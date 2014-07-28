@@ -98,7 +98,7 @@ namespace Kernel
 	 */
 	Pd * core_pd()
 	{
-		using Ttable = Genode::Translation_table;
+		typedef Genode::Translation_table Ttable;
 		constexpr int tt_align  = 1 << Ttable::ALIGNM_LOG2;
 
 		/**

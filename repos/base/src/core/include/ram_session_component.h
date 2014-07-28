@@ -40,8 +40,7 @@ namespace Genode {
 
 			static constexpr size_t SBS = get_page_size();
 
-			using Ds_slab = Synchronized_allocator<Tslab<Dataspace_component,
-			                                             SBS> >;
+			typedef Synchronized_allocator<Tslab<Dataspace_component, SBS> > Ds_slab;
 
 			Rpc_entrypoint         *_ds_ep;
 			Rpc_entrypoint         *_ram_session_ep;

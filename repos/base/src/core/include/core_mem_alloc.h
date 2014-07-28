@@ -60,8 +60,8 @@ class Genode::Core_mem_allocator : public Genode::Core_mem_translator
 {
 	public:
 
-		using Page_allocator = Allocator_avl_tpl<Empty, get_page_size()>;
-		using Phys_allocator = Synchronized_range_allocator<Page_allocator>;
+		typedef Allocator_avl_tpl<Empty, get_page_size()>    Page_allocator;
+		typedef Synchronized_range_allocator<Page_allocator> Phys_allocator;
 
 		/**
 		 * Metadata for allocator blocks that stores a related address
@@ -92,8 +92,7 @@ class Genode::Core_mem_allocator : public Genode::Core_mem_translator
 				void * map_addr(void * addr);
 		};
 
-		using Synchronized_mapped_allocator =
-			Synchronized_range_allocator<Mapped_avl_allocator>;
+		typedef Synchronized_range_allocator<Mapped_avl_allocator> Synchronized_mapped_allocator;
 
 		/**
 		 * Unsynchronized allocator for core-mapped memory

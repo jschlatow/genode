@@ -128,12 +128,13 @@ class Context_area_ram_session : public Ram_session
 
 		enum { verbose = false };
 
-		using Ds_slab = Synchronized_allocator<Tslab<Dataspace_component,
-		                                             get_page_size()> >;
+		typedef Synchronized_allocator<Tslab<Dataspace_component, get_page_size()> > Ds_slab;
 
-		Ds_slab _ds_slab { platform()->core_mem_alloc() };
+		Ds_slab _ds_slab;
 
 	public:
+
+		Context_area_ram_session() : _ds_slab(platform()->core_mem_alloc()) { };
 
 		Ram_dataspace_capability alloc(size_t size, bool cached)
 		{

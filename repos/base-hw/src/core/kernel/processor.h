@@ -47,7 +47,7 @@ class Kernel::Processor_client : public Processor_scheduler::Item
 
 	protected:
 
-		using List_item = Genode::List_element<Processor_client>;
+		typedef Genode::List_element<Processor_client> List_item;
 
 		List_item _flush_tlb_li;     /* TLB maintainance work list item       */
 		unsigned  _flush_tlb_pd_id;  /* id of pd that TLB entries are flushed */
