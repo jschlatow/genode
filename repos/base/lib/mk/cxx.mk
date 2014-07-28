@@ -36,6 +36,13 @@ include $(BASE_DIR)/mk/global.mk
 LIBCXX_GCC = $(shell $(CUSTOM_CXX_LIB) $(CC_MARCH) -print-file-name=libsupc++.a) \
              $(shell $(CUSTOM_CXX_LIB) $(CC_MARCH) -print-file-name=libgcc_eh.a || true)
 
+ifeq ($(filter-out $(SPECS),leon3),)
+# bcc (gcc for LEON3 from gaisler) does not have a libgcc_eh
+# However, the symbols that we require are present in libgcc
+LIBCXX_GCC = $(shell $(CUSTOM_CXX_LIB) $(CC_MARCH) -print-file-name=libsupc++.a) \
+             $(shell $(CUSTOM_CXX_LIB) $(CC_MARCH) -print-file-name=libgcc.a || true)
+endif
+
 #
 # Dummy target used by the build system
 #
