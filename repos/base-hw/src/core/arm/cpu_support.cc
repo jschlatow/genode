@@ -15,6 +15,7 @@
 /* core includes */
 #include <kernel/thread.h>
 #include <kernel/pd.h>
+#include <kernel/vm.h>
 
 using namespace Kernel;
 
@@ -88,6 +89,49 @@ void Thread::_mmu_exception()
 	PERR("unknown MMU exception");
 }
 
+void Thread::exception(unsigned const processor_id)
+{
+	switch (cpu_exception) {
+	case SUPERVISOR_CALL:
+		_call();
+		return;
+	case PREFETCH_ABORT:
+		_mmu_exception();
+		return;
+	case DATA_ABORT:
+		_mmu_exception();
+		return;
+	case INTERRUPT_REQUEST:
+		_interrupt(processor_id);
+		return;
+	case FAST_INTERRUPT_REQUEST:
+		_interrupt(processor_id);
+		return;
+	case RESET:
+		return;
+	default:
+		PWRN("unknown exception");
+		_stop();
+	}
+}
+
+/*****************
+ ** Kernel::Vm  **
+ *****************/
+void Vm::exception(unsigned const processor_id)
+{
+	switch(_state->cpu_exception) {
+	case Genode::Cpu_state::INTERRUPT_REQUEST:
+	case Genode::Cpu_state::FAST_INTERRUPT_REQUEST:
+		_interrupt(processor_id);
+		return;
+	case Genode::Cpu_state::DATA_ABORT:
+		_state->dfar = Processor::Dfar::read();
+	default:
+		Processor_client::_unschedule();
+		_context->submit(1);
+	}
+}
 
 /*************************
  ** Kernel::Cpu_context **

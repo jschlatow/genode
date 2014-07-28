@@ -81,20 +81,7 @@ class Kernel::Vm : public Object<Vm, MAX_VMS, Vm_ids, vm_ids, vm_pool>,
 		 ** Processor_client **
 		 **********************/
 
-		void exception(unsigned const processor_id)
-		{
-			switch(_state->cpu_exception) {
-			case Genode::Cpu_state::INTERRUPT_REQUEST:
-			case Genode::Cpu_state::FAST_INTERRUPT_REQUEST:
-				_interrupt(processor_id);
-				return;
-			case Genode::Cpu_state::DATA_ABORT:
-				_state->dfar = Processor::Dfar::read();
-			default:
-				Processor_client::_unschedule();
-				_context->submit(1);
-			}
-		}
+		void exception(unsigned int);
 
 		void proceed(unsigned const processor_id)
 		{

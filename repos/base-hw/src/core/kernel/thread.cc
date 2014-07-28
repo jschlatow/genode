@@ -191,34 +191,6 @@ void Thread::init(Processor * const processor, Pd * const pd,
 
 void Thread::_stop() { _unschedule(STOPPED); }
 
-
-void Thread::exception(unsigned const processor_id)
-{
-	switch (cpu_exception) {
-	case SUPERVISOR_CALL:
-		_call();
-		return;
-	case PREFETCH_ABORT:
-		_mmu_exception();
-		return;
-	case DATA_ABORT:
-		_mmu_exception();
-		return;
-	case INTERRUPT_REQUEST:
-		_interrupt(processor_id);
-		return;
-	case FAST_INTERRUPT_REQUEST:
-		_interrupt(processor_id);
-		return;
-	case RESET:
-		return;
-	default:
-		PWRN("unknown exception");
-		_stop();
-	}
-}
-
-
 void Thread::_receive_yielded_cpu()
 {
 	if (_state == AWAITS_RESUME) { _schedule(); }
