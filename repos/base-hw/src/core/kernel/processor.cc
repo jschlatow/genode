@@ -28,8 +28,8 @@ namespace Kernel
 	Timer * timer();
 }
 
-using Tlb_list_item = Genode::List_element<Processor_client>;
-using Tlb_list      = Genode::List<Tlb_list_item>;
+typedef Genode::List_element<Processor_client> Tlb_list_item;
+typedef Genode::List<Tlb_list_item>            Tlb_list;
 
 
 static Tlb_list *tlb_list()
