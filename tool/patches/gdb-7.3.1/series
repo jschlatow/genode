@@ -1,2 +1,5 @@
 shared_library.patch
 arm_single_step.patch
+sizeof.patch
+texinfo.patch
+macro.patch

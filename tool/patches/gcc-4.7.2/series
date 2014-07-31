@@ -9,3 +9,4 @@ no_short_enums.patch
 host_target_combination.patch
 pic_cxxflags.patch
 makeinfo5.patch
+segfault.patch
