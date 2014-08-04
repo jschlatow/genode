@@ -172,7 +172,7 @@ class Genode::Expanding_parent_client : public Parent_client
 		 *                    of 'resource_request' won't block.
 		 */
 		enum State { UNDEFINED, BLOCKING_DEFAULT, CUSTOM };
-		State _state = { UNDEFINED };
+		State _state;
 
 		/**
 		 * Lock used to serialize resource requests
@@ -201,7 +201,7 @@ class Genode::Expanding_parent_client : public Parent_client
 		Expanding_parent_client(Parent_capability cap,
 		                        Emergency_ram_reserve &emergency_ram_reserve)
 		:
-			Parent_client(cap), _emergency_ram_reserve(emergency_ram_reserve)
+			Parent_client(cap), _state(UNDEFINED), _emergency_ram_reserve(emergency_ram_reserve)
 		{ }
 
 

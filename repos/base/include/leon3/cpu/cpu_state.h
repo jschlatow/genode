@@ -36,10 +36,15 @@ namespace Genode {
 		/**
 		 * Registers
 		 */
-		addr_t l0, l1, l2, l3, l4, l5, l6, l7; /* local registers */
+		addr_t g0, g1, g2, g3, g4, g5, g6, g7; /* global registers */
 		addr_t i0, i1, i2, i3, i4, i5, i6, i7; /* input registers */
-//		addr_t reserved[8];
-		addr_t sp;                        /* stack pointer */
+		addr_t l0, l1, l2, l3, l4, l5, l6, l7; /* local registers */
+		addr_t o0, o1, o2, o3, o4, o5;    /* output registers o0-o5 */
+		union {
+			addr_t sp;                        /* stack pointer (o6) */
+			addr_t o6;
+		};
+		addr_t o7;
 		addr_t ip;                        /* instruction pointer */
 		addr_t cpsr;                      /* current program status register */
 		addr_t cpu_exception;             /* last trap code */
