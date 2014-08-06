@@ -289,9 +289,16 @@ HOST_CONFIG_ARGS = $(CONFIG_QUIET) \
 # The 't-eh-dw2-dip' tmake file is needed to let the tool chain use 'unwind-dw2-fde-dip.c',
 # needed for the exception handling on Genode in the presence of shared libraries.
 #
+ifeq ($(PLATFORM),leon3)
+# building a shared libgcc doesn't work for leon3 (why?)
+TARGET_CONFIG_ARGS = $(CONFIG_QUIET) \
+                     tmake_file='t-crtstuff-pic t-libgcc-pic t-eh-dw2-dip' \
+                     extra_parts='crtbegin.o crtbeginS.o crtbeginT.o crtend.o crtendS.o'
+else
 TARGET_CONFIG_ARGS = $(CONFIG_QUIET) \
                      tmake_file='t-crtstuff-pic t-libgcc-pic t-eh-dw2-dip t-slibgcc t-slibgcc-gld t-slibgcc-elf-ver' \
                      extra_parts='crtbegin.o crtbeginS.o crtbeginT.o crtend.o crtendS.o'
+endif
 
 # compile libsupc++ as position-independent code
 TARGET_CONFIG_ARGS += PIC_CXXFLAGS='-prefer-pic'
