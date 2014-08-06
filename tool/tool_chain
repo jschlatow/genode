@@ -54,24 +54,30 @@ BINUTILS_DOWNLOAD_URL = $(DOWNLOAD_MIRROR)/gnu/binutils
 GDB_DOWNLOAD_URL      = $(DOWNLOAD_MIRROR)/gnu/gdb
 GMP_DOWNLOAD_URL      = $(DOWNLOAD_MIRROR)/gnu/gmp
 MPFR_DOWNLOAD_URL     = $(DOWNLOAD_MIRROR)/gnu/mpfr
-MPC_DOWNLOAD_URL      = $(DOWNLOAD_MIRROR)/gnu/mpc
-#MPC_DOWNLOAD_URL     ?= http://www.multiprecision.org/mpc/download
+MPC_DOWNLOAD_URL     ?= http://www.multiprecision.org/mpc/download
 
 
 #
 # Tool versions and install location
 #
 
-GCC_VERSION       = 4.8.2
-BINUTILS_VERSION  = 2.24
-GDB_VERSION       = 7.7.1
-GMP_VERSION       = 5.1.3
-MPFR_VERSION      = 3.1.2
-MPC_VERSION       = 1.0.2
+GCC_VERSION       = 4.7.2
+BINUTILS_VERSION  = 2.22
+GDB_VERSION       = 7.3.1
+GMP_VERSION       = 5.0.2
+MPFR_VERSION      = 3.1.0
+MPC_VERSION       = 0.9
 INSTALL_LOCATION  = /usr/local/genode-gcc
 DOWNLOAD_DIR      = download
 CONTRIB_DIR       = contrib
 SIGVERIFIER       = $(GENODE_DIR)/tool/download_sigver
+
+#GCC_VERSION       = 4.8.2
+#BINUTILS_VERSION  = 2.24
+#GDB_VERSION       = 7.7.1
+#GMP_VERSION       = 5.1.3
+#MPFR_VERSION      = 3.1.2
+#MPC_VERSION       = 1.0.2
 
 BINUTILS_DOWNLOAD_TBZ2 = binutils-$(BINUTILS_VERSION).tar.bz2
 
@@ -314,7 +320,7 @@ $(LD_SCRIPT_$(PLATFORM)):
 # the linker.
 #
 
-LINK_SPEC_H_x86 = $(shell pwd)/build/$(PLATFORM)/link_spec.h
+LINK_SPEC_H_$(PLATFORM) = $(shell pwd)/build/$(PLATFORM)/link_spec.h
 
 $(LINK_SPEC_H_x86):
 	$(VERBOSE)echo "#define LINK_SPEC \"%{!m32:-m elf_x86_64} %{m32:-m elf_i386} %{shared:-shared} %{!static:--eh-frame-hdr}\"" > $@
@@ -402,11 +408,12 @@ $(CONTRIB_DIR)/gcc-$(GCC_VERSION): $(addprefix $(DOWNLOAD_DIR)/,gcc-$(GCC_VERSIO
 
 include $(GENODE_DIR)/tool/tool_chain_gcc_patches.inc
 
-$(CONTRIB_DIR)/binutils-$(BINUTILS_VERSION)/configure: $(DOWNLOAD_DIR)/$(BINUTILS_DOWNLOAD_TBZ2)
+$(CONTRIB_DIR)/binutils-$(BINUTILS_VERSION): $(DOWNLOAD_DIR)/$(BINUTILS_DOWNLOAD_TBZ2)
 	$(ECHO) "$(BRIGHT_COL)unpacking binutils...$(DEFAULT_COL)"
 	$(VERBOSE)mkdir -p $(CONTRIB_DIR)
 	$(VERBOSE)tar xfj $^ -C $(CONTRIB_DIR) && touch $@
 
+include $(GENODE_DIR)/tool/tool_chain_binutils_patches.inc
 build/$(PLATFORM)/binutils/Makefile: $(CONTRIB_DIR)/binutils-$(BINUTILS_VERSION)/configure
 	$(ECHO) "$(BRIGHT_COL)configuring binutils...$(DEFAULT_COL)"
 	$(VERBOSE)mkdir -p $(dir $@)

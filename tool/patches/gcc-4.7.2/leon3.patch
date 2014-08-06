@@ -1,0 +1,410 @@
+diff -rupN gcc-4.7.2/contrib/config-list.mk gcc-4.7.2-leon3/contrib/config-list.mk
+--- gcc-4.7.2/contrib/config-list.mk	2012-02-14 11:02:21.000000000 +0100
++++ gcc-4.7.2-leon3/contrib/config-list.mk	2014-08-06 15:39:02.351406905 +0200
+@@ -56,7 +56,7 @@ LIST = alpha-linux-gnu alpha-freebsd6 al
+   rl78-elf rx-elf s390-linux-gnu s390x-linux-gnu s390x-ibm-tpf sh-elf \
+   shle-linux sh-netbsdelf sh-superh-elf sh5el-netbsd sh64-netbsd sh64-linux \
+   sh64-elfOPT-with-newlib sh-rtems sh-wrs-vxworks sparc-elf \
+-  sparc-leon-elf sparc-rtems sparc-linux-gnu \
++  sparc-leon-elf sparc-leon3-elf sparc-rtems sparc-linux-gnu \
+   sparc-leon3-linux-gnuOPT-enable-target=all sparc-netbsdelf \
+   sparc64-sun-solaris2.10OPT-with-gnu-ldOPT-with-gnu-asOPT-enable-threads=posix \
+   sparc-wrs-vxworks sparc64-elf sparc64-rtems sparc64-linux sparc64-freebsd6 \
+diff -rupN gcc-4.7.2/gcc/config/sparc/leon.md gcc-4.7.2-leon3/gcc/config/sparc/leon.md
+--- gcc-4.7.2/gcc/config/sparc/leon.md	2010-12-16 23:28:45.000000000 +0100
++++ gcc-4.7.2-leon3/gcc/config/sparc/leon.md	2014-08-06 14:49:04.106161147 +0200
+@@ -29,28 +29,33 @@
+     (eq_attr "type" "load,sload,fpload"))
+   "leon_memory")
+ 
++;; Use a double reservation to work around the load pipeline hazard on UT699.
++(define_insn_reservation "leon3_load" 1
++  (and (eq_attr "cpu" "leon3") (eq_attr "type" "load,sload"))
++  "leon_memory*2")
++
+ (define_insn_reservation "leon_store" 1
+-  (and (eq_attr "cpu" "leon")
++  (and (eq_attr "cpu" "leon,leon3")
+     (eq_attr "type" "store,fpstore"))
+   "leon_memory+write_buf")
+   
+ (define_insn_reservation "leon_fp_alu" 1
+-  (and (eq_attr "cpu" "leon")
++  (and (eq_attr "cpu" "leon,leon3")
+     (eq_attr "type" "fp,fpmove"))
+   "leon_fpalu, nothing")
+ 
+ (define_insn_reservation "leon_fp_mult" 1
+-  (and (eq_attr "cpu" "leon")
++  (and (eq_attr "cpu" "leon,leon3")
+     (eq_attr "type" "fpmul"))
+   "leon_fpmds, nothing")
+ 
+ (define_insn_reservation "leon_fp_div" 16
+-  (and (eq_attr "cpu" "leon")
++  (and (eq_attr "cpu" "leon,leon3")
+     (eq_attr "type" "fpdivs,fpdivd"))
+   "leon_fpmds, nothing*15")
+ 
+ (define_insn_reservation "leon_fp_sqrt" 23
+-  (and (eq_attr "cpu" "leon")
++  (and (eq_attr "cpu" "leon,leon3")
+     (eq_attr "type" "fpsqrts,fpsqrtd"))
+   "leon_fpmds, nothing*21")
+ 
+diff -rupN gcc-4.7.2/gcc/config/sparc/sparc.c gcc-4.7.2-leon3/gcc/config/sparc/sparc.c
+--- gcc-4.7.2/gcc/config/sparc/sparc.c	2012-09-02 12:36:54.000000000 +0200
++++ gcc-4.7.2-leon3/gcc/config/sparc/sparc.c	2014-08-06 14:45:42.014673402 +0200
+@@ -231,6 +231,30 @@ struct processor_costs leon_costs = {
+ };
+ 
+ static const
++struct processor_costs leon3_costs = {
++  COSTS_N_INSNS (1), /* int load */
++  COSTS_N_INSNS (1), /* int signed load */
++  COSTS_N_INSNS (1), /* int zeroed load */
++  COSTS_N_INSNS (1), /* float load */
++  COSTS_N_INSNS (1), /* fmov, fneg, fabs */
++  COSTS_N_INSNS (1), /* fadd, fsub */
++  COSTS_N_INSNS (1), /* fcmp */
++  COSTS_N_INSNS (1), /* fmov, fmovr */
++  COSTS_N_INSNS (1), /* fmul */
++  COSTS_N_INSNS (14), /* fdivs */
++  COSTS_N_INSNS (15), /* fdivd */
++  COSTS_N_INSNS (22), /* fsqrts */
++  COSTS_N_INSNS (23), /* fsqrtd */
++  COSTS_N_INSNS (5), /* imul */
++  COSTS_N_INSNS (5), /* imulX */
++  0, /* imul bit factor */
++  COSTS_N_INSNS (35), /* idiv */
++  COSTS_N_INSNS (35), /* idivX */
++  COSTS_N_INSNS (1), /* movcc/movr */
++  0, /* shift penalty */
++};
++
++static const
+ struct processor_costs sparclet_costs = {
+   COSTS_N_INSNS (3), /* int load */
+   COSTS_N_INSNS (3), /* int signed load */
+@@ -867,6 +891,7 @@ sparc_option_override (void)
+     { TARGET_CPU_supersparc, PROCESSOR_SUPERSPARC },
+     { TARGET_CPU_hypersparc, PROCESSOR_HYPERSPARC },
+     { TARGET_CPU_leon, PROCESSOR_LEON },
++    { TARGET_CPU_leon3, PROCESSOR_LEON3 },
+     { TARGET_CPU_sparclite, PROCESSOR_F930 },
+     { TARGET_CPU_sparclite86x, PROCESSOR_SPARCLITE86X },
+     { TARGET_CPU_sparclet, PROCESSOR_TSC701 },
+@@ -893,8 +918,8 @@ sparc_option_override (void)
+     /* TI TMS390Z55 supersparc */
+     { "supersparc",	MASK_ISA, MASK_V8 },
+     { "hypersparc",	MASK_ISA, MASK_V8|MASK_FPU },
+-    /* LEON */
+-    { "leon",		MASK_ISA, MASK_V8|MASK_FPU },
++    { "leon",		MASK_ISA, MASK_V8|MASK_LEON|MASK_FPU },
++    { "leon3",		MASK_ISA, MASK_V8|MASK_LEON3|MASK_FPU },
+     { "sparclite",	MASK_ISA, MASK_SPARCLITE },
+     /* The Fujitsu MB86930 is the original sparclite chip, with no FPU.  */
+     { "f930",		MASK_ISA|MASK_FPU, MASK_SPARCLITE },
+@@ -1051,6 +1076,9 @@ sparc_option_override (void)
+ #ifndef HAVE_AS_FMAF_HPC_VIS3
+ 		   & ~(MASK_FMAF | MASK_VIS3)
+ #endif
++#ifndef HAVE_AS_LEON
++		   & ~(MASK_LEON | MASK_LEON3)
++#endif
+ 		   );
+ 
+   /* If -mfpu or -mno-fpu was explicitly used, don't override with
+@@ -1139,6 +1167,9 @@ sparc_option_override (void)
+     case PROCESSOR_LEON:
+       sparc_costs = &leon_costs;
+       break;
++    case PROCESSOR_LEON3:
++      sparc_costs = &leon3_costs;
++      break;
+     case PROCESSOR_SPARCLET:
+     case PROCESSOR_TSC701:
+       sparc_costs = &sparclet_costs;
+@@ -1173,6 +1204,10 @@ sparc_option_override (void)
+       /* Choose the most relaxed model for the processor.  */
+       else if (TARGET_V9)
+ 	sparc_memory_model = SMM_RMO;
++      else if (TARGET_LEON3)
++	sparc_memory_model = SMM_TSO;
++      else if (TARGET_LEON)
++	sparc_memory_model = SMM_SC;
+       else if (TARGET_V8)
+ 	sparc_memory_model = SMM_PSO;
+       else
+diff -rupN gcc-4.7.2/gcc/config/sparc/sparc.h gcc-4.7.2-leon3/gcc/config/sparc/sparc.h
+--- gcc-4.7.2/gcc/config/sparc/sparc.h	2012-03-24 19:47:55.000000000 +0100
++++ gcc-4.7.2-leon3/gcc/config/sparc/sparc.h	2014-08-06 14:52:24.437654315 +0200
+@@ -138,21 +138,22 @@ extern enum cmodel sparc_cmodel;
+ #define TARGET_CPU_supersparc	2
+ #define TARGET_CPU_hypersparc	3
+ #define TARGET_CPU_leon		4
+-#define TARGET_CPU_sparclite	5
+-#define TARGET_CPU_f930		5       /* alias */
+-#define TARGET_CPU_f934		5       /* alias */
+-#define TARGET_CPU_sparclite86x	6
+-#define TARGET_CPU_sparclet	7
+-#define TARGET_CPU_tsc701	7       /* alias */
+-#define TARGET_CPU_v9		8	/* generic v9 implementation */
+-#define TARGET_CPU_sparcv9	8	/* alias */
+-#define TARGET_CPU_sparc64	8	/* alias */
+-#define TARGET_CPU_ultrasparc	9
+-#define TARGET_CPU_ultrasparc3	10
+-#define TARGET_CPU_niagara	11
+-#define TARGET_CPU_niagara2	12
+-#define TARGET_CPU_niagara3	13
+-#define TARGET_CPU_niagara4	14
++#define TARGET_CPU_leon3	5
++#define TARGET_CPU_sparclite	6
++#define TARGET_CPU_f930		6       /* alias */
++#define TARGET_CPU_f934		6       /* alias */
++#define TARGET_CPU_sparclite86x	7
++#define TARGET_CPU_sparclet	8
++#define TARGET_CPU_tsc701	8       /* alias */
++#define TARGET_CPU_v9		9	/* generic v9 implementation */
++#define TARGET_CPU_sparcv9	9	/* alias */
++#define TARGET_CPU_sparc64	9	/* alias */
++#define TARGET_CPU_ultrasparc	10
++#define TARGET_CPU_ultrasparc3	11
++#define TARGET_CPU_niagara	12
++#define TARGET_CPU_niagara2	13
++#define TARGET_CPU_niagara3	14
++#define TARGET_CPU_niagara4	15
+ 
+ #if TARGET_CPU_DEFAULT == TARGET_CPU_v9 \
+  || TARGET_CPU_DEFAULT == TARGET_CPU_ultrasparc \
+@@ -234,9 +235,10 @@ extern enum cmodel sparc_cmodel;
+ #define ASM_CPU32_DEFAULT_SPEC ""
+ #endif
+ 
+-#if TARGET_CPU_DEFAULT == TARGET_CPU_leon
++#if TARGET_CPU_DEFAULT == TARGET_CPU_leon \
++ || TARGET_CPU_DEFAULT == TARGET_CPU_leon3
+ #define CPP_CPU32_DEFAULT_SPEC "-D__leon__ -D__sparc_v8__"
+-#define ASM_CPU32_DEFAULT_SPEC ""
++#define ASM_CPU32_DEFAULT_SPEC AS_LEON_FLAG
+ #endif
+ 
+ #endif
+@@ -284,6 +286,7 @@ extern enum cmodel sparc_cmodel;
+ %{mcpu=supersparc:-D__supersparc__ -D__sparc_v8__} \
+ %{mcpu=hypersparc:-D__hypersparc__ -D__sparc_v8__} \
+ %{mcpu=leon:-D__leon__ -D__sparc_v8__} \
++%{mcpu=leon3:-D__leon__ -D__sparc_v8__} \
+ %{mcpu=v9:-D__sparc_v9__} \
+ %{mcpu=ultrasparc:-D__sparc_v9__} \
+ %{mcpu=ultrasparc3:-D__sparc_v9__} \
+@@ -329,7 +332,8 @@ extern enum cmodel sparc_cmodel;
+ %{mcpu=sparclite86x:-Asparclite} \
+ %{mcpu=f930:-Asparclite} %{mcpu=f934:-Asparclite} \
+ %{mcpu=v8:-Av8} \
+-%{mcpu=leon:-Av8} \
++%{mcpu=leon:" AS_LEON_FLAG "} \
++%{mcpu=leon3:" AS_LEON_FLAG "} \
+ %{mv8plus:-Av8plus} \
+ %{mcpu=v9:-Av9} \
+ %{mcpu=ultrasparc:%{!mv8plus:-Av9a}} \
+@@ -1748,6 +1752,12 @@ extern int sparc_indent_opcode;
+ #define AS_NIAGARA3_FLAG "d"
+ #endif
+ 
++#ifdef HAVE_AS_LEON
++#define AS_LEON_FLAG "-Aleon"
++#else
++#define AS_LEON_FLAG "-Av8"
++#endif
++
+ /* The number of Pmode words for the setjmp buffer.  */
+ #define JMP_BUF_SIZE 12
+ 
+diff -rupN gcc-4.7.2/gcc/config/sparc/sparc.md gcc-4.7.2-leon3/gcc/config/sparc/sparc.md
+--- gcc-4.7.2/gcc/config/sparc/sparc.md	2012-07-19 23:56:33.000000000 +0200
++++ gcc-4.7.2-leon3/gcc/config/sparc/sparc.md	2014-08-06 14:52:48.404500799 +0200
+@@ -216,6 +216,7 @@
+    supersparc,
+    hypersparc,
+    leon,
++   leon3,
+    sparclite,
+    f930,
+    f934,
+diff -rupN gcc-4.7.2/gcc/config/sparc/sparc.opt gcc-4.7.2-leon3/gcc/config/sparc/sparc.opt
+--- gcc-4.7.2/gcc/config/sparc/sparc.opt	2011-11-30 17:10:24.000000000 +0100
++++ gcc-4.7.2-leon3/gcc/config/sparc/sparc.opt	2014-08-06 14:50:11.746663314 +0200
+@@ -142,6 +142,9 @@ EnumValue
+ Enum(sparc_processor_type) String(leon) Value(PROCESSOR_LEON)
+ 
+ EnumValue
++Enum(sparc_processor_type) String(leon3) Value(PROCESSOR_LEON3)
++
++EnumValue
+ Enum(sparc_processor_type) String(sparclite) Value(PROCESSOR_SPARCLITE)
+ 
+ EnumValue
+@@ -200,6 +203,12 @@ Enable workaround for single erratum of
+ Mask(LONG_DOUBLE_128)
+ ;; Use 128-bit long double
+ 
++Mask(LEON)
++;; Generate code for LEON
++
++Mask(LEON3)
++;; Generate code for LEON3
++
+ Mask(SPARCLITE)
+ ;; Generate code for SPARClite
+ 
+diff -rupN gcc-4.7.2/gcc/config/sparc/sparc-opts.h gcc-4.7.2-leon3/gcc/config/sparc/sparc-opts.h
+--- gcc-4.7.2/gcc/config/sparc/sparc-opts.h	2011-11-30 17:10:24.000000000 +0100
++++ gcc-4.7.2-leon3/gcc/config/sparc/sparc-opts.h	2014-08-06 15:28:02.558701745 +0200
+@@ -31,6 +31,7 @@ enum processor_type {
+   PROCESSOR_SUPERSPARC,
+   PROCESSOR_HYPERSPARC,
+   PROCESSOR_LEON,
++  PROCESSOR_LEON3,
+   PROCESSOR_SPARCLITE,
+   PROCESSOR_F930,
+   PROCESSOR_F934,
+diff -rupN gcc-4.7.2/gcc/config/sparc/sync.md gcc-4.7.2-leon3/gcc/config/sparc/sync.md
+--- gcc-4.7.2/gcc/config/sparc/sync.md	2012-01-26 23:04:54.000000000 +0100
++++ gcc-4.7.2-leon3/gcc/config/sparc/sync.md	2014-08-06 15:06:51.661099637 +0200
+@@ -163,7 +163,8 @@
+    (match_operand:SI 5 "const_int_operand" "")		;; is_weak
+    (match_operand:SI 6 "const_int_operand" "")		;; mod_s
+    (match_operand:SI 7 "const_int_operand" "")]		;; mod_f
+-  "TARGET_V9 && (<MODE>mode != DImode || TARGET_ARCH64 || TARGET_V8PLUS)"
++  "(TARGET_V9 || TARGET_LEON3)
++   && (<MODE>mode != DImode || TARGET_ARCH64 || TARGET_V8PLUS)"
+ {
+   sparc_expand_compare_and_swap (operands);
+   DONE;
+@@ -178,7 +179,7 @@
+ 	     [(match_operand:I48MODE 2 "register_operand" "")
+ 	      (match_operand:I48MODE 3 "register_operand" "")]
+ 	     UNSPECV_CAS))])]
+-  "TARGET_V9"
++  "TARGET_V9 || TARGET_LEON3"
+   "")
+ 
+ (define_insn "*atomic_compare_and_swap<mode>_1"
+@@ -189,10 +190,24 @@
+ 	  [(match_operand:I48MODE 2 "register_operand" "r")
+ 	   (match_operand:I48MODE 3 "register_operand" "0")]
+ 	  UNSPECV_CAS))]
+-  "TARGET_V9 && (<MODE>mode == SImode || TARGET_ARCH64)"
++  "TARGET_V9 && (<MODE>mode != DImode || TARGET_ARCH64)"
+   "cas<modesuffix>\t%1, %2, %0"
+   [(set_attr "type" "multi")])
+ 
++(define_insn "*atomic_compare_and_swap_leon3_1"
++  [(set (match_operand:SI 0 "register_operand" "=r")
++	(match_operand:SI 1 "mem_noofs_operand" "+w"))
++   (set (match_dup 1)
++	(unspec_volatile:SI
++	  [(match_operand:SI 2 "register_operand" "r")
++	   (match_operand:SI 3 "register_operand" "0")]
++	  UNSPECV_CAS))]
++  "TARGET_LEON3"
++{
++    return "casa\t%1 0xb, %2, %0"; /* ASI for supervisor data space.  */
++}
++  [(set_attr "type" "multi")])
++
+ (define_insn "*atomic_compare_and_swapdi_v8plus"
+   [(set (match_operand:DI 0 "register_operand" "=h")
+ 	(match_operand:DI 1 "mem_noofs_operand" "+w"))
+diff -rupN gcc-4.7.2/gcc/config.gcc gcc-4.7.2-leon3/gcc/config.gcc
+--- gcc-4.7.2/gcc/config.gcc	2012-09-12 11:03:54.000000000 +0200
++++ gcc-4.7.2-leon3/gcc/config.gcc	2014-08-06 15:17:54.749964296 +0200
+@@ -2895,11 +2895,18 @@ if test x$with_cpu = x ; then
+     mips*-*-vxworks)
+       with_arch=mips2
+       ;;
+-    sparc-leon*-*)
+-      with_cpu=v8;
+-      ;;
+     sparc*-*-*)
+-      with_cpu="`echo ${target} | sed 's/-.*$//'`"
++      case ${target} in
++	*-leon-*)
++	  with_cpu=leon
++	  ;;
++	*-leon[3-9]*)
++	  with_cpu=leon3
++	  ;;
++	*)
++	  with_cpu="`echo ${target} | sed 's/-.*$//'`"
++	  ;;
++      esac
+       ;;
+   esac
+ 
+@@ -3439,7 +3446,7 @@ case "${target}" in
+ 			case ${val} in
+ 			"" | sparc | sparcv9 | sparc64 \
+ 			| v7 | cypress \
+-			| v8 | supersparc | hypersparc | leon \
++			| v8 | supersparc | hypersparc | leon | leon3 \
+ 			| sparclite | f930 | f934 | sparclite86x \
+ 			| sparclet | tsc701 \
+ 			| v9 | ultrasparc | ultrasparc3 | niagara | niagara2 \
+@@ -3595,15 +3602,6 @@ case ${target} in
+ 		cxx_target_objs="${cxx_target_objs} sh-c.o"
+ 		;;
+ 
+-	sparc-leon*-*)
+-		if test x$with_tune = x ; then
+-		  with_tune=leon;
+-		fi
+-
+-		# The SPARC port checks this value at compile-time.
+-		target_cpu_default2="TARGET_CPU_$with_cpu"
+-		;;
+-
+ 	sparc*-*-*)
+ 		# Some standard aliases.
+ 		case x$with_cpu in
+@@ -3615,6 +3613,17 @@ case ${target} in
+ 			;;
+ 		esac
+ 
++		if test x$with_tune = x ; then
++		      case ${target} in
++		      *-leon-*)
++			  with_tune=leon
++			  ;;
++		      *-leon[3-9]*)
++			  with_tune=leon3
++			  ;;
++		      esac
++		fi
++
+ 		# The SPARC port checks this value at compile-time.
+ 		target_cpu_default2="TARGET_CPU_$with_cpu"
+ 		;;
+diff -rupN gcc-4.7.2/gcc/configure.ac gcc-4.7.2-leon3/gcc/configure.ac
+--- gcc-4.7.2/gcc/configure.ac	2012-09-13 15:32:31.000000000 +0200
++++ gcc-4.7.2-leon3/gcc/configure.ac	2014-08-06 15:41:45.936238744 +0200
+@@ -3576,6 +3576,18 @@ foo:
+        fnaddd %f10, %f12, %f14],,
+       [AC_DEFINE(HAVE_AS_FMAF_HPC_VIS3, 1,
+                 [Define if your assembler supports FMAF, HPC, and VIS 3.0 instructions.])])
++    gcc_GAS_CHECK_FEATURE([LEON instructions],
++      gcc_cv_as_sparc_leon,,
++      [-Aleon],
++      [.text
++       .register %g2, #scratch
++       .register %g3, #scratch
++       .align 4
++       smac %g2, %g3, %g1
++       umac %g2, %g3, %g1
++       casa [[%g2]] 0xb, %g3, %g1],,
++      [AC_DEFINE(HAVE_AS_LEON, 1,
++                [Define if your assembler supports LEON instructions.])])
+     ;;
+ 
+ changequote(,)dnl

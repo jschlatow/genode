@@ -10,3 +10,4 @@ host_target_combination.patch
 pic_cxxflags.patch
 makeinfo5.patch
 segfault.patch
+leon3.patch

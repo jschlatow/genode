@@ -1,0 +1,133 @@
+diff -rupN binutils-2.22/gas/config/tc-sparc.c binutils-2.22-leon3/gas/config/tc-sparc.c
+--- binutils-2.22/gas/config/tc-sparc.c	2011-09-22 02:03:28.000000000 +0200
++++ binutils-2.22-leon3/gas/config/tc-sparc.c	2014-08-06 15:51:39.748395455 +0200
+@@ -221,7 +221,7 @@ static void output_insn (const struct sp
+    for this use.  That table is for opcodes only.  This table is for opcodes
+    and file formats.  */
+ 
+-enum sparc_arch_types {v6, v7, v8, sparclet, sparclite, sparc86x, v8plus,
++enum sparc_arch_types {v6, v7, v8, leon, sparclet, sparclite, sparc86x, v8plus,
+ 		       v8plusa, v9, v9a, v9b, v9_64};
+ 
+ static struct sparc_arch {
+@@ -246,6 +246,7 @@ static struct sparc_arch {
+   { "sparcima", "v9b", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_VIS|F_VIS2|F_FMAF|F_IMA },
+   { "sparcvis3", "v9b", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_VIS|F_VIS2|F_FMAF|F_VIS3|F_HPC },
+   { "sparcvis3r", "v9b", v9, 0, 1, F_MUL32|F_DIV32|F_FSMULD|F_POPC|F_VIS|F_VIS2|F_FMAF|F_VIS3|F_HPC|F_RANDOM|F_TRANS|F_FJFMAU },
++  { "leon", "leon", leon, 32, 1, F_MUL32|F_DIV32|F_FSMULD },
+   { "sparclet", "sparclet", sparclet, 32, 1, F_MUL32|F_DIV32|F_FSMULD },
+   { "sparclite", "sparclite", sparclite, 32, 1, F_MUL32|F_DIV32|F_FSMULD },
+   { "sparc86x", "sparclite", sparc86x, 32, 1, F_MUL32|F_DIV32|F_FSMULD },
+@@ -360,7 +361,7 @@ sparc_target_format (void)
+  *	-bump
+  *		Warn on architecture bumps.  See also -A.
+  *
+- *	-Av6, -Av7, -Av8, -Asparclite, -Asparclet
++ *	-Av6, -Av7, -Av8, -Aleon, -Asparclite, -Asparclet
+  *		Standard 32 bit architectures.
+  *	-Av9, -Av9a, -Av9b
+  *		Sparc64 in either a 32 or 64 bit world (-32/-64 says which).
+diff -rupN binutils-2.22/include/opcode/sparc.h binutils-2.22-leon3/include/opcode/sparc.h
+--- binutils-2.22/include/opcode/sparc.h	2011-09-21 22:49:15.000000000 +0200
++++ binutils-2.22-leon3/include/opcode/sparc.h	2014-08-06 15:47:45.866204245 +0200
+@@ -42,6 +42,7 @@ enum sparc_opcode_arch_val
+   SPARC_OPCODE_ARCH_V6 = 0,
+   SPARC_OPCODE_ARCH_V7,
+   SPARC_OPCODE_ARCH_V8,
++  SPARC_OPCODE_ARCH_LEON,
+   SPARC_OPCODE_ARCH_SPARCLET,
+   SPARC_OPCODE_ARCH_SPARCLITE,
+   /* V9 variants must appear last.  */
+diff -rupN binutils-2.22/opcodes/sparc-opc.c binutils-2.22-leon3/opcodes/sparc-opc.c
+--- binutils-2.22/opcodes/sparc-opc.c	2011-09-21 22:49:16.000000000 +0200
++++ binutils-2.22-leon3/opcodes/sparc-opc.c	2014-08-06 15:47:12.319230017 +0200
+@@ -33,6 +33,7 @@
+ #define MASK_V6		SPARC_OPCODE_ARCH_MASK (SPARC_OPCODE_ARCH_V6)
+ #define MASK_V7		SPARC_OPCODE_ARCH_MASK (SPARC_OPCODE_ARCH_V7)
+ #define MASK_V8		SPARC_OPCODE_ARCH_MASK (SPARC_OPCODE_ARCH_V8)
++#define MASK_LEON	SPARC_OPCODE_ARCH_MASK (SPARC_OPCODE_ARCH_LEON)
+ #define MASK_SPARCLET	SPARC_OPCODE_ARCH_MASK (SPARC_OPCODE_ARCH_SPARCLET)
+ #define MASK_SPARCLITE	SPARC_OPCODE_ARCH_MASK (SPARC_OPCODE_ARCH_SPARCLITE)
+ #define MASK_V9		SPARC_OPCODE_ARCH_MASK (SPARC_OPCODE_ARCH_V9)
+@@ -41,12 +42,13 @@
+ 
+ /* Bit masks of architectures supporting the insn.  */
+ 
+-#define v6		(MASK_V6 | MASK_V7 | MASK_V8 | MASK_SPARCLET \
+-			 | MASK_SPARCLITE | MASK_V9 | MASK_V9A | MASK_V9B)
++#define v6		(MASK_V6 | MASK_V7 | MASK_V8 | MASK_LEON \
++			 | MASK_SPARCLET | MASK_SPARCLITE \
++			 | MASK_V9 | MASK_V9A | MASK_V9B)
+ /* v6 insns not supported on the sparclet.  */
+-#define v6notlet	(MASK_V6 | MASK_V7 | MASK_V8 \
++#define v6notlet	(MASK_V6 | MASK_V7 | MASK_V8 | MASK_LEON \
+ 			 | MASK_SPARCLITE | MASK_V9 | MASK_V9A | MASK_V9B)
+-#define v7		(MASK_V7 | MASK_V8 | MASK_SPARCLET \
++#define v7		(MASK_V7 | MASK_V8 | MASK_LEON | MASK_SPARCLET \
+ 			 | MASK_SPARCLITE | MASK_V9 | MASK_V9A | MASK_V9B)
+ /* Although not all insns are implemented in hardware, sparclite is defined
+    to be a superset of v8.  Unimplemented insns trap and are then theoretically
+@@ -54,15 +56,19 @@
+    It's not clear that the same is true for sparclet, although the docs
+    suggest it is.  Rather than complicating things, the sparclet assembler
+    recognizes all v8 insns.  */
+-#define v8		(MASK_V8 | MASK_SPARCLET | MASK_SPARCLITE \
++#define v8		(MASK_V8 | MASK_LEON | MASK_SPARCLET | MASK_SPARCLITE \
+ 			 | MASK_V9 | MASK_V9A | MASK_V9B)
+ #define sparclet	(MASK_SPARCLET)
++/* sparclet insns supported by leon.  */
++#define letandleon	(MASK_SPARCLET | MASK_LEON)
+ #define sparclite	(MASK_SPARCLITE)
+ #define v9		(MASK_V9 | MASK_V9A | MASK_V9B)
++/* v9 insns supported by leon.  */
++#define v9andleon	(MASK_V9 | MASK_V9A | MASK_V9B | MASK_LEON)
+ #define v9a		(MASK_V9A | MASK_V9B)
+ #define v9b		(MASK_V9B)
+ /* v6 insns not supported by v9.  */
+-#define v6notv9		(MASK_V6 | MASK_V7 | MASK_V8 \
++#define v6notv9		(MASK_V6 | MASK_V7 | MASK_V8 | MASK_LEON \
+ 			 | MASK_SPARCLET | MASK_SPARCLITE)
+ /* v9a instructions which would appear to be aliases to v9's impdep's
+    otherwise.  */
+@@ -76,6 +82,7 @@ const struct sparc_opcode_arch sparc_opc
+   { "v6", MASK_V6 },
+   { "v7", MASK_V6 | MASK_V7 },
+   { "v8", MASK_V6 | MASK_V7 | MASK_V8 },
++  { "leon", MASK_V6 | MASK_V7 | MASK_V8 | MASK_LEON },
+   { "sparclet", MASK_V6 | MASK_V7 | MASK_V8 | MASK_SPARCLET },
+   { "sparclite", MASK_V6 | MASK_V7 | MASK_V8 | MASK_SPARCLITE },
+   /* ??? Don't some v8 priviledged insns conflict with v9?  */
+@@ -1669,8 +1676,9 @@ EFPOP2_2 ("efcmpes",	0x055, "e,f"),
+ 
+ /* sparclet specific insns */
+ 
+-COMMUTEOP ("umac", 0x3e, sparclet),
+-COMMUTEOP ("smac", 0x3f, sparclet),
++COMMUTEOP ("umac", 0x3e, letandleon),
++COMMUTEOP ("smac", 0x3f, letandleon),
++
+ COMMUTEOP ("umacd", 0x2e, sparclet),
+ COMMUTEOP ("smacd", 0x2f, sparclet),
+ COMMUTEOP ("umuld", 0x09, sparclet),
+@@ -1721,8 +1729,8 @@ SLCBCC("cbnefr", 15),
+ #undef SLCBCC2
+ #undef SLCBCC
+ 
+-{ "casa",	F3(3, 0x3c, 0), F3(~3, ~0x3c, ~0), "[1]A,2,d", 0, v9 },
+-{ "casa",	F3(3, 0x3c, 1), F3(~3, ~0x3c, ~1), "[1]o,2,d", 0, v9 },
++{ "casa",	F3(3, 0x3c, 0), F3(~3, ~0x3c, ~0), "[1]A,2,d", 0, v9andleon },
++{ "casa",	F3(3, 0x3c, 1), F3(~3, ~0x3c, ~1), "[1]o,2,d", 0, v9andleon },
+ { "casxa",	F3(3, 0x3e, 0), F3(~3, ~0x3e, ~0), "[1]A,2,d", 0, v9 },
+ { "casxa",	F3(3, 0x3e, 1), F3(~3, ~0x3e, ~1), "[1]o,2,d", 0, v9 },
+ 
+@@ -1732,8 +1740,8 @@ SLCBCC("cbnefr", 15),
+ { "signx",	F3(2, 0x27, 0), F3(~2, ~0x27, ~0)|(1<<12)|ASI(~0)|RS2_G0, "r", F_ALIAS, v9 }, /* sra rd,%g0,rd */
+ { "clruw",	F3(2, 0x26, 0), F3(~2, ~0x26, ~0)|(1<<12)|ASI(~0)|RS2_G0, "1,d", F_ALIAS, v9 }, /* srl rs1,%g0,rd */
+ { "clruw",	F3(2, 0x26, 0), F3(~2, ~0x26, ~0)|(1<<12)|ASI(~0)|RS2_G0, "r", F_ALIAS, v9 }, /* srl rd,%g0,rd */
+-{ "cas",	F3(3, 0x3c, 0)|ASI(0x80), F3(~3, ~0x3c, ~0)|ASI(~0x80), "[1],2,d", F_ALIAS, v9 }, /* casa [rs1]ASI_P,rs2,rd */
+-{ "casl",	F3(3, 0x3c, 0)|ASI(0x88), F3(~3, ~0x3c, ~0)|ASI(~0x88), "[1],2,d", F_ALIAS, v9 }, /* casa [rs1]ASI_P_L,rs2,rd */
++{ "cas",	F3(3, 0x3c, 0)|ASI(0x80), F3(~3, ~0x3c, ~0)|ASI(~0x80), "[1],2,d", F_ALIAS, v9andleon }, /* casa [rs1]ASI_P,rs2,rd */
++{ "casl",	F3(3, 0x3c, 0)|ASI(0x88), F3(~3, ~0x3c, ~0)|ASI(~0x88), "[1],2,d", F_ALIAS, v9andleon }, /* casa [rs1]ASI_P_L,rs2,rd */
+ { "casx",	F3(3, 0x3e, 0)|ASI(0x80), F3(~3, ~0x3e, ~0)|ASI(~0x80), "[1],2,d", F_ALIAS, v9 }, /* casxa [rs1]ASI_P,rs2,rd */
+ { "casxl",	F3(3, 0x3e, 0)|ASI(0x88), F3(~3, ~0x3e, ~0)|ASI(~0x88), "[1],2,d", F_ALIAS, v9 }, /* casxa [rs1]ASI_P_L,rs2,rd */
+ 
