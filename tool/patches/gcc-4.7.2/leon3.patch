@@ -386,6 +386,68 @@ diff -rupN gcc-4.7.2/gcc/config.gcc gcc-4.7.2-leon3/gcc/config.gcc
  		# The SPARC port checks this value at compile-time.
  		target_cpu_default2="TARGET_CPU_$with_cpu"
  		;;
+diff -rupN gcc-4.7.2/gcc/config.in gcc-4.7.2-leon3/gcc/config.in
+--- gcc-4.7.2/gcc/config.in	2012-09-20 09:23:55.000000000 +0200
++++ gcc-4.7.2-leon3/gcc/config.in	2014-08-06 17:23:06.707332688 +0200
+@@ -381,6 +381,12 @@
+ #endif
+ 
+ 
++/* Define if your assembler supports LEON instructions. */
++#ifndef USED_FOR_TARGET
++#undef HAVE_AS_LEON
++#endif
++
++
+ /* Define if the assembler won't complain about a line such as # 0 "" 2. */
+ #ifndef USED_FOR_TARGET
+ #undef HAVE_AS_LINE_ZERO
+diff -rupN gcc-4.7.2/gcc/configure gcc-4.7.2-leon3/gcc/configure
+--- gcc-4.7.2/gcc/configure	2012-09-13 15:32:31.000000000 +0200
++++ gcc-4.7.2-leon3/gcc/configure	2014-08-06 17:22:15.723442471 +0200
+@@ -24385,6 +24385,42 @@ if test $gcc_cv_as_sparc_fmaf = yes; the
+ $as_echo "#define HAVE_AS_FMAF_HPC_VIS3 1" >>confdefs.h
+ 
+ fi
++    { $as_echo "$as_me:${as_lineno-$LINENO}: checking assembler for LEON instructions" >&5
++$as_echo_n "checking assembler for LEON instructions... " >&6; }
++if test "${gcc_cv_as_sparc_leon+set}" = set; then :
++  $as_echo_n "(cached) " >&6
++else
++  gcc_cv_as_sparc_leon=no
++  if test x$gcc_cv_as != x; then
++    $as_echo '.text
++       .register %g2, #scratch
++       .register %g3, #scratch
++       .align 4
++       smac %g2, %g3, %g1
++       umac %g2, %g3, %g1
++       casa [%g2] 0xb, %g3, %g1' > conftest.s
++    if { ac_try='$gcc_cv_as $gcc_cv_as_flags -Aleon -o conftest.o conftest.s >&5'
++  { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$ac_try\""; } >&5
++  (eval $ac_try) 2>&5
++  ac_status=$?
++  $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
++  test $ac_status = 0; }; }
++    then
++	gcc_cv_as_sparc_leon=yes
++    else
++      echo "configure: failed program was" >&5
++      cat conftest.s >&5
++    fi
++    rm -f conftest.o conftest.s
++  fi
++fi
++{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $gcc_cv_as_sparc_leon" >&5
++$as_echo "$gcc_cv_as_sparc_leon" >&6; }
++if test $gcc_cv_as_sparc_leon = yes; then
++
++$as_echo "#define HAVE_AS_LEON 1" >>confdefs.h
++
++fi
+     ;;
+ 
+   i[34567]86-*-* | x86_64-*-*)
 diff -rupN gcc-4.7.2/gcc/configure.ac gcc-4.7.2-leon3/gcc/configure.ac
 --- gcc-4.7.2/gcc/configure.ac	2012-09-13 15:32:31.000000000 +0200
 +++ gcc-4.7.2-leon3/gcc/configure.ac	2014-08-06 15:41:45.936238744 +0200
