@@ -2,5 +2,5 @@ LICENSE   := GPLv2
 VERSION   := git
 DOWNLOADS := foc.git
 URL(foc)  := http://github.com/ValiValpas/foc.git
-REV(foc)  := cf0e5631717987080a8e00f7d80283d358a8e545
+REV(foc)  := d8cff10d4086471fa1238c909b7e5af15ba10c5d
 DIR(foc)  := src/kernel/foc

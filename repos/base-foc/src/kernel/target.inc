@@ -8,12 +8,12 @@ STARTUP_LIB   =
 $(TARGET): $(FIASCO)
 
 $(FOC_BUILD_DIR):
-	$(VERBOSE_MK) $(MAKE) SYSTEM_TARGET="$(CROSS_DEV_PREFIX)" \
+	$(VERBOSE_MK) $(MAKE) INCLUDE_SPARC=y SYSTEM_TARGET="$(CROSS_DEV_PREFIX)" \
                           $(VERBOSE_DIR) -C $(FIASCO_SRC) BUILDDIR=$@
 	$(VERBOSE)cp $(KERNEL_CONFIG) $@/globalconfig.out
 
 $(FIASCO): $(FOC_BUILD_DIR)
-	$(VERBOSE_MK) $(MAKE) SYSTEM_TARGET="$(CROSS_DEV_PREFIX)" \
+	$(VERBOSE_MK) $(MAKE) INCLUDE_SPARC=y SYSTEM_TARGET="$(CROSS_DEV_PREFIX)" \
                           CC="$(CC)" CXX="$(CXX)" \
                           $(VERBOSE_DIR) -C $(FOC_BUILD_DIR)
 	$(VERBOSE)ln -sf $@ $(BUILD_BASE_DIR)/bin/$(TARGET)

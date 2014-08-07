@@ -261,10 +261,62 @@ proc build_boot_image_arm {binaries} {
 	}
 }
 
+proc build_boot_image_leon3 {binaries} {
+
+	global run_target
+	global fiasco_serial_esc_arg
+
+	copy_and_strip_binaries $binaries
+
+	build "kernel sigma0 bootstrap"
+
+	#
+	# Generate bootstrap config
+	#
+	set fh [open "[run_dir]/modules.list" "WRONLY CREAT TRUNC"]
+
+	puts $fh "modaddr 0x00e00000\n"
+	puts $fh "entry    genode"
+	puts $fh "kernel   [fiasco] $fiasco_serial_esc_arg"
+	puts $fh "roottask genode/core"
+	puts $fh "module   genode/config"
+	foreach binary $binaries {
+		if {$binary != "core"} {
+			puts $fh "module   genode/$binary" } }
+	close $fh
+
+
+	set gen_img_cmd "make -C [l4_dir]/source O=[l4_dir] E=genode "
+	append gen_img_cmd "MODULES_LIST=[pwd]/[run_dir]/modules.list "
+	append gen_img_cmd "MODULE_SEARCH_PATH=[pwd]/[run_dir]:[file dirname [fiasco]]:[l4_dir] "
+	append gen_img_cmd "SYSTEM_TARGET=[cross_dev_prefix] elfimage"
+
+	set pid [eval "spawn sh -c \"$gen_img_cmd\""]
+	expect { eof { } }
+	if {[lindex [wait $pid] end] != 0} {
+		puts stderr "Error: Single-image creation failed"
+		exit -4
+	}
+
+	exec cp [bin_dir]/bootstrap.elf [run_dir]/image.elf
+	build_uboot_image [run_dir]/image.elf
+
+	puts "\nboot image: [run_dir]/image.elf\n"
+
+	# set symbolic link to image.elf file in TFTP directory for PXE boot
+	if {[info exists ::env(PXE_TFTP_DIR_BASE)] &&
+	    [info exists ::env(PXE_TFTP_DIR_OFFSET)]} {
+		exec ln -sf "[pwd]/[run_dir]/image.elf" "$::env(PXE_TFTP_DIR_BASE)$::env(PXE_TFTP_DIR_OFFSET)"
+		if {[regexp "uboot" $run_target]} {
+			exec ln -sf "[pwd]/[run_dir]/uImage" "$::env(PXE_TFTP_DIR_BASE)$::env(PXE_TFTP_DIR_OFFSET)/uImage"
+		}
+	}
+}
 
 proc build_boot_image {binaries} {
-	if {[have_spec x86]} { return [build_boot_image_x86 $binaries] }
-	if {[have_spec arm]} { return [build_boot_image_arm $binaries] }
+	if {[have_spec x86]}   { return [build_boot_image_x86   $binaries] }
+	if {[have_spec arm]}   { return [build_boot_image_arm   $binaries] }
+	if {[have_spec leon3]} { return [build_boot_image_leon3 $binaries] }
 }
 
 
