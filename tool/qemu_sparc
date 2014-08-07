@@ -1,0 +1,169 @@
+#!/usr/bin/make -f
+#
+# \brief       Build qemu for Sparc/LEON3 (based on tool_chain script)
+# \author      Johannes Schlatow
+# \contributor Norman Feske (tool_chain script)
+# \date        2014-08-07
+#
+
+help:
+	$(ECHO)
+	$(ECHO) "Build qemu with sufficient support for Sparc/LEON3"
+	$(ECHO)
+	$(ECHO) "--- available commands ---"
+	$(ECHO) "all        - build"
+	$(ECHO) "clean      - clean everything except downloaded archives"
+	$(ECHO) "cleanall   - clean everything including downloaded archives"
+	$(ECHO) "install    - copy qemu to '$(INSTALL_LOCATION)'"
+	$(ECHO)
+
+#
+# Enable parallel build for 2nd-level $(MAKE) by default
+#
+
+MAKE_OPT ?= -j4
+
+#
+# Determine Genode base directory based on the known location of the
+# 'create_builddir' tool within the Genode source tree
+#
+
+GENODE_DIR ?= $(realpath $(dir $(firstword $(MAKEFILE_LIST)))/..)
+
+#
+# Download locations
+#
+
+DOWNLOAD_MIRROR      ?= http://wiki.qemu-project.org/download/
+QEMU_DOWNLOAD_URL     = $(DOWNLOAD_MIRROR)/
+
+
+#
+# Tool versions and install location
+#
+
+QEMU_VERSION      = 2.1.0
+INSTALL_LOCATION  = /opt/qemu-sparc/
+DOWNLOAD_DIR      = download
+CONTRIB_DIR       = contrib
+SIGVERIFIER       = $(GENODE_DIR)/tool/download_sigver
+
+#
+# Utilities
+#
+
+##
+# Return $(2) if $(1) is empty, "" else
+#
+check_nonempty_f = $(if $(1),,$(info $(2))$(2))
+
+##
+# Return $(3) if $(1) != $(2), "" else
+#
+check_equal_f = $(if $(filter $(1),$(2)),,$(info $(3))$(3))
+
+
+SHELL       = bash
+BRIGHT_COL  = \033[01;33m
+DEFAULT_COL = \033[0m
+ECHO        = @echo -e
+VERBOSE     = @
+
+#
+# Check if 'wget' is installed
+#
+WGET_OK = $(call check_nonempty_f,$(shell which wget),\
+            Need to have 'wget' installed.)
+
+#
+# Check if 'gpg' is installed
+#
+GPG_OK = $(call check_nonempty_f,$(shell which gpg),\
+           Need to have 'gpg' installed.)
+
+TOOLS_OK = $(WGET_OK) $(GPG_OK)
+
+ifneq ($(strip $(TOOLS_OK)),)
+$(error Please install missing tools.)
+endif
+
+#
+# 'configure' parameters
+#
+
+LOCAL_INSTALL_LOCATION = $(shell pwd)/build/install-qemu
+
+ifneq ($(VERBOSE),)
+CONFIG_QUIET = 
+MAKEFLAGS   += --quiet
+export MAKEFLAGS
+endif
+
+QEMU_CONFIG = $(CONFIG_QUIET) \
+              --prefix=$(LOCAL_INSTALL_LOCATION) \
+              --target-list=sparc-softmmu
+
+#
+# Build rules and dependencies between build steps
+#
+
+QEMU_BINARIES           = build/qemu/sparc-softmmu/qemu-system-sparc
+QEMU_INSTALLED_BINARIES = $(LOCAL_INSTALL_LOCATION)/bin/qemu-system-sparc
+
+all: $(QEMU_INSTALLED_BINARIES)
+
+$(DOWNLOAD_DIR):
+	$(VERBOSE)mkdir -p $@
+
+$(DOWNLOAD_DIR)/qemu-$(QEMU_VERSION).tar.bz2: $(DOWNLOAD_DIR)
+	$(ECHO) "$(BRIGHT_COL)downloading qemu...$(DEFAULT_COL)"
+	$(VERBOSE)wget -c -P $(DOWNLOAD_DIR) $(QEMU_DOWNLOAD_URL)/qemu-$(QEMU_VERSION).tar.bz2 && touch $@
+	$(VERBOSE)wget -c -P $(DOWNLOAD_DIR) $(QEMU_DOWNLOAD_URL)/qemu-$(QEMU_VERSION).tar.bz2.sig && touch $@
+	$(VERBOSE)$(SIGVERIFIER) $(DOWNLOAD_DIR)/qemu-$(QEMU_VERSION).tar.bz2 $(DOWNLOAD_DIR)/qemu-$(QEMU_VERSION).tar.bz2.sig
+
+$(CONTRIB_DIR)/qemu-$(QEMU_VERSION): $(DOWNLOAD_DIR)/qemu-$(QEMU_VERSION).tar.bz2
+	$(ECHO) "$(BRIGHT_COL)unpacking qemu...$(DEFAULT_COL)"
+	$(VERBOSE)mkdir -p $(CONTRIB_DIR)
+	$(VERBOSE)tar xfj $^ -C $(CONTRIB_DIR) && touch $@
+
+QEMU_PATCHES_DIR = $(GENODE_DIR)/tool/patches/qemu-$(QEMU_VERSION)
+QEMU_PATCHES = $(shell cat $(QEMU_PATCHES_DIR)/series)
+
+$(CONTRIB_DIR)/qemu-$(QEMU_VERSION)/configure:: $(CONTRIB_DIR)/qemu-$(QEMU_VERSION)
+	$(ECHO) "$(BRIGHT_COL)patching qemu build system...$(DEFAULT_COL)"
+	$(VERBOSE)for p in $(QEMU_PATCHES); do \
+	            patch -d $(CONTRIB_DIR)/qemu-$(QEMU_VERSION) -p1 -i $(QEMU_PATCHES_DIR)/$$p; done;
+	$(VERBOSE)touch $@
+
+build/qemu/Makefile: $(CONTRIB_DIR)/qemu-$(QEMU_VERSION)/configure
+	$(ECHO) "$(BRIGHT_COL)configuring qemu...$(DEFAULT_COL)"
+	$(VERBOSE)mkdir -p $(dir $@)
+	$(VERBOSE)cd $(dir $@); ../../$(CONTRIB_DIR)/qemu-$(QEMU_VERSION)/configure $(QEMU_CONFIG)
+
+$(QEMU_BINARIES): build/qemu/Makefile
+	$(ECHO) "$(BRIGHT_COL)builing qemu...$(DEFAULT_COL)"
+	$(VERBOSE)$(MAKE) -C $(dir $<) $(MAKE_OPT)
+
+$(QEMU_INSTALLED_BINARIES): $(QEMU_BINARIES)
+	$(ECHO) "$(BRIGHT_COL)installing qemu...$(DEFAULT_COL)"
+	$(VERBOSE)$(MAKE) -C build/qemu install
+
+#
+# Clean rules
+#
+
+clean:
+	rm -rf $(CONTRIB_DIR)/qemu-$(QEMU_VERSION)
+	rm -rf build/qemu
+
+cleanall: clean
+	rm -rf $(DOWNLOAD_DIR)/qemu-$(QEMU_VERSION).tar.bz2
+
+#
+# Install rules
+#
+
+install: all
+	$(ECHO) "$(BRIGHT_COL)installing qemu to '$(INSTALL_LOCATION)'...$(DEFAULT_COL)"
+	$(VERBOSE)sudo cp -a --remove-destination --no-target-directory $(LOCAL_INSTALL_LOCATION) $(INSTALL_LOCATION)
+

@@ -1,0 +1,126 @@
+diff -rup qemu-2.1.0-rc5/hw/sparc/leon3.c qemu-2.1.0-rc5_patched/hw/sparc/leon3.c
+--- qemu-2.1.0-rc5/hw/sparc/leon3.c	2014-07-29 21:47:12.000000000 +0200
++++ qemu-2.1.0-rc5_patched/hw/sparc/leon3.c	2014-07-31 14:03:17.838925604 +0200
+@@ -39,6 +39,8 @@
+ #define CPU_CLK (40 * 1000 * 1000)
+ 
+ #define PROM_FILENAME        "u-boot.bin"
++#define AHB_FILENAME         "leon3_ahbctrl.bin"
++#define APB_FILENAME         "leon3_apbctrl.bin"
+ 
+ #define MAX_PILS 16
+ 
+@@ -110,12 +112,17 @@ static void leon3_generic_hw_init(Machin
+     CPUSPARCState   *env;
+     MemoryRegion *address_space_mem = get_system_memory();
+     MemoryRegion *ram = g_new(MemoryRegion, 1);
++    MemoryRegion *pnp_ahb = g_new(MemoryRegion, 1);
++    MemoryRegion *pnp_apb = g_new(MemoryRegion, 1);
+     MemoryRegion *prom = g_new(MemoryRegion, 1);
+     int         ret;
+     char       *filename;
++    char       *ahb_file = NULL;
++    char       *apb_file = NULL;
+     qemu_irq   *cpu_irqs = NULL;
+     int         bios_size;
+     int         prom_size;
++    int         rom_size;
+     ResetData  *reset_info;
+ 
+     /* Init CPU */
+@@ -155,6 +162,67 @@ static void leon3_generic_hw_init(Machin
+     vmstate_register_ram_global(ram);
+     memory_region_add_subregion(address_space_mem, 0x40000000, ram);
+ 
++    /* Allocate AHB plug&plan section */
++    memory_region_init_ram(pnp_ahb, NULL, "pnp_ahb.rom", GRLIB_PNP_AHB_SIZE);
++    vmstate_register_ram_global(pnp_ahb);
++    memory_region_set_readonly(pnp_ahb, true);
++    memory_region_add_subregion(address_space_mem, GRLIB_PNP_AHB_BASE, pnp_ahb);
++
++    if (nb_option_roms) {
++      ahb_file = qemu_find_file(QEMU_FILE_TYPE_BIOS, option_rom[0].name);
++
++      if (nb_option_roms > 1) {
++        apb_file = qemu_find_file(QEMU_FILE_TYPE_BIOS, option_rom[1].name);
++      }
++      else {
++        apb_file = qemu_find_file(QEMU_FILE_TYPE_BIOS, APB_FILENAME);
++      }
++    }
++    else {
++      ahb_file = qemu_find_file(QEMU_FILE_TYPE_BIOS, AHB_FILENAME);
++      apb_file = qemu_find_file(QEMU_FILE_TYPE_BIOS, APB_FILENAME);
++    }
++    
++    /* Load AHB plug&play section */
++    if (ahb_file != NULL) {
++      rom_size = get_image_size(ahb_file);
++      if (rom_size > GRLIB_PNP_AHB_SIZE) {
++        fprintf(stderr, "%s: ROM image too big (%x > %x)\n",
++                        __FUNCTION__, rom_size, GRLIB_PNP_AHB_SIZE);
++        rom_size = 0;
++      }
++      if (rom_size > 0) {
++        rom_size = load_image_targphys(ahb_file, GRLIB_PNP_AHB_BASE, GRLIB_PNP_AHB_SIZE);
++      }
++      if (rom_size < 0) {
++          fprintf(stderr, "%s: error loading '%s'\n",
++                          __FUNCTION__, ahb_file);
++      }
++    }
++
++    /* Allocate APB plug&plan section */
++    memory_region_init_ram(pnp_apb, NULL, "pnp_apb.rom", GRLIB_PNP_APB_SIZE);
++    vmstate_register_ram_global(pnp_apb);
++    memory_region_set_readonly(pnp_apb, true);
++    memory_region_add_subregion(address_space_mem, GRLIB_PNP_APB_BASE, pnp_apb);
++    
++    /* Load APB plug&play section */
++    if (apb_file != NULL) {
++      rom_size = get_image_size(apb_file);
++      if (rom_size > GRLIB_PNP_APB_SIZE) {
++        fprintf(stderr, "%s: ROM image too big (%x > %x)\n",
++                        __FUNCTION__, rom_size, GRLIB_PNP_APB_SIZE);
++        rom_size = 0;
++      }
++      if (rom_size > 0) {
++        rom_size = load_image_targphys(apb_file, GRLIB_PNP_APB_BASE, GRLIB_PNP_APB_SIZE);
++      }
++      if (rom_size < 0) {
++          fprintf(stderr, "%s: error loading '%s'\n",
++                          __FUNCTION__, apb_file);
++      }
++    }
++
+     /* Allocate BIOS */
+     prom_size = 8 * 1024 * 1024; /* 8Mb */
+     memory_region_init_ram(prom, NULL, "Leon3.bios", prom_size);
+diff -rup qemu-2.1.0-rc5/include/hw/sparc/grlib.h qemu-2.1.0-rc5_patched/include/hw/sparc/grlib.h
+--- qemu-2.1.0-rc5/include/hw/sparc/grlib.h	2014-07-29 21:47:12.000000000 +0200
++++ qemu-2.1.0-rc5_patched/include/hw/sparc/grlib.h	2014-07-31 14:03:17.838925604 +0200
+@@ -34,6 +34,11 @@
+ 
+ /* IRQMP */
+ 
++#define GRLIB_PNP_AHB_BASE 0xFFFFF000
++#define GRLIB_PNP_AHB_SIZE 0x00000FFF
++#define GRLIB_PNP_APB_BASE 0x800FF000
++#define GRLIB_PNP_APB_SIZE 0x00000FFF
++
+ typedef void (*set_pil_in_fn) (void *opaque, uint32_t pil_in);
+ 
+ void grlib_irqmp_set_irq(void *opaque, int irq, int level);
+diff -rup qemu-2.1.0-rc5/target-sparc/translate.c qemu-2.1.0-rc5_patched/target-sparc/translate.c
+--- qemu-2.1.0-rc5/target-sparc/translate.c	2014-07-29 21:47:12.000000000 +0200
++++ qemu-2.1.0-rc5_patched/target-sparc/translate.c	2014-07-31 18:14:27.042533052 +0200
+@@ -5126,7 +5126,8 @@ static void disas_sparc_insn(DisasContex
+                     if (IS_IMM) {
+                         goto illegal_insn;
+                     }
+-                    if (!supervisor(dc)) {
++                    int asi = GET_FIELD(insn, 19, 26);
++                    if (!supervisor(dc) && asi != 0xA) {
+                         goto priv_insn;
+                     }
+ #endif
