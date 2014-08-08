@@ -54,7 +54,7 @@ diff -rupN gcc-4.7.2/gcc/config/sparc/leon.md gcc-4.7.2-leon3/gcc/config/sparc/l
  
 diff -rupN gcc-4.7.2/gcc/config/sparc/sparc.c gcc-4.7.2-leon3/gcc/config/sparc/sparc.c
 --- gcc-4.7.2/gcc/config/sparc/sparc.c	2012-09-02 12:36:54.000000000 +0200
-+++ gcc-4.7.2-leon3/gcc/config/sparc/sparc.c	2014-08-06 14:45:42.014673402 +0200
++++ gcc-4.7.2-leon3/gcc/config/sparc/sparc.c	2014-08-08 12:51:36.066630077 +0200
 @@ -231,6 +231,30 @@ struct processor_costs leon_costs = {
  };
  
@@ -136,9 +136,83 @@ diff -rupN gcc-4.7.2/gcc/config/sparc/sparc.c gcc-4.7.2-leon3/gcc/config/sparc/s
        else if (TARGET_V8)
  	sparc_memory_model = SMM_PSO;
        else
+@@ -1441,6 +1476,18 @@ sparc_expand_move (enum machine_mode mod
+       sparc_emit_set_const64 (operands[0], operands[1]);
+       return true;
+ 
++    case TImode:
++      {
++	rtx high, low;
++	/* TImode isn't available in 32-bit mode.  */
++	split_double (operands[1], &high, &low);
++	emit_insn (gen_movdi (operand_subword (operands[0], 0, 0, TImode),
++			      high));
++	emit_insn (gen_movdi (operand_subword (operands[0], 1, 0, TImode),
++			      low));
++      }
++      return true;
++
+     default:
+       gcc_unreachable ();
+     }
+@@ -2592,7 +2639,7 @@ emit_scc_insn (rtx operands[])
+       || (!TARGET_VIS3 && code == GEU))
+     {
+       emit_insn (gen_rtx_SET (VOIDmode, operands[0],
+-			      gen_rtx_fmt_ee (code, SImode,
++			      gen_rtx_fmt_ee (code, GET_MODE (operands[0]),
+ 					      gen_compare_reg_1 (code, x, y),
+ 					      const0_rtx)));
+       return true;
+@@ -3468,6 +3515,10 @@ sparc_legitimate_address_p (enum machine
+ 	      && ! (TARGET_ARCH64 && TARGET_HARD_QUAD))
+ 	    return 0;
+ 
++	  /* Likewise for TImode, but in all cases.  */
++	  if (mode == TImode)
++	    return 0;
++
+ 	  /* We prohibit REG + REG on ARCH32 if not optimizing for
+ 	     DFmode/DImode because then mem_min_alignment is likely to be zero
+ 	     after reload and the  forced split would lack a matching splitter
+@@ -10949,26 +11000,26 @@ sparc_emit_membar_for_model (enum memmod
+ 
+   if (before_after & 1)
+     {
+-      if (model == MEMMODEL_ACQUIRE
+-          || model == MEMMODEL_ACQ_REL
+-          || model == MEMMODEL_SEQ_CST)
++      if (model == MEMMODEL_RELEASE
++	  || model == MEMMODEL_ACQ_REL
++	  || model == MEMMODEL_SEQ_CST)
+ 	{
+ 	  if (load_store & 1)
+-	    mm |= LoadLoad | LoadStore;
++	    mm |= LoadLoad | StoreLoad;
+ 	  if (load_store & 2)
+-	    mm |= StoreLoad | StoreStore;
++	    mm |= LoadStore | StoreStore;
+ 	}
+     }
+   if (before_after & 2)
+     {
+-      if (model == MEMMODEL_RELEASE
++      if (model == MEMMODEL_ACQUIRE
+ 	  || model == MEMMODEL_ACQ_REL
+ 	  || model == MEMMODEL_SEQ_CST)
+ 	{
+ 	  if (load_store & 1)
+-	    mm |= LoadLoad | StoreLoad;
++	    mm |= LoadLoad | LoadStore;
+ 	  if (load_store & 2)
+-	    mm |= LoadStore | StoreStore;
++	    mm |= StoreLoad | StoreStore;
+ 	}
+     }
+ 
 diff -rupN gcc-4.7.2/gcc/config/sparc/sparc.h gcc-4.7.2-leon3/gcc/config/sparc/sparc.h
 --- gcc-4.7.2/gcc/config/sparc/sparc.h	2012-03-24 19:47:55.000000000 +0100
-+++ gcc-4.7.2-leon3/gcc/config/sparc/sparc.h	2014-08-06 14:52:24.437654315 +0200
++++ gcc-4.7.2-leon3/gcc/config/sparc/sparc.h	2014-08-07 18:49:15.491252385 +0200
 @@ -138,21 +138,22 @@ extern enum cmodel sparc_cmodel;
  #define TARGET_CPU_supersparc	2
  #define TARGET_CPU_hypersparc	3
@@ -223,7 +297,7 @@ diff -rupN gcc-4.7.2/gcc/config/sparc/sparc.h gcc-4.7.2-leon3/gcc/config/sparc/s
  
 diff -rupN gcc-4.7.2/gcc/config/sparc/sparc.md gcc-4.7.2-leon3/gcc/config/sparc/sparc.md
 --- gcc-4.7.2/gcc/config/sparc/sparc.md	2012-07-19 23:56:33.000000000 +0200
-+++ gcc-4.7.2-leon3/gcc/config/sparc/sparc.md	2014-08-06 14:52:48.404500799 +0200
++++ gcc-4.7.2-leon3/gcc/config/sparc/sparc.md	2014-08-08 12:53:13.617282380 +0200
 @@ -216,6 +216,7 @@
     supersparc,
     hypersparc,
@@ -232,6 +306,171 @@ diff -rupN gcc-4.7.2/gcc/config/sparc/sparc.md gcc-4.7.2-leon3/gcc/config/sparc/
     sparclite,
     f930,
     f934,
+@@ -2033,6 +2034,164 @@
+   DONE;
+ })
+ 
++(define_expand "movti"
++  [(set (match_operand:TI 0 "nonimmediate_operand" "")
++	(match_operand:TI 1 "general_operand" ""))]
++  "TARGET_ARCH64"
++{
++  if (sparc_expand_move (TImode, operands))
++    DONE;
++})
++
++;; We need to prevent reload from splitting TImode moves, because it
++;; might decide to overwrite a pointer with the value it points to.
++;; In that case we have to do the loads in the appropriate order so
++;; that the pointer is not destroyed too early.
++
++(define_insn "*movti_insn_sp64"
++  [(set (match_operand:TI 0 "nonimmediate_operand" "=r , o,?*e,?o,b")
++        (match_operand:TI 1 "input_operand"        "roJ,rJ, eo, e,J"))]
++  "TARGET_ARCH64
++   && ! TARGET_HARD_QUAD
++   && (register_operand (operands[0], TImode)
++       || register_or_zero_operand (operands[1], TImode))"
++  "#"
++  [(set_attr "length" "2,2,2,2,2")
++   (set_attr "cpu_feature" "*,*,fpu,fpu,vis")])
++
++(define_insn "*movti_insn_sp64_hq"
++  [(set (match_operand:TI 0 "nonimmediate_operand" "=r , o,?*e,?*e,?m,b")
++        (match_operand:TI 1 "input_operand"        "roJ,rJ,  e,  m, e,J"))]
++  "TARGET_ARCH64
++   && TARGET_HARD_QUAD
++   && (register_operand (operands[0], TImode)
++       || register_or_zero_operand (operands[1], TImode))"
++  "@
++  #
++  #
++  fmovq\t%1, %0
++  ldq\t%1, %0
++  stq\t%1, %0
++  #"
++  [(set_attr "type" "*,*,fpmove,fpload,fpstore,*")
++   (set_attr "length" "2,2,*,*,*,2")])
++
++;; Now all the splits to handle multi-insn TI mode moves.
++(define_split
++  [(set (match_operand:TI 0 "register_operand" "")
++        (match_operand:TI 1 "register_operand" ""))]
++  "reload_completed
++   && ((TARGET_FPU
++        && ! TARGET_HARD_QUAD)
++       || (! fp_register_operand (operands[0], TImode)
++           && ! fp_register_operand (operands[1], TImode)))"
++  [(clobber (const_int 0))]
++{
++  rtx set_dest = operands[0];
++  rtx set_src = operands[1];
++  rtx dest1, dest2;
++  rtx src1, src2;
++
++  dest1 = gen_highpart (DImode, set_dest);
++  dest2 = gen_lowpart (DImode, set_dest);
++  src1 = gen_highpart (DImode, set_src);
++  src2 = gen_lowpart (DImode, set_src);
++
++  /* Now emit using the real source and destination we found, swapping
++     the order if we detect overlap.  */
++  if (reg_overlap_mentioned_p (dest1, src2))
++    {
++      emit_insn (gen_movdi (dest2, src2));
++      emit_insn (gen_movdi (dest1, src1));
++    }
++  else
++    {
++      emit_insn (gen_movdi (dest1, src1));
++      emit_insn (gen_movdi (dest2, src2));
++    }
++  DONE;
++})
++
++(define_split
++  [(set (match_operand:TI 0 "nonimmediate_operand" "")
++        (match_operand:TI 1 "const_zero_operand" ""))]
++  "reload_completed"
++  [(clobber (const_int 0))]
++{
++  rtx set_dest = operands[0];
++  rtx dest1, dest2;
++
++  switch (GET_CODE (set_dest))
++    {
++    case REG:
++      dest1 = gen_highpart (DImode, set_dest);
++      dest2 = gen_lowpart (DImode, set_dest);
++      break;
++    case MEM:
++      dest1 = adjust_address (set_dest, DImode, 0);
++      dest2 = adjust_address (set_dest, DImode, 8);
++      break;
++    default:
++      gcc_unreachable ();
++    }
++
++  emit_insn (gen_movdi (dest1, const0_rtx));
++  emit_insn (gen_movdi (dest2, const0_rtx));
++  DONE;
++})
++
++(define_split
++  [(set (match_operand:TI 0 "register_operand" "")
++        (match_operand:TI 1 "memory_operand" ""))]
++  "reload_completed
++   && offsettable_memref_p (operands[1])
++   && (! TARGET_HARD_QUAD
++       || ! fp_register_operand (operands[0], TImode))"
++  [(clobber (const_int 0))]
++{
++  rtx word0 = adjust_address (operands[1], DImode, 0);
++  rtx word1 = adjust_address (operands[1], DImode, 8);
++  rtx set_dest, dest1, dest2;
++
++  set_dest = operands[0];
++
++  dest1 = gen_highpart (DImode, set_dest);
++  dest2 = gen_lowpart (DImode, set_dest);
++
++  /* Now output, ordering such that we don't clobber any registers
++     mentioned in the address.  */
++  if (reg_overlap_mentioned_p (dest1, word1))
++
++    {
++      emit_insn (gen_movdi (dest2, word1));
++      emit_insn (gen_movdi (dest1, word0));
++    }
++  else
++   {
++      emit_insn (gen_movdi (dest1, word0));
++      emit_insn (gen_movdi (dest2, word1));
++   }
++  DONE;
++})
++
++(define_split
++  [(set (match_operand:TI 0 "memory_operand" "")
++	(match_operand:TI 1 "register_operand" ""))]
++  "reload_completed
++   && offsettable_memref_p (operands[0])
++   && (! TARGET_HARD_QUAD
++       || ! fp_register_operand (operands[1], TImode))"
++  [(clobber (const_int 0))]
++{
++  rtx set_src = operands[1];
++
++  emit_insn (gen_movdi (adjust_address (operands[0], DImode, 0),
++			gen_highpart (DImode, set_src)));
++  emit_insn (gen_movdi (adjust_address (operands[0], DImode, 8),
++			gen_lowpart (DImode, set_src)));
++  DONE;
++})
++
+ 
+ ;; Floating point move instructions
+ 
 diff -rupN gcc-4.7.2/gcc/config/sparc/sparc.opt gcc-4.7.2-leon3/gcc/config/sparc/sparc.opt
 --- gcc-4.7.2/gcc/config/sparc/sparc.opt	2011-11-30 17:10:24.000000000 +0100
 +++ gcc-4.7.2-leon3/gcc/config/sparc/sparc.opt	2014-08-06 14:50:11.746663314 +0200
@@ -271,8 +510,57 @@ diff -rupN gcc-4.7.2/gcc/config/sparc/sparc-opts.h gcc-4.7.2-leon3/gcc/config/sp
    PROCESSOR_F934,
 diff -rupN gcc-4.7.2/gcc/config/sparc/sync.md gcc-4.7.2-leon3/gcc/config/sparc/sync.md
 --- gcc-4.7.2/gcc/config/sparc/sync.md	2012-01-26 23:04:54.000000000 +0100
-+++ gcc-4.7.2-leon3/gcc/config/sparc/sync.md	2014-08-06 15:06:51.661099637 +0200
-@@ -163,7 +163,8 @@
++++ gcc-4.7.2-leon3/gcc/config/sparc/sync.md	2014-08-08 17:40:29.738123852 +0200
+@@ -35,8 +35,7 @@
+ 
+ (define_expand "membar"
+   [(set (match_dup 1)
+-	(unspec:BLK [(match_dup 1)
+-		     (match_operand:SI 0 "const_int_operand")]
++	(unspec:BLK [(match_dup 1) (match_operand:SI 0 "const_int_operand")]
+ 		    UNSPEC_MEMBAR))]
+   "TARGET_V8 || TARGET_V9"
+ {
+@@ -66,7 +65,7 @@
+   "stbar"
+   [(set_attr "type" "multi")])
+ 
+-;; For V8, LDSTUB has the effect of membar #StoreLoad
++;; For V8, LDSTUB has the effect of membar #StoreLoad.
+ (define_insn "*membar_storeload"
+   [(set (match_operand:BLK 0 "" "")
+ 	(unspec:BLK [(match_dup 0) (const_int 2)] UNSPEC_MEMBAR))]
+@@ -95,6 +94,18 @@
+   "membar\t%1"
+   [(set_attr "type" "multi")])
+ 
++(define_peephole2
++  [(set (match_operand:BLK 0 "" "")
++	(unspec:BLK [(match_dup 0) (match_operand:SI 1 "const_int_operand")]
++		    UNSPEC_MEMBAR))
++   (set (match_operand:BLK 2 "" "")
++	(unspec:BLK [(match_dup 2) (match_operand:SI 3 "const_int_operand")]
++		    UNSPEC_MEMBAR))]
++  ""
++  [(set (match_operand:BLK 0 "" "")
++	(unspec:BLK [(match_dup 0) (match_dup 1)] UNSPEC_MEMBAR))]
++{ operands[1] = GEN_INT (UINTVAL (operands[1]) | UINTVAL (operands[3])); })
++
+ (define_expand "atomic_load<mode>"
+   [(match_operand:I 0 "register_operand" "")
+    (match_operand:I 1 "memory_operand" "")
+@@ -123,8 +134,8 @@
+   [(set_attr "type" "load,fpload")])
+ 
+ (define_expand "atomic_store<mode>"
+-  [(match_operand:I 0 "register_operand" "")
+-   (match_operand:I 1 "memory_operand" "")
++  [(match_operand:I 0 "memory_operand" "")
++   (match_operand:I 1 "register_operand" "")
+    (match_operand:SI 2 "const_int_operand" "")]
+   ""
+ {
+@@ -163,7 +174,8 @@
     (match_operand:SI 5 "const_int_operand" "")		;; is_weak
     (match_operand:SI 6 "const_int_operand" "")		;; mod_s
     (match_operand:SI 7 "const_int_operand" "")]		;; mod_f
@@ -282,7 +570,7 @@ diff -rupN gcc-4.7.2/gcc/config/sparc/sync.md gcc-4.7.2-leon3/gcc/config/sparc/s
  {
    sparc_expand_compare_and_swap (operands);
    DONE;
-@@ -178,7 +179,7 @@
+@@ -178,7 +190,7 @@
  	     [(match_operand:I48MODE 2 "register_operand" "")
  	      (match_operand:I48MODE 3 "register_operand" "")]
  	     UNSPECV_CAS))])]
@@ -291,7 +579,7 @@ diff -rupN gcc-4.7.2/gcc/config/sparc/sync.md gcc-4.7.2-leon3/gcc/config/sparc/s
    "")
  
  (define_insn "*atomic_compare_and_swap<mode>_1"
-@@ -189,10 +190,24 @@
+@@ -189,10 +201,24 @@
  	  [(match_operand:I48MODE 2 "register_operand" "r")
  	   (match_operand:I48MODE 3 "register_operand" "0")]
  	  UNSPECV_CAS))]
@@ -388,7 +676,7 @@ diff -rupN gcc-4.7.2/gcc/config.gcc gcc-4.7.2-leon3/gcc/config.gcc
  		;;
 diff -rupN gcc-4.7.2/gcc/config.in gcc-4.7.2-leon3/gcc/config.in
 --- gcc-4.7.2/gcc/config.in	2012-09-20 09:23:55.000000000 +0200
-+++ gcc-4.7.2-leon3/gcc/config.in	2014-08-06 17:23:06.707332688 +0200
++++ gcc-4.7.2-leon3/gcc/config.in	2014-08-07 10:50:22.342816313 +0200
 @@ -381,6 +381,12 @@
  #endif
  
