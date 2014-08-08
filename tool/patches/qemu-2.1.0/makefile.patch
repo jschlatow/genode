@@ -1,0 +1,13 @@
+--- qemu-2.1.0/Makefile	2014-08-08 19:10:23.956156772 +0200
++++ qemu-2.1.0-patched/Makefile	2014-08-08 19:10:20.649468278 +0200
+@@ -345,7 +345,9 @@
+ s390-ccw.img \
+ spapr-rtas.bin slof.bin \
+ palcode-clipper \
+-u-boot.e500
++u-boot.e500 \
++leon3_ahbctrl.bin \
++leon3_apbctrl.bin
+ else
+ BLOBS=
+ endif
