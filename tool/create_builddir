@@ -38,6 +38,7 @@ usage:
 	@echo "                  'hw_rpi'"
 	@echo "                  'hw_zynq'"
 	@echo "                  'hw_parallella'"
+	@echo "                  'hw_zedboard'"
 	@echo "                  'hw_x86_64'"
 	@echo "                  'hw_x86_64_muen'"
 	@echo "                  'foc_x86_32'"
@@ -259,6 +260,9 @@ hw_zynq::
 
 hw_parallella::
 	@echo "SPECS = genode hw_parallella" > $(BUILD_DIR)/etc/specs.conf
+
+hw_zedboard::
+	@echo "SPECS = genode hw_zedboard" > $(BUILD_DIR)/etc/specs.conf
 
 hw_odroid_xu::
 	@echo "SPECS = genode hw_odroid_xu" > $(BUILD_DIR)/etc/specs.conf
