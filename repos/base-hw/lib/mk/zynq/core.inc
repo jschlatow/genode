@@ -5,7 +5,6 @@
 #
 
 # add include paths
-INC_DIR += $(REP_DIR)/src/core/include/spec/zynq
 INC_DIR += $(REP_DIR)/src/core/include/spec/xilinx
 
 # add C++ sources
