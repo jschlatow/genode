@@ -5,5 +5,7 @@
 # \date   2015-03-12
 #
 
+INC_DIR += $(REP_DIR)/src/core/include/spec/zedboard
+
 # include less specific configuration
 include $(REP_DIR)/lib/mk/zynq/core.inc
