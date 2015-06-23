@@ -78,7 +78,17 @@ class Genode::Xilinx_uartps_base : public Mmio
 			struct Bdiv : Bitfield<0,8> { };
 		};
 
-		void _init(unsigned long const clock, unsigned long const baud_rate)
+	public:
+
+		/**
+		 * Constructor
+		 *
+		 * \param  base       MMIO base address
+		 * \param  clock      reference clock
+		 * \param  baud_rate  targeted baud rate
+		 */
+		Xilinx_uartps_base(addr_t const base, unsigned long const clock,
+		                   unsigned long const baud_rate) : Mmio(base)
 		{
 			/* reset UART */
 			Uart_cr::access_t uart_cr = 0;
@@ -101,22 +111,6 @@ class Genode::Xilinx_uartps_base : public Mmio
 			Uart_cr::Rx_enable::set(uart_cr, 1);
 			Uart_cr::Tx_enable::set(uart_cr, 1);
 			write<Uart_cr>(uart_cr);
-		}
-
-	public:
-
-		/**
-		 * Constructor
-		 *
-		 * \param  base       MMIO base address
-		 * \param  clock      reference clock
-		 * \param  baud_rate  targeted baud rate
-		 */
-		Xilinx_uartps_base(addr_t const base, unsigned long const clock,
-		                   unsigned long const baud_rate) : Mmio(base)
-		{
-			/* reset and init UART */
-			_init(clock, baud_rate);
 		}
 
 		/**
