@@ -26,7 +26,7 @@
  */
 class Platform_timer_base :
 	public Genode::Io_mem_connection,
-	public Genode::Ttc_base<0, Genode::Board_base::CPU_1x_CLOCK>
+	public Genode::Ttc_base<0, Genode::Board_base::CPU_1X_CLOCK>
 {
 	public:
 

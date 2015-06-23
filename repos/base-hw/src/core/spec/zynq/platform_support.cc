@@ -53,9 +53,8 @@ Native_region * Platform::_core_only_mmio_regions(unsigned const i)
 		{ Board::CORTEX_A9_PRIVATE_MEM_BASE,
 		  Board::CORTEX_A9_PRIVATE_MEM_SIZE },
 
-		/* both UARTs */
+		/* core UART */
 		{ Board::UART_0_MMIO_BASE, Board::UART_SIZE },
-		{ Board::UART_1_MMIO_BASE, Board::UART_SIZE },
 
 		/* L2 cache controller */
 		{ Board::PL310_MMIO_BASE, Board::PL310_MMIO_SIZE }
