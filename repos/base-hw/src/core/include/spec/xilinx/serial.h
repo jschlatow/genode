@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2014-2015 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -20,26 +20,25 @@
 /* Genode includes */
 #include <drivers/uart/xilinx_uartps_base.h>
 
-namespace Genode
-{
-	/**
-	 * Serial output driver for core
-	 */
-	class Serial : public Xilinx_uartps_base
-	{
-		public:
+namespace Genode { class Serial; }
 
-			/**
-			 * Constructor
-			 *
-			 * \param baud_rate  targeted transfer baud-rate
-			 */
-			Serial(unsigned const baud_rate)
-			:
-				Xilinx_uartps_base(Board::UART_MMIO_BASE,
-				              Board::UART_CLOCK, baud_rate)
-			{ }
-	};
-}
+/**
+ * Serial output driver for core
+ */
+class Genode::Serial : public Xilinx_uartps_base
+{
+	public:
+
+		/**
+		 * Constructor
+		 *
+		 * \param baud_rate  targeted transfer baud-rate
+		 */
+		Serial(unsigned const baud_rate)
+		:
+			Xilinx_uartps_base(Board::UART_MMIO_BASE,
+			                   Board::UART_CLOCK, baud_rate)
+		{ }
+};
 
 #endif /* _SERIAL_H_ */
