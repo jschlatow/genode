@@ -32,7 +32,21 @@ class Platform_timer_base
 {
 	private:
 
-		enum { TICS_PER_US = Genode::Board_base::CPU_1X_CLOCK / 1000 / 1000 };
+		enum
+		{ 
+			PRESCALER   = 6,
+			TICS_PER_MS = (Genode::Board_base::CPU_1X_CLOCK / 1000 >> PRESCALER),
+			TICS_PER_US = TICS_PER_MS / 1000
+		};
+
+		/**
+		 * Clock control register
+		 */
+		struct Clock : Register<0x00, 8>
+		{
+			struct Prescale_en : Bitfield<0, 1> { };
+			struct Prescale    : Bitfield<1, 4> { };
+		};
 
 		/**
 		 * Counter control register
@@ -77,6 +91,9 @@ class Platform_timer_base
 				Genode::env()->rm_session()->attach(dataspace()))
 		{
 			_disable();
+
+			/* configure prescaler */
+			write<Clock>(Clock::Prescale::bits(PRESCALER-1) | Clock::Prescale_en::bits(1));
 
 			/* enable all interrupts */
 			write<Irqen>(~0);
@@ -129,7 +146,7 @@ class Platform_timer_base
 			return us * TICS_PER_US; }
 
 		/**
-		 * Translate native timer value to microseconds
+		 * Return maximum number of tics
 		 */
 		unsigned long max_value() const { return (Interval::access_t)~0; }
 };

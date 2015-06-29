@@ -46,7 +46,7 @@ struct Genode::Board_base
 		AXI_1_MMIO_SIZE = 0x40000000,
 
 		/* clocks (assuming 6:2:1 mode) */
-		CPU_1X_CLOCK   = 111111115,
+		CPU_1X_CLOCK   = 133000000,
 		CPU_6X4X_CLOCK = 6*CPU_1X_CLOCK,
 
 		/* UART controllers */
