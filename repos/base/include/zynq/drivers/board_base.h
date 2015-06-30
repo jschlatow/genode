@@ -1,5 +1,5 @@
 /*
- * \brief  Base driver for the Zynq (QEMU)
+ * \brief  Base driver for Xilinx Zynq platforms
  * \author Mark Albers
  * \author Timo Wischer
  * \author Johannes Schlatow
@@ -16,12 +16,12 @@
 #ifndef _INCLUDE__DRIVERS__BOARD_BASE_H_
 #define _INCLUDE__DRIVERS__BOARD_BASE_H_
 
-namespace Genode { struct Board_base; }
+namespace Zynq { struct Board_base; }
 
 /**
  * Base driver for the Zynq platform
  */
-struct Genode::Board_base
+struct Zynq::Board_base
 {
 	enum
 	{
@@ -45,10 +45,6 @@ struct Genode::Board_base
 		AXI_1_MMIO_BASE = 0x80000000, /* PL AXI Slave port #1 */
 		AXI_1_MMIO_SIZE = 0x40000000,
 
-		/* clocks (assuming 6:2:1 mode) */
-		CPU_1X_CLOCK   = 133000000,
-		CPU_6X4X_CLOCK = 6*CPU_1X_CLOCK,
-
 		/* UART controllers */
 		UART_0_MMIO_BASE = MMIO_0_BASE,
 		UART_SIZE        = 0x1000,
@@ -57,8 +53,6 @@ struct Genode::Board_base
 		/* CPU */
 		CORTEX_A9_PRIVATE_MEM_BASE  = 0xf8f00000,
 		CORTEX_A9_PRIVATE_MEM_SIZE  = 0x00002000,
-		CORTEX_A9_CLOCK             = CPU_6X4X_CLOCK,
-		CORTEX_A9_PRIVATE_TIMER_CLK = CORTEX_A9_CLOCK, /* FIXME not sure */
 
 		/* CPU cache */
 		PL310_MMIO_BASE      = MMIO_1_BASE + 0xF02000,
