@@ -34,9 +34,8 @@ class Platform_timer_base
 
 		enum
 		{ 
-			PRESCALER   = 6,
-			TICS_PER_MS = (Genode::Board_base::CPU_1X_CLOCK / 1000 >> PRESCALER),
-			TICS_PER_US = TICS_PER_MS / 1000
+			PRESCALER   = 5,
+			TICS_PER_MS = (Genode::Board_base::CPU_1X_CLOCK / 1000) >> PRESCALER
 		};
 
 		/**
@@ -137,13 +136,13 @@ class Platform_timer_base
 		 * Translate native timer value to microseconds
 		 */
 		static unsigned long tics_to_us(unsigned long const tics) {
-			return tics / TICS_PER_US; }
+			return tics * 1000 / TICS_PER_MS; }
 
 		/**
 		 * Translate microseconds to a native timer value
 		 */
 		static unsigned long us_to_tics(unsigned long const us) {
-			return us * TICS_PER_US; }
+			return us * TICS_PER_MS / 1000; }
 
 		/**
 		 * Return maximum number of tics
