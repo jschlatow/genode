@@ -55,7 +55,9 @@ append config {
 			<provides><service name="Block"/></provides>
 		</start>
 		<start name="test-blk-cli">
-			<resource name="RAM" quantum="1M" />
+			<resource name="RAM" quantum="2M" />
+			<config>
+			</config>
 		</start>
 	</config> }
 
@@ -79,7 +81,7 @@ lappend_if [have_spec platform_rpi]     boot_modules platform_drv
 set disk_image "bin/sd_card.img"
 
 build_boot_image $boot_modules
-append qemu_args "-drive file=$disk_image,if=sd,cache=writeback -nographic "
+append qemu_args "-drive file=$disk_image,if=sd,cache=writeback,format=raw -nographic "
 
 if { [file exists $disk_image] == 0 } then {
 	# create empty block device file
