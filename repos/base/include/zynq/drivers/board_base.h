@@ -70,6 +70,10 @@ struct Zynq::Board_base
 		EMAC_0_MMIO_SIZE   = 0x1000,
 		EMAC_0_IRQ         = 54,
 
+		SDIO_0_MMIO_BASE   = MMIO_0_BASE + 0x100000,
+		SDIO_0_MMIO_SIZE   = 0x100,
+		SDIO_0_IRQ         = 56,
+
 		/* wether board provides security extension */
 		SECURITY_EXTENSION = 0,
 	};
