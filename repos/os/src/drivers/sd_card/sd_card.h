@@ -406,7 +406,7 @@ namespace Sd_card {
 			 * Extract capacity information from CSD register
 			 *
 			 * \throw  Detection_failed
-			 * \return capacity in 512-byte blocks
+			 * \return capacity in 512-kByte blocks
 			 */
 			size_t _sd_card_device_size(Csd const csd)
 			{
@@ -417,7 +417,6 @@ namespace Sd_card {
 				 */
 
 				if (Csd3::Version::get(csd.csd3) == Csd3::Version::STANDARD_CAPACITY) {
-
 					/*
 					 * Calculation of the capacity according to the
 					 * "Physical Layer Simplified Specification Version 4.10",
@@ -426,12 +425,14 @@ namespace Sd_card {
 					size_t const read_bl_len = Csd2::V1_read_bl_len::get(csd.csd2);
 					size_t const c_size      = (Csd2::V1_c_size_hi::get(csd.csd2) << 2)
 					                         |  Csd1::V1_c_size_lo::get(csd.csd1);
+
 					size_t const c_size_mult = Csd1::V1_c_size_mult::get(csd.csd1);
 					size_t const mult        = 1 << (c_size_mult + 2);
 					size_t const block_len   = 1 << read_bl_len;
 					size_t const capacity    = (c_size + 1)*mult*block_len;
+					size_t const capacity512KiB = capacity / (512 * 1024);
 
-					return capacity;
+					return capacity512KiB;
 				}
 
 				if (Csd3::Version::get(csd.csd3) == Csd3::Version::HIGH_CAPACITY)
@@ -474,6 +475,8 @@ namespace Sd_card {
 				}
 
 				Csd const csd = _read_csd();
+				PDBG("CSD: 0x%08x 0x%08x 0x%08x 0x%08x",
+					 csd.csd3, csd.csd2, csd.csd1, csd.csd0);
 
 				if (!issue_command(Select_card(rca))) {
 					PERR("Select_card failed");

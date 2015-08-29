@@ -406,6 +406,14 @@ struct Sdhci_controller : private Sdhci, public Sd_card::Host_controller
 			csd.csd1 = read<Resp1>();
 			csd.csd2 = read<Resp2>();
 			csd.csd3 = read<Resp3>();
+
+			/* shift csd response by 1 byte higher */
+			Genode::uint8_t* csdBytes = reinterpret_cast<Genode::uint8_t*>(&csd);
+			for (int i=sizeof(csd)-1; i>=1; i--) {
+				csdBytes[i] = csdBytes[i-1];
+			}
+			csdBytes[0] = 0x00;
+
 			return csd;
 		}
 
