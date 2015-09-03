@@ -33,12 +33,15 @@ class Buffer_descriptor : protected Attached_ram_dataspace, protected Mmio
 		const size_t _buffer_offset;
 
 		unsigned int _descriptor_index;
-		char* const _buffer;
+		char * const _buffer;
 
 	protected:
-		typedef struct {
+
+		typedef struct
+		{
 			uint32_t addr;
 			uint32_t status;
+
 		} descriptor_t;
 
 		descriptor_t* const _descriptors;
@@ -52,15 +55,17 @@ class Buffer_descriptor : protected Attached_ram_dataspace, protected Mmio
 		}
 
 
-		descriptor_t& _current_descriptor()
+		descriptor_t & _current_descriptor()
 		{
 			return _descriptors[_descriptor_index];
 		}
 
 
-		char* const _current_buffer()
+		char * const _current_buffer()
 		{
-			char* const buffer = &_buffer[MAX_PACKAGE_SIZE * _descriptor_index];
+			char * const buffer =
+				&_buffer[MAX_PACKAGE_SIZE * _descriptor_index];
+
 			return buffer;
 		}
 
@@ -70,8 +75,10 @@ class Buffer_descriptor : protected Attached_ram_dataspace, protected Mmio
 		 * start of the ram spave contains all buffer descriptors
 		 * after that the data spaces for the ethernet packages are following
 		 */
-		Buffer_descriptor(const size_t buffer_count = 1) :
-			Attached_ram_dataspace(env()->ram_session(), BUFFER_SIZE * buffer_count, UNCACHED),
+		Buffer_descriptor(const size_t buffer_count = 1)
+		:
+			Attached_ram_dataspace(env()->ram_session(),
+			                       BUFFER_SIZE * buffer_count, UNCACHED),
 			Genode::Mmio( reinterpret_cast<addr_t>(local_addr<void>()) ),
 			_buffer_count(buffer_count),
 			_buffer_offset(BUFFER_DESC_SIZE * buffer_count),
