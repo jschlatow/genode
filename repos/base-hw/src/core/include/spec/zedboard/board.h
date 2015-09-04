@@ -1,13 +1,13 @@
 /*
- * \brief  Board driver for core on Zynq/Zedboard
- * \author Mark Albers
- * \date   2015-03-12
+ * \brief  Board driver for core on Zynq
  * \author Johannes Schlatow
- * \date   2014-12-15
+ * \author Stefan Kalkowski
+ * \author Martin Stein
+ * \date   2014-06-02
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2015 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -17,22 +17,40 @@
 #define _BOARD_H_
 
 /* core includes */
-#include <spec/zynq/board_support.h>
+#include <spec/cortex_a9/board_support.h>
+#include <spec/arm/pl310.h>
 
 namespace Genode
 {
-	class Board : public Zynq::Board
-	{
-		public:
-			enum {
-				UART_MMIO_BASE = UART_1_MMIO_BASE,
-				RAM_0_SIZE = 0x20000000, /* 512MB */
-				DDR_CLOCK  = 533333313,
-				FCLK_CLK0  = 100*1000*1000, /* AXI */
-				FCLK_CLK1  = 20250*1000, /* Cam */
-				FCLK_CLK2  = 150*1000*1000, /* AXI HP */
-			};
-	};
+	class Pl310;
+	class Board;
 }
+
+/**
+ * L2 outer cache controller
+ */
+class Genode::Pl310 : public Arm::Pl310
+{
+	public:
+
+		Pl310(addr_t const base) : Arm::Pl310(base) { _init(); }
+};
+
+/**
+ * Board driver for core
+ */
+class Genode::Board : public Cortex_a9::Board
+{
+	public:
+		enum {
+			UART_MMIO_BASE = UART_1_MMIO_BASE,
+		};
+
+		static void outer_cache_invalidate();
+		static void outer_cache_flush();
+		static void prepare_kernel();
+		static void secondary_cpus_ip(void * const ip) { }
+		static bool is_smp() { return true; }
+};
 
 #endif /* _BOARD_H_ */

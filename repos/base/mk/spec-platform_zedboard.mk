@@ -8,4 +8,6 @@ SPECS += cadence_gem
 #
 SPECS += zynq
 
+REP_INC_DIR += include/platform/parallella
+
 include $(call select_from_repositories,mk/spec-zynq.mk)
