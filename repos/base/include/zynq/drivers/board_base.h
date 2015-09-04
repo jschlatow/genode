@@ -47,6 +47,7 @@ struct Zynq::Board_base
 
 		/* UART controllers */
 		UART_0_MMIO_BASE = MMIO_0_BASE,
+		UART_1_MMIO_BASE = MMIO_0_BASE + 0x1000,
 		UART_SIZE        = 0x1000,
 		UART_CLOCK       = 50*1000*1000,
 
