@@ -152,6 +152,8 @@ struct Sdhci : Genode::Mmio
 
 struct Sdhci_controller : private Sdhci, public Sd_card::Host_controller
 {
+	enum { Block_size = 0x200 };
+
 	private:
 
 		Delayer           &_delayer;
@@ -313,7 +315,7 @@ struct Sdhci_controller : private Sdhci, public Sd_card::Host_controller
 			 */
 			Blksizecnt::access_t v = read<Blksizecnt>();
 			Blksizecnt::Blkcnt::set(v, block_count);
-			Blksizecnt::Blksize::set(v, 0x200);
+			Blksizecnt::Blksize::set(v, Block_size);
 			write<Blksizecnt>(v);
 		}
 
@@ -435,6 +437,16 @@ struct Sdhci_controller : private Sdhci, public Sd_card::Host_controller
 			return Sd_card::Send_relative_addr::Response::Rca::get(read<Resp0>());
 		}
 
+		size_t _block_to_command_address(const size_t block_number)
+		{
+			/* use byte position for addressing with standard cards */
+			if (_card_info.version() == Sd_card::Csd3::Version::STANDARD_CAPACITY) {
+				return block_number * Block_size;
+			}
+
+			return block_number;
+		}
+
 		/**
 		 * Read data blocks from SD card
 		 *
@@ -446,7 +458,7 @@ struct Sdhci_controller : private Sdhci, public Sd_card::Host_controller
 
 			_set_block_count(block_count);
 
-			if (!issue_command(Read_multiple_block(block_number))) {
+			if (!issue_command(Read_multiple_block(_block_to_command_address(block_number)))) {
 				PERR("Read_multiple_block failed, Status: 0x%08x", read<Status>());
 				return false;
 			}
@@ -492,7 +504,7 @@ struct Sdhci_controller : private Sdhci, public Sd_card::Host_controller
 
 			_set_block_count(block_count);
 
-			if (!issue_command(Write_multiple_block(block_number))) {
+			if (!issue_command(Write_multiple_block(_block_to_command_address(block_number)))) {
 				PERR("Write_multiple_block failed, Status: 0x%08x", read<Status>());
 				return false;
 			}

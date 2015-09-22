@@ -77,7 +77,7 @@ class Block::Sdhci_driver : public Block::Driver
 		 ** Block::Driver interface **
 		 *****************************/
 
-		Genode::size_t block_size() { return 512; }
+		Genode::size_t block_size() { return Sdhci_controller::Block_size; }
 
 		virtual Block::sector_t block_count()
 		{
