@@ -202,7 +202,6 @@ struct Sdhci_controller : private Sdhci, public Sd_card::Host_controller
 
 			/* print the host controller version */
 			PDBG("Host controller Version: %u (specification %u.0)", read<Host_version::Vendor>(), read<Host_version::Spec>()+1);
-			PDBG("Capabilities 0x%08x", read<Capabilities>());
 
 
 			/* Enable sd card power */
@@ -218,13 +217,6 @@ struct Sdhci_controller : private Sdhci, public Sd_card::Host_controller
 			 */
 
 			_set_and_enable_clock(240);
-
-
-
-			// check powercon and clock
-			// alle werte von sdhci_can_issue_command überprüfen
-			PDBG("Clock %x, Power %d, Voltage %x", read<Control1>() & 0x7, read<Host_ctrl::Power>(), read<Host_ctrl::Voltage>());
-
 
 			if (!issue_command(Go_idle_state())) {
 				PWRN("Go_idle_state command failed");
@@ -393,8 +385,6 @@ struct Sdhci_controller : private Sdhci, public Sd_card::Host_controller
 
 			/* write command */
 			write<Cmdtm>(cmd);
-
-			// TODO hier gucken warum interruptfalg nicht gesetzt wird
 
 			if (!_poll_and_wait_for<Interrupt::Cmd_done>(1)) {
 				PERR("command timed out");

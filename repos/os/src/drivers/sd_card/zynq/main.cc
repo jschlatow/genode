@@ -15,7 +15,6 @@
 /* Genode includes */
 #include <base/printf.h>
 #include <os/server.h>
-//#include <platform_session/connection.h>
 
 /* local includes */
 #include <driver.h>
@@ -25,7 +24,6 @@ struct Main
 {
 	Server::Entrypoint &ep;
 
-//	Platform::Connection platform;
 
 	struct Factory : Block::Driver_factory
 	{
@@ -43,9 +41,6 @@ struct Main
 	: ep(ep), root(ep, Genode::env()->heap(), factory)
 	{
 		Genode::printf("--- SD card driver ---\n");
-
-//		while (platform.power_state(Platform::Session::POWER_SDHCI) == 0)
-//			platform.power_state(Platform::Session::POWER_SDHCI, true);
 
 		Genode::env()->parent()->announce(ep.manage(root));
 	}
