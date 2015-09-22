@@ -63,7 +63,7 @@ class Block::Sdhci_driver : public Block::Driver
 		Sdhci_driver(bool use_dma)
 		:
 			_controller((addr_t)_sdhci_mmio.local_addr<void>(),
-			            _delayer, SDHCI_IRQ, use_dma),
+						_delayer, SDHCI_IRQ, use_dma, true),
 			_use_dma(use_dma)
 		{
 			Sd_card::Card_info const card_info = _controller.card_info();
