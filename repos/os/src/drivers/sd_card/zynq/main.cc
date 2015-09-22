@@ -28,7 +28,7 @@ struct Main
 	struct Factory : Block::Driver_factory
 	{
 		Block::Driver *create() {
-			return new (Genode::env()->heap()) Block::Sdhci_driver(false); }
+			return new (Genode::env()->heap()) Block::Sdhci_driver(false, true); }
 
 		void destroy(Block::Driver *driver) {
 			Genode::destroy(Genode::env()->heap(),

@@ -55,6 +55,10 @@ struct Genode::Board_base
 		USB_DWC_OTG_BASE = 0x20980000,
 		USB_DWC_OTG_SIZE = 0x20000,
 
+		SDHCI_BASE = MMIO_0_BASE + 0x300000,
+		SDHCI_SIZE = 0x100,
+		SDHCI_IRQ  = 62,
+
 		/* timer */
 		TIMER_IRQ = 0,
 
