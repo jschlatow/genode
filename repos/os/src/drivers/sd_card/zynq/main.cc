@@ -1,6 +1,7 @@
 /*
- * \brief  SD-card driver for Raspberry Pi
+ * \brief  SD-card driver for Zynq boards
  * \author Norman Feske
+ * \authot Timo Wischer
  * \date   2014-09-21
  */
 

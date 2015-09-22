@@ -1,6 +1,7 @@
 /*
- * \brief  Raspberry Pi implementation of the Block::Driver interface
+ * \brief  Zynq board implementation of the Block::Driver interface
  * \author Norman Feske
+ * \authot Timo Wischer
  * \date   2014-09-21
  */
 
@@ -21,7 +22,7 @@
 #include <block/component.h>
 
 /* local includes */
-#include "sdhci.h"
+#include <sdhci.h>
 
 namespace Block {
 	using namespace Genode;
