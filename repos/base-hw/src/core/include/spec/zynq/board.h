@@ -42,6 +42,9 @@ class Genode::Pl310 : public Arm::Pl310
 class Genode::Board : public Cortex_a9::Board
 {
 	public:
+		enum {
+			UART_MMIO_BASE = UART_0_MMIO_BASE,
+		};
 
 		static void outer_cache_invalidate();
 		static void outer_cache_flush();
