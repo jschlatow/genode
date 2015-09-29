@@ -18,7 +18,7 @@
 #include <timer_session/connection.h>
 #include <util/mmio.h>
 
-#include <platform/zynq/drivers/board_base.h>
+#include <platform/zedboard/drivers/board_base.h>
 
 #include "i2c.h"
 
