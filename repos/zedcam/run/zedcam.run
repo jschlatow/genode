@@ -1,0 +1,98 @@
+#
+# Build
+#
+
+build { core
+        init
+	drivers/timer
+        drivers/gpio
+        drivers/i2c
+        drivers/vdma
+        app/zedcam
+}
+
+create_boot_directory
+
+#
+# Generate config
+#
+
+set config {
+<config verbose="yes">
+	<parent-provides>
+		<service name="CAP"/>
+		<service name="LOG"/>
+		<service name="RM"/>
+		<service name="SIGNAL"/>
+		<service name="IO_MEM"/>
+		<service name="IRQ"/>
+		<service name="ROM"/>
+		<service name="RAM"/>
+		<service name="IO_PORT"/>
+		<service name="PD"/>
+		<service name="CPU"/>
+	</parent-provides>
+	<default-route>
+		<any-service> <parent/> <any-child/> </any-service>
+	</default-route>
+
+	<start name="timer">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Timer"/></provides>
+	</start>
+        <start name="zynq_gpio">
+                <binary name="zynq_gpio_drv" />
+                <resource name="RAM" quantum="1M" />
+                <provides><service name="Gpio"/></provides>
+                <config>
+                        <gpio addr="0x41230000"/>
+                        <gpio addr="0x41210000"/>
+                        <gpio addr="0x41200000"/>
+                </config>
+	</start>
+        <start name="zynq_i2c">
+                <binary name="zynq_i2c_drv" />
+                <resource name="RAM" quantum="1M" />
+                <provides><service name="I2C"/></provides>
+        </start>
+        <start name="zynq_vdma">
+                <binary name="zynq_vdma_drv" />
+                <resource name="RAM" quantum="1M" />
+                <provides><service name="Vdma"/></provides>
+                <config>
+                        <vdma addr="0x43010000"/>
+                        <vdma addr="0x43000000"/>
+                        <vdma addr="0x43020000"/>
+                </config>
+        </start>
+        <start name="zedcam-app">
+                <resource name="RAM" quantum="24M" />
+                <service name="Gpio"> <child name="zynq_gpio" /> </service>
+                <service name="I2C"> <child name="zynq_i2c" /> </service>
+                <service name="Vdma"> <child name="zynq_vdma" /> </service>
+		<service name="Timer"> <child name="timer" /> </service>
+	</start>
+</config>}
+
+install_config $config
+
+#
+# Boot image
+#
+
+build_boot_image { 	core
+                        init
+			timer
+                        zynq_gpio_drv
+                        zynq_i2c_drv
+                        zynq_vdma_drv
+                        zedcam-app
+                        ld.lib.so
+                        libc.lib.so
+                        libm.lib.so
+                        stdcxx.lib.so
+}
+
+append qemu_args " -nographic "
+
+run_genode_until {Zedcam App Test: done} 60

@@ -19,7 +19,7 @@
 #include <util/mmio.h>
 #include <vector>
 #include <new>
-#include <zynq/drivers/board_base.h>
+#include <drivers/board_base.h>
 #include "vdma.h"
 
 namespace Vdma {
@@ -37,7 +37,7 @@ class Vdma::Driver
         {
             for (unsigned i = 0; i < addr.size(); i++)
             {
-                _vdma_bank.push_back(new Zynq_Vdma(addr[i], Zynq::Board_base::VDMA_MMIO_SIZE));
+                _vdma_bank.push_back(new Zynq_Vdma(addr[i], Board_base::VDMA_MMIO_SIZE));
             }
         }
 

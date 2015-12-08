@@ -19,7 +19,7 @@
 #include <util/mmio.h>
 #include <vector>
 #include <new>
-#include <platform/zynq/drivers/board_base.h>
+#include <drivers/board_base.h>
 #include "gpio.h"
 
 namespace Gpio {
