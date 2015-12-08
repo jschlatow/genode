@@ -4,7 +4,7 @@
 # \date   2012-07-03
 #
 
-set use_sd_card_drv [expr [have_spec omap4] || [have_spec platform_arndale] || [have_spec pl180]]
+set use_sd_card_drv [expr [have_spec omap4] || [have_spec platform_arndale] || [have_spec pl180] || [have_spec hw_zynq]]
 set use_ahci_drv   [have_spec x86]
 set mkfs [check_installed mkfs.vfat]
 
@@ -135,7 +135,7 @@ catch { exec sh -c $cmd }
 #
 append qemu_args " -m 128 -nographic "
 append_if $use_ahci_drv    qemu_args " -drive id=disk,file=$disk_image,if=none -device ahci,id=ahci -device ide-drive,drive=disk,bus=ahci.0 -boot d"
-append_if $use_sd_card_drv qemu_args " -drive file=$disk_image,if=sd,cache=writeback "
+append_if $use_sd_card_drv qemu_args " -drive file=$disk_image,if=sd,cache=writeback,format=file "
 
 run_genode_until {.*child "test-libc_vfs" exited with exit value 0.*} 60
 
