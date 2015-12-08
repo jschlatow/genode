@@ -86,7 +86,7 @@
 #undef HAVE_CHROOT
 
 /* Define to 1 if you have the `clock' function. */
-#undef HAVE_CLOCK
+#define HAVE_CLOCK
 
 /* Define to 1 if you have the `confstr' function. */
 #undef HAVE_CONFSTR

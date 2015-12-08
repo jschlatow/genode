@@ -1,0 +1,60 @@
+build "core init test/lemon_lgf server/ram_fs"
+
+create_boot_directory
+
+install_config {
+<config>
+	<parent-provides>
+		<service name="ROM"/>
+		<service name="RAM"/>
+		<service name="IRQ"/>
+		<service name="IO_MEM"/>
+		<service name="IO_PORT"/>
+		<service name="CAP"/>
+		<service name="PD"/>
+		<service name="RM"/>
+		<service name="CPU"/>
+		<service name="LOG"/>
+		<service name="SIGNAL"/>
+	</parent-provides>
+	<default-route>
+		<any-service> <parent/> <any-child/> </any-service>
+	</default-route>
+	<start name="ram_fs">
+		<resource name="RAM" quantum="4M"/>
+		<provides><service name="File_system"/></provides>
+		<config>
+			<content>
+				<rom name="digraph.lgf" as="digraph.lgf"/>
+			</content>
+			<policy label="" root="/" writeable="no"/>
+		</config>
+	</start>
+	<start name="test-lemon_lgf">
+		<resource name="RAM" quantum="2M"/>
+		<config>
+			<libc stdin="/dev/null" stdout="/dev/log" stderr="/dev/log">
+				<vfs>
+					<dir name="dev"> <log/> <null/> </dir>
+					<fs />
+				</vfs>
+			</libc>
+		</config>
+	</start>
+</config>
+}
+
+build_boot_image {
+	core init test-lemon_lgf
+	ld.lib.so libc.lib.so
+	libm.lib.so
+	stdcxx.lib.so
+	ram_fs libc_fs.lib.so
+	libc_log.lib.so
+	digraph.lgf
+}
+
+append qemu_args " -nographic -m 64 "
+
+run_genode_until "--- returning from main ---" 20
+

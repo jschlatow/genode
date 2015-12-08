@@ -1,0 +1,19 @@
++++ src/lib/sqlite/sqlite-amalgamation-3080403/sqlite3.c	2014-04-08 16:39:12.195025654 +0200
+@@ -26795,7 +26795,7 @@ static int seekAndRead(unixFile *id, sql
+ #endif
+   TIMER_START;
+   assert( cnt==(cnt&0x1ffff) );
+-  assert( id->h>2 );
++  assert( id->h>=SQLITE_MINIMUM_FILE_DESCRIPTOR );
+   cnt &= 0x1ffff;
+   do{
+ #if defined(USE_PREAD)
+@@ -26910,7 +26910,7 @@ static int seekAndWriteFd(
+   int rc = 0;                     /* Value returned by system call */
+ 
+   assert( nBuf==(nBuf&0x1ffff) );
+-  assert( fd>2 );
++  assert( fd>=SQLITE_MINIMUM_FILE_DESCRIPTOR );
+   nBuf &= 0x1ffff;
+   TIMER_START;
+ 

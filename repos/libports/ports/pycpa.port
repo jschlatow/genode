@@ -1,0 +1,12 @@
+LICENSE   := MIT
+VERSION   := hg
+DOWNLOADS := pycpa.hg
+
+URL(pycpa) := https://code.google.com/p/pycpa/ 
+REV(pycpa) := df31e56aca87
+DIR(pycpa) := pycpa
+
+PATCHES := src/lib/pycpa/options.patch src/lib/pycpa/logging.patch src/lib/pycpa/random.patch src/lib/pycpa/python26.patch
+
+#DIRS := include/python2.6
+#DIR_CONTENT(include/python2.6) := src/lib/python/Include/*.h

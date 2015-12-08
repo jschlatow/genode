@@ -14,7 +14,14 @@ your build.conf file. A sample Genode configuration is provided with the
 be found within this directory. If you are not using Linux as a Genode base
 platform, do not forget to add 'python.lib.so' to your boot module list.
 
-Limitations
+Import
 -----------
-Currently, this Python port does not feature any standard modules or the import
-of any modules from a Python script.
+The import of standard modules is currently supported by using the built-in 
+zipimporter. For this, a zip file containing all the required .py or .pyc files
+must be provided as a rom module. In order to import a module from a Python
+script, the PYTHONPATH must be set to the zip file, e.g.:
+
+  import sys
+  sys.path = ['python26.zip']
+  # now we can import modules from python26.zip
+  import os

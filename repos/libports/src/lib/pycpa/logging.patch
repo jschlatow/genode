@@ -1,0 +1,156 @@
++++ pycpa/pycpa/analysis.py	2014-11-10 11:45:17.773856372 +0100
+@@ -23,7 +23,7 @@ from __future__ import division
+ 
+ 
+ import gc
+-import logging
++from pycpa import logging
+ import copy
+ import time
+ from collections import deque
++++ pycpa/pycpa/cparpc.py	2014-11-10 11:45:17.777189738 +0100
+@@ -39,7 +39,7 @@ from pycpa import analysis
+ from pycpa import path_analysis
+ from pycpa import graph
+ 
+-import logging
++from pycpa import logging
+ 
+ logger = logging.getLogger("xmlrpc")
+ 
++++ pycpa/pycpa/junctions.py	2014-11-10 11:45:17.777189738 +0100
+@@ -19,7 +19,7 @@ from __future__ import division
+ 
+ import itertools
+ import math
+-import logging
++from pycpa import logging
+ 
+ from . import analysis
+ from . import model
++++ pycpa/pycpa/logging.py	2014-11-10 11:45:17.783856470 +0100
+@@ -0,0 +1,54 @@
++
++
++
++logger_dict = {}
++
++def getLogger(name):
++    if (logger_dict.has_key(name)):
++        return logger_dict.get(name)
++    else:
++        l = logger(name)
++        logger_dict[name] = l
++        return l
++
++def basicConfig(level, format):
++    print "IGNORE basicConfig"
++    
++
++def debug(*args):
++    print "IGNORE debug"
++    
++
++def info(*args):
++    print "IGNORE info"
++        
++
++class logger:
++    
++
++
++    def __init__(self,name):
++        self.name = name
++        self.actual_printing = True;
++
++    def debug(self, *args):
++        if (self.actual_printing):
++            print "DEBUG [", self.name, "]"
++            print args
++        
++    def info(self, *args):
++        if (self.actual_printing):
++            print "INFO ", self.name, "]"
++            print args
++        
++    def warning(self, *args):
++        if (self.actual_printing):
++            print "WARNING [", self.name, "]"
++            print "args"
++        
++    def error(self, *args):
++        if (self.actual_printing):
++            print "ERROR [", self.name, "]"
++            print args
++        
++        
++++ pycpa/pycpa/model.py	2014-11-10 11:45:17.783856470 +0100
+@@ -24,7 +24,7 @@ from __future__ import unicode_literals
+ from __future__ import division
+ 
+ import math
+-import logging
++from pycpa import logging
+ import copy
+ import warnings
+ 
++++ pycpa/pycpa/options.py	2014-11-10 11:45:17.783856470 +0100
+@@ -30,7 +30,7 @@ MAX_ERRORS = 10
+ INFINITY = float('inf')
+ 
+ #import argparse
+-import logging
++from pycpa import logging
+ import sys
+ 
+ from . import __license_text__, __version__
++++ pycpa/pycpa/schedulers.py	2014-11-10 11:45:17.790523201 +0100
+@@ -19,7 +19,7 @@ from __future__ import division
+ 
+ import itertools
+ import math
+-import logging
++from pycpa import logging
+ 
+ from . import analysis
+ from . import options
++++ pycpa/pycpa/simulation.py	2014-11-10 11:45:17.790523201 +0100
+@@ -19,7 +19,7 @@ from __future__ import absolute_import
+ 
+ from SimPy.Simulation import Process, Simulation, SimEvent, waitevent, hold
+ 
+-import logging
++from pycpa import logging
+ 
+ 
+ logger = logging.getLogger("sim")
++++ pycpa/pycpa/smff_loader.py	2014-11-10 11:45:17.793856567 +0100
+@@ -15,7 +15,7 @@ SMFF import/annotate
+ from __future__ import absolute_import
+ 
+ import xml.dom.minidom
+-import logging
++from pycpa import logging
+ 
+ from . import options
+ from . import model
++++ pycpa/pycpa/symload.py	2014-11-10 11:45:17.793856567 +0100
+@@ -20,7 +20,7 @@ import xml.dom.minidom
+ from . import model
+ from . import schedulers
+ 
+-import logging
++from pycpa import logging
+ 
+ logger = logging.getLogger("symta_loader")
+ 
++++ pycpa/pycpa/util.py	2014-11-10 11:45:17.793856567 +0100
+@@ -21,7 +21,7 @@ from __future__ import division
+ 
+ 
+ import fractions
+-import logging
++from pycpa import logging
+ import random
+ import math
+ import itertools

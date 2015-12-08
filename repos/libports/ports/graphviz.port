@@ -1,0 +1,26 @@
+LICENSE    := Eclipse Public License 1.0
+VERSION    := 2.38.0
+DOWNLOADS  := graphviz.archive
+
+URL(graphviz) := http://www.graphviz.org/pub/graphviz/stable/SOURCES/graphviz-${VERSION}.tar.gz
+SHA(graphviz) := 053c771278909160916ca5464a0a98ebf034c6ef
+DIR(graphviz) := src
+
+DIRS := include/graphviz
+
+DIR_CONTENT(include/graphviz) := $(addprefix src/lib/,cgraph/cgraph.h \
+                 gvc/gvc.h \
+					  gvc/gvcext.h \
+					  gvc/gvcjob.h \
+					  gvc/gvplugin.h \
+					  cdt/cdt.h \
+					  common/types.h \
+					  common/geom.h \
+					  common/textspan.h \
+					  common/usershape.h \
+					  common/memory.h \
+					  common/utils.h \
+					  xdot/xdot.h \
+					  common/globals.h \
+					  pathplan/pathgeom.h \
+					  fdpgen/fdp.h )

@@ -1,0 +1,19 @@
++++ pycpa/pycpa/model.py	2014-11-10 12:09:19.714462074 +0100
+@@ -509,7 +509,7 @@ class PJdEventModel (EventModel):
+         self.J = J
+         self.dmin = dmin
+ 
+-        self.__description__ = "P={} J={} d={}".format(P, J, dmin)
++        self.__description__ = "P={0} J={1} d={2}".format(P, J, dmin)
+         if early_arrival:
+             raise(NotImplementedError)
+ 
+@@ -935,7 +935,7 @@ class Resource (object):
+                 logger.warn("cannot compute load for %s, skipping load "
+                     "analysis for this resource" % (self.name))
+                 return 0.
+-            assert l < float('inf'), "Load on resource {} is infinity"\
++            assert l < float('inf'), "Load on resource {0} is infinity"\
+                     .format(self.name)
+             assert l >= 0., "Load should be non-negative"
+         return l

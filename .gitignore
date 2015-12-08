@@ -2,7 +2,6 @@
 *.orig
 *.swp
 *.rej
-
 /build
 /contrib
 /repos/base-codezero/contrib
@@ -35,4 +34,3 @@
 /repos/qt4/tool/qmake/qmake
 /repos/qt4/tool/rcc
 /repos/qt4/tool/uic
-

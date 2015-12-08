@@ -1,0 +1,47 @@
+build "core init test/rpc_multiple_ep"
+
+create_boot_directory
+
+install_config {
+	<config>
+		<parent-provides>
+			<service name="LOG"/>
+			<service name="CAP"/>
+			<service name="RM"/>
+		</parent-provides>
+		<default-route>
+			<any-service> <parent/> </any-service>
+		</default-route>
+		<start name="test-rpc_multiple_ep">
+			<resource name="RAM" quantum="10M"/>
+			<provides> <service name="LOG"/> </provides>
+		</start>
+		<start name="client1">
+			<binary name="test-rpc_multiple_ep_client"/>
+			<resource name="RAM" quantum="10M"/>
+			<route>
+				<service name="LOG"> <any-child/> </service>
+			</route>
+		</start>
+		<start name="client2">
+			<binary name="test-rpc_multiple_ep_client"/>
+			<resource name="RAM" quantum="10M"/>
+			<route>
+				<service name="LOG"> <any-child/> </service>
+			</route>
+		</start>
+	</config>
+}
+
+build_boot_image "core init test-rpc_multiple_ep test-rpc_multiple_ep_client"
+
+append qemu_args "-nographic -m 64"
+
+run_genode_until {.*First message.*First message} 10
+
+if {[regexp {Second message} $output]} {
+	puts stderr "Test failed"
+	exit 1;
+}
+
+puts "Test succeeded"

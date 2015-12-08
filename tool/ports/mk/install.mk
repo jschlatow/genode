@@ -161,6 +161,22 @@ _git_dir = $(call _assert,$(DIR($1)),Missing declaration of DIR($*))
 		test -d $$dir || git clone $(URL($*)) $$dir; \
 		$(MSG_UPDATE)$$dir; \
 		cd $$dir && git fetch && git reset -q --hard HEAD && git checkout -q $(REV($*))
+##
+## Obtain source codes from a Mercurial repository
+##
+
+_hg_dir = $(call _assert,$(DIR($1)),Missing declaration of DIR($*))
+
+%.hg:
+	$(VERBOSE)test -n "$(REV($*))" ||\
+		($(ECHO) "Error: Undefined revision for $*"; false);
+	$(VERBOSE)test -n "$(URL($*))" ||\
+		($(ECHO) "Error: Undefined URL for $*"; false);
+	$(VERBOSE)dir=$(call _hg_dir,$*);\
+		test -d $$dir || $(MSG_DOWNLOAD)$(URL($*)); \
+		test -d $$dir || hg clone $(URL($*)) $$dir; \
+		$(MSG_UPDATE)$$dir; \
+		cd $$dir && hg pull -u && hg revert --all && hg checkout $(REV($*))
 
 
 ##

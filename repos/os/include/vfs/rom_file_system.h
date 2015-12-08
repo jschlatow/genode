@@ -44,6 +44,18 @@ class Vfs::Rom_file_system : public Single_file_system
 			}
 		} _label;
 
+		struct Size
+		{
+			unsigned value;
+
+			Size(Xml_node config)
+			{
+				/* obtain label from config */
+				try { config.attribute("size").value(&value); }
+				catch (...)	{ value = 0; }
+			}
+		} _size;
+
 		Genode::Attached_rom_dataspace _rom;
 
 	public:
@@ -52,6 +64,7 @@ class Vfs::Rom_file_system : public Single_file_system
 		:
 			Single_file_system(NODE_TYPE_FILE, name(), config),
 			_label(config),
+			_size(config),
 			_rom(_label.string)
 		{ }
 
@@ -87,7 +100,7 @@ class Vfs::Rom_file_system : public Single_file_system
 			Stat_result result = Single_file_system::stat(path, out);
 
 			_rom.update();
-			out.size = _rom.is_valid() ? _rom.size() : 0;
+			out.size = (_size.value == 0) ? (_rom.is_valid() ? _rom.size() : 0) : _size.value;
 
 			return result;
 		}
@@ -108,7 +121,7 @@ class Vfs::Rom_file_system : public Single_file_system
 		                 file_size &out_count) override
 		{
 			/* file read limit is the size of the dataspace */
-			file_size const max_size = _rom.size();
+			file_size const max_size = (_size.value == 0) ? _rom.size() : _size.value;
 
 			/* current read offset */
 			file_size const read_offset = vfs_handle->seek();

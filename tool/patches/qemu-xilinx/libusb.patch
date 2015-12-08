@@ -1,0 +1,13 @@
+diff --git a/hw/usb/host-libusb.c b/hw/usb/host-libusb.c
+index d1186b8..1165c1e 100644
+--- a/hw/usb/host-libusb.c
++++ b/hw/usb/host-libusb.c
+@@ -240,7 +240,7 @@ static int usb_host_get_port(libusb_device *dev, char *port, size_t len)
+     size_t off;
+     int rc, i;
+ 
+-    rc = libusb_get_port_path(ctx, dev, path, 7);
++    rc = libusb_get_port_numbers(dev, path, 7);
+     if (rc < 0) {
+         return 0;
+     }
