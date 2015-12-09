@@ -14,7 +14,7 @@
 #ifndef _INCLUDE__ZEDBOARD__DRIVERS__BOARD_BASE_H_
 #define _INCLUDE__ZEDBOARD__DRIVERS__BOARD_BASE_H_
 
-#include <zynq/drivers/board_base.h>
+#include <spec/zynq/drivers/board_base_support.h>
 
 namespace Genode { struct Board_base; }
 
