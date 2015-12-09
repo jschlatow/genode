@@ -55,7 +55,7 @@ append config {
 			<service name="SIGNAL"/>
 		</parent-provides>
 		<default-route>
-			<any-service> <any-child/> <parent/> </any-service>
+			<any-service> <parent/> <any-child/> </any-service>
 		</default-route>
 		<start name="timer">
 			<resource name="RAM" quantum="1M"/>
@@ -90,10 +90,10 @@ append config {
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Nitpicker"/></provides>
 		<config>
-			<domain name="pointer" layer="1" xray="no" origin="pointer" />
-			<domain name=""        layer="2" />
+			<domain name="pointer" layer="1" content="client" label="no" origin="pointer" />
+			<domain name="default" layer="2" content="client" focus="click" />
 			<policy label="pointer" domain="pointer"/>
-			<policy label=""        domain=""/>
+			<policy domain="default"/>
 		</config>
 		<route> }
 append_if [have_spec ps2] config {

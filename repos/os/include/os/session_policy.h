@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2011-2013 Genode Labs GmbH
+ * Copyright (C) 2011-2015 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU General Public License version 2.
@@ -18,38 +18,158 @@
 #include <os/config.h>
 
 namespace Genode {
-	
-	class Session_label;
-	class Session_policy;
+
+	struct Xml_node_label_score;
+	struct Session_label;
+	class  Session_policy;
 }
 
 
-class Genode::Session_label
+/**
+ * Score for matching an Xml_node against a label
+ *
+ * The score is based on the attributes 'label', 'label_prefix', and
+ * 'label_suffix'.
+ */
+struct Genode::Xml_node_label_score
 {
-	public:
+	bool label_present  = true;
+	bool prefix_present = true;
+	bool suffix_present = true;
 
-		enum { MAX_LEN = 128 };
+	bool label_match = false;
 
-	private:
+	/*
+	 * The match values contain the number of matching characters + 1.
+	 * If 0, there is a conflict. If 1, an empty string matched.
+	 */
+	enum { CONFLICT = 0 };
+	unsigned prefix_match = CONFLICT;
+	unsigned suffix_match = CONFLICT;
 
-		char _buf[MAX_LEN];
+	Xml_node_label_score() { }
 
-	public:
+	template <size_t N>
+	Xml_node_label_score(Xml_node node, String<N> const &label)
+	:
+		label_present (node.has_attribute("label")),
+		prefix_present(node.has_attribute("label_prefix")),
+		suffix_present(node.has_attribute("label_suffix"))
+	{
+		if (label_present)
+			label_match = node.attribute_value("label", String<N>()) == label;
 
-		Session_label() { _buf[0] = 0; }
+		if (prefix_present) {
+			typedef String<N> Prefix;
+			Prefix const prefix = node.attribute_value("label_prefix", Prefix());
 
-		/**
-		 * Constructor
-		 *
-		 * \param args  session arguments as null-terminated string
-		 */
-		explicit Session_label(char const *args)
-		{
-			Arg_string::find_arg(args, "label").string(_buf, sizeof(_buf),
-			                                           "<undefined>");
+			if (!strcmp(label.string(), prefix.string(), prefix.length() - 1))
+				prefix_match = prefix.length();
 		}
 
-		char const *string() const { return _buf; }
+		if (suffix_present) {
+			typedef String<N> Suffix;
+			Suffix const suffix = node.attribute_value("label_suffix", Suffix());
+
+			if (label.length() >= suffix.length()) {
+				unsigned const offset = label.length() - suffix.length();
+
+				if (!strcmp(label.string() + offset, suffix.string()))
+					suffix_match = suffix.length();
+			}
+		}
+	}
+
+	bool conflict() const
+	{
+		return (label_present  && !label_match)
+		    || (prefix_present && !prefix_match)
+		    || (suffix_present && !suffix_match);
+	}
+
+	/**
+	 * Return true if this node's score is higher than 'other'
+	 */
+	bool stronger(Xml_node_label_score const &other) const
+	{
+		/* if we are in conflict, we have a lower score than any other node */
+		if (conflict())
+			return false;
+
+		/* there are no conflicts */
+
+		/* we have a higher score than another conflicting node */
+		if (other.conflict())
+			return true;
+
+		if (label_present && !other.label_present)
+			return true;
+
+		if (other.label_present)
+			return false;
+
+		/* labels are equally good */
+
+		if (prefix_present && !other.prefix_present)
+			return true;
+
+		if (!prefix_present && other.prefix_present)
+			return false;
+
+		if (prefix_present && other.prefix_present) {
+
+			if (prefix_match > other.prefix_match)
+				return true;
+
+			if (prefix_match < other.prefix_match)
+				return false;
+		}
+
+		/* prefixes are equally good */
+
+		if (suffix_present && !other.suffix_present)
+			return true;
+
+		if (!suffix_present && other.suffix_present)
+			return false;
+
+		if (suffix_present && other.suffix_present) {
+
+			if (suffix_match > other.suffix_match)
+				return true;
+
+			if (suffix_match < other.suffix_match)
+				return false;
+		}
+
+		/* nodes are equally good */
+
+		return false;
+	}
+};
+
+
+struct Genode::Session_label : String<128>
+{
+	Session_label() { }
+
+	/**
+	 * Constructor
+	 *
+	 * \param args  session arguments as null-terminated string
+	 *
+	 * The constructor extracts the label from the supplied session-argument
+	 * string.
+	 */
+	explicit Session_label(char const *args)
+	{
+		typedef String<128> String;
+
+		char buf[String::capacity()];
+		Arg_string::find_arg(args, "label").string(buf, sizeof(buf),
+		                                           "<undefined>");
+		*static_cast<String *>(this) = String(buf);
+	}
 };
 
 
@@ -68,44 +188,32 @@ class Genode::Session_policy : public Xml_node
 	private:
 
 		/**
-		 * Returns true if the start of the label matches the specified
-		 * match string
-		 */
-		static bool _label_matches(Session_label const &label, char const *match) {
-			return strcmp(label.string(), match, strlen(match)) == 0; }
-
-		/**
 		 * Query session policy from session label
 		 */
-		static Xml_node _query_policy(Session_label const &label)
+		template <size_t N>
+		static Xml_node _query_policy(String<N> const &label, Xml_node config)
 		{
-			/* find index of policy node that matches best */
-			int best_match = -1;
-			try {
-				unsigned label_len = 0;
-				Xml_node policy = config()->xml_node().sub_node();
+			/*
+			 * Find policy node that matches best
+			 */
+			Xml_node             best_match("<none/>");
+			Xml_node_label_score best_score;
 
-				for (int i = 0;; i++, policy = policy.next()) {
-
-					if (!policy.has_type("policy"))
-						continue;
-
-					/* label attribute from policy node */
-					char policy_label[Session_label::MAX_LEN];
-					policy.attribute("label").value(policy_label,
-					                                sizeof(policy_label));
-
-					if (!_label_matches(label, policy_label)
-					 || strlen(policy_label) < label_len)
-						continue;
-
-					label_len = strlen(policy_label);
-					best_match = i;
+			/*
+			 * Functor to be applied to each policy node
+			 */
+			auto lambda = [&] (Xml_node policy) {
+				Xml_node_label_score const score(policy, label);
+				if (score.stronger(best_score)) {
+					best_match = policy;
+					best_score = score;
 				}
-			} catch (...) { }
+			};
 
-			if (best_match != -1)
-				return config()->xml_node().sub_node(best_match);
+			config.for_each_sub_node("policy", lambda);
+
+			if (!best_match.has_type("none"))
+				return best_match;
 
 			throw No_policy_defined();
 		}
@@ -115,23 +223,28 @@ class Genode::Session_policy : public Xml_node
 		/**
 		 * Constructor
 		 *
-		 * \param args  session arguments
+		 * \param label   label used as the selector of a policy
+		 * \param config  XML node that contains the policies as sub nodes,
+		 *                using the component's top-level config node by
+		 *                default
 		 *
-		 * \throw No_policy_defined  if the server configuration has no
-		 *                           policy defined for the session
-		 *                           request
+		 * \throw No_policy_defined  the server configuration has no
+		 *                           policy defined for the specified label
 		 *
-		 * On construction, the 'Session_policy' looks up the 'policy' XML
-		 * node that matches the label provided as argument. The
-		 * server-side policies are defined in one or more policy subnodes
-		 * of the server's 'config' node. Each policy node has a label
-		 * attribute. If the policy label matches the first part of the
-		 * label delivered as session argument, the policy matches. If
-		 * multiple policies match, the one with the largest label is
-		 * selected.
+		 * On construction, the 'Session_policy' looks up the 'policy' XML node
+		 * that matches the label provided as argument. The server-side
+		 * policies are defined in one or more policy subnodes of the server's
+		 * 'config' node. Each policy node has a label attribute. If the policy
+		 * label matches the first part of the label as delivered as session
+		 * argument, the policy matches. If multiple policies match, the one
+		 * with the longest label is selected.
 		 */
-		explicit Session_policy(Session_label const &label)
-		: Xml_node(_query_policy(label)) { }
+		template <size_t N>
+		explicit Session_policy(String<N> const &label,
+		                        Xml_node config = Genode::config()->xml_node())
+		:
+			Xml_node(_query_policy(label, config))
+		{ }
 };
 
 #endif /* _INCLUDE__OS__SESSION_POLICY_H_ */

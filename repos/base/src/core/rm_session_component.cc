@@ -476,7 +476,7 @@ void Rm_session_component::detach(Local_addr local_addr)
 	/*
 	 * Deallocate region on platforms that support unmap
 	 *
-	 * On platforms without support for unmap (in particular NOVA 0.1), the
+	 * On platforms without support for unmap, the
 	 * same virtual address must not be reused. Hence, we never mark used
 	 * regions as free.
 	 *
@@ -513,10 +513,10 @@ void Rm_session_component::detach(Local_addr local_addr)
 		/*
 		 * XXX Unmapping managed dataspaces on kernels, which take a core-
 		 *     local virtual address as unmap argument is not supported yet.
-		 *     This is the case for Fiasco, Pistachio, and NOVA. On those
+		 *     This is the case for Fiasco and Pistachio. On those
 		 *     kernels, the unmap operation must be issued for each leaf
 		 *     dataspace the managed dataspace is composed of. For kernels with
-		 *     support for directed unmap (OKL4 or Codezero), unmap can be
+		 *     support for directed unmap (OKL4), unmap can be
 		 *     simply applied for the contiguous virtual address region in the
 		 *     client.
 		 */
@@ -754,7 +754,7 @@ Rm_session_component::~Rm_session_component()
 		faulter->dissolve_from_faulting_rm_session(this);
 
 	/* remove all clients, invalidate rm_client pointers in cpu_thread objects */
-	while (Rm_client *cl = _client_slab.raw()->first_object()) {
+	while (Rm_client *cl = _client_slab()->first_object()) {
 		cl->dissolve_from_faulting_rm_session(this);
 
 		Thread_capability thread_cap = cl->thread_cap();

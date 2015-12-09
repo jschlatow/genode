@@ -44,7 +44,7 @@
 #include <nic/packet_allocator.h>
 #include <os/config.h>
 #include <os/alarm.h>
-#include <os/synced_interface.h>
+#include <base/synced_interface.h>
 #include <timer_session/connection.h>
 #include <rtc_session/connection.h>
 
@@ -634,9 +634,8 @@ class Vcpu_dispatcher : public Vcpu_handler,
 			} else {
 				order = utcb->qual[0] & 7;
 				if (order > 2) order = 2;
+				_handle_io(utcb->qual[0] & 8, order, utcb->qual[0] >> 16);
 			}
-
-			_handle_io(utcb->qual[0] & 8, order, utcb->qual[0] >> 16);
 		}
 
 		void _vmx_ept()
@@ -826,13 +825,15 @@ class Vcpu_dispatcher : public Vcpu_handler,
 				msg.cpu->ebx = 0;
 				msg.cpu->ecx = 0;
 				msg.cpu->edx = 0;
-				break;
-
+				return true;
+			case 0x80000007U:
+				/* Bit 8 of edx indicates whether invariant TSC is supported */
+				msg.cpu->eax = msg.cpu->ebx = msg.cpu->ecx = msg.cpu->edx = 0;
+				return true;
 			default:
-				PDBG("CpuMessage::TYPE_CPUID index %x ignored, return true)",
-				     msg.cpuid_index);
+				Logging::printf("CpuMessage::TYPE_CPUID index %x ignored\n",
+				                msg.cpuid_index);
 			}
-
 			return true;
 		}
 };
@@ -938,11 +939,12 @@ class Machine : public StaticReceiver<Machine>
 
 					_vcpus_up ++;
 
-					Vmm::Vcpu_thread * vcpu_thread;
-					Genode::Cpu_session * cpu_session = Genode::env()->cpu_session();
+					long const prio = Genode::Cpu_session::PRIORITY_LIMIT / 16;
+					static Genode::Cpu_connection * cpu_session = new (Genode::env()->heap()) Genode::Cpu_connection("Seoul vCPUs", prio);
 					Genode::Affinity::Space cpu_space = cpu_session->affinity_space();
 					Genode::Affinity::Location location = cpu_space.location_of_index(_vcpus_up);
 
+					Vmm::Vcpu_thread * vcpu_thread;
 					if (_colocate_vm_vmm)
 						vcpu_thread = new Vmm::Vcpu_same_pd(Vcpu_dispatcher::STACK_SIZE, cpu_session, location);
 					else
@@ -1074,7 +1076,7 @@ class Machine : public StaticReceiver<Machine>
 						return false;
 					}
 
-					PINF("Our mac address is %2x:%2x:%2x:%2x:%2x:%2x\n",
+					Logging::printf("Our mac address is %2x:%2x:%2x:%2x:%2x:%2x\n",
 					        _nic->mac_address().addr[0],
 					        _nic->mac_address().addr[1],
 					        _nic->mac_address().addr[2],
@@ -1105,7 +1107,7 @@ class Machine : public StaticReceiver<Machine>
 		bool receive(MessageDisk &msg)
 		{
 			if (verbose_debug)
-				PDBG("MessageDisk");
+				Logging::printf("MessageDisk\n");
 			return false;
 		}
 
@@ -1186,7 +1188,7 @@ class Machine : public StaticReceiver<Machine>
 			try {
 				tx_packet = _nic->tx()->alloc_packet(msg.len);
 			} catch (Nic::Session::Tx::Source::Packet_alloc_failed) {
-				PERR("tx packet alloc failed");
+				Logging::printf("error: tx packet alloc failed\n");
 				return false;
 			}
 
@@ -1203,7 +1205,7 @@ class Machine : public StaticReceiver<Machine>
 
 			if (ack_tx_packet.size()   != tx_packet.size()
 			 || ack_tx_packet.offset() != tx_packet.offset()) {
-				PERR("unexpected acked packet");
+				Logging::printf("error: unexpected acked packet\n");
 			}
 
 			/* release sent packet to free the space in the tx communication buffer */
@@ -1217,14 +1219,14 @@ class Machine : public StaticReceiver<Machine>
 		bool receive(MessagePciConfig &msg)
 		{
 			if (verbose_debug)
-				PDBG("MessagePciConfig");
+				Logging::printf("MessagePciConfig\n");
 			return false;
 		}
 
 		bool receive(MessageAcpi &msg)
 		{
 			if (verbose_debug)
-				PDBG("MessageAcpi");
+				Logging::printf("MessageAcpi\n");
 			return false;
 		}
 

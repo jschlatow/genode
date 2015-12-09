@@ -82,13 +82,14 @@ MODEL_INFO(pmtimer, "io_port")
 MODEL_INFO(pcihostbridge, "bus_num", "bus_count", "io_base", "mem_base")
 MODEL_INFO(intel82576vf, "promisc", "mem_mmio", "mem_msix", "txpoll_us", "rx_map")
 
+MODEL_INFO(ide, "port0", "port1", "irq", "bdf", "disk")
 MODEL_INFO(ahci, "mem", "irq", "bdf")
 MODEL_INFO(drive, "sigma0drive", "controller", "port")
 
 MODEL_INFO(vbios_multiboot, "modaddr", "lowmem")
 
 MODEL_INFO_NO_ARG(vbios_disk)
-MODEL_INFO_NO_ARG(vbios_keyboard)
+MODEL_INFO(vbios_keyboard, "host_keyboard")
 MODEL_INFO_NO_ARG(vbios_mem)
 MODEL_INFO_NO_ARG(vbios_time)
 MODEL_INFO_NO_ARG(vbios_reset)

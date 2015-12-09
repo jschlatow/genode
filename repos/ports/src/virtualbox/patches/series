@@ -21,3 +21,6 @@ serial.patch
 rem_irq.patch
 usb.patch
 tm_smp.patch
+posix.patch
+hostservice.patch
+powerbutton.patch

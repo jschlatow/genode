@@ -126,7 +126,7 @@ namespace Noux {
 
 			void close(Genode::Session_capability session)
 			{
-				Dataspace_info *info;
+				Dataspace_info *info = nullptr;;
 
 				auto lambda = [&] (Rm_session_component *rm_session) {
 					if (!rm_session) {
@@ -154,7 +154,7 @@ namespace Noux {
 
 				/* 'rm_session' is deleted by deleting Rm_dataspace_info 'info' */
 				destroy(env()->heap(), info);
-				
+
 			}
 	};
 }

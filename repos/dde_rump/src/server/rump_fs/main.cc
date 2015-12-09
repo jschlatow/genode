@@ -343,9 +343,10 @@ class File_system::Session_component : public Session_rpc_object
 
 			switch (errno) {
 			case ENOTEMPTY: throw Node_already_exists();
+			case ENOENT: throw Lookup_failed();
 			}
 
-			PWRN("renameat produced unhandled error");
+			PWRN("renameat produced unhandled error %x %s %s", errno, from_str, to_str);
 			throw Permission_denied();
 		}
 
@@ -354,7 +355,7 @@ class File_system::Session_component : public Session_rpc_object
 			_handle_registry.sigh(node_handle, sigh);
 		}
 
-		void sync() { rump_sys_sync(); }
+		void sync(Node_handle) override { rump_sys_sync(); }
 };
 
 class File_system::Root : public Root_component<Session_component>

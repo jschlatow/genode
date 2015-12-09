@@ -75,7 +75,7 @@ append config_of_app {
 		(Recording is configured to use the external mic.)
 	-->
 	<start name="audio_drv">
-		<resource name="RAM" quantum="8M"/>
+		<resource name="RAM" quantum="9M"/>
 		<provides>
 			<service name="Audio_out"/>
 			<service name="Audio_in"/>
@@ -112,19 +112,13 @@ append config_of_app {
 		<config>
 			<report focus="yes" hover="yes" xray="yes" />
 
-			<domain name="pointer" layer="1" xray="no" origin="pointer" />
-			<domain name="vbox"    layer="2" />
-			<domain name=""        layer="2" />
+			<domain name="pointer" layer="1" content="client" label="no" origin="pointer" />
+			<domain name="vbox"    layer="2" content="client" focus="click" hover="always" />
+			<domain name=""        layer="2" content="client" focus="click" hover="always" />
 
 			<policy label="vbox_pointer" domain="pointer"/>
 			<policy label="nit_fb"       domain="vbox"/>
-			<policy label=""             domain=""/>
-
-			<global-key name="KEY_SCROLLLOCK" operation="xray" />
-			<global-key name="KEY_SYSRQ"      operation="kill" />
-			<global-key name="KEY_PRINT"      operation="kill" />
-			<global-key name="KEY_F11"        operation="kill" />
-			<global-key name="KEY_F12"        operation="xray" />
+			<policy domain=""/>
 		</config>
 	</start>
 
@@ -149,7 +143,7 @@ append config_of_app {
 		<binary name="virtualbox" />
 		<resource name="RAM" quantum="1280M"/>}
 append config_of_app "
-			<config vbox_file=\"${vbox_file}\" vm_name=\"${flavor}\">"
+			<config ld_verbose=\"yes\" vbox_file=\"${vbox_file}\" vm_name=\"${flavor}\">"
 append config_of_app {
 			<libc stdout="/dev/log" stderr="/dev/log" rtc="/dev/rtc">
 				<vfs>

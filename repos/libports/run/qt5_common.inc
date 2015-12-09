@@ -67,22 +67,17 @@ proc qt5_start_nodes { feature_arg } {
 				<service name="Input"> <child name="ps2_drv" /> </service>
 	}
 	append start_nodes {
+				<service name="Report"> <child name="report_rom"/> </service>
 				<any-service> <parent /> <any-child /> </any-service>
 			</route>
 			<config>
-				<domain name="pointer"   layer="1" xray="no" origin="pointer" />
-				<domain name="decorator" layer="2" xray="opaque" />
-				<domain name="default"   layer="2" />
+				<report focus="yes"/>
 
-				<policy label="pointer"         domain="pointer"/>
-				<policy label=""                domain="default"/>
-				<policy label="wm -> decorator" domain="decorator"/>
+				<domain name="pointer" layer="1" label="no" content="client" origin="pointer" />
+				<domain name="default" layer="2" label="no" content="client" focus="click" hover="always" />
 
-				<global-key name="KEY_SCROLLLOCK" operation="xray" />
-				<global-key name="KEY_SYSRQ"      operation="kill" />
-				<global-key name="KEY_PRINT"      operation="kill" />
-				<global-key name="KEY_F11"        operation="kill" />
-				<global-key name="KEY_F12"        operation="xray" />
+				<policy label="pointer" domain="pointer"/>
+				<policy domain="default"/>
 			</config>
 		</start>
 
@@ -94,12 +89,59 @@ proc qt5_start_nodes { feature_arg } {
 			</route>
 		</start>
 
+		<start name="report_rom">
+			<resource name="RAM" quantum="4M"/>
+			<provides>
+				<service name="Report"/>
+				<service name="ROM"/>
+			</provides>
+			<config>
+				<rom>
+					<policy label="layouter -> window_list"     report="wm -> window_list"/>
+					<policy label="layouter -> focus_request"   report="wm -> focus_request"/>
+					<policy label="decorator -> window_layout"  report="layouter -> window_layout"/>
+					<policy label="wm -> resize_request"        report="layouter -> resize_request"/>
+					<policy label="decorator -> pointer"        report="wm -> pointer"/>
+					<policy label="layouter -> hover"           report="decorator -> hover"/>
+					<policy label="wm -> focus"                 report="layouter -> focus"/>
+					<policy label="clipboard -> focus"          report="nitpicker -> focus"/>
+				</rom>
+			</config>
+		</start>
+
 		<start name="wm">
-			<resource name="RAM" quantum="16M"/>
-			<provides><service name="Nitpicker"/></provides>
+			<resource name="RAM" quantum="12M"/>
+			<provides>
+				<service name="Nitpicker"/>
+			</provides>
+			<config>
+				<policy label="decorator" role="decorator"/>
+				<policy label="layouter"  role="layouter"/>
+			</config>
 			<route>
-				<service name="Nitpicker"> <child name="nitpicker"/> </service>
-				<any-service> <parent/> <any-child/> </any-service>
+				<any-service>
+					<child name="nitpicker"/> <child name="report_rom"/> <parent/> <any-child/>
+				</any-service>
+			</route>
+		</start>
+
+		<start name="layouter">
+			<binary name="floating_window_layouter"/>
+			<resource name="RAM" quantum="4M"/>
+			<route>
+				<any-service>
+					<child name="wm"/> <child name="report_rom"/> <parent/> <any-child/>
+				</any-service>
+			</route>
+		</start>
+
+		<start name="decorator">
+			<binary name="decorator"/>
+			<resource name="RAM" quantum="12M"/>
+			<route>
+				<any-service>
+					<child name="wm"/> <child name="report_rom"/> <parent/> <any-child/>
+				</any-service>
 			</route>
 		</start>
 	}

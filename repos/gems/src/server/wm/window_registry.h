@@ -20,6 +20,7 @@
 #include <base/allocator.h>
 #include <os/surface.h>
 #include <os/reporter.h>
+#include <os/session_policy.h>
 
 /* gems includes */
 #include <gems/local_reporter.h>
@@ -60,9 +61,14 @@ class Wm::Window_registry
 		{
 			public:
 
-				typedef Genode::String<200> Title;
+				typedef Genode::String<200>   Title;
+				typedef Genode::Session_label Session_label;
 
 				enum Has_alpha { HAS_ALPHA, HAS_NO_ALPHA };
+
+				enum Is_hidden { IS_HIDDEN, IS_NOT_HIDDEN };
+
+				enum Resizeable { RESIZEABLE, NOT_RESIZEABLE };
 
 			private:
 
@@ -70,9 +76,15 @@ class Wm::Window_registry
 
 				Title _title;
 
+				Session_label _label;
+
 				Area _size;
 
-				Has_alpha _has_alpha;
+				Has_alpha _has_alpha = HAS_NO_ALPHA;
+
+				Is_hidden _is_hidden = IS_NOT_HIDDEN;
+
+				Resizeable _resizeable = NOT_RESIZEABLE;
 
 				friend class Window_registry;
 
@@ -85,20 +97,30 @@ class Wm::Window_registry
 				/*
 				 * Accessors for setting attributes
 				 */
-				void attr(Title const &title)  { _title = title; }
-				void attr(Area size)           { _size  = size;  }
-				void attr(Has_alpha has_alpha) { _has_alpha = has_alpha; }
+				void attr(Title const &title)         { _title = title; }
+				void attr(Session_label const &label) { _label = label; }
+				void attr(Area size)                  { _size  = size;  }
+				void attr(Has_alpha has_alpha)        { _has_alpha = has_alpha; }
+				void attr(Is_hidden is_hidden)        { _is_hidden = is_hidden; }
+				void attr(Resizeable resizeable)      { _resizeable = resizeable; }
 
 				void generate_window_list_entry_xml(Xml_generator &xml) const
 				{
 					xml.node("window", [&] () {
 						xml.attribute("id",     _id.value);
+						xml.attribute("label",  _label.string());
 						xml.attribute("title",  _title.string());
 						xml.attribute("width",  _size.w());
 						xml.attribute("height", _size.h());
 
 						if (_has_alpha == HAS_ALPHA)
 							xml.attribute("has_alpha", "yes");
+
+						if (_is_hidden == IS_HIDDEN)
+							xml.attribute("hidden", "yes");
+
+						if (_resizeable == RESIZEABLE)
+							xml.attribute("resizeable", "yes");
 					});
 				}
 		};
@@ -192,9 +214,21 @@ class Wm::Window_registry
 
 		void title(Id id, Window::Title title) { _set_attr(id, title); }
 
+		void label(Id id, Window::Session_label label) { _set_attr(id, label); }
+
 		void has_alpha(Id id, bool has_alpha)
 		{
 			_set_attr(id, has_alpha ? Window::HAS_ALPHA : Window::HAS_NO_ALPHA);
+		}
+
+		void is_hidden(Id id, bool is_hidden)
+		{
+			_set_attr(id, is_hidden ? Window::IS_HIDDEN : Window::IS_NOT_HIDDEN);
+		}
+
+		void resizeable(Id id, bool resizeable)
+		{
+			_set_attr(id, resizeable ? Window::RESIZEABLE : Window::NOT_RESIZEABLE);
 		}
 };
 

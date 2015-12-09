@@ -14,6 +14,7 @@
 
 /* Genode inludes */
 #include <ram_session/client.h>
+#include <util/retry.h>
 #include <base/object_pool.h>
 #include <platform_session/connection.h>
 #include <platform_device/client.h>
@@ -264,9 +265,7 @@ extern "C" int pci_register_driver(struct pci_driver *drv)
 {
 	drv->driver.name = drv->name;
 
-	pci_device_id const  *id = drv->id_table;
-	if (!id)
-		return -ENODEV;
+	if (!drv->id_table) return -ENODEV;
 
 	using namespace Genode;
 
@@ -279,49 +278,42 @@ extern "C" int pci_register_driver(struct pci_driver *drv)
 		PCI_CLASS_WIFI = 0x028000,
 	};
 
-	unsigned found = 0;
+	bool found = false;
 
-	while (id->device) {
-		if (id->class_ == (unsigned)PCI_ANY_ID) {
-			id++;
-			continue;
-		}
+	for (Platform::Device_capability cap = pci()->first_device(PCI_CLASS_WIFI,
+		                                                       PCI_CLASS_MASK);
+		 cap.valid() && !found;) {
+		Pci_driver *pci_drv = nullptr;
+		pci_device_cap = cap;
 
-		Platform::Device_capability cap = pci()->first_device(PCI_CLASS_WIFI,
-		                                                 PCI_CLASS_MASK);
+		for (pci_device_id const  *id = drv->id_table; id->device && !found; id++) {
 
-		while (cap.valid()) {
-			Pci_driver *pci_drv = 0;
+			if (id->class_ == (unsigned)PCI_ANY_ID) continue;
+
 			try {
-				pci_device_cap = cap;
-
-				/* probe device */
-				pci_drv = new (env()->heap()) Pci_driver(drv, cap, id);
-				pci()->on_destruction(Platform::Connection::KEEP_OPEN);
-				found++;
-
-			} catch (Platform::Device::Quota_exceeded) {
-				Genode::env()->parent()->upgrade(pci()->cap(), "ram_quota=4096");
-				continue;
+				retry<Platform::Device::Quota_exceeded>(
+				[&] {
+					/* probe device */
+					pci_drv = new (env()->heap()) Pci_driver(drv, cap, id);
+					pci()->on_destruction(Platform::Connection::KEEP_OPEN);
+					found = true;
+				},
+				[&] {
+					Genode::env()->parent()->upgrade(pci()->cap(), "ram_quota=4096");
+				});
 			} catch (...) {
 				destroy(env()->heap(), pci_drv);
-				pci_drv = 0;
+				pci_drv = nullptr;
 			}
-
-			if (found)
-				break;
-
-			Platform::Device_capability free_up = cap;
-			cap = pci()->next_device(cap, PCI_CLASS_WIFI, PCI_CLASS_MASK);
-			if (!pci_drv)
-				pci()->release_device(free_up);
 		}
-		id++;
 
-		/* XXX */
-		if (found)
-			break;
+		Platform::Device_capability free_up = cap;
+		cap = pci()->next_device(cap, PCI_CLASS_WIFI, PCI_CLASS_MASK);
+		if (!pci_drv)
+			pci()->release_device(free_up);
 	}
+
+	if (!found) PERR("no usable wireless device found");
 
 	return found ? 0 : -ENODEV;
 }
@@ -462,12 +454,16 @@ Lx::backend_alloc(Genode::addr_t size, Genode::Cache_attribute cached)
 		cap = env()->ram_session()->alloc(size);
 		o = new (env()->heap())	Ram_object(cap);
 	} else {
-		/* transfer quota to pci driver, otherwise it will give us a exception */
-		char buf[32];
-		Genode::snprintf(buf, sizeof(buf), "ram_quota=%ld", size);
-		Genode::env()->parent()->upgrade(pci()->cap(), buf);
-
-		cap = pci()->alloc_dma_buffer(size);
+		size_t donate = size;
+		cap = Genode::retry<Platform::Session::Out_of_metadata>(
+			[&] () { return pci()->alloc_dma_buffer(size); },
+			[&] () {
+				char quota[32];
+				Genode::snprintf(quota, sizeof(quota), "ram_quota=%zd",
+				                 donate);
+				Genode::env()->parent()->upgrade(pci()->cap(), quota);
+				donate = donate * 2 > size ? 4096 : donate * 2;
+			});
 		o = new (env()->heap()) Dma_object(cap);
 	}
 
@@ -484,10 +480,10 @@ void Lx::backend_free(Genode::Ram_dataspace_capability cap)
 	auto lambda = [&] (Memory_object_base *o) {
 		object = o;
 		if (object) {
-			o->free();
-			memory_pool.remove(o);
+			object->free();
+			memory_pool.remove(object);
 		}
 	};
 	memory_pool.apply(cap, lambda);
-	destroy(env()->heap(), object);
+	if (object) destroy(env()->heap(), object);
 }

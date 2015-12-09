@@ -76,7 +76,8 @@ Framebuffer::Session *tmp_fb;
  ** Utilities **
  ***************/
 
-static void report_session(Genode::Reporter &reporter, Session *session)
+static void report_session(Genode::Reporter &reporter, Session *session,
+                           bool active = false)
 {
 	if (!reporter.is_enabled())
 		return;
@@ -92,21 +93,9 @@ static void report_session(Genode::Reporter &reporter, Session *session)
 			Genode::snprintf(buf, sizeof(buf), "#%02x%02x%02x",
 			                 color.r, color.g, color.b);
 			xml.attribute("color", buf);
+
+			if (active) xml.attribute("active", "yes");
 		}
-	});
-}
-
-
-static void report_kill_focus(Genode::Reporter &reporter)
-{
-	if (!reporter.is_enabled())
-		return;
-
-	Genode::Reporter::Xml_generator xml(reporter, [&] ()
-	{
-		xml.attribute("label",  "");
-		xml.attribute("domain", "");
-		xml.attribute("color",  "#ff4444");
 	});
 }
 
@@ -787,6 +776,8 @@ class Nitpicker::Session_component : public Genode::Rpc_object<Session>,
 				}
 				catch (View_handle_registry::Lookup_failed) {
 					return View_handle(); }
+				catch (View_handle_registry::Out_of_memory) {
+					throw Nitpicker::Session::Out_of_metadata(); }
 				catch (Genode::Allocator::Out_of_memory) {
 					throw Nitpicker::Session::Out_of_metadata(); }
 			}
@@ -810,7 +801,9 @@ class Nitpicker::Session_component : public Genode::Rpc_object<Session>,
 			_view_list.insert(view);
 			_ep.manage(view);
 
-			return _view_handle_registry.alloc(*view);
+			try { return _view_handle_registry.alloc(*view); }
+			catch (View_handle_registry::Out_of_memory) {
+				throw Nitpicker::Session::Out_of_metadata(); }
 		}
 
 		void destroy_view(View_handle handle) override
@@ -846,7 +839,10 @@ class Nitpicker::Session_component : public Genode::Rpc_object<Session>,
 				return (view) ? _view_handle_registry.alloc(*view, handle)
 				              : View_handle();
 			};
-			return _ep.apply(view_cap, lambda);
+
+			try { return _ep.apply(view_cap, lambda); }
+			catch (View_handle_registry::Out_of_memory) {
+				throw Nitpicker::Session::Out_of_metadata(); }
 		}
 
 		View_capability view_capability(View_handle handle) override
@@ -919,17 +915,20 @@ class Nitpicker::Session_component : public Genode::Rpc_object<Session>,
 				return;
 			}
 
-			/* prevent focus changes during drag operations */
-			if (_mode.drag())
-				return;
-
 			/* lookup targeted session object */
 			auto lambda = [this] (Session_component *session)
 			{
-				_mode.focused_session(session);
-				report_session(_focus_reporter, session);
+				_mode.next_focused_session(session);
 			};
 			_ep.apply(session_cap, lambda);
+
+			/*
+			 * To avoid changing the focus in the middle of a drag operation,
+			 * we cannot perform the focus change immediately. Instead, it
+			 * comes into effect via the 'Mode::apply_pending_focus_change()'
+			 * function called the next time when the user input is handled and
+			 * no drag operation is in flight.
+			 */
 		}
 
 		void session_control(Label suffix, Session_control control) override
@@ -1165,7 +1164,6 @@ struct Nitpicker::Main
 	Genode::Reporter pointer_reporter = { "pointer" };
 	Genode::Reporter hover_reporter   = { "hover" };
 	Genode::Reporter focus_reporter   = { "focus" };
-	Genode::Reporter xray_reporter    = { "xray" };
 
 	Root<PT> np_root = { session_list, *domain_registry, global_keys,
 	                     ep.rpc_ep(), user_state, user_state, pointer_origin,
@@ -1195,6 +1193,30 @@ struct Nitpicker::Main
 	Timer::Connection timer;
 
 	/**
+	 * Counter that is incremented periodically
+	 */
+	unsigned period_cnt = 0;
+
+	/**
+	 * Period counter when the user was active the last time
+	 */
+	unsigned last_active_period = 0;
+
+	/**
+	 * Number of periods after the last user activity when we regard the user
+	 * as becoming inactive
+	 */
+	unsigned activity_threshold = 50;
+
+	/**
+	 * True if the user was recently active
+	 *
+	 * This state is reported as part of focus reports to allow the clipboard
+	 * to dynamically adjust its information-flow policy to the user activity.
+	 */
+	bool user_active = false;
+
+	/**
 	 * Perform redraw and flush pixels to the framebuffer
 	 */
 	void draw_and_flush()
@@ -1213,9 +1235,7 @@ struct Nitpicker::Main
 		config()->sigh(config_dispatcher);
 		handle_config(0);
 
-		timer.sigh(input_dispatcher);
-		timer.trigger_periodic(10*1000);
-
+		framebuffer.sync_sigh(input_dispatcher);
 		framebuffer.mode_sigh(fb_mode_dispatcher);
 
 		env()->parent()->announce(ep.manage(np_root));
@@ -1225,103 +1245,67 @@ struct Nitpicker::Main
 
 void Nitpicker::Main::handle_input(unsigned)
 {
-	/*
-	 * If kill mode is already active, we got recursively called from
-	 * within this 'input_func' (via 'wait_and_dispatch_one_signal').
-	 * In this case, return immediately. New input events will be
-	 * processed in the local 'do' loop.
-	 */
-	if (user_state.kill())
-		return;
+	period_cnt++;
 
-	do {
-		Point       const old_pointer_pos     = user_state.pointer_pos();
-		::Session * const old_pointed_session = user_state.pointed_session();
-		::Session * const old_focused_session = user_state.Mode::focused_session();
-		bool        const old_kill_mode       = user_state.kill();
-		bool        const old_xray_mode       = user_state.xray();
+	Point       const old_pointer_pos     = user_state.pointer_pos();
+	::Session * const old_pointed_session = user_state.pointed_session();
+	::Session * const old_focused_session = user_state.Mode::focused_session();
+	bool        const old_user_active     = user_active;
 
-		/* handle batch of pending events */
-		import_input_events(ev_buf, input.flush(), user_state);
+	/* handle batch of pending events */
+	if (import_input_events(ev_buf, input.flush(), user_state)) {
+		last_active_period = period_cnt;
+		user_active        = true;
+	}
 
-		Point       const new_pointer_pos     = user_state.pointer_pos();
-		::Session * const new_pointed_session = user_state.pointed_session();
-		::Session * const new_focused_session = user_state.Mode::focused_session();
-		bool        const new_kill_mode       = user_state.kill();
-		bool        const new_xray_mode       = user_state.xray();
+	user_state.Mode::apply_pending_focus_change();
 
-		/* report mouse-position updates */
-		if (pointer_reporter.is_enabled() && old_pointer_pos != new_pointer_pos) {
+	Point       const new_pointer_pos     = user_state.pointer_pos();
+	::Session * const new_pointed_session = user_state.pointed_session();
+	::Session * const new_focused_session = user_state.Mode::focused_session();
 
-			Genode::Reporter::Xml_generator xml(pointer_reporter, [&] ()
-			{
-				xml.attribute("xpos", new_pointer_pos.x());
-				xml.attribute("ypos", new_pointer_pos.y());
-			});
-		}
+	if (old_focused_session != new_focused_session)
+		user_state.update_all_views();
 
-		if (xray_reporter.is_enabled() && old_xray_mode != new_xray_mode) {
+	/* flag user as inactive after activity threshold is reached */
+	if (period_cnt == last_active_period + activity_threshold)
+		user_active = false;
 
-			Genode::Reporter::Xml_generator xml(xray_reporter, [&] ()
-			{
-				xml.attribute("enabled", new_xray_mode ? "yes" : "no");
-			});
-		}
+	/* report mouse-position updates */
+	if (pointer_reporter.is_enabled() && old_pointer_pos != new_pointer_pos) {
 
-		/* report hover changes */
-		if (old_pointed_session != new_pointed_session)
-			report_session(hover_reporter, new_pointed_session);
+		Genode::Reporter::Xml_generator xml(pointer_reporter, [&] ()
+		{
+			xml.attribute("xpos", new_pointer_pos.x());
+			xml.attribute("ypos", new_pointer_pos.y());
+		});
+	}
 
-		/* report focus changes */
-		if (old_focused_session != new_focused_session)
-			report_session(focus_reporter, new_focused_session);
+	/* report hover changes */
+	if (!user_state.Mode::key_is_pressed()
+	 && old_pointed_session != new_pointed_session) {
+		report_session(hover_reporter, new_pointed_session);
+	}
 
-		/* report kill mode */
-		if (old_kill_mode != new_kill_mode) {
+	/* report focus changes */
+	if (old_focused_session != new_focused_session
+	 || old_user_active     != user_active)
+		report_session(focus_reporter, new_focused_session, user_active);
 
-			if (new_kill_mode)
-				report_kill_focus(focus_reporter);
+	/* update mouse cursor */
+	if (old_pointer_pos != new_pointer_pos)
+		user_state.geometry(pointer_origin, Rect(new_pointer_pos, Area()));
 
-			if (!new_kill_mode)
-				report_session(focus_reporter, new_focused_session);
-		}
+	/* perform redraw and flush pixels to the framebuffer */
+	user_state.draw(fb_screen->screen).flush([&] (Rect const &rect) {
+		framebuffer.refresh(rect.x1(), rect.y1(),
+		                    rect.w(),  rect.h()); });
 
-		/*
-		 * Continuously redraw the whole screen when kill mode is active.
-		 * Otherwise client updates (e.g., the status bar) would stay invisible
-		 * because we do not dispatch the RPC interface during kill mode.
-		 */
-		if (new_kill_mode)
-			user_state.update_all_views();
+	user_state.mark_all_views_as_clean();
 
-		/* update mouse cursor */
-		if (old_pointer_pos != new_pointer_pos)
-			user_state.geometry(pointer_origin, Rect(new_pointer_pos, Area()));
-
-		/* perform redraw and flush pixels to the framebuffer */
-		user_state.draw(fb_screen->screen).flush([&] (Rect const &rect) {
-			framebuffer.refresh(rect.x1(), rect.y1(),
-			                    rect.w(),  rect.h()); });
-
-		user_state.mark_all_views_as_clean();
-
-		/* deliver framebuffer synchronization events */
-		if (!user_state.kill()) {
-			for (::Session *s = session_list.first(); s; s = s->next())
-				s->submit_sync();
-		}
-
-		/*
-		 * In kill mode, we do not leave the dispatch function in order to
-		 * block RPC calls from Nitpicker clients. We block for signals
-		 * here to stay responsive to user input and configuration changes.
-		 * Nested calls of 'input_func' are prevented by the condition
-		 * check for 'user_state.kill()' at the beginning of the handler.
-		 */
-		if (user_state.kill())
-			Server::wait_and_dispatch_one_signal();
-
-	} while (user_state.kill());
+	/* deliver framebuffer synchronization events */
+	for (::Session *s = session_list.first(); s; s = s->next())
+		s->submit_sync();
 }
 
 
@@ -1364,7 +1348,6 @@ void Nitpicker::Main::handle_config(unsigned)
 	configure_reporter(pointer_reporter);
 	configure_reporter(hover_reporter);
 	configure_reporter(focus_reporter);
-	configure_reporter(xray_reporter);
 
 	/* update domain registry and session policies */
 	for (::Session *s = session_list.first(); s; s = s->next())

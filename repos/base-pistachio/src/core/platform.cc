@@ -50,9 +50,9 @@ static const bool verbose_region_alloc = false;
  ** Core address space management **
  ***********************************/
 
-static Synchronized_range_allocator<Allocator_avl> &_core_address_ranges()
+static Synced_range_allocator<Allocator_avl> &_core_address_ranges()
 {
-	static Synchronized_range_allocator<Allocator_avl> _core_address_ranges(0);
+	static Synced_range_allocator<Allocator_avl> _core_address_ranges(nullptr);
 	return _core_address_ranges;
 }
 
@@ -466,15 +466,23 @@ void Platform::_setup_preemption()
 }
 
 
-void Platform::_setup_basics()
+static Pistachio::L4_KernelInterfacePage_t *init_kip()
 {
 	using namespace Pistachio;
 
 	/* completely map program image */
 	addr_t beg = trunc_page((addr_t)&_prog_img_beg);
 	addr_t end = round_page((addr_t)&_prog_img_end);
-	for ( ; beg < end; beg += get_page_size())
-		L4_Sigma0_GetPage(get_sigma0(), L4_Fpage(beg, get_page_size()));
+	for ( ; beg < end; beg += Pistachio::get_page_size())
+		L4_Sigma0_GetPage(get_sigma0(), L4_Fpage(beg, Pistachio::get_page_size()));
+
+	return get_kip();
+}
+
+
+void Platform::_setup_basics()
+{
+	using namespace Pistachio;
 
 	/* store mapping base from received mapping */
 	L4_KernelInterfacePage_t *kip = get_kip();
@@ -515,7 +523,6 @@ void Platform::_setup_basics()
 
 	/* done magic */
 
-	_mb_info = Multiboot_info(mb_info_ptr);
 	if (verbose) printf("MBI @ %p\n", mb_info_ptr);
 
 	/* get UTCB memory */
@@ -625,9 +632,10 @@ Platform_pd *Platform::core_pd()
 
 
 Platform::Platform() :
-	_ram_alloc(0), _io_mem_alloc(core_mem_alloc()),
+	_ram_alloc(nullptr), _io_mem_alloc(core_mem_alloc()),
 	_io_port_alloc(core_mem_alloc()), _irq_alloc(core_mem_alloc()),
-	_region_alloc(core_mem_alloc())
+	_region_alloc(core_mem_alloc()),
+	_mb_info(init_kip()->BootInfo)
 {
 	/*
 	 * We must be single-threaded at this stage and so this is safe.
@@ -649,13 +657,13 @@ Platform::Platform() :
 	 * hold the meta data for the ROM modules as initialized by '_setup_rom'.
 	 */
 	if (verbose) {
-		printf(":ram_alloc: ");    _ram_alloc.raw()->dump_addr_tree();
-		printf(":region_alloc: "); _region_alloc.raw()->dump_addr_tree();
-		printf(":io_mem: ");       _io_mem_alloc.raw()->dump_addr_tree();
-		printf(":io_port: ");      _io_port_alloc.raw()->dump_addr_tree();
-		printf(":irq: ");          _irq_alloc.raw()->dump_addr_tree();
+		printf(":ram_alloc: ");    _ram_alloc()->dump_addr_tree();
+		printf(":region_alloc: "); _region_alloc()->dump_addr_tree();
+		printf(":io_mem: ");       _io_mem_alloc()->dump_addr_tree();
+		printf(":io_port: ");      _io_port_alloc()->dump_addr_tree();
+		printf(":irq: ");          _irq_alloc()->dump_addr_tree();
 		printf(":rom_fs: ");       _rom_fs.print_fs();
-		printf(":core ranges: ");  _core_address_ranges().raw()->dump_addr_tree();
+		printf(":core ranges: ");  _core_address_ranges()()->dump_addr_tree();
 	}
 
 	/*

@@ -210,6 +210,7 @@ class Libc::Vfs_plugin : public Libc::Plugin
 
 		~Vfs_plugin() { }
 
+		bool supports_access(const char *, int)              override { return true; }
 		bool supports_mkdir(const char *, mode_t)            override { return true; }
 		bool supports_open(const char *, int)                override { return true; }
 		bool supports_readlink(const char *, char *, size_t) override { return true; }
@@ -227,6 +228,7 @@ class Libc::Vfs_plugin : public Libc::Plugin
 			return open(path, flags, Libc::ANY_FD);
 		}
 
+		int     access(char const *, int) override;
 		int     close(Libc::File_descriptor *) override;
 		int     dup2(Libc::File_descriptor *, Libc::File_descriptor *) override;
 		int     fcntl(Libc::File_descriptor *, int, long) override;
@@ -249,6 +251,16 @@ class Libc::Vfs_plugin : public Libc::Plugin
 		void   *mmap(void *, ::size_t, int, int, Libc::File_descriptor *, ::off_t) override;
 		int     munmap(void *, ::size_t) override;
 };
+
+
+int Libc::Vfs_plugin::access(const char *path, int amode)
+{
+	if (_root_dir.leaf_path(path))
+		return 0;
+
+	errno = ENOENT;
+	return -1;
+}
 
 
 Libc::File_descriptor *Libc::Vfs_plugin::open(char const *path, int flags,
@@ -283,14 +295,18 @@ Libc::File_descriptor *Libc::Vfs_plugin::open(char const *path, int flags,
 					/* file has been created by someone else in the meantime */
 					break;
 
-				case Result::OPEN_ERR_NO_PERM:      errno = EPERM;  return 0;
-				case Result::OPEN_ERR_UNACCESSIBLE: errno = ENOENT; return 0;
+				case Result::OPEN_ERR_NO_PERM:       errno = EPERM;        return 0;
+				case Result::OPEN_ERR_UNACCESSIBLE:  errno = ENOENT;       return 0;
+				case Result::OPEN_ERR_NAME_TOO_LONG: errno = ENAMETOOLONG; return 0;
+				case Result::OPEN_ERR_NO_SPACE:      errno = ENOSPC;       return 0;
 				}
 			}
 			break;
 
-		case Result::OPEN_ERR_NO_PERM: errno = EPERM;  return 0;
-		case Result::OPEN_ERR_EXISTS:  errno = EEXIST; return 0;
+		case Result::OPEN_ERR_NO_PERM:       errno = EPERM;        return 0;
+		case Result::OPEN_ERR_EXISTS:        errno = EEXIST;       return 0;
+		case Result::OPEN_ERR_NAME_TOO_LONG: errno = ENAMETOOLONG; return 0;
+		case Result::OPEN_ERR_NO_SPACE:      errno = ENOSPC;       return 0;
 		}
 	}
 
@@ -650,9 +666,10 @@ int Libc::Vfs_plugin::ftruncate(Libc::File_descriptor *fd, ::off_t length)
 	typedef Vfs::File_io_service::Ftruncate_result Result;
 
 	switch (handle->fs().ftruncate(handle, length)) {
-	case Result::FTRUNCATE_ERR_NO_PERM:   errno = EPERM; return -1;
-	case Result::FTRUNCATE_ERR_INTERRUPT: errno = EINTR; return -1;
-	case Result::FTRUNCATE_OK:                           break;
+	case Result::FTRUNCATE_ERR_NO_PERM:   errno = EPERM;  return -1;
+	case Result::FTRUNCATE_ERR_INTERRUPT: errno = EINTR;  return -1;
+	case Result::FTRUNCATE_ERR_NO_SPACE:  errno = ENOSPC; return -1;
+	case Result::FTRUNCATE_OK:                            break;
 	}
 	return 0;
 }
@@ -698,7 +715,7 @@ int Libc::Vfs_plugin::fcntl(Libc::File_descriptor *fd, int cmd, long arg)
 
 int Libc::Vfs_plugin::fsync(Libc::File_descriptor *fd)
 {
-	_root_dir.sync();
+	_root_dir.sync(fd->fd_path);
 	return 0;
 }
 
@@ -745,9 +762,10 @@ int Libc::Vfs_plugin::unlink(char const *path)
 	typedef Vfs::Directory_service::Unlink_result Result;
 
 	switch (_root_dir.unlink(path)) {
-	case Result::UNLINK_ERR_NO_ENTRY: errno = ENOENT; return -1;
-	case Result::UNLINK_ERR_NO_PERM:  errno = EPERM;  return -1;
-	case Result::UNLINK_OK:                           break;
+	case Result::UNLINK_ERR_NO_ENTRY:  errno = ENOENT;    return -1;
+	case Result::UNLINK_ERR_NO_PERM:   errno = EPERM;     return -1;
+	case Result::UNLINK_ERR_NOT_EMPTY: errno = ENOTEMPTY; return -1;
+	case Result::UNLINK_OK:            break;
 	}
 	return 0;
 }

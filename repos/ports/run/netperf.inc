@@ -9,23 +9,24 @@ if {[have_include "power_on/qemu"]} {
 	exit
 }
 
-if {[have_spec hw_odroid_xu]} {
+if {[have_spec hw_odroid_xu] || [have_spec hw_wand_quad]} {
 	puts "Run script does not support this platform."
 	exit 0
 }
 
 if {![info exists use_usb_driver]} {
-	set use_usb_driver      [expr [have_spec omap4] || [have_spec platform_arndale] || [have_spec platform_rpi]]
+	set use_usb_driver      [expr [have_spec omap4] || [have_spec arndale] || [have_spec rpi]]
 }
-set use_nic_driver      [expr !$use_usb_driver && ![have_spec platform_imx53] && !$use_wifi_driver]
+set use_nic_driver      [expr !$use_usb_driver && ![have_spec imx53] && !$use_wifi_driver]
 
 if {[expr !$use_usb_driver && !$use_nic_driver && !$use_wifi_driver]} {
-	puts "\n Run script is not supported on this platform. \n"; exit 0 }
+	puts "Run script is not supported on this platform.";
+	exit 0
+}
 
 # provide wifi related variables in case we do not use the wifi driver
 if {!$use_wifi_driver} {
 	set wifi_ssid ""
-	set wifi_bssid ""
 	set wifi_psk ""
 }
 
@@ -180,7 +181,7 @@ append_if $use_wifi_driver config {
 			<content>
 				<inline name="wlan_configuration">}
 append_if $use_wifi_driver config "
-<selected_network ssid=\"$wifi_ssid\" bssid=\"$wifi_bssid\" protection=\"WPA-PSK\" psk=\"$wifi_psk\"/>"
+<selected_network ssid=\"$wifi_ssid\" protection=\"WPA-PSK\" psk=\"$wifi_psk\"/>"
 append_if $use_wifi_driver config {
 				</inline>
 				<inline name="wpa_supplicant.conf"></inline>
@@ -282,6 +283,7 @@ append_if $use_wifi_driver boot_modules {
 	iwlwifi-6000g2a-6.ucode
 	iwlwifi-6000g2b-6.ucode
 	iwlwifi-7260-8.ucode
+	iwlwifi-7265-8.ucode
 }
 
 append_platform_drv_boot_modules

@@ -22,6 +22,7 @@
 #include <cap_session/connection.h>
 #include <base/printf.h>
 #include <base/child.h>
+#include <os/session_policy.h>
 
 /* init includes */
 #include <init/child_config.h>
@@ -67,11 +68,11 @@ namespace Init {
 		priority = -priority;
 
 		if (priority && (priority >= prio_levels)) {
-			long new_prio = prio_levels-1;
+			long new_prio = prio_levels ? prio_levels-1 : 0;
 			char name[Genode::Service::MAX_NAME_LEN];
 			start_node.attribute("name").value(name, sizeof(name));
-			PERR("%s: invalid priority, upgrading from -%ld to -%ld",
-			     name, priority, new_prio);
+			PWRN("%s: invalid priority, upgrading from %ld to %ld",
+			     name, -priority, -new_prio);
 			return new_prio;
 		}
 
@@ -123,19 +124,6 @@ namespace Init {
 
 
 	/**
-	 * Return true if service XML node matches the specified service name
-	 */
-	inline bool service_node_matches(Genode::Xml_node service_node, const char *service_name)
-	{
-		if (service_node.has_type("any-service"))
-			return true;
-
-		return service_node.has_type("service")
-		    && service_node.attribute("name").has_value(service_name);
-	}
-
-
-	/**
 	 * Return sub string of label with the leading child name stripped out
 	 *
 	 */
@@ -167,6 +155,35 @@ namespace Init {
 
 		PWRN("cannot skip label prefix while processing <if-arg>");
 		return label;
+	}
+
+
+	/**
+	 * Return true if service XML node matches service request
+	 *
+	 * \param args          session arguments, inspected for the session label
+	 * \param child_name    name of the originator of the session request
+	 * \param service_name  name of the requested service
+	 */
+	inline bool service_node_matches(Genode::Xml_node service_node,
+	                                 char const *args,
+	                                 char const *child_name,
+	                                 char const *service_name)
+	{
+		bool const service_matches =
+			service_node.has_type("any-service") ||
+			(service_node.has_type("service") &&
+			 service_node.attribute("name").has_value(service_name));
+
+		if (!service_matches)
+			return false;
+
+		typedef Genode::String<128> Label;
+
+		Label const session_label =
+			Label(skip_label_prefix(child_name, Genode::Session_label(args).string()));
+
+		return !Genode::Xml_node_label_score(service_node, session_label).conflict();
 	}
 
 
@@ -412,6 +429,9 @@ class Init::Child : Genode::Child_policy
 			           Genode::size_t & cpu_quota_pc,
 			           bool           & constrain_phys)
 			{
+				cpu_quota_pc   = 0;
+				constrain_phys = false;
+
 				Genode::Number_of_bytes ram_bytes = 0;
 
 				try {
@@ -651,7 +671,7 @@ class Init::Child : Genode::Child_policy
 
 					bool service_wildcard = service_node.has_type("any-service");
 
-					if (!service_node_matches(service_node, service_name))
+					if (!service_node_matches(service_node, args, name(), service_name))
 						continue;
 
 					if (!service_node_args_condition_satisfied(service_node, args, name()))
@@ -802,6 +822,23 @@ class Init::Child : Genode::Child_policy
 			_child.notify_resource_avail();
 		}
 
+		void exit(int exit_value) override
+		{
+			try {
+				if (_start_node.sub_node("exit").attribute("propagate").has_value("yes")) {
+					Genode::env()->parent()->exit(exit_value);
+					return;
+				}
+			} catch (...) { }
+
+			/*
+			 * Print a message as the exit is not handled otherwise. There are
+			 * a number of automated tests that rely on this message. It is
+			 * printed by the default implementation of 'Child_policy::exit'.
+			 */
+			Child_policy::exit(exit_value);
+		}
+
 		Genode::Native_pd_args const *pd_args() const { return &_pd_args; }
 };
 
@@ -813,7 +850,7 @@ void Init::Child::Resources::transfer_cpu_quota()
 	static size_t avail = Cpu_session::quota_lim_upscale(         100, 100);
 	size_t const   need = Cpu_session::quota_lim_upscale(cpu_quota_pc, 100);
 	size_t need_adj;
-	if (need > avail) {
+	if (need > avail || avail == 0) {
 		warn_insuff_quota(Cpu_session::quota_lim_downscale(avail, 100));
 		need_adj = Cpu_session::quota_lim_upscale(100, 100);
 		avail    = 0;

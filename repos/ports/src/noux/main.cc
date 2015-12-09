@@ -387,6 +387,8 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 				}
 				catch (Child::Binary_does_not_exist) {
 					_sysio->error.execve = Sysio::EXECVE_NONEXISTENT; }
+				catch (Child::Insufficient_memory) {
+					_sysio->error.execve = Sysio::EXECVE_NOMEM; }
 
 				break;
 			}
@@ -583,28 +585,34 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 				Genode::addr_t parent_cap_addr = _sysio->fork_in.parent_cap_addr;
 
 				int const new_pid = pid_allocator()->alloc();
+				Child * child = nullptr;
 
-				/*
-				 * XXX To ease debugging, it would be useful to generate a
-				 *     unique name that includes the PID instead of just
-				 *     reusing the name of the parent.
-				 */
-				Child *child = new Child(_child_policy.name(),
-				                         this,
-				                         _kill_broadcaster,
-				                         *this,
-				                         new_pid,
-				                         _sig_rec,
-				                         root_dir(),
-				                         _args,
-				                         _env.env(),
-				                         _cap_session,
-				                         _parent_services,
-				                         _resources.ep,
-				                         true,
-				                         env()->heap(),
-				                         _destruct_queue,
-				                         verbose);
+				try {
+					/*
+					 * XXX To ease debugging, it would be useful to generate a
+					 *     unique name that includes the PID instead of just
+					 *     reusing the name of the parent.
+					 */
+					child = new Child(_child_policy.name(),
+					                  this,
+					                  _kill_broadcaster,
+					                  *this,
+					                  new_pid,
+					                  _sig_rec,
+					                  root_dir(),
+					                  _args,
+					                  _env.env(),
+					                  _cap_session,
+					                  _parent_services,
+					                  _resources.ep,
+					                  true,
+					                  env()->heap(),
+					                  _destruct_queue,
+					                  verbose);
+				} catch (Child::Insufficient_memory) {
+					_sysio->error.fork = Sysio::FORK_NOMEM;
+					break;
+				}
 
 				Family_member::insert(child);
 
@@ -835,7 +843,7 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 
 		case SYSCALL_SYNC:
 			{
-				root_dir()->sync();
+				root_dir()->sync("/");
 				result = true;
 				break;
 			}
@@ -1002,6 +1010,55 @@ Terminal::Connection *Noux::terminal()
 }
 
 
+static Noux::Io_channel *connect_stdio(Vfs::Dir_file_system            &root,
+                                       Noux::Terminal_io_channel::Type  type,
+                                       Genode::Signal_receiver         &sig_rec)
+{
+	using namespace Vfs;
+	using namespace Noux;
+	typedef Terminal_io_channel Tio; /* just a local abbreviation */
+
+	char path[MAX_PATH_LEN];
+	Vfs_handle *vfs_handle = nullptr;
+	char const *stdio_name = "";
+	unsigned mode = 0;
+
+	switch (type) {
+	case Tio::STDIN:
+		stdio_name = "stdin";
+		mode = Directory_service::OPEN_MODE_RDONLY;
+		break;
+	case Tio::STDOUT:
+		stdio_name = "stdout";
+		mode = Directory_service::OPEN_MODE_WRONLY;
+		break;
+	case Tio::STDERR:
+		stdio_name = "stderr";
+		mode = Directory_service::OPEN_MODE_WRONLY;
+		break;
+	};
+
+	try {
+		config()->xml_node().attribute(stdio_name).value(
+			path, sizeof(path));
+
+		if (root.open(path, mode, &vfs_handle) != Directory_service::OPEN_OK) {
+			PERR("failed to connect %s to '%s'", stdio_name, path);
+			Genode::env()->parent()->exit(1);
+		}
+
+		return new (Genode::env()->heap())
+			Vfs_io_channel("", path, &root, vfs_handle, sig_rec);
+
+	} catch (Genode::Xml_node::Nonexistent_attribute) {
+		PWRN("%s VFS path not defined, connecting to Terminal session", stdio_name);
+	}
+
+	return new (Genode::env()->heap())
+		Tio(*Noux::terminal(), type, sig_rec);
+}
+
+
 Genode::Dataspace_capability Noux::ldso_ds_cap()
 {
 	try {
@@ -1029,7 +1086,24 @@ Genode::Lock &Noux::signal_lock()
 
 
 void *operator new (Genode::size_t size) {
-	return Genode::env()->heap()->alloc(size); }
+	void * ptr = Genode::env()->heap()->alloc(size);
+	if (!ptr)
+		return ptr;
+
+	Genode::memset(ptr, 0, size);
+	return ptr;
+}
+
+
+void operator delete (void * ptr)
+{
+	if (Genode::env()->heap()->need_size_for_free()) {
+		PWRN("leaking memory");
+		return;
+	}
+
+	Genode::env()->heap()->free(ptr, 0);
+}
 
 
 template <typename FILE_SYSTEM>
@@ -1135,9 +1209,9 @@ int main(int argc, char **argv)
 	 */
 	typedef Terminal_io_channel Tio; /* just a local abbreviation */
 	Shared_pointer<Io_channel>
-		channel_0(new Tio(*Noux::terminal(), Tio::STDIN,  sig_rec), Genode::env()->heap()),
-		channel_1(new Tio(*Noux::terminal(), Tio::STDOUT, sig_rec), Genode::env()->heap()),
-		channel_2(new Tio(*Noux::terminal(), Tio::STDERR, sig_rec), Genode::env()->heap());
+		channel_0(connect_stdio(root_dir, Tio::STDIN,  sig_rec), Genode::env()->heap()),
+		channel_1(connect_stdio(root_dir, Tio::STDOUT, sig_rec), Genode::env()->heap()),
+		channel_2(connect_stdio(root_dir, Tio::STDERR, sig_rec), Genode::env()->heap());
 
 	init_child->add_io_channel(channel_0, 0);
 	init_child->add_io_channel(channel_1, 1);

@@ -31,6 +31,7 @@ set build_components {
 if {$use_fancy_stuff} { set use_framebuffer 1 }
 
 lappend_if $use_usb             build_components drivers/usb
+lappend_if $use_block_ram       build_components server/ram_blk
 lappend_if $use_block_sata      build_components drivers/ahci
 lappend_if $use_nic_session     build_components drivers/nic
 lappend_if $use_nic_bridge      build_components server/nic_bridge
@@ -76,7 +77,7 @@ if {!$use_multiboot} {
 }
 
 	puts $vm_cfg_fd {
-		<vbios_keyboard/>
+		<vbios_keyboard host_keyboard="0x10000"/>
 		<vbios_mem/>
 		<vbios_time/>
 		<vbios_reset/>}
@@ -102,9 +103,17 @@ for {set i 0} {$i < $vcpus_to_be_used} {incr i 1} {
 }
 
 if {!$use_multiboot} {
-	puts $vm_cfg_fd {
+
+	if {$use_model_ahci} {
+		puts $vm_cfg_fd {
 		<ahci mem="0xe0800000" irq="14" bdf="0x30"/>
 		<drive sigma0drive="0" controller="0" port="0"/>
+		}
+	}
+	if {$use_model_ide} {
+		puts $vm_cfg_fd {
+		<ide port0="0x1f0" port1="0x3f6" irq="14" bdf="0x38" disk="0"/>
+		}
 	}
 }
 
@@ -170,13 +179,19 @@ append_if [expr !$use_usb] config {
 	</start> }
 
 append_if $use_block_sata config {
-	<start name="ahci" priority="-1">
-		<binary name="ahci_drv" />
+	<start name="ahci_drv" priority="-1">
 		<resource name="RAM" quantum="1M" />
 		<provides><service name="Block"/></provides>
 		<config>
-			<policy label="seoul" device="0" />
+			<policy label="seoul -> VirtualDisk 0" device="0" />
 		</config>
+	</start>}
+
+append_if $use_block_ram config {
+	<start name="ram_blk" priority="-1">
+		<resource name="RAM" quantum="1M" />
+		<provides><service name="Block"/></provides>
+		<config file="seoul-disc.raw" block_size="512"/>
 	</start>}
 
 append_if $use_genode_iso config {
@@ -199,7 +214,7 @@ append_platform_drv_config
 
 append_if $use_nic_session config {
 	<start name="nic_drv" priority="-2">
-		<resource name="RAM" quantum="3M"/>
+		<resource name="RAM" quantum="4M"/>
 		<provides><service name="Nic"/></provides>
 		<route> <any-service><any-child/><parent/></any-service> </route>
 	</start>
@@ -275,23 +290,18 @@ append_if $use_fancy_stuff config {
 		<resource name="RAM" quantum="8M"/>
 		<config>
 			<report focus="yes" />
-			<domain name="pointer" layer="1" xray="no" origin="pointer" />
-			<domain name="panel"   layer="2" xray="no" />
-			<domain name=""        layer="3" ypos="18" height="-18" />
-
+			<domain name="pointer" layer="1" content="client" label="no" origin="pointer" />
+			<domain name="panel"   layer="2" content="client" label="no" focus="none" />
+			<domain name=""        layer="3" content="client" focus="click"
+			                       hover="always" ypos="18" height="-18" />
 			<policy label="pointer"    domain="pointer"/>
 			<policy label="status_bar" domain="panel"/>
-			<policy label=""           domain=""/>
-
-			<global-key name="KEY_SCROLLLOCK" operation="xray" />
-			<global-key name="KEY_SYSRQ"      operation="kill" />
-			<global-key name="KEY_PRINT"      operation="kill" />
-			<global-key name="KEY_F11"        operation="kill" />
-			<global-key name="KEY_F12"        operation="xray" />
+			<policy domain=""/>
 		</config>
 		<route>
 			<service name="Timer">      <child name="timer"/></service>
 			<service name="Framebuffer"><child name="fb_drv"/></service>
+			<service name="Report">     <child name="report_rom"/></service>
 			<any-service><parent/><any-child/></any-service>
 		</route>
 		<provides><service name="Nitpicker"/></provides>
@@ -405,6 +415,7 @@ set boot_modules {
 
 lappend_if [expr !$use_usb]   boot_modules ps2_drv
 lappend_if $use_usb           boot_modules usb_drv
+lappend_if $use_block_ram     boot_modules ram_blk
 lappend_if $use_block_sata    boot_modules ahci_drv
 lappend_if $use_nic_session   boot_modules nic_drv
 lappend_if $use_nic_bridge    boot_modules nic_bridge
@@ -422,6 +433,8 @@ lappend_if $use_fancy_stuff   boot_modules report_rom
 lappend_if $use_genode_iso    boot_modules rom_blk
 lappend_if $use_genode_iso    boot_modules iso9660
 lappend_if $use_genode_iso    boot_modules genode.iso
+
+lappend_if $use_block_ram     boot_modules seoul-disc.raw
 
 #
 # Add OS binaries of guest

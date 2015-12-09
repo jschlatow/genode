@@ -57,7 +57,8 @@ int Platform_thread::start(void *ip, void *sp)
 		return -1;
 	}
 
-	if (!_pd) {
+	if (!_pd || (is_main_thread() && !is_vcpu() &&
+	             _pd->parent_pt_sel() == Native_thread::INVALID_INDEX)) {
 		PERR("protection domain undefined");
 		return -2;
 	}
@@ -324,11 +325,15 @@ unsigned long long Platform_thread::execution_time() const
 	unsigned long long time = 0;
 
 	/*
-	 * Ignore the return value, which indicates success only for global ECs.
 	 * For local ECs, we simply return 0 as local ECs are executed with the
 	 * time of their callers.
 	 */
-	(void) Nova::sc_ctrl(_sel_sc(), time);
+	if (is_worker())
+		return time;
+
+	uint8_t res = Nova::sc_ctrl(_sel_sc(), time);
+	if (res != Nova::NOVA_OK)
+		PDBG("sc_ctrl failed res=%x", res);
 
 	return time;
 }
@@ -342,6 +347,16 @@ Platform_thread::Platform_thread(const char *name, unsigned prio, int thread_id)
 	_priority(Cpu_session::scale_priority(Nova::Qpd::DEFAULT_PRIORITY, prio))
 {
 	strncpy(_name, name, sizeof(_name));
+
+	if (_priority == 0) {
+		PWRN("priority of thread '%s' below minimum - boost to 1", _name);
+		_priority = 1;
+	}
+	if (_priority > Nova::Qpd::DEFAULT_PRIORITY) {
+		PWRN("priority of thread '%s' above maximum - limit to %u",
+		     _name, Nova::Qpd::DEFAULT_PRIORITY);
+		_priority = Nova::Qpd::DEFAULT_PRIORITY;
+	}
 }
 
 

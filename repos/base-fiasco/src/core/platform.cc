@@ -49,9 +49,9 @@ static const bool verbose_region_alloc = false;
  ** Core address space management **
  ***********************************/
 
-static Synchronized_range_allocator<Allocator_avl> &_core_address_ranges()
+static Synced_range_allocator<Allocator_avl> &_core_address_ranges()
 {
-	static Synchronized_range_allocator<Allocator_avl> _core_address_ranges(0);
+	static Synced_range_allocator<Allocator_avl> _core_address_ranges(nullptr);
 	return _core_address_ranges;
 }
 
@@ -321,7 +321,7 @@ void Platform::_setup_irq_alloc() {
 	_irq_alloc.add_range(0, 0x10); }
 
 
-void Platform::_setup_basics()
+static Fiasco::l4_kernel_info_t *get_kip()
 {
 	using namespace Fiasco;
 
@@ -370,14 +370,22 @@ void Platform::_setup_basics()
 		printf("           root "); printf(" esp: %08lx  eip: %08lx\n", kip->root_esp, kip->root_eip);
 	}
 
+	return kip;
+}
+
+void Platform::_setup_basics()
+{
+	using namespace Fiasco;
+
+	l4_kernel_info_t * kip = get_kip();
+
 	/* add KIP as ROM module */
 	_kip_rom = Rom_module((addr_t)kip, L4_PAGESIZE, "l4v2_kip");
 	_rom_fs.insert(&_kip_rom);
 
 	/* update multi-boot info pointer from KIP */
-	void *mb_info_ptr = (void *)kip->user_ptr;
-	_mb_info = Multiboot_info(mb_info_ptr);
-	if (verbose) printf("MBI @ %p\n", mb_info_ptr);
+	addr_t mb_info_addr = kip->user_ptr;
+	if (verbose) printf("MBI @ 0x%lx\n", mb_info_addr);
 
 	/* parse memory descriptors - look for virtual memory configuration */
 	/* XXX we support only one VM region (here and also inside RM) */
@@ -412,8 +420,8 @@ void Platform::_setup_basics()
 	/* remove KIP and MBI area from region and IO_MEM allocator */
 	remove_region(Region((addr_t)kip, (addr_t)kip + L4_PAGESIZE), _region_alloc);
 	remove_region(Region((addr_t)kip, (addr_t)kip + L4_PAGESIZE), _io_mem_alloc);
-	remove_region(Region((addr_t)mb_info_ptr, (addr_t)mb_info_ptr + _mb_info.size()), _region_alloc);
-	remove_region(Region((addr_t)mb_info_ptr, (addr_t)mb_info_ptr + _mb_info.size()), _io_mem_alloc);
+	remove_region(Region(mb_info_addr, mb_info_addr + _mb_info.size()), _region_alloc);
+	remove_region(Region(mb_info_addr, mb_info_addr + _mb_info.size()), _io_mem_alloc);
 
 	/* remove core program image memory from region and IO_MEM allocator */
 	addr_t img_start = (addr_t) &_prog_img_beg;
@@ -457,9 +465,10 @@ void Platform::_setup_rom()
 
 
 Platform::Platform() :
-	_ram_alloc(0), _io_mem_alloc(core_mem_alloc()),
+	_ram_alloc(nullptr), _io_mem_alloc(core_mem_alloc()),
 	_io_port_alloc(core_mem_alloc()), _irq_alloc(core_mem_alloc()),
-	_region_alloc(core_mem_alloc())
+	_region_alloc(core_mem_alloc()),
+	_mb_info(get_kip()->user_ptr, true)
 {
 	/*
 	 * We must be single-threaded at this stage and so this is safe.
@@ -475,13 +484,13 @@ Platform::Platform() :
 	_setup_rom();
 
 	if (verbose) {
-		printf(":ram_alloc: ");    _ram_alloc.raw()->dump_addr_tree();
-		printf(":region_alloc: "); _region_alloc.raw()->dump_addr_tree();
-		printf(":io_mem: ");       _io_mem_alloc.raw()->dump_addr_tree();
-		printf(":io_port: ");      _io_port_alloc.raw()->dump_addr_tree();
-		printf(":irq: ");          _irq_alloc.raw()->dump_addr_tree();
+		printf(":ram_alloc: ");    _ram_alloc()->dump_addr_tree();
+		printf(":region_alloc: "); _region_alloc()->dump_addr_tree();
+		printf(":io_mem: ");       _io_mem_alloc()->dump_addr_tree();
+		printf(":io_port: ");      _io_port_alloc()->dump_addr_tree();
+		printf(":irq: ");          _irq_alloc()->dump_addr_tree();
 		printf(":rom_fs: ");       _rom_fs.print_fs();
-		printf(":core ranges: ");  _core_address_ranges().raw()->dump_addr_tree();
+		printf(":core ranges: ");  _core_address_ranges()()->dump_addr_tree();
 	}
 
 	Fiasco::l4_threadid_t myself = Fiasco::l4_myself();

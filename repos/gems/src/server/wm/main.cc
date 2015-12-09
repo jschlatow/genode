@@ -54,13 +54,17 @@ struct Wm::Main
 	/* list of present windows, to be consumed by the layouter */
 	Reporter window_list_reporter = { "window_list" };
 
+	/* request to the layouter to set the focus */
+	Reporter focus_request_reporter = { "focus_request" };
+
 	Window_registry window_registry { *env()->heap(), window_list_reporter };
+
+	Nitpicker::Connection focus_nitpicker_session;
 
 	Nitpicker::Root nitpicker_root { ep, window_registry,
 	                                 *env()->heap(), env()->ram_session_cap(),
-	                                 pointer_reporter };
-
-	Nitpicker::Connection focus_nitpicker_session;
+	                                 pointer_reporter, focus_request_reporter,
+	                                 focus_nitpicker_session };
 
 	void handle_focus_update(unsigned)
 	{
@@ -124,6 +128,8 @@ struct Wm::Main
 		/* initially report an empty window list */
 		window_list_reporter.enabled(true);
 		Genode::Reporter::Xml_generator xml(window_list_reporter, [&] () { });
+
+		focus_request_reporter.enabled(true);
 
 		focus_rom.sigh(focus_dispatcher);
 		resize_request_rom.sigh(resize_request_dispatcher);

@@ -24,7 +24,7 @@ using namespace Genode;
 static const bool verbose_core_mem_alloc = false;
 
 
-void * Core_mem_allocator::Mapped_avl_allocator::map_addr(void * addr)
+void * Mapped_avl_allocator::map_addr(void * addr)
 {
 	Block *b = static_cast<Block *>(_find_by_address((addr_t)addr));
 
@@ -36,9 +36,9 @@ void * Core_mem_allocator::Mapped_avl_allocator::map_addr(void * addr)
 
 
 Range_allocator::Alloc_return
-Core_mem_allocator::Mapped_mem_allocator::alloc_aligned(size_t size, void **out_addr, int align, addr_t from, addr_t to)
+Mapped_mem_allocator::alloc_aligned(size_t size, void **out_addr, int align, addr_t from, addr_t to)
 {
-	size_t page_rounded_size = (size + get_page_size() - 1) & get_page_mask();
+	size_t page_rounded_size = align_addr(size, get_page_size_log2());
 	void  *phys_addr = 0;
 	align = max((size_t)align, get_page_size_log2());
 
@@ -77,7 +77,7 @@ Core_mem_allocator::Mapped_mem_allocator::alloc_aligned(size_t size, void **out_
 }
 
 
-void Core_mem_allocator::Mapped_mem_allocator::free(void *addr, size_t size)
+void Mapped_mem_allocator::free(void *addr, size_t size)
 {
 	using Block = Mapped_avl_allocator::Block;
 	Block *b = static_cast<Block *>(_virt_alloc->_find_by_address((addr_t)addr));
@@ -89,7 +89,7 @@ void Core_mem_allocator::Mapped_mem_allocator::free(void *addr, size_t size)
 }
 
 
-void Core_mem_allocator::Mapped_mem_allocator::free(void *addr)
+void Mapped_mem_allocator::free(void *addr)
 {
 	PWRN("Not implemented!");
 }

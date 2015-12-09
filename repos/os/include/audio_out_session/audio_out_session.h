@@ -49,7 +49,7 @@ namespace Audio_out {
 	class Session;
 
 	enum {
-		QUEUE_SIZE  = 16,            /* buffer queue size */
+		QUEUE_SIZE  = 256,           /* buffer queue size */
 		PERIOD      = 512,           /* samples per period (~11.6ms) */
 		SAMPLE_RATE = 44100,
 		SAMPLE_SIZE = sizeof(float),
@@ -171,6 +171,28 @@ class Audio_out::Stream
 		unsigned pos() const { return _pos; }
 
 		/**
+		 * Current audio allocation position
+		 *
+		 * \return position
+		 */
+		unsigned tail() const { return _tail; }
+
+		/**
+		 * Number of packets between playback and allocation position
+		 *
+		 * \return number
+		 */
+		unsigned queued() const
+		{
+			if (_tail > _pos)
+				return _tail - _pos;
+			else if (_pos > _tail)
+				return QUEUE_SIZE - (_pos - _tail);
+			else
+				return 0;
+		}
+
+		/**
 		 * Retrieve next packet for given packet
 		 *
 		 * \param packet  preceding packet
@@ -241,7 +263,7 @@ class Audio_out::Stream
 		 *
 		 * This means that allocation will start at current queue position.
 		 */
-		void reset() { _tail = _pos; }
+		void reset() { _tail = (_pos + 1) % QUEUE_SIZE; }
 
 
 		/**

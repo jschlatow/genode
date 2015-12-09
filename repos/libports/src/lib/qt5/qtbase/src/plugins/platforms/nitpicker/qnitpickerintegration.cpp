@@ -11,13 +11,9 @@
  * under the terms of the GNU General Public License version 2.
  */
 
-/* Genode includes */
-
-#include <base/rpc_server.h>
-#include <cap_session/connection.h>
-
 /* Qt includes */
 #include <QtGui/private/qguiapplication_p.h>
+#include "qgenodeclipboard.h"
 #include "qnitpickerglcontext.h"
 #include "qnitpickerintegration.h"
 #include "qnitpickerplatformwindow.h"
@@ -30,21 +26,20 @@ QT_BEGIN_NAMESPACE
 
 static const bool verbose = false;
 
-static Genode::Rpc_entrypoint &_entrypoint()
+Genode::Signal_receiver &QNitpickerIntegration::_signal_receiver()
 {
-	enum { STACK_SIZE = 2*1024*sizeof(Genode::addr_t) };
-	static Genode::Cap_connection cap;
-	static Genode::Rpc_entrypoint entrypoint(&cap, STACK_SIZE, "qt_window_ep");
-	return entrypoint;
+	static Genode::Signal_receiver _inst;
+	return _inst;
 }
 
-
 QNitpickerIntegration::QNitpickerIntegration()
-: _nitpicker_screen(new QNitpickerScreen()),
+: _signal_handler_thread(_signal_receiver()),
+  _nitpicker_screen(new QNitpickerScreen()),
   _event_dispatcher(createUnixEventDispatcher())
 {
     QGuiApplicationPrivate::instance()->setEventDispatcher(_event_dispatcher);
     screenAdded(_nitpicker_screen);
+    _signal_handler_thread.start();
 }
 
 
@@ -63,7 +58,8 @@ QPlatformWindow *QNitpickerIntegration::createPlatformWindow(QWindow *window) co
 		qDebug() << "QNitpickerIntegration::createPlatformWindow(" << window << ")";
 
     QRect screen_geometry = _nitpicker_screen->geometry();
-    return new QNitpickerPlatformWindow(window, _entrypoint(),
+    return new QNitpickerPlatformWindow(window,
+                                        _signal_receiver(),
                                         screen_geometry.width(),
                                         screen_geometry.height());
 }
@@ -92,10 +88,18 @@ QPlatformFontDatabase *QNitpickerIntegration::fontDatabase() const
 }
 
 
+#ifndef QT_NO_CLIPBOARD
+QPlatformClipboard *QNitpickerIntegration::clipboard() const
+{
+	static QGenodeClipboard cb(_signal_receiver());
+	return &cb;
+}
+#endif
+
+
 QPlatformOpenGLContext *QNitpickerIntegration::createPlatformOpenGLContext(QOpenGLContext *context) const
 {
     return new QNitpickerGLContext(context);
 }
 
 QT_END_NAMESPACE
-

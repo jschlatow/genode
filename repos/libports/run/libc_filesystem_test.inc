@@ -10,7 +10,7 @@ if {[have_spec hw_odroid_xu] || [have_spec hw_zynq]} {
 }
 
 # use SD on ARM
-set use_sd_card_drv [expr [have_spec omap4] || [have_spec platform_arndale] || [have_spec pl180]]
+set use_sd_card_drv [expr [have_spec omap4] || [have_spec arndale] || [have_spec pl180]]
 
 # use AHCI on x86
 set use_ahci        [have_spec x86]
@@ -80,7 +80,10 @@ append config "
 append config {
 		<resource name="RAM" quantum="8M"/>
 		<config>
-			<iterations value="1"/>
+			<iterations value="1"/>}
+append_if [have_include "power_on/qemu"] config {
+			<write-read size="1M" buffer_size="8K"/>}
+append config {
 			<libc stdout="/dev/log" stderr="/dev/log">
 				<vfs>
 					<dir name="dev">}

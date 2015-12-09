@@ -10,16 +10,19 @@ SRC_CC = qgenericunixeventdispatcher.cpp \
          qeglconvenience.cpp
 
 SRC_CC += main.cpp \
+          qgenodeclipboard.cpp \
           qnitpickerglcontext.cpp \
           qnitpickerintegration.cpp \
           qnitpickerplatformwindow.cpp \
           qnitpickerwindowsurface.cpp \
+          qsignalhandlerthread.cpp \
           moc_qnitpickerplatformwindow.cpp \
           moc_qnitpickerwindowsurface.cpp \
           moc_qnitpickerintegrationplugin.cpp \
           qevdevkeyboardhandler.cpp \
           moc_qunixeventdispatcher_qpa_p.cpp \
-          moc_qevdevkeyboardhandler_p.cpp
+          moc_qevdevkeyboardhandler_p.cpp \
+          moc_qsignalhandlerthread.cpp
 
 INC_DIR += $(QT5_CONTRIB_DIR)/qtbase/src/platformsupport/eventdispatchers \
            $(QT5_CONTRIB_DIR)/qtbase/src/platformsupport/fontdatabases/basic \

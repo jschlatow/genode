@@ -54,13 +54,13 @@ class Format_command
 
 	public:
 
-		Type   type;           /* format argument type                    */
-		Length length;         /* format argument length                  */
-		int    padding;        /* min number of characters to print       */
-		int    base;           /* base of numeric arguments               */
-		int    zeropad   : 1;  /* pad with zero instead of space          */
-		int    uppercase : 1;  /* use upper case for hex numbers          */
-		int    consumed;       /* nb of consumed format string characters */
+		Type   type      = INVALID;  /* format argument type               */
+		Length length    = DEFAULT;  /* format argument length             */
+		int    padding   = 0;        /* min number of characters to print  */
+		int    base      = 10;       /* base of numeric arguments          */
+		bool   zeropad   = false;    /* pad with zero instead of space     */
+		bool   uppercase = false;    /* use upper case for hex numbers     */
+		int    consumed  = 0;        /* nb of consumed format string chars */
 
 		/**
 		 * Constructor
@@ -69,12 +69,6 @@ class Format_command
 		 */
 		explicit Format_command(const char *format)
 		{
-			consumed  = 0;
-			uppercase = 0;
-			base      = 10;
-			type      = INVALID;
-			length    = DEFAULT;
-
 			/* check for command begin and eat the character */
 			if (format[consumed] != '%') return;
 			if (!format[++consumed]) return;
@@ -335,6 +329,8 @@ void Console::vprintf(const char *format, va_list list)
 			case Format_command::INVALID:
 
 				_out_string("<warning: unsupported format string argument>");
+				/* consume the argument of the unsupported command */
+				va_arg(list, long);
 				break;
 		}
 

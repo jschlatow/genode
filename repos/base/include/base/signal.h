@@ -36,6 +36,7 @@ namespace Genode {
 	class Signal_dispatcher_base;
 	class Signal_connection;
 	template <typename> class Signal_dispatcher;
+	Signal_connection * signal_connection();
 }
 
 
@@ -200,6 +201,12 @@ class Genode::Signal_receiver : Noncopyable
 		 */
 		void _platform_destructor();
 
+		/**
+		 * Hooks to platform specific dissolve parts
+		 */
+		void _platform_begin_dissolve(Signal_context * const c);
+		void _platform_finish_dissolve(Signal_context * const c);
+
 	public:
 
 		/**
@@ -207,6 +214,7 @@ class Genode::Signal_receiver : Noncopyable
 		 */
 		class Context_already_in_use { };
 		class Context_not_associated { };
+		class Signal_not_pending     { };
 
 		/**
 		 * Constructor
@@ -243,11 +251,24 @@ class Genode::Signal_receiver : Noncopyable
 		bool pending();
 
 		/**
-		 * Block until a signal is received
+		 * Block until a signal is received and return the signal
 		 *
 		 * \return received signal
 		 */
 		Signal wait_for_signal();
+
+		/**
+		 * Block until a signal is received
+		 */
+		void block_for_signal();
+
+		/**
+		 * Retrieve  pending signal
+		 *
+		 * \throw   'Signal_not_pending' no pending signal found
+		 * \return  received signal
+		 */
+		Signal pending_signal();
 
 		/**
 		 * Locally submit signal to the receiver

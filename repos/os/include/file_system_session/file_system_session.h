@@ -28,15 +28,6 @@ namespace File_system {
 	struct Dir_handle;
 	struct Symlink_handle;
 
-	/**
-	 * Type of client context embedded in each packet descriptor
-	 *
-	 * Using the opaque refererence, the client is able to attribute incoming
-	 * packet acknowledgements to a context that is meaningful for the client.
-	 * It has no meaning at the server side.
-	 */
-	struct Packet_ref;
-
 	typedef Genode::uint64_t seek_off_t;
 	typedef Genode::uint64_t file_size_t;
 
@@ -69,6 +60,7 @@ namespace File_system {
 	class Invalid_handle      : Exception { };
 	class Invalid_name        : Exception { };
 	class Size_limit_reached  : Exception { };
+	class Not_empty           : Exception { };
 
 	struct Session;
 }
@@ -123,8 +115,6 @@ class File_system::Packet_descriptor : public Genode::Packet_descriptor
 		seek_off_t  _position; /* seek offset in bytes */
 		size_t      _length;   /* transaction length in bytes */
 		bool        _success;  /* indicates success of operation */
-		Packet_ref *_ref;      /* opaque reference used at the client side
-		                          for recognizing acknowledgements */
 
 	public:
 
@@ -141,14 +131,13 @@ class File_system::Packet_descriptor : public Genode::Packet_descriptor
 		 *
 		 * \param position  seek offset in bytes (by default, append)
 		 */
-		Packet_descriptor(Packet_descriptor p, Packet_ref *ref,
+		Packet_descriptor(Packet_descriptor p,
 		                  Node_handle handle, Opcode op, size_t length,
 		                  seek_off_t position = ~0)
 		:
 			Genode::Packet_descriptor(p.offset(), p.size()),
 			_handle(handle), _op(op),
-			_position(position), _length(length), _success(false),
-			_ref(ref)
+			_position(position), _length(length), _success(false)
 		{ }
 
 		Node_handle handle()    const { return _handle;   }
@@ -156,7 +145,6 @@ class File_system::Packet_descriptor : public Genode::Packet_descriptor
 		seek_off_t  position()  const { return _position; }
 		size_t      length()    const { return _length;   }
 		bool        succeeded() const { return _success;  }
-		Packet_ref *ref()       const { return _ref;      }
 
 		/*
 		 * Accessors called at the server side
@@ -230,11 +218,18 @@ struct File_system::Session : public Genode::Session
 	 * \throw Invalid_name         file name contains invalid characters
 	 * \throw Lookup_failed        the name refers to a node other than a
 	 *                             file
+	 * \throw Out_of_node_handles  server cannot allocate metadata
+	 * \throw No_space
 	 */
 	virtual File_handle file(Dir_handle, Name const &name, Mode, bool create) = 0;
 
 	/**
 	 * Open or create symlink
+	 *
+	 * \throw Invalid_handle       directory handle is invalid
+	 * \throw Invalid_name         file name contains invalid characters
+	 * \throw Out_of_node_handles  server cannot allocate metadata
+	 * \throw No_space
 	 */
 	virtual Symlink_handle symlink(Dir_handle, Name const &name, bool create) = 0;
 
@@ -247,6 +242,7 @@ struct File_system::Session : public Genode::Session
 	 * \throw Lookup_failed        path lookup failed because one element
 	 *                             of 'path' does not exist
 	 * \throw Name_too_long
+	 * \throw Out_of_node_handles  server cannot allocate metadata
 	 * \throw No_space
 	 */
 	virtual Dir_handle dir(Path const &path, bool create) = 0;
@@ -256,6 +252,10 @@ struct File_system::Session : public Genode::Session
 	 *
 	 * The returned node handle can be used merely as argument for
 	 * 'status'.
+	 *
+	 * \throw Lookup_failed        path lookup failed because one element
+	 *                             of 'path' does not exist
+	 * \throw Out_of_node_handles  server cannot allocate metadata
 	 */
 	virtual Node_handle node(Path const &path) = 0;
 
@@ -276,11 +276,21 @@ struct File_system::Session : public Genode::Session
 
 	/**
 	 * Delete file or directory
+	 *
+	 * \throw Permission_denied
+	 * \throw Invalid_name
+	 * \throw Lookup_failed
+	 * \throw Not_empty      argument is a non-empty directory and
+	 *                       the backend does not support recursion
 	 */
 	virtual void unlink(Dir_handle, Name const &) = 0;
 
 	/**
 	 * Truncate or grow file to specified size
+	 *
+	 * \throw Permission_denied  node modification not allowed
+	 * \throw Invalid_handle     node handle is invalid
+	 * \throw No_space           new size exceeds free space
 	 */
 	virtual void truncate(File_handle, file_size_t size) = 0;
 
@@ -299,10 +309,9 @@ struct File_system::Session : public Genode::Session
 	 * Synchronize file system
 	 *
 	 * This is only needed by file systems that maintain an internal
-	 * cache, which needs to be flushed on certain occasions. Therefore,
-	 * the default implementation just serves as a reminder.
+	 * cache, which needs to be flushed on certain occasions.
 	 */
-	virtual void sync() { PWRN("sync() not implemented!"); }
+	virtual void sync(Node_handle) { }
 
 
 	/*******************
@@ -313,27 +322,32 @@ struct File_system::Session : public Genode::Session
 	GENODE_RPC_THROW(Rpc_file, File_handle, file,
 	                 GENODE_TYPE_LIST(Invalid_handle, Node_already_exists,
 	                                  Invalid_name, Lookup_failed,
-	                                  Permission_denied),
+	                                  Permission_denied, No_space,
+	                                  Out_of_node_handles),
 	                 Dir_handle, Name const &, Mode, bool);
 	GENODE_RPC_THROW(Rpc_symlink, Symlink_handle, symlink,
 	                 GENODE_TYPE_LIST(Invalid_handle, Node_already_exists,
-	                                  Invalid_name, Lookup_failed, Permission_denied),
+	                                  Invalid_name, Lookup_failed,
+	                                  Permission_denied, No_space,
+	                                  Out_of_node_handles),
 	                 Dir_handle, Name const &, bool);
 	GENODE_RPC_THROW(Rpc_dir, Dir_handle, dir,
 	                 GENODE_TYPE_LIST(Permission_denied, Node_already_exists,
-	                                  Lookup_failed, Name_too_long, No_space),
+	                                  Lookup_failed, Name_too_long,
+	                                  No_space, Out_of_node_handles),
 	                 Path const &, bool);
 	GENODE_RPC_THROW(Rpc_node, Node_handle, node,
-	                 GENODE_TYPE_LIST(Lookup_failed),
+	                 GENODE_TYPE_LIST(Lookup_failed, Out_of_node_handles),
 	                 Path const &);
 	GENODE_RPC(Rpc_close, void, close, Node_handle);
 	GENODE_RPC(Rpc_status, Status, status, Node_handle);
 	GENODE_RPC(Rpc_control, void, control, Node_handle, Control);
 	GENODE_RPC_THROW(Rpc_unlink, void, unlink,
-	                 GENODE_TYPE_LIST(Permission_denied, Invalid_name, Lookup_failed),
+	                 GENODE_TYPE_LIST(Permission_denied, Invalid_name,
+	                                  Lookup_failed,     Not_empty),
 	                 Dir_handle, Name const &);
 	GENODE_RPC_THROW(Rpc_truncate, void, truncate,
-	                 GENODE_TYPE_LIST(Permission_denied, Invalid_handle),
+	                 GENODE_TYPE_LIST(Permission_denied, Invalid_handle, No_space),
 	                 File_handle, file_size_t);
 	GENODE_RPC_THROW(Rpc_move, void, move,
 	                 GENODE_TYPE_LIST(Permission_denied, Invalid_name, Lookup_failed),
@@ -341,7 +355,7 @@ struct File_system::Session : public Genode::Session
 	GENODE_RPC_THROW(Rpc_sigh, void, sigh,
 	                 GENODE_TYPE_LIST(Invalid_handle),
 	                 Node_handle, Signal_context_capability);
-	GENODE_RPC(Rpc_sync, void, sync);
+	GENODE_RPC(Rpc_sync, void, sync, Node_handle);
 
 	/*
 	 * Manual type-list definition, needed because the RPC interface

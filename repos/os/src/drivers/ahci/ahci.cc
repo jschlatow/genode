@@ -71,6 +71,11 @@ struct Ahci
 		return sig == ATAPI_SIG_QEMU || sig == ATAPI_SIG;
 	}
 
+	bool is_ata(unsigned sig)
+	{
+		return sig == ATA_SIG;
+	}
+
 	/**
 	 * Forward IRQs to ports
 	 */
@@ -106,27 +111,36 @@ struct Ahci
 		PINF("\tversion: %x.%04x", hba.read<Hba::Version::Major>(),
 		                           hba.read<Hba::Version::Minor>());
 		PINF("\tcommand slots: %u", hba.command_slots());
-		PINF("\tnative command queuing: %s", hba.ncg() ? "yes" : "no");
+		PINF("\tnative command queuing: %s", hba.ncq() ? "yes" : "no");
 		PINF("\t64 bit support: %s", hba.supports_64bit() ? "yes" : "no");
 	}
 
 	void scan_ports()
 	{
 		PINF("\tnumber of ports: %u pi: %x", hba.port_count(), hba.read<Hba::Pi>());
-		unsigned avaiable = hba.read<Hba::Pi>();
+		unsigned available = hba.read<Hba::Pi>();
 		for (unsigned i = 0; i < hba.port_count(); i++) {
 
 			/* check if port is implemented */
-			if (!(avaiable & (1U << i)))
+			if (!(available & (1U << i)))
 				continue;
 
 			Port port(hba, platform_hba, i);
-			bool enabled = port.enable();
-			unsigned sig = port.read<Port::Sig>();
 
-			PINF("\t\t#%u: %s", i, enabled ?
-			                       (is_atapi(sig) ? "ATAPI" : "ATA") :
-			                       "off");
+			/* check for ATA/ATAPI devices */
+			unsigned sig = port.read<Port::Sig>();
+			if (!is_atapi(sig) && !is_ata(sig)) {
+				PINF("\t\t#%u: off", i);
+				continue;
+			}
+
+			port.reset();
+
+			bool enabled = false;
+			try { enabled = port.enable(); }
+			catch (Port::Not_ready) { PERR("Could not enable port %u", i); }
+
+			PINF("\t\t#%u: %s", i, is_atapi(sig) ? "ATAPI" : "ATA");
 
 			if (!enabled)
 				continue;

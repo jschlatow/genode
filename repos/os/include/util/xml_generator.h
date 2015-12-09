@@ -15,6 +15,7 @@
 #define _INCLUDE__UTIL__XML_GENERATOR_H_
 
 #include <util/string.h>
+#include <util/print_lines.h>
 #include <base/snprintf.h>
 
 namespace Genode { class Xml_generator; }
@@ -87,6 +88,30 @@ class Genode::Xml_generator
 				void append(char const *src) { append(src, strlen(src)); }
 
 				/**
+				 * Append character, sanitize it if needed
+				 */
+				void append_sanitized(char const c)
+				{
+					switch (c) {
+					case 0:    append("&#x00;"); break;
+					case '>':  append("&gt;");   break;
+					case '<':  append("&lt;");   break;
+					case '&':  append("&amp;");  break;
+					case '"':  append("&quot;"); break;
+					case '\'': append("&apos;"); break;
+					default:   append(c);        break;
+					}
+				}
+
+				/**
+				 * Append character buffer, sanitize characters if needed
+				 */
+				void append_sanitized(char const *src, size_t len)
+				{
+					for (; len--; append_sanitized(*src++));
+				}
+
+				/**
 				 * Return unused part of the buffer
 				 */
 				Out_buffer remainder() const {
@@ -110,10 +135,20 @@ class Genode::Xml_generator
 					return Out_buffer(_dst + at, len);
 				}
 
+				bool has_trailing_newline() const
+				{
+					return (_used > 1) && (_dst[_used - 1] == '\n');
+				}
+
 				/**
 				 * Return number of unused bytes of the buffer
 				 */
 				size_t used() const { return _used; }
+
+				void discard_trailing_whitespace()
+				{
+					for (; _used > 0 && is_whitespace(_dst[_used - 1]); _used--);
+				}
 		};
 
 
@@ -130,7 +165,8 @@ class Genode::Xml_generator
 
 				Out_buffer _out_buffer;
 
-				bool _has_sub_nodes  = false;
+				bool _has_content    = false;
+				bool _is_indented    = false;
 				bool _has_attributes = false;
 
 				/**
@@ -140,15 +176,23 @@ class Genode::Xml_generator
 
 				/**
 				 * Called by sub node
+				 *
+				 * \param indented  if true, the returned buffer and the
+				 *                  end tag start at a fresh line. This is the
+				 *                  case if the content buffer contains sub
+				 *                  nodes. But when inserting raw content,
+				 *                  such additional whitespaces are not desired.
 				 */
-				Out_buffer _content_buffer()
+				Out_buffer _content_buffer(bool indented)
 				{
-					if (!_has_sub_nodes)
+					if (!_has_content)
 						_out_buffer.append(">");
 
-					_out_buffer.append("\n");
+					if (indented)
+						_out_buffer.append("\n");
 
-					_has_sub_nodes = true;
+					_has_content = true;
+					_is_indented = indented;
 
 					return _out_buffer.remainder();
 				}
@@ -172,10 +216,24 @@ class Genode::Xml_generator
 					dst.append(' ');
 					dst.append(name);
 					dst.append("=\"");
-					dst.append(value);
+					dst.append(value, strlen(value));
 					dst.append("\"");
 
 					_attr_offset += gap;
+				}
+
+				void append(char const *src, size_t src_len)
+				{
+					Out_buffer content_buffer = _content_buffer(false);
+					content_buffer.append(src, src_len);
+					_commit_content(content_buffer);
+				}
+
+				void append_sanitized(char const *src, size_t src_len)
+				{
+					Out_buffer content_buffer = _content_buffer(false);
+					content_buffer.append_sanitized(src, src_len);
+					_commit_content(content_buffer);
 				}
 
 				template <typename FUNC>
@@ -183,7 +241,7 @@ class Genode::Xml_generator
 				:
 					_indent_level(xml._curr_indent),
 					_parent_node(xml._curr_node),
-					_out_buffer(_parent_node ? _parent_node->_content_buffer()
+					_out_buffer(_parent_node ? _parent_node->_content_buffer(true)
 					                         : xml._out_buffer)
 				{
 					_out_buffer.append('\t', _indent_level);
@@ -202,9 +260,12 @@ class Genode::Xml_generator
 					xml._curr_node = _parent_node;
 					xml._curr_indent--;
 
-					if (_has_sub_nodes) {
+					if (_is_indented) {
 						_out_buffer.append("\n");
 						_out_buffer.append('\t', _indent_level);
+					}
+
+					if (_has_content) {
 						_out_buffer.append("</");
 						_out_buffer.append(name);
 						_out_buffer.append(">");
@@ -251,11 +312,37 @@ class Genode::Xml_generator
 			_curr_node->insert_attribute(name, str);
 		}
 
+		template <size_t N>
+		void attribute(char const *name, String<N> const &str)
+		{
+			_curr_node->insert_attribute(name, str.string());
+		}
+
 		void attribute(char const *name, long value)
 		{
 			char buf[64];
 			Genode::snprintf(buf, sizeof(buf), "%ld", value);
 			_curr_node->insert_attribute(name, buf);
+		}
+
+		/**
+		 * Append content to XML node
+		 *
+		 * This method must not be followed by calls of 'attribute'.
+		 */
+		void append(char const *str, size_t str_len = ~0UL)
+		{
+			_curr_node->append(str, str_len == ~0UL ? strlen(str) : str_len);
+		}
+
+		/**
+		 * Append sanitized content to XML node
+		 *
+		 * This method must not be followed by calls of 'attribute'.
+		 */
+		void append_sanitized(char const *str, size_t str_len = ~0UL)
+		{
+			_curr_node->append_sanitized(str, str_len == ~0UL ? strlen(str) : str_len);
 		}
 
 		size_t used() const { return _out_buffer.used(); }

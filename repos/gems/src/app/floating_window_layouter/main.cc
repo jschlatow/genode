@@ -16,6 +16,7 @@
 #include <base/signal.h>
 #include <os/attached_rom_dataspace.h>
 #include <os/reporter.h>
+#include <os/session_policy.h>
 #include <nitpicker_session/connection.h>
 #include <input_session/client.h>
 #include <input/event.h>
@@ -69,11 +70,13 @@ class Floating_window_layouter::Window : public List<Window>::Element
 	public:
 
 		typedef String<256> Title;
+		typedef String<256> Label;
 
 		struct Element
 		{
 			enum Type { UNDEFINED, TITLE, LEFT, RIGHT, TOP, BOTTOM,
-			            TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT };
+			            TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT,
+			            CLOSER, MAXIMIZER, MINIMIZER };
 
 			Type type;
 
@@ -90,6 +93,9 @@ class Floating_window_layouter::Window : public List<Window>::Element
 				case TOP_RIGHT:    return "top_right";
 				case BOTTOM_LEFT:  return "bottom_left";
 				case BOTTOM_RIGHT: return "bottom_right";
+				case CLOSER:       return "closer";
+				case MAXIMIZER:    return "maximizer";
+				case MINIMIZER:    return "minimizer";
 				}
 				return "";
 			}
@@ -97,6 +103,7 @@ class Floating_window_layouter::Window : public List<Window>::Element
 			Element(Type type) : type(type) { }
 
 			bool operator != (Element const &other) const { return other.type != type; }
+			bool operator == (Element const &other) const { return other.type == type; }
 		};
 
 	private:
@@ -104,6 +111,8 @@ class Floating_window_layouter::Window : public List<Window>::Element
 		unsigned const _id = 0;
 
 		Title _title;
+
+		Label _label;
 
 		Rect _geometry;
 
@@ -118,9 +127,25 @@ class Floating_window_layouter::Window : public List<Window>::Element
 		Area _requested_size;
 
 		/**
+		 * Backup of the original geometry while the window is maximized
+		 */
+		Rect _unmaximized_geometry;
+
+		Rect const _maximized_geometry;
+
+		/** 
 		 * Window may be partially transparent
 		 */
 		bool _has_alpha = false;
+
+		/**
+		 * Window is temporarily not visible
+		 */
+		bool _is_hidden = false;
+
+		bool _is_resizeable = false;
+
+		bool _is_maximized = false;
 
 		/*
 		 * Number of times the window has been topped. This value is used by
@@ -138,13 +163,18 @@ class Floating_window_layouter::Window : public List<Window>::Element
 
 	public:
 
-		Window(unsigned id) : _id(id) { }
+		Window(unsigned id, Rect maximized_geometry)
+		:
+			_id(id), _maximized_geometry(maximized_geometry)
+		{ }
 
 		bool has_id(unsigned id) const { return id == _id; }
 
 		unsigned id() const { return _id; }
 
 		void title(Title const &title) { _title = title; }
+
+		void label(Label const &label) { _label = label; }
 
 		void geometry(Rect geometry) { _geometry = geometry; }
 
@@ -153,6 +183,12 @@ class Floating_window_layouter::Window : public List<Window>::Element
 		void position(Point pos) { _geometry = Rect(pos, _geometry.area()); }
 
 		void has_alpha(bool has_alpha) { _has_alpha = has_alpha; }
+
+		void is_hidden(bool is_hidden) { _is_hidden = is_hidden; }
+
+		void is_resizeable(bool is_resizeable) { _is_resizeable = is_resizeable; }
+
+		bool label_matches(Label const &label) const { return label == _label; }
 
 		/**
 		 * Return true if user drags a window border
@@ -170,6 +206,11 @@ class Floating_window_layouter::Window : public List<Window>::Element
 		 */
 		void size(Area size)
 		{
+			if (_is_maximized) {
+				_geometry = Rect(_maximized_geometry.p1(), size);
+				return;
+			}
+
 			if (!_drag_border()) {
 				_geometry = Rect(_geometry.p1(), size);
 				return;
@@ -198,9 +239,27 @@ class Floating_window_layouter::Window : public List<Window>::Element
 
 		void serialize(Xml_generator &xml, bool focused, Element highlight)
 		{
+			/* omit window from the layout if hidden */
+			if (_is_hidden)
+				return;
+
 			xml.node("window", [&]() {
-				xml.attribute("id",     _id);
-				xml.attribute("title",  _title.string());
+
+				xml.attribute("id", _id);
+
+				/* present concatenation of label and title in the window's title bar */
+				{
+					bool const has_title = Genode::strlen(_title.string()) > 0;
+
+					char buf[Label::capacity()];
+					Genode::snprintf(buf, sizeof(buf), "%s%s%s",
+					                 _label.string(),
+					                 has_title ? " " : "",
+					                 _title.string());
+
+					xml.attribute("title",  buf);
+				}
+
 				xml.attribute("xpos",   _geometry.x1());
 				xml.attribute("ypos",   _geometry.y1());
 				xml.attribute("width",  _geometry.w());
@@ -218,6 +277,11 @@ class Floating_window_layouter::Window : public List<Window>::Element
 
 				if (_has_alpha)
 					xml.attribute("has_alpha", "yes");
+
+				if (_is_resizeable) {
+					xml.attribute("maximizer", "yes");
+					xml.attribute("closer", "yes");
+				}
 			});
 		}
 
@@ -269,6 +333,27 @@ class Floating_window_layouter::Window : public List<Window>::Element
 		}
 
 		void topped() { _topped_cnt++; }
+
+		void close() { _requested_size = Area(0, 0); }
+
+		bool is_maximized() const { return _is_maximized; }
+
+		void is_maximized(bool is_maximized)
+		{
+			/* enter maximized state */
+			if (!_is_maximized && is_maximized) {
+				_unmaximized_geometry = _geometry;
+				_requested_size = _maximized_geometry.area();
+			}
+
+			/* leave maximized state */
+			if (_is_maximized && !is_maximized) {
+				_requested_size = _unmaximized_geometry.area();
+				_geometry = Rect(_unmaximized_geometry.p1(), _geometry.area());
+			}
+
+			_is_maximized = is_maximized;
+		}
 };
 
 
@@ -282,7 +367,8 @@ struct Floating_window_layouter::Main
 	unsigned focused_window_id = 0;
 	unsigned key_cnt = 0;
 
-	Window::Element hovered_element = Window::Element::UNDEFINED;
+	Window::Element hovered_element     = Window::Element::UNDEFINED;
+	Window::Element hovered_element_now = Window::Element::UNDEFINED;
 
 	bool drag_state     = false;
 	bool drag_init_done = true;
@@ -309,6 +395,21 @@ struct Floating_window_layouter::Main
 
 
 	/**
+	 * Install handler for responding to focus requests
+	 */
+	void handle_focus_request_update(unsigned);
+
+	void _apply_focus_request();
+
+	int handled_focus_request_id = 0;
+
+	Signal_dispatcher<Main> focus_request_dispatcher = {
+		sig_rec, *this, &Main::handle_focus_request_update };
+
+	Attached_rom_dataspace focus_request { "focus_request" };
+
+
+	/**
 	 * Install handler for responding to hover changes
 	 */
 	void handle_hover_update(unsigned);
@@ -327,6 +428,8 @@ struct Floating_window_layouter::Main
 		sig_rec, *this, &Main::handle_input };
 
 	Nitpicker::Connection nitpicker;
+
+	Rect maximized_window_geometry;
 
 	Input::Session_client input { nitpicker.input_session() };
 
@@ -353,7 +456,21 @@ struct Floating_window_layouter::Main
 	 */
 	Main(Signal_receiver &sig_rec) : sig_rec(sig_rec)
 	{
+		/* determine maximized window geometry */
+		Framebuffer::Mode const mode =
+			nitpicker.mode();
+
+		/*
+		 * XXX obtain decorator constraints dynamically
+		 */
+		enum { PAD_LEFT = 4, PAD_RIGHT = 4, PAD_TOP = 20, PAD_BOTTOM = 4 };
+		maximized_window_geometry = Rect(Point(PAD_LEFT, PAD_TOP),
+		                                 Area(mode.width() - PAD_LEFT - PAD_RIGHT,
+		                                      mode.height() - PAD_TOP - PAD_BOTTOM));
+
 		window_list.sigh(window_list_dispatcher);
+
+		focus_request.sigh(focus_request_dispatcher);
 
 		hover.sigh(hover_dispatcher);
 
@@ -392,7 +509,7 @@ void Floating_window_layouter::Main::import_window_list(Xml_node window_list_xml
 
 			Window *win = lookup_window_by_id(id);
 			if (!win) {
-				win = new (env()->heap()) Window(id);
+				win = new (env()->heap()) Window(id, maximized_window_geometry);
 				windows.insert(win);
 
 				/*
@@ -402,9 +519,14 @@ void Floating_window_layouter::Main::import_window_list(Xml_node window_list_xml
 			}
 
 			win->size(area_attribute(node));
-			win->title(string_attribute(node, "title", Window::Title("untitled")));
+			win->label(string_attribute(node, "label", Window::Label("")));
+			win->title(string_attribute(node, "title", Window::Title("")));
 			win->has_alpha(node.has_attribute("has_alpha")
 			            && node.attribute("has_alpha").has_value("yes"));
+			win->is_hidden(node.has_attribute("hidden")
+			            && node.attribute("hidden").has_value("yes"));
+			win->is_resizeable(node.has_attribute("resizeable")
+			            && node.attribute("resizeable").has_value("yes"));
 		}
 	} catch (...) { }
 }
@@ -483,7 +605,11 @@ element_from_hover_model(Genode::Xml_node hover_window_xml)
 	if (top_sizer)    return Type::TOP;
 	if (bottom_sizer) return Type::BOTTOM;
 
-	if (hover_window_xml.has_sub_node("title")) return Type::TITLE;
+	if (hover_window_xml.has_sub_node("title"))     return Type::TITLE;
+	if (hover_window_xml.has_sub_node("closer"))    return Type::CLOSER;
+	if (hover_window_xml.has_sub_node("maximizer")) return Type::MAXIMIZER;
+	if (hover_window_xml.has_sub_node("minimizer")) return Type::MINIMIZER;
+
 
 	return Type::UNDEFINED;
 }
@@ -518,6 +644,74 @@ void Floating_window_layouter::Main::handle_window_list_update(unsigned)
 }
 
 
+void Floating_window_layouter::Main::_apply_focus_request()
+{
+	try {
+		Xml_node node(focus_request.local_addr<char>());
+
+		Window::Label const label = node.attribute_value("label", Window::Label(""));
+
+		int const id = node.attribute_value("id", 0L);
+
+		/* don't apply the same focus request twice */
+		if (id == handled_focus_request_id)
+			return;
+
+		bool focus_redefined = false;
+
+		/*
+		 * Move all windows that match the requested label to the front while
+		 * maintaining their ordering.
+		 */
+		Window *at = nullptr;
+		for (Window *w = windows.first(); w; w = w->next()) {
+
+			if (!w->label_matches(label))
+				continue;
+
+			focus_redefined = true;
+
+			/*
+			 * Move window to behind the previous window that we moved to
+			 * front. If 'w' is the first window that matches the selector,
+			 * move it to the front ('at' argument of 'insert' is 0).
+			 */
+			windows.remove(w);
+			windows.insert(w, at);
+
+			/*
+			 * Bring top-most window to the front of nitpicker's global view
+			 * stack and set the focus to the top-most window.
+			 */
+			if (at == nullptr) {
+				w->topped();
+
+				focused_window_id = w->id();
+				generate_focus_model();
+			}
+
+			at = w;
+		}
+
+		if (focus_redefined)
+			handled_focus_request_id = id;
+
+	}
+	catch (...) {
+		PERR("Error while handling focus request"); }
+}
+
+
+void Floating_window_layouter::Main::handle_focus_request_update(unsigned)
+{
+	focus_request.update();
+
+	_apply_focus_request();
+
+	generate_window_layout_model();
+}
+
+
 void Floating_window_layouter::Main::handle_hover_update(unsigned)
 {
 	hover.update();
@@ -529,7 +723,7 @@ void Floating_window_layouter::Main::handle_hover_update(unsigned)
 
 		unsigned const id = attribute(hover_window_xml, "id", 0UL);
 
-		Window::Element hovered = element_from_hover_model(hover_window_xml);
+		hovered_element_now = element_from_hover_model(hover_window_xml);
 
 		/*
 		 * Check if we have just received an update while already being in
@@ -559,10 +753,10 @@ void Floating_window_layouter::Main::handle_hover_update(unsigned)
 			}
 		}
 
-		if (!drag_state && (id != hovered_window_id || hovered != hovered_element)) {
+		if (!drag_state && (id != hovered_window_id || hovered_element_now != hovered_element)) {
 
 			hovered_window_id = id;
-			hovered_element   = hovered;
+			hovered_element   = hovered_element_now;
 
 			/* XXX read from config */
 			bool const focus_follows_pointer = true;
@@ -580,7 +774,15 @@ void Floating_window_layouter::Main::handle_hover_update(unsigned)
 			hovered_element = Window::Element::UNDEFINED;
 			hovered_window_id = 0;
 			generate_window_layout_model();
-			generate_focus_model();
+
+			/*
+			 * Don't generate a focus-model update here. In a situation where
+			 * the pointer has moved over a native nitpicker view (outside
+			 * the realm of the window manager), the hover model as generated
+			 * by the decorator naturally becomes empty. If we posted a
+			 * focus update, this would steal the focus away from the native
+			 * nitpicker view.
+			 */
 		}
 	}
 }
@@ -614,25 +816,72 @@ void Floating_window_layouter::Main::handle_input(unsigned)
 			if (e.type()    == Input::Event::PRESS
 			 && e.keycode() == Input::BTN_LEFT) {
 
-				drag_state        = true;
-				drag_init_done    = false;
-				dragged_window_id = hovered_window_id;
-				pointer_clicked   = pointer_curr;
-				pointer_last      = pointer_clicked;
+				/*
+				 * Toggle maximized state
+				 */
+				if (hovered_element == Window::Element::MAXIMIZER) {
+
+					if (hovered_window) {
+
+						dragged_window_id = hovered_window_id;
+						hovered_window->is_maximized(!hovered_window->is_maximized());
+
+						/* bring focused window to front */
+						if (hovered_window != windows.first()) {
+							windows.remove(hovered_window);
+							windows.insert(hovered_window);
+						}
+						hovered_window->topped();
+
+						focused_window_id = hovered_window_id;
+
+						need_regenerate_window_layout_model  = true;
+						need_regenerate_resize_request_model = true;
+					}
+				}
+
+				bool const hovered_window_is_maximized =
+					hovered_window ? hovered_window->is_maximized() : false;
 
 				/*
-				 * If the hovered window is known at the time of the press
-				 * event, we can initiate the drag operation immediately.
-				 * Otherwise, we the initiation is deferred to the next
-				 * update of the hover model.
+				 * Change window geometry unless the window is in maximized
+				 * state.
 				 */
-				if (hovered_window) {
-					initiate_window_drag(*hovered_window);
-					need_regenerate_window_layout_model = true;
+				if (hovered_element != Window::Element::MAXIMIZER) {
 
-					if (focused_window_id != hovered_window_id) {
-						focused_window_id  = hovered_window_id;
-						generate_focus_model();
+					 if (!hovered_window_is_maximized) {
+
+						drag_state        = true;
+						drag_init_done    = false;
+						dragged_window_id = hovered_window_id;
+						pointer_clicked   = pointer_curr;
+						pointer_last      = pointer_clicked;
+
+						/*
+					 	 * If the hovered window is known at the time of the press
+					 	 * event, we can initiate the drag operation immediately.
+					 	 * Otherwise, we the initiation is deferred to the next
+					 	 * update of the hover model.
+					 	 */
+						if (hovered_window)
+							initiate_window_drag(*hovered_window);
+					}
+
+					if (hovered_window) {
+						if (focused_window_id != hovered_window_id) {
+							focused_window_id  = hovered_window_id;
+
+							/* bring focused window to front */
+							if (hovered_window != windows.first()) {
+								windows.remove(hovered_window);
+								windows.insert(hovered_window);
+							}
+
+							hovered_window->topped();
+
+							generate_focus_model();
+						}
+						need_regenerate_window_layout_model = true;
 					}
 				}
 			}
@@ -643,8 +892,12 @@ void Floating_window_layouter::Main::handle_input(unsigned)
 					drag_state = false;
 					generate_focus_model();
 
+					bool const manipulate_geometry =
+						hovered_element != Window::Element::CLOSER;
+
 					Window *dragged_window = lookup_window_by_id(dragged_window_id);
-					if (dragged_window) {
+
+					if (dragged_window && manipulate_geometry) {
 
 						Area const last_requested_size = dragged_window->requested_size();
 						dragged_window->finalize_drag_operation();
@@ -659,6 +912,20 @@ void Floating_window_layouter::Main::handle_input(unsigned)
 						 * resize handle, the resize handle is no longer
 						 * hovered.
 						 */
+					}
+
+					/**
+					 * Issue resize to 0x0 when releasing the the window closer
+					 */
+					if (dragged_window && hovered_element == Window::Element::CLOSER) {
+
+						if (hovered_element_now == hovered_element) {
+							dragged_window->close();
+							need_regenerate_resize_request_model = true;
+						}
+					}
+
+					if (dragged_window) {
 						handle_hover_update(0);
 					}
 				}
@@ -670,8 +937,11 @@ void Floating_window_layouter::Main::handle_input(unsigned)
 
 		pointer_last = pointer_curr;
 
+		bool const manipulate_geometry =
+			hovered_element != Window::Element::CLOSER;
+
 		Window *dragged_window = lookup_window_by_id(dragged_window_id);
-		if (dragged_window) {
+		if (dragged_window && manipulate_geometry) {
 
 			Point const last_pos            = dragged_window->position();
 			Area  const last_requested_size = dragged_window->requested_size();

@@ -282,16 +282,14 @@ extern "C" int getrlimit(int resource, struct rlimit *rlim)
 			using namespace Genode;
 
 			Thread_base * me = Thread_base::myself();
-			if (me) {
-				addr_t top = reinterpret_cast<addr_t>(me->stack_top());
-				addr_t cur = reinterpret_cast<addr_t>(me->stack_base());
 
-				rlim->rlim_cur = rlim->rlim_max = top - cur;
-				return 0;
-			}
+			if (!me)
+				break;
 
-			/* XXX - fix Thread_base::myself to be working also for main thread */
-			rlim->rlim_cur = rlim->rlim_max = 64 * 1024;
+			addr_t top = reinterpret_cast<addr_t>(me->stack_top());
+			addr_t cur = reinterpret_cast<addr_t>(me->stack_base());
+
+			rlim->rlim_cur = rlim->rlim_max = top - cur;
 			return 0;
 		}
 		case RLIMIT_AS:
@@ -303,6 +301,10 @@ extern "C" int getrlimit(int resource, struct rlimit *rlim)
 			return 0;
 		case RLIMIT_RSS:
 			rlim->rlim_cur = rlim->rlim_max = Genode::env()->ram_session()->quota();
+			return 0;
+		case RLIMIT_NPROC:
+		case RLIMIT_NOFILE:
+			rlim->rlim_cur = rlim->rlim_max = RLIM_INFINITY;
 			return 0;
 	}
 	errno = ENOSYS;
@@ -547,6 +549,11 @@ extern "C" pid_t fork(void)
 
 		if (!noux_syscall(Noux::Session::SYSCALL_FORK)) {
 			PERR("fork error %d", sysio()->error.general);
+			switch (sysio()->error.fork) {
+			case Noux::Sysio::FORK_NOMEM:       errno = ENOMEM; break;
+			default: errno = EAGAIN;
+			}
+			return -1;
 		}
 
 		return sysio()->fork_out.pid;
@@ -565,20 +572,6 @@ extern "C" pid_t getpid(void)
 
 
 extern "C" pid_t getppid(void) { return getpid(); }
-
-
-extern "C" int access(char const *pathname, int mode)
-{
-	if (verbose)
-		PDBG("access '%s' (mode=%x) called, not implemented", pathname, mode);
-
-	struct stat stat;
-	if (::stat(pathname, &stat) == 0)
-		return 0;
-
-	errno = ENOENT;
-	return -1;
-}
 
 
 extern "C" int chmod(char const *path, mode_t mode)
@@ -889,6 +882,7 @@ namespace {
 				}
 			}
 
+			bool supports_access(const char *, int)              { return true; }
 			bool supports_execve(char const *, char *const[],
 			                     char *const[])                  { return true; }
 			bool supports_open(char const *, int)                { return true; }
@@ -903,6 +897,7 @@ namespace {
 			bool supports_socket(int, int, int)                  { return true; }
 			bool supports_mmap()                                 { return true; }
 
+			int access(char const *, int);
 			Libc::File_descriptor *open(char const *, int);
 			ssize_t write(Libc::File_descriptor *, const void *, ::size_t);
 			int close(Libc::File_descriptor *);
@@ -957,6 +952,20 @@ namespace {
 	};
 
 
+	int Plugin::access(char const *pathname, int mode)
+	{
+		if (verbose)
+			PDBG("access '%s' (mode=%x) called, not implemented", pathname, mode);
+
+		struct stat stat;
+		if (::stat(pathname, &stat) == 0)
+			return 0;
+
+		errno = ENOENT;
+		return -1;
+	}
+
+
 	int Plugin::execve(char const *filename, char *const argv[],
 	                   char *const envp[])
 	{
@@ -1004,6 +1013,7 @@ namespace {
 			PWRN("exec syscall failed for path \"%s\"", filename);
 			switch (sysio()->error.execve) {
 			case Noux::Sysio::EXECVE_NONEXISTENT: errno = ENOENT; break;
+			case Noux::Sysio::EXECVE_NOMEM:       errno = ENOMEM; break;
 			}
 			return -1;
 		}
@@ -1448,8 +1458,9 @@ namespace {
 		if (!noux_syscall(Noux::Session::SYSCALL_FTRUNCATE)) {
 			switch (sysio()->error.ftruncate) {
 			case Vfs::File_io_service::FTRUNCATE_OK: /* never reached */
-			case Vfs::File_io_service::FTRUNCATE_ERR_NO_PERM:   errno = EPERM; break;
-			case Vfs::File_io_service::FTRUNCATE_ERR_INTERRUPT: errno = EINTR; break;
+			case Vfs::File_io_service::FTRUNCATE_ERR_NO_PERM:   errno = EPERM;  break;
+			case Vfs::File_io_service::FTRUNCATE_ERR_INTERRUPT: errno = EINTR;  break;
+			case Vfs::File_io_service::FTRUNCATE_ERR_NO_SPACE:  errno = ENOSPC; break;
 			}
 			return -1;
 		}
@@ -1623,9 +1634,12 @@ namespace {
 
 		if (!noux_syscall(Noux::Session::SYSCALL_UNLINK)) {
 			PWRN("unlink syscall failed for path \"%s\"", path);
+			typedef Vfs::Directory_service::Unlink_result Result;
 			switch (sysio()->error.unlink) {
-			case Vfs::Directory_service::UNLINK_ERR_NO_ENTRY: errno = ENOENT; break;
-			default:                                          errno = EPERM;  break;
+			case Result::UNLINK_ERR_NO_ENTRY:  errno = ENOENT;    break;
+			case Result::UNLINK_ERR_NOT_EMPTY: errno = ENOTEMPTY; break;
+			case Result::UNLINK_ERR_NO_PERM:   errno = EPERM;     break;
+			case Result::UNLINK_OK: break; /* only here to complete the enumeration */
 			}
 			return -1;
 		}

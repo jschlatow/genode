@@ -114,6 +114,18 @@ class Decorator::Window_stack : public Window_base::Draw_behind_fn
 			return redraw_needed;
 		}
 
+		/**
+		 * Apply functor to each window
+		 *
+		 * The functor is called with 'Window_base &' as argument.
+		 */
+		template <typename FUNC>
+		void for_each_window(FUNC const &func)
+		{
+			for (Window_base *win = _windows.first(); win; win = win->next())
+				func(*win);
+		}
+
 		void update_nitpicker_views()
 		{
 			/*
@@ -142,8 +154,12 @@ class Decorator::Window_stack : public Window_base::Draw_behind_fn
 		Window_base::Hover hover(Point pos) const
 		{
 			for (Window_base const *win = _windows.first(); win; win = win->next())
-				if (win->outer_geometry().contains(pos))
-					return win->hover(pos);
+				if (win->outer_geometry().contains(pos)) {
+
+					Window_base::Hover const hover = win->hover(pos);
+					if (hover.window_id != 0)
+						return hover;
+				}
 
 			return Window_base::Hover();
 		}
@@ -247,9 +263,7 @@ void Decorator::Window_stack::update_model(Genode::Xml_node root_node)
 				 * Immediately propagate the new stacking position of the new
 				 * window to nitpicker ('update_nitpicker_views'). Otherwise,
 				 */
-				new_window->stack(_windows.first()
-				                ? _windows.first()->frontmost_view()
-				                : Nitpicker::Session::View_handle());
+				new_window->stack(Nitpicker::Session::View_handle());
 
 				_windows.insert(new_window);
 
