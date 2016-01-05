@@ -257,9 +257,11 @@ hw_zynq::
 
 hw_parallella::
 	@echo "SPECS = genode hw_parallella" > $(BUILD_DIR)/etc/specs.conf
+	@echo "SPECS += perf_counter" >> $(BUILD_DIR)/etc/specs.conf
 
 hw_zedboard::
 	@echo "SPECS = genode hw_zedboard" > $(BUILD_DIR)/etc/specs.conf
+	@echo "SPECS += perf_counter" >> $(BUILD_DIR)/etc/specs.conf
 
 hw_odroid_xu::
 	@echo "SPECS = genode hw_odroid_xu" > $(BUILD_DIR)/etc/specs.conf
