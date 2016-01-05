@@ -253,6 +253,7 @@ hw_rpi::
 
 hw_zynq::
 	@echo "SPECS = genode hw_zynq" > $(BUILD_DIR)/etc/specs.conf
+	@echo "SPECS += perf_counter" >> $(BUILD_DIR)/etc/specs.conf
 
 hw_parallella::
 	@echo "SPECS = genode hw_parallella" > $(BUILD_DIR)/etc/specs.conf
