@@ -9,6 +9,6 @@ SRC_CC = sat_tactic.cpp \
 	goal2sat.cpp \
 	atom2bool_var.cpp
 
-LIBS = stdcxx z3-tactic z3-sat gmp
+LIBS = stdcxx z3-tactic z3-sat
 
 vpath %.cpp $(Z3_DIR)/src/sat/tactic

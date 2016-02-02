@@ -8,6 +8,6 @@ include $(REP_DIR)/lib/mk/z3.inc
 SRC_CC = aig_tactic.cpp \
 	aig.cpp
 
-LIBS = stdcxx z3-tactic gmp
+LIBS = stdcxx z3-tactic
 
 vpath %.cpp $(Z3_DIR)/src/tactic/aig

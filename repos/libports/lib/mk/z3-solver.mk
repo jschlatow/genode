@@ -11,6 +11,6 @@ SRC_CC = tactic2solver.cpp \
 	combined_solver.cpp \
 	check_sat_result.cpp
 
-LIBS = stdcxx z3-model z3-tactic gmp
+LIBS = stdcxx z3-model z3-tactic
 
 vpath %.cpp $(Z3_DIR)/src/solver

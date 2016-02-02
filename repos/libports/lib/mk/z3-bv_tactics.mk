@@ -14,6 +14,6 @@ SRC_CC = max_bv_sharing_tactic.cpp \
 	bit_blaster_tactic.cpp \
 	bit_blaster_model_converter.cpp
 
-LIBS = stdcxx z3-tactic z3-bit_blaster gmp
+LIBS = stdcxx z3-tactic z3-bit_blaster
 
 vpath %.cpp $(Z3_DIR)/src/tactic/bv

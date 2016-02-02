@@ -56,7 +56,7 @@ SRC_CC   = approx_nat.cpp \
 	warning.cpp \
 	z3_exception.cpp
 
-LIBS     = stdcxx gmp
+LIBS     = stdcxx
 
 vpath %.cpp  $(Z3_DIR)/src/util
 

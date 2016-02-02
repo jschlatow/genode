@@ -32,6 +32,6 @@ SRC_CC = udoc_relation.cpp \
 	check_relation.cpp \
 	aig_exporter.cpp
 
-LIBS = stdcxx z3-muz z3-transforms gmp
+LIBS = stdcxx z3-muz z3-transforms
 
 vpath %.cpp $(Z3_DIR)/src/muz/rel

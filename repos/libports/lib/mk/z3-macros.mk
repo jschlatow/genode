@@ -10,6 +10,6 @@ SRC_CC = quasi_macros.cpp \
 	macro_manager.cpp \
 	macro_finder.cpp
 
-LIBS = stdcxx z3-simplifier gmp
+LIBS = stdcxx z3-simplifier
 
 vpath %.cpp $(Z3_DIR)/src/ast/macros

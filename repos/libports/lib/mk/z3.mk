@@ -10,7 +10,7 @@ SRC_CC   = dll.cpp \
 			  install_tactic.cpp \
 			  mem_initializer.cpp
 
-LIBS     = stdcxx z3-api z3-sat z3-extra_cmds gmp
+LIBS     = stdcxx z3-api z3-sat z3-extra_cmds
 
 vpath %.cpp $(Z3_DIR)/src/api/dll
 vpath %.cpp $(REP_DIR)/src/lib/z3

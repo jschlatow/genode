@@ -12,6 +12,6 @@ SRC_CC = subpaving_mpq.cpp \
 	subpaving_hwf.cpp \
 	subpaving.cpp
 
-LIBS = stdcxx z3-interval gmp
+LIBS = stdcxx z3-interval
 
 vpath %.cpp $(Z3_DIR)/src/math/subpaving

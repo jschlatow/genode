@@ -5,7 +5,7 @@
 Z3_PORT_DIR := $(call select_from_ports,z3)
 Z3_DIR      := $(Z3_PORT_DIR)/src/lib/z3
 
-D_OPTS   = _NO_OMP_ _MP_GMP
+D_OPTS   = _NO_OMP_ _MP_INTERNAL
 D_OPTS  := $(addprefix -D,$(D_OPTS))
 CC_OPT  += $(D_OPTS)
 

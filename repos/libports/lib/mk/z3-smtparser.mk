@@ -9,6 +9,6 @@ SRC_CC = smtparser.cpp \
 	smtlib_solver.cpp \
 	smtlib.cpp
 
-LIBS = stdcxx z3-portfolio gmp
+LIBS = stdcxx z3-portfolio
 
 vpath %.cpp $(Z3_DIR)/src/parsers/smt

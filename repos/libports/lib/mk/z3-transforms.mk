@@ -27,6 +27,6 @@ SRC_CC = dl_transforms.cpp \
 	dl_mk_backwards.cpp \
 	dl_mk_array_blast.cpp
 
-LIBS = stdcxx z3-muz z3-hilbert z3-dataflow gmp
+LIBS = stdcxx z3-muz z3-hilbert z3-dataflow
 
 vpath %.cpp $(Z3_DIR)/src/muz/transforms

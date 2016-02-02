@@ -10,6 +10,6 @@ SRC_CC = unifier.cpp \
 	substitution.cpp \
 	matcher.cpp
 
-LIBS = stdcxx z3-ast z3-rewriter gmp
+LIBS = stdcxx z3-ast z3-rewriter
 
 vpath %.cpp $(Z3_DIR)/src/ast/substitution

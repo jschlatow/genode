@@ -46,6 +46,6 @@ SRC_CC = well_sorted.cpp \
 	arith_decl_plugin.cpp \
 	act_cache.cpp
 
-LIBS = stdcxx z3-util z3-polynomial gmp
+LIBS = stdcxx z3-util z3-polynomial
 
 vpath %.cpp $(Z3_DIR)/src/ast

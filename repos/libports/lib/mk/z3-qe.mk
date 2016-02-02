@@ -21,6 +21,6 @@ SRC_CC = vsubst_tactic.cpp \
 	qe.cpp \
 	nlarith_util.cpp
 
-LIBS = stdcxx z3-smt z3-sat gmp
+LIBS = stdcxx z3-smt z3-sat
 
 vpath %.cpp $(Z3_DIR)/src/qe

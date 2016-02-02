@@ -9,6 +9,6 @@ SRC_CC = subpaving_cmds.cpp \
 	polynomial_cmds.cpp \
 	dbg_cmds.cpp
 
-LIBS = stdcxx z3-cmd_context z3-subpaving_tactic z3-arith_tactics gmp
+LIBS = stdcxx z3-cmd_context z3-subpaving_tactic z3-arith_tactics
 
 vpath %.cpp $(Z3_DIR)/src/cmd_context/extra_cmds

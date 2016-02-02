@@ -9,6 +9,6 @@ SRC_CC = sls_tactic.cpp \
 	sls_engine.cpp \
 	bvsls_opt_engine.cpp
 
-LIBS = stdcxx z3-tactic z3-normal_forms z3-core_tactics z3-bv_tactics gmp
+LIBS = stdcxx z3-tactic z3-normal_forms z3-core_tactics z3-bv_tactics
 
 vpath %.cpp $(Z3_DIR)/src/tactic/sls

@@ -20,6 +20,6 @@ SRC_CC = tactic_manager.cpp \
 	check_logic.cpp \
 	basic_cmds.cpp
 
-LIBS = stdcxx z3-solver z3-rewriter z3-interp gmp
+LIBS = stdcxx z3-solver z3-rewriter z3-interp
 
 vpath %.cpp $(Z3_DIR)/src/cmd_context

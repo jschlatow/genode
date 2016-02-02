@@ -19,6 +19,6 @@ SRC_CC = quant_tactics.cpp \
 	qfaufbv_tactic.cpp \
 	nra_tactic.cpp
 
-LIBS = stdcxx z3-arith_tactics z3-bv_tactics z3-nlsat_tactic z3-smt_tactic z3-aig_tactic z3-fp z3-muz z3-qe z3-nlsat_smt_tactic gmp
+LIBS = stdcxx z3-arith_tactics z3-bv_tactics z3-nlsat_tactic z3-smt_tactic z3-aig_tactic z3-fp z3-muz z3-qe z3-nlsat_smt_tactic
 
 vpath %.cpp $(Z3_DIR)/src/tactic/smtlogics

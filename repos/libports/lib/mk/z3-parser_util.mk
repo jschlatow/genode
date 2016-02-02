@@ -10,6 +10,6 @@ SRC_CC = simple_parser.cpp \
 	pattern_validation.cpp \
 	cost_parser.cpp
 
-LIBS = stdcxx z3-ast gmp
+LIBS = stdcxx z3-ast
 
 vpath %.cpp $(Z3_DIR)/src/parsers/util

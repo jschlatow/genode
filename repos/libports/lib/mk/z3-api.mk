@@ -37,7 +37,7 @@ SRC_CC = api_commands.cpp \
 	api_arith.cpp \
 	api_algebraic.cpp
 
-LIBS = stdcxx z3-portfolio z3-smtparser z3-realclosure z3-interp z3-opt gmp
+LIBS = stdcxx z3-portfolio z3-smtparser z3-realclosure z3-interp z3-opt
 
 vpath %.cpp $(Z3_DIR)/src/api
 vpath api_commands.cpp $(REP_DIR)/src/lib/z3

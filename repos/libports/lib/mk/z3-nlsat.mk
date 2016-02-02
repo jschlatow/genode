@@ -12,7 +12,7 @@ SRC_CC   = nlsat_clause.cpp \
 	nlsat_solver.cpp \
 	nlsat_types.cpp
 
-LIBS     = stdcxx z3-sat z3-polynomial gmp
+LIBS     = stdcxx z3-sat z3-polynomial
 
 vpath %.cpp  $(Z3_DIR)/src/nlsat
 

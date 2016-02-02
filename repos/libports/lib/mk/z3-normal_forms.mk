@@ -10,6 +10,6 @@ SRC_CC = pull_quant.cpp \
 	name_exprs.cpp \
 	defined_names.cpp
 
-LIBS = stdcxx z3-rewriter gmp
+LIBS = stdcxx z3-rewriter
 
 vpath %.cpp $(Z3_DIR)/src/ast/normal_forms

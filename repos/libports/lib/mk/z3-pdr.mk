@@ -17,6 +17,6 @@ SRC_CC = pdr_util.cpp \
 	pdr_context.cpp \
 	pdr_closure.cpp
 
-LIBS = stdcxx z3-muz z3-transforms z3-arith_tactics z3-core_tactics z3-smt_tactic gmp
+LIBS = stdcxx z3-muz z3-transforms z3-arith_tactics z3-core_tactics z3-smt_tactic
 
 vpath %.cpp $(Z3_DIR)/src/muz/pdr

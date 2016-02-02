@@ -22,6 +22,6 @@ SRC_CC = wmax.cpp \
 	fu_malik.cpp \
 	bcd2.cpp
 
-LIBS = stdcxx z3-smt z3-smtlogic_tactics z3-sls_tactic z3-sat_solver gmp
+LIBS = stdcxx z3-smt z3-smtlogic_tactics z3-sls_tactic z3-sat_solver
 
 vpath %.cpp $(Z3_DIR)/src/opt

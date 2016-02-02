@@ -1,0 +1,11 @@
+--- a/examples/c/test_capi.c	2016-02-02 13:14:20.431065785 +0100
++++ b/examples/c/test_capi.c	2016-02-02 13:14:37.161159279 +0100
+@@ -11,8 +11,6 @@ Copyright (c) 2015 Microsoft Corporation
+ #include<setjmp.h>
+ #include<z3.h>
+ 
+-#define LOG_Z3_CALLS
+-
+ #ifdef LOG_Z3_CALLS
+ #define LOG_MSG(msg) Z3_append_log(msg)
+ #else

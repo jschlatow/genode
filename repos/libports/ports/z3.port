@@ -3,10 +3,10 @@ VERSION   := git
 DOWNLOADS := z3.git
 
 URL(z3) := https://github.com/Z3Prover/z3.git
-REV(z3) := 20df9e1cd1bc8ef38269b79f7ce72747972ccf2a
+REV(z3) := 9b979b6e1e4c196c870b8bf03febae9fa00fce9d
 DIR(z3) := src/lib/z3
 
-PATCHES := $(addprefix src/lib/z3/,util_stopwatch.patch examples.patch)
+PATCHES := $(addprefix src/lib/z3/,util_stopwatch.patch examples.patch x86_32.patch)
 
 PATCH_OPT := -p1 -d src/lib/z3
 

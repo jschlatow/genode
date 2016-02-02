@@ -9,6 +9,6 @@ SRC_CC = qffp_tactic.cpp \
 	fpa2bv_tactic.cpp \
 	fpa2bv_model_converter.cpp
 
-LIBS = stdcxx z3-fpa z3-core_tactics z3-bv_tactics z3-sat_tactic z3-smt_tactic z3-arith_tactics z3-smtlogic_tactics gmp
+LIBS = stdcxx z3-fpa z3-core_tactics z3-bv_tactics z3-sat_tactic z3-smt_tactic z3-arith_tactics z3-smtlogic_tactics
 
 vpath %.cpp $(Z3_DIR)/src/tactic/fpa

@@ -26,6 +26,6 @@ SRC_CC = simplifier_plugin.cpp \
 	arith_simplifier_plugin.cpp \
 	arith_simplifier_params.cpp
 
-LIBS = stdcxx z3-rewriter gmp
+LIBS = stdcxx z3-rewriter
 
 vpath %.cpp $(Z3_DIR)/src/ast/simplifier

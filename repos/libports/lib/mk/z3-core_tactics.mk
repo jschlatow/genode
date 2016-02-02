@@ -24,6 +24,6 @@ SRC_CC = tseitin_cnf_tactic.cpp \
 	cofactor_elim_term_ite.cpp \
 	blast_term_ite_tactic.cpp
 
-LIBS = stdcxx z3-tactic z3-normal_forms gmp
+LIBS = stdcxx z3-tactic z3-normal_forms
 
 vpath %.cpp $(Z3_DIR)/src/tactic/core

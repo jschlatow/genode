@@ -31,6 +31,6 @@ SRC_CC = recover_01_tactic.cpp \
 	arith_bounds_tactic.cpp \
 	add_bounds_tactic.cpp
 
-LIBS = stdcxx z3-core_tactics z3-sat gmp
+LIBS = stdcxx z3-core_tactics z3-sat
 
 vpath %.cpp $(Z3_DIR)/src/tactic/arith

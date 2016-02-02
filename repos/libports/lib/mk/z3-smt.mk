@@ -66,6 +66,6 @@ SRC_CC = watch_list.cpp \
 	arith_eq_solver.cpp \
 	arith_eq_adapter.cpp
 
-LIBS = stdcxx z3-bit_blaster z3-macros z3-normal_forms z3-cmd_context z3-proto_model z3-substitution z3-grobner z3-euclid z3-simplex z3-proof_checker z3-pattern z3-parser_util z3-fpa gmp
+LIBS = stdcxx z3-bit_blaster z3-macros z3-normal_forms z3-cmd_context z3-proto_model z3-substitution z3-grobner z3-euclid z3-simplex z3-proof_checker z3-pattern z3-parser_util z3-fpa
 
 vpath %.cpp $(Z3_DIR)/src/smt

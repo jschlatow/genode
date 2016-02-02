@@ -15,6 +15,6 @@ SRC_CC = model_v2_pp.cpp \
 	model.cpp \
 	func_interp.cpp
 
-LIBS = stdcxx z3-rewriter gmp
+LIBS = stdcxx z3-rewriter
 
 vpath %.cpp $(Z3_DIR)/src/model

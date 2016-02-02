@@ -25,6 +25,6 @@ SRC_CC = var_subst.cpp \
 	array_rewriter.cpp \
 	arith_rewriter.cpp
 
-LIBS = stdcxx z3-ast z3-polynomial z3-automata gmp
+LIBS = stdcxx z3-ast z3-polynomial z3-automata
 
 vpath %.cpp $(Z3_DIR)/src/ast/rewriter

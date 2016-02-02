@@ -20,6 +20,6 @@ SRC_CC = tactical.cpp \
 	extension_model_converter.cpp \
 	equiv_proof_converter.cpp
 
-LIBS = stdcxx z3-ast z3-model gmp
+LIBS = stdcxx z3-ast z3-model
 
 vpath %.cpp $(Z3_DIR)/src/tactic

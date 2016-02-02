@@ -7,6 +7,6 @@ include $(REP_DIR)/lib/mk/z3.inc
 # simplex files
 SRC_CC = simplex.cpp
 
-LIBS = stdcxx z3-util gmp
+LIBS = stdcxx z3-util
 
 vpath %.cpp $(Z3_DIR)/src/math/simplex

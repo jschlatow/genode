@@ -14,6 +14,6 @@ SRC_CC = theory_pb_params.cpp \
 	preprocessor_params.cpp \
 	dyn_ack_params.cpp
 
-LIBS = stdcxx z3-ast z3-simplifier z3-pattern z3-bit_blaster gmp
+LIBS = stdcxx z3-ast z3-simplifier z3-pattern z3-bit_blaster
 
 vpath %.cpp $(Z3_DIR)/src/smt/params

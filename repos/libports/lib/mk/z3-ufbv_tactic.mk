@@ -11,6 +11,6 @@ SRC_CC = ufbv_tactic.cpp \
 	quasi_macros_tactic.cpp \
 	macro_finder_tactic.cpp
 
-LIBS = stdcxx z3-normal_forms z3-core_tactics z3-macros z3-smt_tactic z3-rewriter gmp
+LIBS = stdcxx z3-normal_forms z3-core_tactics z3-macros z3-smt_tactic z3-rewriter
 
 vpath %.cpp $(Z3_DIR)/src/tactic/ufbv

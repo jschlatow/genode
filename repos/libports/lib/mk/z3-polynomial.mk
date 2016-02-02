@@ -14,7 +14,7 @@ SRC_CC   = algebraic_numbers.cpp \
 	upolynomial.cpp \
 	upolynomial_factorization.cpp
 
-LIBS     = stdcxx z3-util gmp
+LIBS     = stdcxx z3-util
 
 vpath %.cpp  $(Z3_DIR)/src/math/polynomial
 

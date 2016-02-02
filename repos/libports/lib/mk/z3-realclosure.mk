@@ -8,6 +8,6 @@ include $(REP_DIR)/lib/mk/z3.inc
 SRC_CC = realclosure.cpp \
 	mpz_matrix.cpp
 
-LIBS = stdcxx z3-interval gmp
+LIBS = stdcxx z3-interval
 
 vpath %.cpp $(Z3_DIR)/src/math/realclosure

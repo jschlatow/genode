@@ -18,6 +18,6 @@ SRC_CC = rule_properties.cpp \
 	dl_boogie_proof.cpp \
 	bind_variables.cpp
 
-LIBS = stdcxx z3-smt z3-sat z3-smt2parser z3-aig_tactic z3-qe gmp
+LIBS = stdcxx z3-smt z3-sat z3-smt2parser z3-aig_tactic z3-qe
 
 vpath %.cpp $(Z3_DIR)/src/muz/base

@@ -12,6 +12,6 @@ SRC_CC = value_factory.cpp \
 	datatype_factory.cpp \
 	array_factory.cpp
 
-LIBS = stdcxx z3-model z3-simplifier z3-smt_params gmp
+LIBS = stdcxx z3-model z3-simplifier z3-smt_params
 
 vpath %.cpp $(Z3_DIR)/src/smt/proto_model

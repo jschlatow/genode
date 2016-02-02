@@ -18,6 +18,6 @@ SRC_CC = iz3translate_direct.cpp \
 	iz3checker.cpp \
 	iz3base.cpp
 
-LIBS = stdcxx z3-solver gmp
+LIBS = stdcxx z3-solver
 
 vpath %.cpp $(Z3_DIR)/src/interp

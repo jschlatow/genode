@@ -1,0 +1,15 @@
+--- a/src/util/hwf.cpp	2016-02-02 17:42:33.660427448 +0100
++++ b/src/util/hwf.cpp	2016-02-02 17:41:24.523293333 +0100
+@@ -29,9 +29,9 @@ Revision History:
+ #include<fenv.h>
+ #endif
+ 
+-#ifndef _M_IA64
+-#define USE_INTRINSICS
+-#endif
++//#ifndef _M_IA64
++//#define USE_INTRINSICS
++//#endif
+ 
+ #include"hwf.h"
+ 
