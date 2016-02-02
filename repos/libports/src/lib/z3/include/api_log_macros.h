@@ -876,6 +876,8 @@ void log_Z3_stats_get_uint_value(Z3_context a0, Z3_stats a1, unsigned a2);
 #define LOG_Z3_stats_get_uint_value(_ARG0, _ARG1, _ARG2) z3_log_ctx _LOG_CTX; if (_LOG_CTX.enabled()) { log_Z3_stats_get_uint_value(_ARG0, _ARG1, _ARG2); }
 void log_Z3_stats_get_double_value(Z3_context a0, Z3_stats a1, unsigned a2);
 #define LOG_Z3_stats_get_double_value(_ARG0, _ARG1, _ARG2) z3_log_ctx _LOG_CTX; if (_LOG_CTX.enabled()) { log_Z3_stats_get_double_value(_ARG0, _ARG1, _ARG2); }
+void log_Z3_get_estimated_alloc_size();
+#define LOG_Z3_get_estimated_alloc_size() z3_log_ctx _LOG_CTX; if (_LOG_CTX.enabled()) { log_Z3_get_estimated_alloc_size(); }
 void log_Z3_mk_ast_vector(Z3_context a0);
 #define LOG_Z3_mk_ast_vector(_ARG0) z3_log_ctx _LOG_CTX; if (_LOG_CTX.enabled()) { log_Z3_mk_ast_vector(_ARG0); }
 void log_Z3_ast_vector_inc_ref(Z3_context a0, Z3_ast_vector a1);
