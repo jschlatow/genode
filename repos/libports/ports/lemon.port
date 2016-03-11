@@ -6,6 +6,8 @@ URL(lemon) := http://lemon.cs.elte.hu/pub/sources/lemon-$(VERSION).tar.gz
 SHA(lemon) := c833604b790e6f45d5cf8da304d9b23ba74eae6c
 DIR(lemon) := src/lib/lemon
 
+PATCHES := $(addprefix src/lib/lemon/,BpGraphReader.patch BpGraphWriter.patch)
+
 DIRS := include/lemon
 
 DIR_CONTENT(include/lemon) := $(addprefix src/lib/lemon/lemon/,concepts \
