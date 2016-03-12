@@ -58,6 +58,14 @@ struct Rom::Registry : Registry_for_reader, Registry_for_writer, Genode::Noncopy
 
 		} _read_write_policy;
 
+		struct Default_writer : Writer
+		{
+			Genode::Session_label _label;
+			Genode::Session_label label() const { return _label; }
+
+			Default_writer(const char* args) : _label(args) { }
+		};
+
 		Module &_lookup(Module::Name const name)
 		{
 			for (Module *m = _modules.first(); m; m = m->next())
@@ -71,6 +79,21 @@ struct Rom::Registry : Registry_for_reader, Registry_for_writer, Genode::Noncopy
 
 			Module * const module = new (&_md_alloc)
 				Module(name, _read_write_policy, _read_write_policy);
+
+			/* populate module with default content */
+			try {
+				for (Xml_node node = _config.sub_node("report");
+						true; node = node.next("report")) {
+
+					if (!node.has_attribute("name")
+					 || !node.attribute("name").has_value(name.string()))
+						continue;
+
+					if (node.content_size()) {
+						module->write_content(Default_writer(name.string()), node.content_base(), node.content_size());
+					}
+				}
+			} catch (...) {}
 
 			_modules.insert(module);
 			return *module;
@@ -126,6 +149,7 @@ struct Rom::Registry : Registry_for_reader, Registry_for_writer, Genode::Noncopy
 
 					char report[Rom::Module::Name::capacity()];
 					node.attribute("report").value(report, sizeof(report));
+
 					return Rom::Module::Name(report);
 				}
 			} catch (Xml_node::Nonexistent_sub_node) { }
