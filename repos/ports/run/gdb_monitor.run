@@ -57,7 +57,7 @@ set config {
 	</start>
 	<start name="uart_drv">
 		<resource name="RAM" quantum="1M"/>
-		<provides> <service name="Terminal"/> </provides>
+		<provides> <service name="Terminal"/> <service name="Uart" /></provides>
 		<config>
 			<policy label="gdb_monitor" uart="1"/>
 		</config>
@@ -112,6 +112,8 @@ append qemu_args " -serial mon:stdio "
 # connect comport 1 with TCP port $local_port
 append qemu_args " -serial chardev:uart "
 append qemu_args " -chardev socket,id=uart,port=$local_port,host=localhost,server,nowait "
+
+append qemu_args " -net user -redir tcp:5555::5555"
 
 run_genode_until {.*Remote debugging using /dev/terminal.*} 30
 set genode_id [output_spawn_id]
