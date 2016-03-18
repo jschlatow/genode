@@ -132,7 +132,7 @@ proc build_boot_image {binaries} {
 }
 
 # set expect match-buffer size
-match_max -d 40000
+match_max -d 400000
 
 ##
 # Execute Genode

@@ -251,6 +251,7 @@ hw_rpi::
 
 hw_zynq::
 	@echo "SPECS = genode hw_zynq" > $(BUILD_DIR)/etc/specs.conf
+	@echo "SPECS += perf_counter" >> $(BUILD_DIR)/etc/specs.conf
 
 hw_odroid_xu::
 	@echo "SPECS = genode hw_odroid_xu" > $(BUILD_DIR)/etc/specs.conf

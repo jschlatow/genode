@@ -1,0 +1,27 @@
+LICENSE   := BSD
+VERSION   := git
+DOWNLOADS := z3.git
+
+URL(z3) := https://github.com/Z3Prover/z3.git
+REV(z3) := 9b979b6e1e4c196c870b8bf03febae9fa00fce9d
+DIR(z3) := src/lib/z3
+
+PATCHES := $(addprefix src/lib/z3/,util_stopwatch.patch examples.patch x86_32.patch)
+
+PATCH_OPT := -p1 -d src/lib/z3
+
+DIRS := include/z3
+
+DIR_CONTENT(include/z3) := $(addprefix src/lib/z3/src/api/,z3_api.h \
+                                       z3_ast_containers.h \
+                                       z3_algebraic.h \
+													z3_polynomial.h \
+													z3_rcf.h \
+													z3_fixedpoint.h \
+													z3_optimization.h \
+													z3_interp.h \
+													z3_fpa.h \
+													z3.h \
+													z3_v1.h \
+													z3_macros.h \
+													c++/z3++.h)
