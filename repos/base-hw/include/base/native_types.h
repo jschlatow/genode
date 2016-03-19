@@ -161,7 +161,10 @@ class Genode::Native_utcb
 		void copy_to(Msgbuf_base &o)
 		{
 			o._snd_cap_cnt = _cap_cnt;
-			for (unsigned i = 0; i < _cap_cnt; i++) o._caps[i] = _caps[i];
+			for (unsigned i = 0; i < _cap_cnt; i++) {
+				o._caps[i] = _caps[i];
+				if (o._caps[i].valid()) Kernel::ack_cap(o._caps[i].dst());
+			}
 
 			memcpy(o.buf, _buf, min(_size, o._size));
 		}
@@ -183,14 +186,16 @@ class Genode::Native_utcb
 namespace Genode
 {
 	static constexpr addr_t VIRT_ADDR_SPACE_START = 0x1000;
-	static constexpr size_t VIRT_ADDR_SPACE_SIZE  = 0xfffef000;
+	static constexpr size_t VIRT_ADDR_SPACE_SIZE  = 0xfffee000;
 
-	static constexpr Native_utcb * utcb_main_thread()
-	{
-		return (Native_utcb *)
-		((VIRT_ADDR_SPACE_START + VIRT_ADDR_SPACE_SIZE - sizeof(Native_utcb))
-		 & ~(get_page_size() - 1));
-	}
+	/**
+	 * The main thread's UTCB, used during bootstrap of the main thread before it
+	 * allocates its context area, needs to be outside the virtual memory area
+	 * controlled by the RM session, because it is needed before the main
+	 * thread can access its RM session.
+	 */
+	static constexpr Native_utcb * utcb_main_thread() {
+		return (Native_utcb *) (VIRT_ADDR_SPACE_START + VIRT_ADDR_SPACE_SIZE); }
 }
 
 #endif /* _BASE__NATIVE_TYPES_H_ */

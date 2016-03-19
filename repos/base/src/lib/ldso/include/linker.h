@@ -34,9 +34,6 @@ constexpr bool verbose_exception  = false;
 constexpr bool verbose_shared     = false;
 constexpr bool verbose_loading    = false;
 
-
-extern const unsigned long _GLOBAL_OFFSET_TABLE_[] __attribute__((visibility("hidden")));
-extern unsigned long       _DYNAMIC[] __attribute__((visibility("hidden")));
 extern Elf::Addr           etext;
 
 /**

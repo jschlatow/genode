@@ -16,6 +16,7 @@
 
 /* Genode includes */
 #include <report_rom/rom_registry.h>
+#include <os/session_policy.h>
 
 namespace Rom { struct Registry; }
 
@@ -25,8 +26,6 @@ struct Rom::Registry : Registry_for_reader, Registry_for_writer, Genode::Noncopy
 	private:
 
 		Genode::Allocator &_md_alloc;
-
-		Xml_node _config;
 
 		Module_list _modules;
 
@@ -58,14 +57,6 @@ struct Rom::Registry : Registry_for_reader, Registry_for_writer, Genode::Noncopy
 
 		} _read_write_policy;
 
-		struct Default_writer : Writer
-		{
-			Genode::Session_label _label;
-			Genode::Session_label label() const { return _label; }
-
-			Default_writer(const char* args) : _label(args) { }
-		};
-
 		Module &_lookup(Module::Name const name)
 		{
 			for (Module *m = _modules.first(); m; m = m->next())
@@ -79,21 +70,6 @@ struct Rom::Registry : Registry_for_reader, Registry_for_writer, Genode::Noncopy
 
 			Module * const module = new (&_md_alloc)
 				Module(name, _read_write_policy, _read_write_policy);
-
-			/* populate module with default content */
-			try {
-				for (Xml_node node = _config.sub_node("report");
-						true; node = node.next("report")) {
-
-					if (!node.has_attribute("name")
-					 || !node.attribute("name").has_value(name.string()))
-						continue;
-
-					if (node.content_size()) {
-						module->write_content(Default_writer(name.string()), node.content_base(), node.content_size());
-					}
-				}
-			} catch (...) {}
 
 			_modules.insert(module);
 			return *module;
@@ -138,21 +114,26 @@ struct Rom::Registry : Registry_for_reader, Registry_for_writer, Genode::Noncopy
 		 */
 		Module::Name _report_name(Module::Name const &rom_label) const
 		{
+			using namespace Genode;
+
+			String<Rom::Module::Name::capacity()> report;
+
 			try {
-				for (Xml_node node = _config.sub_node("policy");
-				     true; node = node.next("policy")) {
+				Session_policy policy(rom_label);
+				policy.attribute("report").value(&report);
+				return Rom::Module::Name(report.string());
+			} catch (Session_policy::No_policy_defined) {
+				/* FIXME backwards compatibility, remove at next release */
+				try {
+					Xml_node rom_node = config()->xml_node().sub_node("rom");
+					PWRN("parsing legacy <rom> policies");
 
-					if (!node.has_attribute("label")
-					 || !node.has_attribute("report")
-					 || !node.attribute("label").has_value(rom_label.string()))
-					 	continue;
-
-					char report[Rom::Module::Name::capacity()];
-					node.attribute("report").value(report, sizeof(report));
-
-					return Rom::Module::Name(report);
-				}
-			} catch (Xml_node::Nonexistent_sub_node) { }
+					Session_policy policy(rom_label, rom_node);
+					policy.attribute("report").value(&report);
+					return Rom::Module::Name(report.string());
+				} catch (Xml_node::Nonexistent_sub_node)    { /* no <rom> node */ }
+				  catch (Session_policy::No_policy_defined) { }
+			}
 
 			PWRN("no valid policy for label \"%s\"", rom_label.string());
 			throw Root::Invalid_args();
@@ -160,9 +141,9 @@ struct Rom::Registry : Registry_for_reader, Registry_for_writer, Genode::Noncopy
 
 	public:
 
-		Registry(Genode::Allocator &md_alloc, Xml_node config)
+		Registry(Genode::Allocator &md_alloc)
 		:
-			_md_alloc(md_alloc), _config(config)
+			_md_alloc(md_alloc)
 		{ }
 
 		Module &lookup(Writer &writer, Module::Name const &name) override

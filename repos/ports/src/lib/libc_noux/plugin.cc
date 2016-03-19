@@ -226,6 +226,21 @@ extern "C" struct passwd *getpwuid(uid_t uid)
 }
 
 
+extern "C" int getdtablesize()
+{
+	if (!noux_syscall(Noux::Session::SYSCALL_GETDTABLESIZE)) {
+		PWRN("getdtablesize syscall failed");
+		errno = ENOSYS;
+		return -1;
+	}
+
+	int n = sysio()->getdtablesize_out.n;
+	if (verbose)
+		PDBG("%d", n);
+	return n;
+}
+
+
 extern "C" uid_t getgid()
 {
 	sysio()->userinfo_in.request = Noux::Sysio::USERINFO_GET_GID;
@@ -1894,12 +1909,15 @@ namespace {
 
 		if (!noux_syscall(Noux::Session::SYSCALL_CONNECT)) {
 			switch (sysio()->error.connect) {
-			case Noux::Sysio::CONNECT_ERR_AGAIN:        errno = EAGAIN;      break;
-			case Noux::Sysio::CONNECT_ERR_ALREADY:      errno = EALREADY;    break;
-			case Noux::Sysio::CONNECT_ERR_ADDR_IN_USE:  errno = EADDRINUSE;  break;
-			case Noux::Sysio::CONNECT_ERR_IN_PROGRESS:  errno = EINPROGRESS; break;
-			case Noux::Sysio::CONNECT_ERR_IS_CONNECTED: errno = EISCONN;     break;
-			default:                                    errno = 0;           break;
+			case Noux::Sysio::CONNECT_ERR_AGAIN:        errno = EAGAIN;       break;
+			case Noux::Sysio::CONNECT_ERR_ALREADY:      errno = EALREADY;     break;
+			case Noux::Sysio::CONNECT_ERR_ADDR_IN_USE:  errno = EADDRINUSE;   break;
+			case Noux::Sysio::CONNECT_ERR_IN_PROGRESS:  errno = EINPROGRESS;  break;
+			case Noux::Sysio::CONNECT_ERR_IS_CONNECTED: errno = EISCONN;      break;
+			case Noux::Sysio::CONNECT_ERR_RESET:        errno = ECONNRESET;   break;
+			case Noux::Sysio::CONNECT_ERR_ABORTED:      errno = ECONNABORTED; break;
+			case Noux::Sysio::CONNECT_ERR_NO_ROUTE:     errno = EHOSTUNREACH; break;
+			default:                                    errno = 0;            break;
 			}
 			return -1;
 		}

@@ -169,9 +169,10 @@ class Session : public Session_list::Element
 			return s && (s->_domain == _domain);
 		}
 
-		bool has_click_focusable_domain()
+		bool has_focusable_domain()
 		{
-			return has_valid_domain() && _domain->focus_click();
+			return has_valid_domain()
+			    && (_domain->focus_click() || _domain->focus_transient());
 		}
 
 		bool has_transient_focusable_domain()
@@ -219,7 +220,11 @@ class Session : public Session_list::Element
 				Domain_name name(buf);
 				_domain = domain_registry.lookup(name);
 
-			} catch (...) { }
+				if (!_domain)
+					PERR("policy for label \"%s\" specifies nonexistent domain \"%s\"",
+					     _label.string(), name.string());
+
+			} catch (...) { PERR("no policy matching label \"%s\"", _label.string()); }
 		}
 };
 

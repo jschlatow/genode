@@ -27,7 +27,6 @@ CC_WARN = -Wall -Wno-unused-variable -Wno-uninitialized \
 
 CC_C_OPT += -Wno-unused-but-set-variable -Wno-pointer-sign -Wno-unused-label
 
-CXX_OPT = -fpermissive
 CC_CXX_OPT = -fpermissive
 
 #
@@ -49,7 +48,7 @@ SRC_C += $(addprefix usb/host/, ehci-hcd.c)
 # USB hid
 SRC_C += $(addprefix hid/usbhid/, hid-core.c hid-quirks.c)
 SRC_C += $(addprefix hid/,        hid-core.c hid-generic.c hid-input.c \
-                                  hid-cherry.c hid-multitouch.c)
+                                  hid-cherry.c hid-microsoft.c hid-multitouch.c)
 SRC_C += $(addprefix input/,      evdev.c input.c input-mt.c)
 SRC_C += $(addprefix input/,      tablet/wacom_sys.c tablet/wacom_wac.c)
 

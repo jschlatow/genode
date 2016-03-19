@@ -30,6 +30,13 @@ proc run_boot_dir {binaries} {
 		set core_target "core"
 	}
 
+	# generate static ACPI report for platform driver on Muen
+	if {[have_spec "hw_x86_64_muen"]} {
+		set fh [open "bin/acpi" "WRONLY CREAT TRUNC"]
+		puts $fh "<acpi><bdf start=\"0\" count=\"16384\" base=\"0xf8000000\"/></acpi>"
+		close $fh
+	}
+
 	# strip binaries
 	copy_and_strip_genode_binaries_to_run_dir $binaries
 
@@ -145,20 +152,14 @@ proc run_boot_dir {binaries} {
 	# offer ELF image
 	set elf_img "[run_dir]/image.elf"
 
-	# Use raw binary object for base-hw on Muen
-	if {[have_spec "muen"]} {
-		set raw_img "[run_dir]/image.raw"
-		exec [cross_dev_prefix]objcopy -O binary bin/$core_bin $raw_img
-		exit 0
-	}
-
-	if {[have_spec "x86_64"] && ![have_spec "muen"]} {
+	if {[have_spec "x86_64"]} {
 		# as startup is done in 32 bit mode, GRUB expects a 32 bit image
 		exec [cross_dev_prefix]objcopy -O elf32-i386 bin/$core_bin $elf_img
 	}
-	if {[expr [have_spec "arm"] || [have_spec "x86_32"]]} {
+	if {[expr [have_spec "arm"] || [have_spec "x86_32"] || [have_spec "riscv"]]} {
 		exec cp -L bin/$core_bin $elf_img
 	}
+
 	exec [cross_dev_prefix]strip $elf_img
 
 	if {[have_include "image/iso"] || [have_include "image/disk"]} {
@@ -173,9 +174,15 @@ proc run_boot_dir {binaries} {
 		set fh [open "[run_dir]/boot/grub/menu.lst" "WRONLY CREAT TRUNC"]
 		puts $fh "timeout 0"
 		puts $fh "default 0"
-		puts $fh "\ntitle Genode on base-hw"
-		puts $fh " kernel /boot/bender"
-		puts $fh " module /image.elf"
+
+		if {[have_spec "muen"]} {
+			puts $fh "\ntitle Genode on base-hw/Muen SK"
+			puts $fh " kernel /image.bin"
+		} else {
+			puts $fh "\ntitle Genode on base-hw"
+			puts $fh " kernel /boot/bender"
+			puts $fh " module /image.elf"
+		}
 		close $fh
 	}
 
@@ -190,7 +197,7 @@ proc run_boot_dir {binaries} {
 		}
 	}
 
-	if {[have_spec x86] && [have_include "load/tftp"]} {
+	if {[have_spec x86] && ![have_spec muen] && [have_include "load/tftp"]} {
 		#
 		# Install PXE bootloader pulsar
 		#
@@ -205,6 +212,30 @@ proc run_boot_dir {binaries} {
 		close $fh
 
 		generate_tftp_config
+	}
+
+	if {[have_spec x86] && [have_include "load/ipxe"]} {
+		#
+		# Generate iPXE config file
+		#
+		set fh [open "[run_dir]/boot.cfg" "WRONLY CREAT TRUNC"]
+		puts $fh "#!ipxe"
+
+		if {[have_spec "muen"]} {
+			puts $fh "kernel image.bin"
+		} else {
+			puts $fh "kernel boot/bender"
+			puts $fh "module image.elf"
+
+			#
+			# Install bender
+			#
+			install_bender_to_run_dir
+		}
+		puts $fh "boot"
+		close $fh
+
+		update_ipxe_boot_dir
 	}
 
 	# retrieve stand-alone core
