@@ -1,0 +1,55 @@
+##
+# Reset the target machine via ssh and remote executed command
+#
+# \param --power-on-ssh-host       ssh host
+# \param --power-on-ssh-port       ssh port
+# \param --power-on-ssh-username   ssh user
+# \param --power-on-ssh-cmd        remote cmd
+#
+
+
+proc power_on_ssh_host { } {
+	return [get_cmd_arg_first --power-on-ssh-host ""]
+}
+
+
+proc power_on_ssh_port { } {
+	return [get_cmd_arg_first --power-on-ssh-port ""]
+}
+
+proc power_on_ssh_username { } {
+	return [get_cmd_arg_first --power-on-ssh-username ""]
+}
+
+proc power_on_ssh_cmd {} {
+	return [get_cmd_arg_first --power-on-ssh-cmd ""]
+}
+
+proc run_power_on { } {
+	set host [power_on_ssh_host]
+	set port [power_on_ssh_port]
+	set username  [power_on_ssh_username]
+	set cmd [power_on_ssh_cmd]
+
+	if {[string equal $host ""]} {
+		puts "Aborting, softreset host not set."
+		exit -1
+	}
+
+	if {[string equal $port ""]} {
+		set port "22"
+	}
+
+	if {[string equal $username ""]} {
+		puts "Aborting, user for ssh not set."
+		exit -1
+	}
+
+	if {[string equal $cmd ""]} {
+		puts "Aborting, no reset cmd set."
+		exit -1
+	}
+
+	set ssh [check_installed ssh]
+	exec $ssh $username@$host -p $port $cmd
+}
