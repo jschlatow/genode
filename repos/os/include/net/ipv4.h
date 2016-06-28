@@ -60,7 +60,7 @@ class Net::Ipv4_packet
 
 		static Ipv4_address ip_from_string(const char *ip);
 
-		static Genode::uint16_t calculate_checksum(const Ipv4_packet &packet);
+		static Genode::uint16_t calculate_checksum(Ipv4_packet const &packet);
 
 	private:
 
@@ -133,9 +133,11 @@ class Net::Ipv4_packet
 		 ** IPv4 field read-accessors **
 		 *******************************/
 
-		Genode::size_t  version()     { return _version;                   }
-		Genode::size_t  header_length() { return _header_length;           }
-		Genode::uint8_t precedence()  { return _diff_service & PRECEDENCE; }
+		Genode::uint8_t version() { return _version; }
+
+		/* returns the number of 32-bit words the header occupies */
+		Genode::uint8_t header_length() { return _header_length; }
+		Genode::uint8_t precedence()    { return _diff_service & PRECEDENCE; }
 
 		bool low_delay()              { return _diff_service & DELAY;      }
 		bool high_throughput()        { return _diff_service & THROUGHPUT; }
@@ -152,12 +154,14 @@ class Net::Ipv4_packet
 		Genode::uint8_t  time_to_live()    { return _time_to_live;         }
 		Genode::uint8_t  protocol()        { return _protocol;             }
 
-		Genode::uint16_t checksum() { return host_to_big_endian(_header_checksum);      }
+		Genode::uint16_t checksum() { return host_to_big_endian(_header_checksum); }
 
 		Ipv4_address dst() { return Ipv4_address(&_dst_addr); }
 		Ipv4_address src() { return Ipv4_address(&_src_addr); }
 
-		void *data() { return &_data; }
+		template <typename T> T const * header() const { return (T const *)(this); }
+		template <typename T> T *       data()         { return (T *)(_data); }
+		template <typename T> T const * data()   const { return (T const *)(_data); }
 
 		/********************************
 		 ** IPv4 field write-accessors **
