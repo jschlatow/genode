@@ -8,4 +8,4 @@ include $(REP_DIR)/lib/mk/base.inc
 
 LIBS   += startup
 SRC_CC += thread.cc thread_myself.cc thread_linux.cc
-
+SRC_CC += attach_stack_area.cc
