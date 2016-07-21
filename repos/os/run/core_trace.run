@@ -1,0 +1,65 @@
+#
+# Check platform
+#
+# HW is the only kernel that provides appliance of quota to the scheduling.
+#
+assert_spec hw
+
+#
+# Build
+#
+
+build "core init drivers/timer test/core_trace"
+
+#
+# Boot image
+#
+
+create_boot_directory
+
+install_config {
+<config prio_levels="4">
+	<parent-provides>
+		<service name="ROM"/>
+		<service name="RAM"/>
+		<service name="IRQ"/>
+		<service name="IO_MEM"/>
+		<service name="IO_PORT"/>
+		<service name="PD"/>
+		<service name="RM"/>
+		<service name="CPU"/>
+		<service name="LOG"/>
+		<service name="TRACE"/>
+	</parent-provides>
+	<default-route>
+		<any-service><parent/><any-child/></any-service>
+	</default-route>
+
+	<start name="timer" priority="0">
+		<resource name="RAM" quantum="10M"/>
+		<resource name="CPU" quantum="10"/>
+		<provides><service name="Timer"/></provides>
+	</start>
+
+	<start name="test-core_load" priority="-1">
+		<resource name="RAM" quantum="10M"/>
+		<resource name="CPU" quantum="10"/>
+	</start>
+
+	<start name="test-core_trace" priority="-2">
+		<resource name="RAM" quantum="10M"/>
+		<resource name="CPU" quantum="80"/>
+	</start>
+
+</config>
+}
+
+build_boot_image "core init timer test-core_trace test-core_load"
+
+#
+# Execution
+#
+
+append qemu_args "-nographic -m 128"
+
+run_genode_until ".*done.*\n.*done.*\n.*done.*\n" 100
