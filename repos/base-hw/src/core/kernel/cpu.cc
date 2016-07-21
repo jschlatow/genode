@@ -18,6 +18,7 @@
 #include <kernel/thread.h>
 #include <kernel/irq.h>
 #include <kernel/pd.h>
+#include <kernel/trace.h>
 #include <pic.h>
 #include <timer.h>
 #include <assert.h>
@@ -175,6 +176,8 @@ Cpu_job & Cpu::schedule()
 	_clock.set_timeout(this, quota);
 
 	_clock.schedule_timeout();
+
+	Kernel::Trace::Event trace_event("Cpu::schedule()");
 
 	/* switch to new job */
 	switch_to(new_job);
