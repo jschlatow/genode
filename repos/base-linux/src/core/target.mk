@@ -25,6 +25,7 @@ SRC_CC        = main.cc \
                 io_mem_session_component.cc \
                 signal_source_component.cc \
                 trace_session_component.cc \
+                trace_session_support.cc \
                 thread_linux.cc \
                 stack_area.cc \
                 core_printf.cc \

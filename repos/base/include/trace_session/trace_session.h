@@ -101,6 +101,11 @@ struct Genode::Trace::Session : Genode::Session
 	 */
 	virtual void free(Subject_id) = 0;
 
+	/**
+	 * Obtain trace buffer of core
+	 */
+	virtual Dataspace_capability core_buffer() = 0;
+
 	virtual ~Session() { }
 
 
@@ -140,11 +145,12 @@ struct Genode::Trace::Session : Genode::Session
 	                 Subject_id);
 	GENODE_RPC_THROW(Rpc_free, void, free,
 	                 GENODE_TYPE_LIST(Nonexistent_subject), Subject_id);
+	GENODE_RPC(Rpc_core_buffer, Dataspace_capability, core_buffer);
 
 	GENODE_RPC_INTERFACE(Rpc_dataspace, Rpc_alloc_policy, Rpc_policy,
 	                     Rpc_unload_policy, Rpc_trace, Rpc_rule, Rpc_pause,
 	                     Rpc_resume, Rpc_subjects, Rpc_subject_info, Rpc_buffer,
-	                     Rpc_free);
+	                     Rpc_free, Rpc_core_buffer);
 };
 
 #endif /* _INCLUDE__TRACE_SESSION__TRACE_SESSION_H_ */

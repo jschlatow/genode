@@ -8,6 +8,9 @@
 LIBS += core-perf_counter
 
 # add library dependencies
+LIBS += core-trace
+
+# add library dependencies
 LIBS += base-common
 
 # add include paths
@@ -43,6 +46,7 @@ SRC_CC += ram_session_support.cc
 SRC_CC += region_map_component.cc
 SRC_CC += rom_session_component.cc
 SRC_CC += trace_session_component.cc
+SRC_CC += trace_session_support.cc
 SRC_CC += thread_start.cc
 SRC_CC += env.cc
 SRC_CC += region_map_support.cc

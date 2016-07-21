@@ -103,6 +103,9 @@ struct Genode::Trace::Session_client : Genode::Rpc_client<Genode::Trace::Session
 
 		void free(Subject_id subject) override {
 			call<Rpc_free>(subject); }
+
+		Dataspace_capability core_buffer() override {
+			return call<Rpc_core_buffer>(); }
 };
 
 #endif /* _INCLUDE__TRACE_SESSION__CLIENT_H_ */

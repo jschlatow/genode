@@ -103,6 +103,7 @@ class Genode::Trace::Session_component
 		Subject_info subject_info(Subject_id);
 		Dataspace_capability buffer(Subject_id);
 		void free(Subject_id);
+		Dataspace_capability core_buffer();
 };
 
 #endif /* _CORE__INCLUDE__TRACE__SESSION_COMPONENT_H_ */
