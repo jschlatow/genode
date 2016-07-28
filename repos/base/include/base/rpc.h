@@ -37,10 +37,10 @@
  */
 #define GENODE_RPC_THROW(rpc_name, ret_type, func_name, exc_types, ...) \
 	struct rpc_name { \
-		typedef ::Genode::Meta::Ref_args<__VA_ARGS__>::Type  Client_args; \
-		typedef ::Genode::Meta::Pod_args<__VA_ARGS__>::Type  Server_args; \
-		typedef ::Genode::Trait::Exc_list<exc_types>::Type   Exceptions; \
-		typedef ::Genode::Trait::Call_return<ret_type>::Type Ret_type; \
+		typedef typename ::Genode::Meta::Ref_args<__VA_ARGS__>::Type  Client_args; \
+		typedef typename ::Genode::Meta::Pod_args<__VA_ARGS__>::Type  Server_args; \
+		typedef typename ::Genode::Trait::Exc_list<exc_types>::Type   Exceptions; \
+		typedef typename ::Genode::Trait::Call_return<ret_type>::Type Ret_type; \
 		\
 		template <typename SERVER, typename RET> \
 		static void serve(SERVER &server, Server_args &args, RET &ret) { \
