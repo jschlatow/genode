@@ -38,16 +38,29 @@ class Platform_timer
 		unsigned long mutable   _last_timeout_us;
 		time_t const            _max_timeout_us;
 
+		/**
+		 * Return kernel capability selector of Genode capability
+		 *
+		 * This function is normally framework-internal and defined in
+		 * 'base/internal/capability_space.h'.
+		 */
+		static inline Kernel::capid_t _capid(Genode::Native_capability const &cap)
+		{
+			Genode::addr_t const index = (Genode::addr_t)cap.data();
+			return index;
+		}
+
 	public:
 
 		Platform_timer()
 		:
-			_sigid(_sigrec.manage(&_sigctx).dst()), _curr_time_us(0),
-			_last_timeout_us(0), _max_timeout_us(Kernel::timeout_max_us())
+			_sigid(_capid(_sigrec.manage(&_sigctx))),
+			_curr_time_us(0), _last_timeout_us(0),
+			_max_timeout_us(Kernel::timeout_max_us())
 		{
-			PINF("Maximum timeout %lu us", _max_timeout_us);
+			Genode::log("maximum timeout ", _max_timeout_us, " us");
 			if (max_timeout() < min_timeout()) {
-				PERR("Minimum timeout greater then maximum timeout");
+				Genode::error("minimum timeout greater then maximum timeout");
 				throw Genode::Exception();
 			}
 		}

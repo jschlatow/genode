@@ -12,7 +12,7 @@
  */
 
 /* base includes */
-#include <base/native_types.h>
+#include <base/capability.h>
 #include <base/printf.h>
 #include <util/bit_allocator.h>
 
@@ -40,7 +40,7 @@ namespace {
 
 	struct Local_capability_space
 	:
-		Capability_space_sel4<4*1024, 1UL << NUM_CORE_MANAGED_SEL_LOG2,
+		Capability_space_sel4<15*1024, 1UL << NUM_CORE_MANAGED_SEL_LOG2,
 		                      Native_capability::Data>
 	{ };
 
@@ -119,6 +119,12 @@ void Capability_space::inc_ref(Native_capability::Data &data)
 Rpc_obj_key Capability_space::rpc_obj_key(Native_capability::Data const &data)
 {
 	return local_capability_space().rpc_obj_key(data);
+}
+
+
+void Capability_space::print(Output &out, Native_capability::Data const &data)
+{
+	return local_capability_space().print(out, data);
 }
 
 

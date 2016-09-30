@@ -1,4 +1,7 @@
-assert_spec nova
+if {(![have_spec nova] && ![have_spec hw_x86_64_muen])} {
+	puts "Platform is unsupported."
+	exit 0
+}
 
 if {[have_include "power_on/qemu"]} {
 	puts "\nRun script does not support Qemu.\n"
@@ -6,7 +9,7 @@ if {[have_include "power_on/qemu"]} {
 }
 
 append build_components {
-	core init virtualbox 
+	core init
 	server/part_blk
 	server/rump_fs
 	server/fs_rom
@@ -15,6 +18,8 @@ append build_components {
 	drivers/timer
 }
 
+lappend_if [expr $use_vbox4]  build_components virtualbox
+lappend_if [expr $use_vbox5]  build_components virtualbox5
 lappend_if [expr $use_ps2]    build_components drivers/input
 lappend_if [expr $use_usb]    build_components drivers/usb
 lappend_if [expr $use_usb]    build_components app/usb_report_filter
@@ -42,7 +47,12 @@ set config {
 		<service name="PD"/>
 		<service name="RM"/>
 		<service name="CPU"/>
-		<service name="LOG"/>
+		<service name="LOG"/>}
+
+append_if [have_spec muen] config {
+		<service name="VM"/>}
+
+append config {
 	</parent-provides>
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
@@ -52,19 +62,19 @@ set config {
 		<provides><service name="Timer"/></provides>
 	</start>
 	<start name="ahci_drv" priority="-1">
-		<resource name="RAM" quantum="10M" />
-		<provides><service name="Block" /></provides>
+		<resource name="RAM" quantum="10M"/>
+		<provides><service name="Block"/></provides>
 		<config>
-			<policy label="part_blk" device="0" />
+			<policy label="part_blk" device="0"/>
 		</config>
 		<route>
-			<service name="IRQ"><child name="acpi_drv" /></service>
-			<any-service> <parent /> <any-child /></any-service>
+			<service name="IRQ"><child name="acpi_drv"/></service>
+			<any-service> <parent/> <any-child/></any-service>
 		</route>
 	</start>
 	<start name="part_blk" priority="-1">
-		<resource name="RAM" quantum="10M" />
-		<provides><service name="Block" /></provides>
+		<resource name="RAM" quantum="10M"/>
+		<provides><service name="Block"/></provides>
 		<route>
 			<any-service><child name="ahci_drv"/> <parent/><any-child/></any-service>
 		</route>
@@ -73,9 +83,14 @@ set config {
 		</config>
 	</start>
 	<start name="rump_fs" priority="-1">
-		<resource name="RAM" quantum="32M" />
+		<resource name="RAM" quantum="32M"/>
 		<provides><service name="File_system"/></provides>
-		<config fs="ext2fs"><policy root="/" writeable="yes"/></config>
+		<config fs="ext2fs">}
+append_if [expr $use_ram_fs && $use_overlay_from_disk] config {
+			<policy label="overlay_from_disk" root="/ram" writeable="yes"/>}
+append config {
+			<default-policy root="/" writeable="yes"/>
+		</config>
 		<route>
 			<any-service><child name="part_blk"/> <parent/><any-child/></any-service>
 		</route>
@@ -83,7 +98,7 @@ set config {
 
 append_if [expr $use_ram_fs] config {
 	<start name="ram_fs" priority="-1">
-		<resource name="RAM" quantum="512M" />
+		<resource name="RAM" quantum="512M"/>
 		<provides><service name="File_system"/></provides>
 		<config>
 			<content>
@@ -93,8 +108,26 @@ append_if [expr $use_ram_fs] config {
 				</dir>
 			</content>
 			<!-- constrain sessions according to their labels -->
-			<policy label="vbox -> from_ram_fs" root="/ram" writeable="yes" />
+			<policy label="vbox -> from_ram_fs" root="/ram" writeable="yes"/>
 		</config>
+		<route>}
+append_if [expr $use_ram_fs && $use_overlay_from_disk] config "<service name=\"ROM\" label=\"${overlay_image}\">"
+append_if [expr $use_ram_fs && $use_overlay_from_disk] config {
+			<child name="overlay_from_disk"/></service>}
+append_if [expr $use_ram_fs] config {
+			<any-service> <parent/> <any-child/></any-service>
+		</route>
+	</start>}
+
+append_if [expr $use_ram_fs && $use_overlay_from_disk] config {
+	<start name="overlay_from_disk" priority="-1">
+		<binary name="fs_rom"/>
+		<resource name="RAM" quantum="256M"/>
+		<provides><service name="ROM"/></provides>
+		<route>
+			<service name="File_system"><child name="rump_fs"/></service>
+			<any-service><parent/><any-child/></any-service>
+		</route>
 	</start>}
 
 append_platform_drv_config
@@ -104,8 +137,8 @@ append_if [expr $use_ps2] config {
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Input"/></provides>
 		<route>
-			<service name="IRQ"><child name="acpi_drv" /></service>
-			<any-service> <parent /> <any-child /></any-service>
+			<service name="IRQ"><child name="acpi_drv"/></service>
+			<any-service> <parent/> <any-child/></any-service>
 		</route>
 	</start>}
 
@@ -116,8 +149,15 @@ append_if [expr $use_usb] config {
 		<provides><service name="File_system"/></provides>
 		<config verbose="yes">
 			<content>
-				<inline name="usb_drv.config">
-<config uhci="yes" ehci="yes" xhci="yes">
+				<inline name="usb_drv.config">}
+
+append_if [expr $use_usb && ![have_spec hw_x86_64_muen]] config {
+<config uhci="yes" ehci="yes" xhci="yes">}
+
+append_if [expr $use_usb && [have_spec hw_x86_64_muen]] config {
+<config uhci="no" ehci="no" xhci="yes">}
+
+append_if [expr $use_usb] config {
 	<hid/>
 	<raw>
 		<report devices="yes"/>
@@ -150,7 +190,7 @@ append_if [expr $use_usb] config {
 </config>
 				</inline>
 			</content>
-			<policy label_prefix="usb_report_filter" root="/" writeable="yes" />
+			<policy label_prefix="usb_report_filter" root="/" writeable="yes"/>
 			<policy label_prefix="usb_config_rom" root="/"/>
 		</config>
 	</start>
@@ -169,7 +209,7 @@ append_if [expr $use_usb] config {
 		<resource name="RAM" quantum="1200K"/>
 		<configfile name="usb_report_filter.config"/>
 		<route>
-			<service name="Report"><child name="report_rom" /></service>
+			<service name="Report"><child name="report_rom"/></service>
 			<service name="ROM" label="usb_report_filter.config">
 				<child name="usb_config_rom"/>
 			</service>
@@ -182,7 +222,7 @@ append_if [expr $use_usb] config {
 			<service name="File_system" label="usb_drv.config">
 				<child name="usb_config_fs"/>
 			</service>
-			<any-service><parent/><any-child /></any-service>
+			<any-service><parent/><any-child/></any-service>
 		</route>
 	</start>
 
@@ -190,14 +230,14 @@ append_if [expr $use_usb] config {
 		<resource name="RAM" quantum="16M"/>
 		<provides>
 			<service name="Input"/>
-			<service name="Usb" />
+			<service name="Usb"/>
 		</provides>
 		<configfile name="usb_drv.config"/>
 		<route>
-			<service name="IRQ"><child name="acpi_drv" /></service>
-			<service name="Report"><child name="report_rom" /></service>
+			<service name="IRQ"><child name="acpi_drv"/></service>
+			<service name="Report"><child name="report_rom"/></service>
 			<service name="ROM" label="usb_drv.config"><child name="usb_config_rom"/></service>
-			<any-service><parent /><any-child /></any-service>
+			<any-service><parent/><any-child/></any-service>
 		</route>
 	</start>
 }
@@ -206,7 +246,7 @@ append_if [have_spec framebuffer] config {
 	<start name="fb_drv" priority="-1">
 		<resource name="RAM" quantum="6M"/>
 		<provides><service name="Framebuffer"/></provides>
-		<config buffered="yes" />
+		<config buffered="yes"/>
 	</start>}
 
 append_if [have_spec x86] config {
@@ -232,11 +272,13 @@ append boot_modules {
 	libc_pipe.lib.so libc_terminal.lib.so
 	libiconv.lib.so stdcxx.lib.so
 	rump.lib.so rump_fs.lib.so rump_fs
-	virtualbox qemu-usb.lib.so
+	qemu-usb.lib.so
 }
 
+lappend_if [expr $use_vbox4] boot_modules virtualbox
+lappend_if [expr $use_vbox5] boot_modules virtualbox5
 lappend_if [expr $use_ram_fs || $use_usb] boot_modules ram_fs
-lappend_if [expr $use_ram_fs]             boot_modules ${overlay_image}
+lappend_if [expr $use_ram_fs && !$use_overlay_from_disk] boot_modules ${overlay_image}
 
 # platform-specific modules
 lappend_if [expr         $use_ps2] boot_modules ps2_drv

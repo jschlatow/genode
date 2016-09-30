@@ -15,7 +15,7 @@
 /* Genode includes */
 #include <base/printf.h>
 #include <base/sleep.h>
-#include <kernel/log.h>
+#include <base/log.h>
 
 /* core includes */
 #include <core_parent.h>
@@ -162,6 +162,8 @@ Platform::Platform()
 		_rom_fs.insert(rom_module);
 	}
 
+	_init_additional();
+
 	/* print ressource summary */
 	if (VERBOSE) {
 		printf("Core virtual memory allocator\n");
@@ -198,8 +200,8 @@ Platform::Platform()
 
 void Core_parent::exit(int exit_value)
 {
-	Kernel::log() << __PRETTY_FUNCTION__ << "not implemented\n";
-	while (1) ;
+	warning(__PRETTY_FUNCTION__, "not implemented");
+	while (1);
 }
 
 
@@ -229,5 +231,6 @@ bool Mapped_mem_allocator::_map_local(addr_t virt_addr, addr_t phys_addr,
 	return ::map_local(phys_addr, virt_addr, size / get_page_size()); }
 
 
-bool Mapped_mem_allocator::_unmap_local(addr_t virt_addr, unsigned size) {
+bool Mapped_mem_allocator::_unmap_local(addr_t virt_addr, addr_t phys_addr,
+                                        unsigned size) {
 	return ::unmap_local(virt_addr, size / get_page_size()); }

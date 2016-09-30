@@ -43,6 +43,7 @@
 #include <util/string.h>
 #include <base/printf.h>
 #include <base/snprintf.h>
+#include <base/log.h>
 
 
 /***********************************
@@ -50,14 +51,13 @@
  ***********************************/
 
 extern "C" void wait_for_continue(void);
-extern "C" int raw_write_str(const char *str);
 
 #define PRAW(fmt, ...)                                             \
 	do {                                                           \
 		char str[128];                                             \
 		Genode::snprintf(str, sizeof(str),                         \
 		                 ESC_ERR fmt ESC_END "\n", ##__VA_ARGS__); \
-		raw_write_str(str);                                        \
+		Genode::raw(Genode::Cstring(str));                         \
 	} while (0)
 
 
@@ -245,7 +245,7 @@ extern "C" void lx_restore_rt (void);
 /**
  * Simplified binding for sigaction system call
  */
-inline int lx_sigaction(int signum, void (*handler)(int))
+inline int lx_sigaction(int signum, void (*handler)(int), bool altstack)
 {
 	struct kernel_sigaction act;
 	act.handler = handler;
@@ -258,12 +258,16 @@ inline int lx_sigaction(int signum, void (*handler)(int))
 	 * when leaving the signal handler and it should call the rt_sigreturn syscall.
 	 */
 	enum { SA_RESTORER = 0x04000000 };
-	act.flags    = SA_RESTORER | SA_ONSTACK;
+	act.flags    = SA_RESTORER;
 	act.restorer = lx_restore_rt;
 #else
-	act.flags    = SA_ONSTACK;
+	act.flags    = 0;
 	act.restorer = 0;
 #endif
+
+	/* use alternate signal stack if requested */
+	act.flags |= altstack ? SA_ONSTACK : 0;
+
 	lx_sigemptyset(&act.mask);
 
 	return lx_syscall(SYS_rt_sigaction, signum, &act, 0UL, _NSIG/8);

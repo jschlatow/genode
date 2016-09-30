@@ -48,7 +48,7 @@ enum {
 PSUPGLOBALINFOPAGE g_pSUPGlobalInfoPage;
 
 
-struct Periodic_gip : public Genode::Thread_deprecated<4096>
+struct Periodic_gip : public Genode::Thread_deprecated<2*4096>
 {
 	Periodic_gip() : Thread_deprecated("periodic_gip") { start(); }
 
@@ -204,7 +204,7 @@ int SUPSemEventSignal(PSUPDRVSESSION pSession, SUPSEMEVENT hEvent)
 	if (hEvent)
 		reinterpret_cast<Genode::Semaphore *>(hEvent)->up();
 	else
-		PERR("%s called - not implemented", __FUNCTION__);
+		Genode::error(__FUNCTION__, " called - not implemented");
 
 	return VINF_SUCCESS;	
 }
@@ -216,7 +216,8 @@ int SUPSemEventWaitNoResume(PSUPDRVSESSION pSession, SUPSEMEVENT hEvent,
 	if (hEvent && cMillies == RT_INDEFINITE_WAIT)
 		reinterpret_cast<Genode::Semaphore *>(hEvent)->down();
 	else {
-		PERR("%s called millis=%u - not implemented", __FUNCTION__, cMillies);
+		Genode::error(__FUNCTION__, " called millis=", cMillies,
+		              " - not implemented");
 		reinterpret_cast<Genode::Semaphore *>(hEvent)->down();
 	}
 
@@ -255,15 +256,15 @@ int SUPR3CallVMMR0(PVMR0 pVMR0, VMCPUID idCpu, unsigned uOperation,
                    void *pvArg)
 {
 	if (uOperation == VMMR0_DO_CALL_HYPERVISOR) {
-		PDBG("VMMR0_DO_CALL_HYPERVISOR - doing nothing");
+		Genode::log(__func__, ": VMMR0_DO_CALL_HYPERVISOR - doing nothing");
 		return VINF_SUCCESS;
 	}
 	if (uOperation == VMMR0_DO_VMMR0_TERM) {
-		PDBG("VMMR0_DO_VMMR0_TERM - doing nothing");
+		Genode::log(__func__, ": VMMR0_DO_VMMR0_TERM - doing nothing");
 		return VINF_SUCCESS;
 	}
 	if (uOperation == VMMR0_DO_GVMM_DESTROY_VM) {
-		PDBG("VMMR0_DO_GVMM_DESTROY_VM - doing nothing");
+		Genode::log(__func__, ": VMMR0_DO_GVMM_DESTROY_VM - doing nothing");
 		return VINF_SUCCESS;
 	}
 
@@ -327,4 +328,33 @@ void genode_VMMR0_DO_GVMM_REGISTER_VMCPU(PVMR0 pVMR0, VMCPUID idCpu)
 {
 	PVM pVM = reinterpret_cast<PVM>(pVMR0);
 	pVM->aCpus[idCpu].hNativeThreadR0 = RTThreadNativeSelf();
+}
+
+
+HRESULT genode_check_memory_config(ComObjPtr<Machine> machine)
+{
+	HRESULT rc;
+
+	/* Validate configured memory of vbox file and Genode config */
+	ULONG memory_vbox;
+	rc = machine->COMGETTER(MemorySize)(&memory_vbox);
+	if (FAILED(rc))
+		return rc;
+
+	/* Request max available memory */
+	size_t memory_genode = Genode::env()->ram_session()->avail() >> 20;
+	size_t memory_vmm    = 28;
+
+	if (memory_vbox + memory_vmm > memory_genode) {
+		using Genode::error;
+		error("Configured memory ", memory_vmm, " MB (vbox file) is insufficient.");
+		error(memory_genode,              " MB (1) - ",
+		      memory_vmm,                 " MB (2) = ",
+		      memory_genode - memory_vmm, " MB (3)");
+		error("(1) available memory based defined by Genode config");
+		error("(2) minimum memory required for VBox VMM");
+		error("(3) maximal available memory to VM");
+		return E_FAIL;
+	}
+	return S_OK;
 }

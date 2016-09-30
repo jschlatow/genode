@@ -151,7 +151,7 @@ void Menu_view::Main::handle_dialog_update(unsigned)
 		root_widget.update(dialog_xml);
 		root_widget.size(root_widget.min_size());
 	} catch (...) {
-		PERR("failed to construct widget tree");
+		Genode::error("failed to construct widget tree");
 	}
 
 	schedule_redraw = true;
@@ -174,8 +174,7 @@ void Menu_view::Main::handle_config(unsigned)
 
 	try {
 		hover_reporter.enabled(config()->xml_node().sub_node("report")
-		                                           .attribute("hover")
-		                                           .has_value("yes"));
+		                                           .attribute_value("hover", false));
 	} catch (...) {
 		hover_reporter.enabled(false);
 	}

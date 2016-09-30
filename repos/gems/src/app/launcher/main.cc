@@ -87,7 +87,7 @@ struct Launcher::Main
 
 	void _handle_exited_child(unsigned)
 	{
-		auto kill_child_fn = [&] (Child_base::Label label) { _panel_dialog.kill(label); };
+		auto kill_child_fn = [&] (Label const &label) { _panel_dialog.kill(label); };
 
 		_subsystem_manager.for_each_exited_child(kill_child_fn);
 	}
@@ -180,7 +180,7 @@ void Launcher::Main::_handle_focus_update(unsigned)
 		_panel_dialog.focus_changed(label);
 
 	} catch (...) {
-		PWRN("no focus model available");
+		Genode::warning("no focus model available");
 	}
 }
 

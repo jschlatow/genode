@@ -1,6 +1,9 @@
-# Tested for nova. 
-assert_spec nova
- 
+# Tested for nova and hw_x86_64_muen.
+if {(![have_spec nova] && ![have_spec hw_x86_64_muen])} {
+	puts "Platform is unsupported."
+	exit 0
+}
+
 if {[have_include "power_on/qemu"]} {
 	puts "\nRun script does not support Qemu.\n"
 	exit 0
@@ -74,7 +77,7 @@ append config_of_app {
 		needs to be enabled in the .vbox file (disabled by default).
 		(Recording is configured to use the external mic.)
 	-->
-	<start name="audio_drv">
+	<start name="audio_drv" priority="-1">
 		<resource name="RAM" quantum="9M"/>
 		<provides>
 			<service name="Audio_out"/>
@@ -120,7 +123,7 @@ append config_of_app {
 
 			<policy label="vbox_pointer" domain="pointer"/>
 			<policy label="nit_fb"       domain="vbox"/>
-			<policy domain=""/>
+			<default-policy domain=""/>
 		</config>
 	</start>
 
@@ -138,17 +141,23 @@ append config_of_app {
 
 	<start name="nit_fb" priority="-1">
 		<resource name="RAM" quantum="8M" />
+		<config/>
 		<provides>
 			<service name="Framebuffer" />
 			<service name="Input" />
 		</provides>
 	</start>
 
-	<start name="vbox" priority="-2">
-		<binary name="virtualbox" />
+	<start name="vbox" priority="-2">}
+append_if [expr $use_vbox4] config_of_app {
+		<binary name="virtualbox" />}
+append_if [expr $use_vbox5] config_of_app {
+		<binary name="virtualbox5" />}
+
+append config_of_app {
 		<resource name="RAM" quantum="1280M"/>}
 append config_of_app "
-			<config ld_verbose=\"yes\" vbox_file=\"${vbox_file}\" vm_name=\"${flavor}\">"
+			<config ld_verbose=\"yes\" vbox_file=\"${vbox_file}\" vm_name=\"${flavor}\" xhci=\"yes\">"
 append config_of_app {
 			<libc stdout="/dev/log" stderr="/dev/log" rtc="/dev/rtc">
 				<vfs>

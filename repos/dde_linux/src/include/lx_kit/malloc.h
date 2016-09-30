@@ -28,7 +28,7 @@ namespace Lx {
 }
 
 
-class Lx::Malloc
+class Lx::Malloc : public Genode::Allocator
 {
 	public:
 
@@ -55,6 +55,21 @@ class Lx::Malloc
 		 * Belongs given address to this allocator
 		 */
 		virtual bool inside(addr_t const addr) const = 0;
+
+		/**
+		 * Genode alllocator interface
+		 */
+		bool need_size_for_free() const override { return false; }
+
+		size_t overhead(size_t size) const override { return 0; }
+
+		bool alloc(size_t size, void **out_addr) override
+		{
+			*out_addr = alloc(size);
+			return *out_addr ? true : false;
+		}
+
+		void free(void *addr, size_t size) override { free(addr); }
 
 		static Malloc &mem();
 		static Malloc &dma();

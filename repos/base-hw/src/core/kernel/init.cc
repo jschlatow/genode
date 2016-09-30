@@ -23,7 +23,6 @@
 
 /* base includes */
 #include <base/internal/unmanaged_singleton.h>
-#include <base/native_types.h>
 
 using namespace Kernel;
 
@@ -61,7 +60,7 @@ extern "C" void init_kernel()
 
 	Core_thread::singleton();
 
-	Genode::printf("kernel initialized\n");
+	Genode::printf("\nkernel initialized\n");
 
 	test();
 

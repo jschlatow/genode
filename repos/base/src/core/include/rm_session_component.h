@@ -77,13 +77,16 @@ class Genode::Rm_session_component : public Rpc_object<Rm_session>
 		{
 			Lock::Guard guard(_region_maps_lock);
 
-			Region_map_component *rm =
-				new (_md_alloc)
-					Region_map_component(_ep, _md_alloc, _pager_ep, 0, size);
+			try {
+				Region_map_component *rm =
+					new (_md_alloc)
+						Region_map_component(_ep, _md_alloc, _pager_ep, 0, size);
 
-			_region_maps.insert(rm);
+				_region_maps.insert(rm);
 
-			return rm->cap();
+				return rm->cap();
+			}
+			catch (Allocator::Out_of_memory) { throw Out_of_metadata(); }
 		}
 
 		void destroy(Capability<Region_map> rm) override
@@ -92,7 +95,7 @@ class Genode::Rm_session_component : public Rpc_object<Rm_session>
 
 			_ep.apply(rm, [&] (Region_map_component *rmc) {
 				if (!rmc) {
-					PWRN("could not look up region map to destruct");
+					warning("could not look up region map to destruct");
 					return;
 				}
 

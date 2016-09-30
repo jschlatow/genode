@@ -106,6 +106,7 @@ static inline void out_unsigned(T value, unsigned base, int pad,
 		out_char(buf[i]);
 }
 
+
 /**
  * Output floating point value
  */
