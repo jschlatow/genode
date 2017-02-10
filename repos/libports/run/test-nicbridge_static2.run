@@ -47,14 +47,14 @@ append config {
 		<provides><service name="Timer"/></provides>
 	</start>
 	<start name="nic_drv">
-		<resource name="RAM" quantum="2M"/>
+		<resource name="RAM" quantum="4M"/>
 		<provides><service name="Nic"/></provides>
 	</start>
 	<start name="nic_bridge">
 		<resource name="RAM" quantum="24M"/>
 		<provides><service name="Nic"/></provides>
 		<config>
-			<policy label="lighttpd" ip_addr="10.0.2.55"/>
+			<policy label_prefix="lighttpd" ip_addr="10.0.2.55"/>
 		</config>
 		<route>
 			<service name="Nic"> <child name="nic_drv"/> </service>

@@ -25,7 +25,7 @@
 
 typedef long long ssize_t;
 
-extern void wifi_init(Genode::Env&, Genode::Lock&);
+extern void wifi_init(Genode::Env&, Genode::Lock&, bool);
 extern "C" void wpa_conf_reload(void);
 extern "C" ssize_t wpa_write_conf(char const *, Genode::size_t);
 
@@ -230,9 +230,16 @@ struct Main
 
 	Main(Genode::Env &env) : env(env)
 	{
-		bool const verbose = config_rom.xml().attribute_value("verbose", false);
+		bool const verbose  = config_rom.xml().attribute_value("verbose", false);
+		long const interval = config_rom.xml().attribute_value("connected_scan_interval", 0L);
 
-		wpa = new (&heap) Wpa_thread(env, wpa_startup_lock(), verbose);
+		/*
+		 * Forcefully disable 11n but for convenience the attribute is used the
+		 * other way araound.
+		 */
+		bool const disable_11n = !config_rom.xml().attribute_value("use_11n", true);
+
+		wpa = new (&heap) Wpa_thread(env, wpa_startup_lock(), verbose, interval);
 
 		wpa->start();
 
@@ -242,12 +249,9 @@ struct Main
 			Genode::warning("could not create Wlan_configration handler");
 		}
 
-		wifi_init(env, wpa_startup_lock());
+		wifi_init(env, wpa_startup_lock(), disable_11n);
 	}
 };
 
 
-namespace Component {
-	Genode::size_t      stack_size() { return 32 * 1024 * sizeof(long); }
-	void construct(Genode::Env &env) { static Main server(env);         }
-}
+void Component::construct(Genode::Env &env) { static Main server(env); }

@@ -63,7 +63,7 @@ class Driver : public Block::Driver
 		{
 			/* sanity check block number */
 			if (block_number + block_count > _fb_size / BLOCK_SIZE) {
-				PWRN("Out of range: requested %zd blocks from block %llu",
+				PWRN("Out of range: requested %ld blocks from block %llu",
 				     block_count, block_number);
 				return;
 			}
@@ -82,7 +82,7 @@ class Driver : public Block::Driver
 		{
 			/* sanity check block number */
 			if (block_number + block_count > _fb_size / BLOCK_SIZE) {
-				PWRN("Out of range: requested %zd blocks from block %llu",
+				PWRN("Out of range: requested %ld blocks from block %llu",
 				     block_count, block_number);
 				return;
 			}
@@ -121,5 +121,4 @@ struct Main
 };
 
 
-Genode::size_t Component::stack_size()      { return 2*1024*sizeof(long); }
-void Component::construct(Genode::Env &env) { static Main m(env);         }
+void Component::construct(Genode::Env &env) { static Main m(env); }

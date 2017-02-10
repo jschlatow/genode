@@ -166,8 +166,8 @@ struct Main
 
 	Genode::Static_root<Framebuffer::Session> fb_root { env.ep().manage(fb_session) };
 
-	Input::Session_component input_session;
-	Input::Root_component    input_root { env.ep().rpc_ep(), input_session };
+	Input::Session_component input_session { env, env.ram() };
+	Input::Root_component    input_root    { env.ep().rpc_ep(), input_session };
 
 	Input::Handler_component input_handler_component { input_session };
 	Input::Handler_client    input_handler_client    { env.ep().manage(input_handler_component) };
@@ -214,5 +214,4 @@ struct Main
 };
 
 
-Genode::size_t Component::stack_size()      { return 4*1024*sizeof(long); }
 void Component::construct(Genode::Env &env) { static Main inst(env); }

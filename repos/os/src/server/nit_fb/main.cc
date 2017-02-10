@@ -236,7 +236,7 @@ struct Nit_fb::Main : View_updater
 	/*
 	 * Input and framebuffer sessions provided to our client
 	 */
-	Input::Session_component       input_session;
+	Input::Session_component       input_session { env, env.ram() };
 	Framebuffer::Session_component fb_session { nitpicker, *this, _initial_mode() };
 
 	/*
@@ -301,8 +301,18 @@ struct Nit_fb::Main : View_updater
 		Input::Event const * const events = input_ds.local_addr<Input::Event>();
 
 		unsigned const num = nitpicker.input()->flush();
-		for (unsigned i = 0; i < num; i++)
+		bool update = false;
+
+		for (unsigned i = 0; i < num; i++) {
+			if (events[i].type() == Input::Event::FOCUS)
+				update = events[i].code();
+
 			input_session.submit(translate_event(events[i], position, fb_session.size()));
+		}
+
+		/* get to front if we got input focus */
+		if (update)
+			update_view();
 	}
 
 	Signal_handler<Main> input_handler =
@@ -335,12 +345,6 @@ struct Nit_fb::Main : View_updater
 	}
 };
 
-
-/***************
- ** Component **
- ***************/
-
-Genode::size_t Component::stack_size() { return 4*1024*sizeof(long); }
 
 void Component::construct(Genode::Env &env) { static Nit_fb::Main inst(env); }
 

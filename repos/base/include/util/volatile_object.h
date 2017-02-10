@@ -16,6 +16,7 @@
 
 #include <util/construct_at.h>
 #include <base/stdint.h>
+#include <util/noncopyable.h>
 
 namespace Genode {
 	template<typename> class Volatile_object;
@@ -35,7 +36,7 @@ namespace Genode {
  * \param  MT type
  */
 template <typename MT>
-class Genode::Volatile_object
+class Genode::Volatile_object : Noncopyable
 {
 	private:
 
@@ -141,7 +142,16 @@ class Genode::Volatile_object
 		MT       *operator -> ()       { _check_constructed(); return       _ptr(); }
 		MT const *operator -> () const { _check_constructed(); return _const_ptr(); }
 
-		MT &operator * () { _check_constructed(); return *_ptr(); }
+		MT       &operator * ()       { _check_constructed(); return       *_ptr(); }
+		MT const &operator * () const { _check_constructed(); return *_const_ptr(); }
+
+		void print(Output &out) const
+		{
+			if (_constructed)
+				_const_ptr()->print(out);
+			else
+				out.out_string("<unconstructed>");
+		}
 };
 
 

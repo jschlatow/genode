@@ -14,37 +14,50 @@
  * under the terms of the GNU General Public License version 2.
  */
 
+/* Genode includes */
 #include <base/env.h>
 #include <base/heap.h>
 #include <util/string.h>
+#include <util/volatile_object.h>
+
+/* base-internal includes */
+#include <base/internal/globals.h>
+#include <base/internal/unmanaged_singleton.h>
 
 using namespace Genode;
+
+
+static Heap *cxx_heap_ptr;
+
+
+static Heap &cxx_heap()
+{
+	class Cxx_heap_uninitialized : Exception { };
+	if (!cxx_heap_ptr)
+		throw Cxx_heap_uninitialized();
+
+	return *cxx_heap_ptr;
+}
 
 
 /**
  * Return heap partition for the private use within the cxx library.
  *
- * If we used the 'env()->heap()' with the C++ runtime, we would run into a
- * deadlock when a 'Ram_session::Alloc_failed' exception is thrown from within
- * 'Heap::alloc'. For creating the exception object, the C++ runtime calls
- * '__cxa_allocate_exception', which, in turn, calls 'malloc'. If our 'malloc'
- * implementation called 'env()->heap()->alloc()', we would end up in a
- * recursive attempt to obtain the 'env()->heap()' lock.
- *
- * By using a dedicated heap instance for the cxx library, we avoid this
- * circular condition.
+ * For creating the exception object, the C++ runtime calls
+ * '__cxa_allocate_exception', which, in turn, calls 'malloc'. The cxx library
+ * uses a local implementation of 'malloc' using a dedicated heap instance.
  */
-static Heap *cxx_heap()
+void Genode::init_cxx_heap(Env &env)
 {
 	/*
 	 * Exception frames are small. Hence, a small static backing store suffices
-	 * for the cxx heap partition in the normal case. The 'env()->ram_session'
+	 * for the cxx heap partition in the normal case. The 'env.ram()' session
 	 * is used only if the demand exceeds the capacity of the 'initial_block'.
 	 */
 	static char initial_block[1024*sizeof(long)];
-	static Heap heap(env()->ram_session(), env()->rm_session(),
-	                 Heap::UNLIMITED, initial_block, sizeof(initial_block));
-	return &heap;
+
+	cxx_heap_ptr = unmanaged_singleton<Heap>(&env.ram(), &env.rm(), Heap::UNLIMITED,
+	                                         initial_block, sizeof(initial_block));
 }
 
 
@@ -64,7 +77,7 @@ extern "C" void *malloc(unsigned size)
 	 */
 	unsigned long real_size = size + sizeof(Block_header);
 	void *addr = 0;
-	if (!cxx_heap()->alloc(real_size, &addr))
+	if (!cxx_heap().alloc(real_size, &addr))
 		return 0;
 
 	*(Block_header *)addr = real_size;
@@ -85,7 +98,7 @@ extern "C" void free(void *ptr)
 	if (!ptr) return;
 
 	unsigned long *addr = ((unsigned long *)ptr) - 1;
-	cxx_heap()->free(addr, *addr);
+	cxx_heap().free(addr, *addr);
 }
 
 

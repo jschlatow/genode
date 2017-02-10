@@ -83,6 +83,7 @@ drm_display_mode *
 Framebuffer::Driver::_preferred_mode(drm_connector *connector)
 {
 	using namespace Genode;
+	using Genode::size_t;
 
 	/* try to read configuration for connector */
 	try {
@@ -187,7 +188,8 @@ void Framebuffer::Driver::update_mode()
 	}
 
 	if (old._lx.addr)  Lx::iounmap(old._lx.addr);
-	if (old._lx.lx_fb) old._lx.lx_fb->funcs->destroy(old._lx.lx_fb);
+	/* drm_crtc.h in drm_framebuffer_funcs definition: use drm_fb_remove */
+	if (old._lx.lx_fb) drm_framebuffer_remove(old._lx.lx_fb);
 }
 
 
@@ -200,7 +202,17 @@ void Framebuffer::Driver::generate_report()
 		struct drm_connector *c;
 		list_for_each_entry(c, &lx_drm_device->mode_config.connector_list,
 		                    head)
-			if (list_empty(&c->modes)) c->funcs->fill_modes(c, 0, 0);
+		{
+			/*
+			 * All states unequal to disconnected are handled as connected,
+			 * since some displays stay in unknown state if not fill_modes()
+			 * is called at least one time.
+			 */
+			bool connected = c->status != connector_status_disconnected;
+			if ((connected && list_empty(&c->modes)) ||
+			    (!connected && !list_empty(&c->modes)))
+				c->funcs->fill_modes(c, 0, 0);
+		}
 	}
 
 	/* check for report configuration option */
@@ -1695,6 +1707,11 @@ int intel_guc_ucode_load(struct drm_device *dev)
 {
 	TRACE;
 	return 0;
+}
+
+void intel_lrc_irq_handler(struct intel_engine_cs *ring)
+{
+	TRACE;
 }
 
 } /* extern "C" */

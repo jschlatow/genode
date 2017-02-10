@@ -34,14 +34,15 @@ class Platform::Device_component : public Genode::Rpc_object<Platform::Device>,
 {
 	private:
 
-		Device_config                      _device_config;
-		Genode::addr_t                     _config_space;
-		Genode::Io_mem_session_capability  _io_mem_config_extended;
-		Config_access                      _config_access;
-		Genode::Rpc_entrypoint            *_ep;
-		Platform::Session_component       *_session;
-		unsigned short                     _irq_line;
-		Irq_session_component             *_irq_session;
+		Device_config                _device_config;
+		Genode::addr_t               _config_space;
+		Config_access                _config_access;
+		Genode::Rpc_entrypoint      &_ep;
+		Platform::Session_component &_session;
+		unsigned short               _irq_line;
+		Irq_session_component       *_irq_session = nullptr;
+
+		Genode::Lazy_volatile_object<Genode::Io_mem_connection> _io_mem_config_extended;
 
 		class Io_mem : public Genode::Io_mem_connection,
 		               public Genode::List<Io_mem>::Element
@@ -176,28 +177,22 @@ class Platform::Device_component : public Genode::Rpc_object<Platform::Device>,
 				                     Platform::Device::ACCESS_16BIT);
 		}
 
-
-	protected:
-
-		Genode::Rpc_entrypoint * ep() { return _ep; }
-
 	public:
 
 		/**
 		 * Constructor
 		 */
 		Device_component(Device_config device_config, Genode::addr_t addr,
-		                 Genode::Rpc_entrypoint *ep,
-		                 Platform::Session_component * session,
-		                 Genode::Allocator * md_alloc)
+		                 Genode::Rpc_entrypoint &ep,
+		                 Platform::Session_component &session,
+		                 Genode::Allocator &md_alloc)
 		:
 			_device_config(device_config), _config_space(addr),
 			_ep(ep), _session(session),
 			_irq_line(_device_config.read(&_config_access, PCI_IRQ_LINE,
 			                              Platform::Device::ACCESS_8BIT)),
-			_irq_session(nullptr),
-			_slab_ioport(md_alloc, &_slab_ioport_block_data),
-			_slab_iomem(md_alloc, &_slab_iomem_block_data)
+			_slab_ioport(&md_alloc, &_slab_ioport_block_data),
+			_slab_iomem(&md_alloc, &_slab_iomem_block_data)
 		{
 			for (unsigned i = 0; i < Device::NUM_RESOURCES; i++) {
 				_io_port_conn[i] = nullptr;
@@ -209,15 +204,14 @@ class Platform::Device_component : public Genode::Rpc_object<Platform::Device>,
 		/**
 		 * Constructor for non PCI devices
 		 */
-		Device_component(Genode::Rpc_entrypoint * ep,
-		                 Platform::Session_component * session, unsigned irq)
+		Device_component(Genode::Rpc_entrypoint &ep,
+		                 Platform::Session_component &session, unsigned irq)
 		:
 			_config_space(~0UL),
 			_ep(ep), _session(session),
 			_irq_line(irq),
-			_irq_session(nullptr),
-			_slab_ioport(0, &_slab_ioport_block_data),
-			_slab_iomem(0, &_slab_iomem_block_data)
+			_slab_ioport(nullptr, &_slab_ioport_block_data),
+			_slab_iomem(nullptr, &_slab_iomem_block_data)
 		{
 			for (unsigned i = 0; i < Device::NUM_RESOURCES; i++)
 				_io_port_conn[i] = nullptr;
@@ -229,7 +223,7 @@ class Platform::Device_component : public Genode::Rpc_object<Platform::Device>,
 		~Device_component()
 		{
 			if (_irq_session) {
-				_ep->dissolve(_irq_session);
+				_ep.dissolve(_irq_session);
 				_irq_session->~Irq_session();
 			}
 
@@ -242,9 +236,6 @@ class Platform::Device_component : public Genode::Rpc_object<Platform::Device>,
 					Genode::destroy(_slab_iomem, io_mem);
 				}
 			}
-
-			if (_io_mem_config_extended.valid())
-				Genode::env()->parent()->close(_io_mem_config_extended);
 
 			if (_device_config.valid())
 				_disable_bus_master_dma();
@@ -261,21 +252,18 @@ class Platform::Device_component : public Genode::Rpc_object<Platform::Device>,
 			if (_config_space == ~0UL)
 				return Genode::Io_mem_dataspace_capability();
 
-			if (!_io_mem_config_extended.valid()) {
+			if (!_io_mem_config_extended.constructed()) {
 				try {
-					Genode::Io_mem_connection conn(_config_space, 0x1000);
-					conn.on_destruction(Genode::Io_mem_connection::KEEP_OPEN);
-					_io_mem_config_extended = conn;
+					_io_mem_config_extended.construct(_config_space, 0x1000);
 				} catch (...) {
 					_config_space = ~0UL;
 				}
 			}
 
-			if (!_io_mem_config_extended.valid())
+			if (!_io_mem_config_extended.constructed())
 				return Genode::Io_mem_dataspace_capability();
 
-			Genode::Io_mem_session_client client(_io_mem_config_extended);
-			return client.dataspace();
+			return _io_mem_config_extended->dataspace();
 		}
 
 		/**************************

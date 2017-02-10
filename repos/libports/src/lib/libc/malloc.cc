@@ -68,6 +68,8 @@ class Malloc : public Genode::Allocator
 {
 	private:
 
+		typedef Genode::size_t size_t;
+
 		enum {
 			SLAB_START = 2,  /* 4 Byte (log2) */
 			SLAB_STOP  = 11, /* 2048 Byte (log2) */
@@ -192,7 +194,8 @@ extern "C" void *malloc(size_t size)
 extern "C" void *calloc(size_t nmemb, size_t size)
 {
 	void *addr = malloc(nmemb*size);
-	Genode::memset(addr, 0, nmemb*size);
+	if (addr)
+		Genode::memset(addr, 0, nmemb*size);
 	return addr;
 }
 

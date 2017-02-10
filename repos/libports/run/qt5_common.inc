@@ -73,7 +73,7 @@ proc qt5_start_nodes { feature_arg } {
 				<domain name="pointer" layer="1" label="no" content="client" origin="pointer" />
 				<domain name="default" layer="2" label="no" content="client" focus="click" hover="always" />
 
-				<policy label="pointer" domain="pointer"/>
+				<policy label_prefix="pointer" domain="pointer"/>
 				<default-policy domain="default"/>
 			</config>
 		</start>
@@ -93,17 +93,15 @@ proc qt5_start_nodes { feature_arg } {
 				<service name="ROM"/>
 			</provides>
 			<config>
-				<rom>
-					<policy label="layouter -> window_list"       report="wm -> window_list"/>
-					<policy label="layouter -> focus_request"     report="wm -> focus_request"/>
-					<policy label="decorator -> window_layout"    report="layouter -> window_layout"/>
-					<policy label="wm -> resize_request"          report="layouter -> resize_request"/>
-					<policy label="decorator -> pointer"          report="wm -> pointer"/>
-					<policy label="layouter -> hover"             report="decorator -> hover"/>
-					<policy label="wm -> focus"                   report="layouter -> focus"/>
-					<policy label="clipboard -> focus"            report="nitpicker -> focus"/>
-					<policy label="layouter -> decorator_margins" report="decorator -> decorator_margins"/>
-				</rom>
+				<policy label="layouter -> window_list"       report="wm -> window_list"/>
+				<policy label="layouter -> focus_request"     report="wm -> focus_request"/>
+				<policy label="decorator -> window_layout"    report="layouter -> window_layout"/>
+				<policy label="wm -> resize_request"          report="layouter -> resize_request"/>
+				<policy label="decorator -> pointer"          report="wm -> pointer"/>
+				<policy label="layouter -> hover"             report="decorator -> hover"/>
+				<policy label="wm -> focus"                   report="layouter -> focus"/>
+				<policy label="clipboard -> focus"            report="nitpicker -> focus"/>
+				<policy label="layouter -> decorator_margins" report="decorator -> decorator_margins"/>
 			</config>
 		</start>
 
@@ -113,8 +111,8 @@ proc qt5_start_nodes { feature_arg } {
 				<service name="Nitpicker"/>
 			</provides>
 			<config>
-				<policy label="decorator" role="decorator"/>
-				<policy label="layouter"  role="layouter"/>
+				<policy label_prefix="decorator" role="decorator"/>
+				<policy label_prefix="layouter"  role="layouter"/>
 			</config>
 			<route>
 				<any-service>

@@ -87,6 +87,13 @@ namespace Genode {
 	 */
 
 	extern void (*call_component_construct)(Genode::Env &) __attribute__((weak));
+
+	/*
+	 * This function is normally provided by the cxx library, which is not
+	 * used for lx_hybrid programs. For lx_hybrid programs, the exception
+	 * handling is initialized by the host system's regular startup code.
+	 */
+	void init_exception_handling(Env &) { }
 }
 
 static void lx_hybrid_component_construct(Genode::Env &env)
@@ -102,6 +109,12 @@ void (*Genode::call_component_construct)(Genode::Env &) = &lx_hybrid_component_c
  */
 void Genode::call_global_static_constructors() { }
 
+Genode::size_t Component::stack_size() __attribute__((weak));
+Genode::size_t Component::stack_size()
+{
+	return 16UL * 1024 * sizeof(Genode::addr_t);
+}
+
 /*
  * Hybrid components are not allowed to implement legacy main(). This enables
  * us to hook in and bootstrap components as usual.
@@ -109,7 +122,6 @@ void Genode::call_global_static_constructors() { }
 
 int main()
 {
-	Genode::init_log();
 	Genode::bootstrap_component();
 
 	/* never reached */
@@ -145,10 +157,12 @@ int main()
 #include <base/thread.h>
 #include <base/env.h>
 
-/* libc includes */
+/* host libc includes */
+#define size_t __SIZE_TYPE__ /* see comment in 'linux_syscalls.h' */
 #include <pthread.h>
 #include <stdio.h>
 #include <errno.h>
+#undef size_t
 
 using namespace Genode;
 

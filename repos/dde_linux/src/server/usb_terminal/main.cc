@@ -139,7 +139,7 @@ struct Usb::Pl2303_driver : Completion
 		Packet_descriptor  p     = iface.alloc(num_bytes);
 
 		memcpy(iface.content(p), dst, num_bytes);
-		iface.bulk_transfer(p, ep, 0, false, this);
+		iface.bulk_transfer(p, ep, false, this);
 
 		return num_bytes;
 	}
@@ -196,7 +196,7 @@ struct Usb::Pl2303_driver : Completion
 		Usb::Endpoint &ep = iface.endpoint(IN);
 		for (int i = 0; i < PACKET_BUFFER; i++) {
 			p = iface.alloc(ep.max_packet_size);
-			iface.bulk_transfer(p, ep, 0, false, this);
+			iface.bulk_transfer(p, ep, false, this);
 		}
 
 		/* send signal to terminal client */
@@ -317,7 +317,7 @@ struct Terminal::Main
 
 namespace Server {
 	char const *name()       { return "usb_terminal_ep"; };
-	size_t      stack_size() { return 2*1024*sizeof(long); }
+	size_t      stack_size() { return 16*1024*sizeof(long); }
 
 	void construct(Entrypoint &ep)
 	{

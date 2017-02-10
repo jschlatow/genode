@@ -22,15 +22,29 @@
 #include <util/endian.h>
 #include <net/netaddress.h>
 
+namespace Genode { class Output; }
+
 namespace Net
 {
 	enum { IPV4_ADDR_LEN = 4 };
-	typedef Network_address<IPV4_ADDR_LEN, '.', false> Ipv4_address;
+
+	class Ipv4_address;
 
 	class Ipv4_address_prefix;
 
 	class Ipv4_packet;
 }
+
+
+struct Net::Ipv4_address : Network_address<IPV4_ADDR_LEN, '.', false>
+{
+	Ipv4_address(Genode::uint8_t value = 0) : Network_address(value) { }
+
+	Ipv4_address(void *src) : Network_address(src) { }
+
+	bool valid() const { return *this != Ipv4_address(); }
+}
+__attribute__((packed));
 
 
 /**
@@ -159,12 +173,12 @@ class Net::Ipv4_packet
 
 		Genode::size_t   fragment_offset() { return _fragment_offset;      }
 		Genode::uint8_t  time_to_live()    { return _time_to_live;         }
-		Genode::uint8_t  protocol()        { return _protocol;             }
+		Genode::uint8_t  protocol() const  { return _protocol;             }
 
 		Genode::uint16_t checksum() { return host_to_big_endian(_header_checksum); }
 
-		Ipv4_address dst() { return Ipv4_address(&_dst_addr); }
-		Ipv4_address src() { return Ipv4_address(&_src_addr); }
+		Ipv4_address dst() const { return Ipv4_address((void *)&_dst_addr); }
+		Ipv4_address src() const { return Ipv4_address((void *)&_src_addr); }
 
 		template <typename T> T const * header() const { return (T const *)(this); }
 		template <typename T> T *       data()         { return (T *)(_data); }
@@ -192,8 +206,14 @@ class Net::Ipv4_packet
 		/**
 		 * Placement new.
 		 */
-		void * operator new(Genode::size_t size, void* addr) {
-			return addr; }
+		void * operator new(__SIZE_TYPE__ size, void* addr) { return addr; }
+
+
+		/*********
+		 ** log **
+		 *********/
+
+		void print(Genode::Output &output) const;
 
 } __attribute__((packed));
 
@@ -201,7 +221,13 @@ class Net::Ipv4_packet
 struct Net::Ipv4_address_prefix
 {
 	Ipv4_address    address;
-	Genode::uint8_t prefix = 0;
+	Genode::uint8_t prefix = 32;
+
+	bool valid() const { return address.valid(); }
+
+	void print(Genode::Output &output) const;
+
+	bool prefix_matches(Ipv4_address const &ip) const;
 };
 
 

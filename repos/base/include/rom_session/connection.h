@@ -28,15 +28,13 @@ class Genode::Rom_connection : public Connection<Rom_session>,
 
 		class Rom_connection_failed : public Parent::Exception { };
 
+		enum { RAM_QUOTA = 4096UL };
+
 	private:
 
 		Rom_session_capability _session(Parent &parent, char const *label)
 		{
-			try { return session("ram_quota=4K, label=\"%s\"", label); }
-			catch (...) {
-				error("Could not open ROM session for \"", label, "\"");
-				throw Rom_connection_failed();
-			}
+			return session("ram_quota=%ld, label=\"%s\"", RAM_QUOTA, label);
 		}
 
 	public:
@@ -49,10 +47,14 @@ class Genode::Rom_connection : public Connection<Rom_session>,
 		 * \throw Rom_connection_failed
 		 */
 		Rom_connection(Env &env, const char *label)
-		:
+		try :
 			Connection<Rom_session>(env, _session(env.parent(), label)),
 			Rom_session_client(cap())
 		{ }
+		catch (...) {
+			error("Could not open ROM session for \"", label, "\"");
+			throw Rom_connection_failed();
+		}
 
 		/**
 		 * Constructor
@@ -62,10 +64,14 @@ class Genode::Rom_connection : public Connection<Rom_session>,
 		 *              argument instead
 		 */
 		Rom_connection(const char *label)
-		:
+		try :
 			Connection<Rom_session>(_session(*env()->parent(), label)),
 			Rom_session_client(cap())
 		{ }
+		catch (...) {
+			error("Could not open ROM session for \"", label, "\"");
+			throw Rom_connection_failed();
+		}
 };
 
 #endif /* _INCLUDE__ROM_SESSION__CONNECTION_H_ */

@@ -24,12 +24,12 @@
 #include <base/internal/globals.h>
 
 /* core includes */
+#include <boot_modules.h>
 #include <core_parent.h>
 #include <platform.h>
 #include <platform_thread.h>
 #include <platform_pd.h>
 #include <util.h>
-#include <multiboot.h>
 
 /* Fiasco includes */
 namespace Fiasco {
@@ -41,8 +41,6 @@ namespace Fiasco {
 #include <l4/sys/types.h>
 #include <l4/sys/utcb.h>
 #include <l4/sys/scheduler.h>
-
-static l4_kernel_info_t *kip;
 }
 
 using namespace Genode;
@@ -126,7 +124,9 @@ static void _core_pager_loop()
 
 Platform::Sigma0::Sigma0(Cap_index* i)
 :
-	Pager_object(Cpu_session_capability(), Thread_capability(), 0, Affinity::Location())
+	Pager_object(Cpu_session_capability(), Thread_capability(),
+	             0, Affinity::Location(), Session_label(),
+	             Cpu_session::Name("sigma0"))
 {
 	/*
 	 * We use the Pager_object here in a slightly different manner,
@@ -139,7 +139,9 @@ Platform::Sigma0::Sigma0(Cap_index* i)
 Platform::Core_pager::Core_pager(Platform_pd *core_pd, Sigma0 *sigma0)
 :
 	Platform_thread("core.pager"),
-	Pager_object(Cpu_session_capability(), Thread_capability(), 0, Affinity::Location())
+	Pager_object(Cpu_session_capability(), Thread_capability(),
+	             0, Affinity::Location(), Session_label(),
+	             Cpu_session::Name(name()))
 {
 	Platform_thread::pager(sigma0);
 
@@ -249,6 +251,10 @@ static Fiasco::l4_kernel_info_t *sigma0_map_kip()
 {
 	using namespace Fiasco;
 
+	static l4_kernel_info_t *kip = nullptr;
+
+	if (kip) return kip;
+
 	/* signal we want to map the KIP */
 	l4_utcb_mr()->mr[0] = SIGMA0_REQ_KIP;
 
@@ -269,8 +275,9 @@ static Fiasco::l4_kernel_info_t *sigma0_map_kip()
 
 	if (!ret)
 		panic("kip mapping failed");
-
-	return (l4_kernel_info_t*) ret;
+	else
+		kip = (l4_kernel_info_t*) ret;
+	return kip;
 }
 
 
@@ -339,7 +346,7 @@ void Platform::_setup_basics()
 {
 	using namespace Fiasco;
 
-	kip = sigma0_map_kip();
+	l4_kernel_info_t * kip = sigma0_map_kip();
 
 	if (kip->magic != L4_KERNEL_INFO_MAGIC)
 		panic("Sigma0 mapped something but not the KIP");
@@ -350,7 +357,6 @@ void Platform::_setup_basics()
 	log("  version: ", Hex(kip->version));
 
 	/* add KIP as ROM module */
-	_kip_rom = Rom_module((addr_t)kip, L4_PAGESIZE, "l4v2_kip");
 	_rom_fs.insert(&_kip_rom);
 
 	/* update multi-boot info pointer from KIP */
@@ -393,8 +399,6 @@ void Platform::_setup_basics()
 	/* remove KIP and MBI area from region and IO_MEM allocator */
 	remove_region(Region((addr_t)kip, (addr_t)kip + L4_PAGESIZE), _region_alloc);
 	remove_region(Region((addr_t)kip, (addr_t)kip + L4_PAGESIZE), _io_mem_alloc);
-	remove_region(Region(mb_info_addr, mb_info_addr + _mb_info.size()), _region_alloc);
-	remove_region(Region(mb_info_addr, mb_info_addr + _mb_info.size()), _io_mem_alloc);
 
 	/* remove core program image memory from region and IO_MEM allocator */
 	addr_t img_start = (addr_t) &_prog_img_beg;
@@ -409,33 +413,13 @@ void Platform::_setup_basics()
 
 void Platform::_setup_rom()
 {
-	Rom_module rom;
-
-	for (unsigned i = FIRST_ROM; i < _mb_info.num_modules();  i++) {
-		if (!(rom = _mb_info.get_module(i)).valid()) continue;
-
-		Rom_module *new_rom = new(core_mem_alloc()) Rom_module(rom);
-		_rom_fs.insert(new_rom);
-
-		/* map module */
-		touch_ro((const void*)new_rom->addr(), new_rom->size());
-
-		/* zero remainder of last ROM page */
-		size_t count = L4_PAGESIZE - rom.size() % L4_PAGESIZE;
-		if (count != L4_PAGESIZE)
-			memset(reinterpret_cast<void *>(rom.addr() + rom.size()), 0, count);
-
-		/* remove ROM area from region and IO_MEM allocator */
-		remove_region(Region(new_rom->addr(), new_rom->addr() + new_rom->size()), _region_alloc);
-		remove_region(Region(new_rom->addr(), new_rom->addr() + new_rom->size()), _io_mem_alloc);
-
-		/* add area to core-accessible ranges */
-		add_region(Region(new_rom->addr(), new_rom->addr() + new_rom->size()), _core_address_ranges());
+	/* add boot modules to ROM FS */
+	Boot_modules_header * header = &_boot_modules_headers_begin;
+	for (; header < &_boot_modules_headers_end; header++) {
+		Rom_module * rom = new (core_mem_alloc())
+			Rom_module(header->base, header->size, (const char*)header->name);
+		_rom_fs.insert(rom);
 	}
-
-	Rom_module *kip_rom = new(core_mem_alloc())
-		Rom_module((addr_t)Fiasco::kip, L4_PAGESIZE, "kip");
-	_rom_fs.insert(kip_rom);
 }
 
 
@@ -443,7 +427,7 @@ Platform::Platform() :
 	_ram_alloc(nullptr), _io_mem_alloc(core_mem_alloc()),
 	_io_port_alloc(core_mem_alloc()), _irq_alloc(core_mem_alloc()),
 	_region_alloc(core_mem_alloc()), _cap_id_alloc(core_mem_alloc()),
-	_mb_info(sigma0_map_kip()->user_ptr, true),
+	_kip_rom(Rom_module((addr_t)sigma0_map_kip(), L4_PAGESIZE, "l4v2_kip")),
 	_sigma0(cap_map()->insert(_cap_id_alloc.alloc(), Fiasco::L4_BASE_PAGER_CAP))
 {
 	/*
@@ -461,13 +445,13 @@ Platform::Platform() :
 	_setup_irq_alloc();
 	_setup_rom();
 
-	log(":ram_alloc: ");    _ram_alloc()->dump_addr_tree();
-	log(":region_alloc: "); _region_alloc()->dump_addr_tree();
-	log(":io_mem: ");       _io_mem_alloc()->dump_addr_tree();
-	log(":io_port: ");      _io_port_alloc()->dump_addr_tree();
-	log(":irq: ");          _irq_alloc()->dump_addr_tree();
-	log(":rom_fs: ");       _rom_fs.print_fs();
-	log(":core ranges: ");  _core_address_ranges()()->dump_addr_tree();
+	log(":ram_alloc: ",    _ram_alloc);
+	log(":region_alloc: ", _region_alloc);
+	log(":io_mem: ",       _io_mem_alloc);
+	log(":io_port: ",      _io_port_alloc);
+	log(":irq: ",          _irq_alloc);
+	log(":rom_fs: ",       _rom_fs);
+	log(":core ranges: ",  _core_address_ranges());
 
 	Core_cap_index* pdi =
 		reinterpret_cast<Core_cap_index*>(cap_map()->insert(_cap_id_alloc.alloc(), Fiasco::L4_BASE_TASK_CAP));

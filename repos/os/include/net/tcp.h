@@ -50,7 +50,7 @@ class Net::Tcp_packet
 		uint16_t _window_size;
 		uint16_t _checksum;
 		uint16_t _urgent_ptr;
-		uint32_t _data[];
+		uint32_t _data[0];
 
 		struct Flags : Genode::Register<8>
 		{
@@ -78,9 +78,9 @@ class Net::Tcp_packet
 		void src_port(Genode::uint16_t p) { _src_port = host_to_big_endian(p); }
 		void dst_port(Genode::uint16_t p) { _dst_port = host_to_big_endian(p); }
 
-		uint16_t src_port() { return host_to_big_endian(_src_port); }
-		uint16_t dst_port() { return host_to_big_endian(_dst_port); }
-		uint16_t flags()    { return host_to_big_endian(_flags); }
+		uint16_t src_port() const { return host_to_big_endian(_src_port); }
+		uint16_t dst_port() const { return host_to_big_endian(_dst_port); }
+		uint16_t flags()    const { return host_to_big_endian(_flags); }
 
 		Tcp_packet(size_t size) {
 			if (size < sizeof(Tcp_packet)) { throw No_tcp_packet(); } }
@@ -134,7 +134,14 @@ class Net::Tcp_packet
 		/**
 		 * Placement new
 		 */
-		void * operator new(size_t size, void * addr) { return addr; }
+		void * operator new(__SIZE_TYPE__ size, void * addr) { return addr; }
+
+
+		/*********
+		 ** log **
+		 *********/
+
+		void print(Genode::Output &output) const;
 
 } __attribute__((packed));
 

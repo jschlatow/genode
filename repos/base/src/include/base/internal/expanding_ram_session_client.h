@@ -26,8 +26,8 @@ namespace Genode { class Expanding_ram_session_client; }
 
 struct Genode::Expanding_ram_session_client : Upgradeable_client<Genode::Ram_session_client>
 {
-	Expanding_ram_session_client(Ram_session_capability cap)
-	: Upgradeable_client<Genode::Ram_session_client>(cap) { }
+	Expanding_ram_session_client(Ram_session_capability cap, Parent::Client::Id id)
+	: Upgradeable_client<Genode::Ram_session_client>(cap, id) { }
 
 	Ram_dataspace_capability alloc(size_t size, Cache_attribute cached = UNCACHED) override
 	{
@@ -60,7 +60,7 @@ struct Genode::Expanding_ram_session_client : Upgradeable_client<Genode::Ram_ses
 				 * a bit too much quota for the most time.
 				 */
 				enum { ALLOC_OVERHEAD = 4096U };
-				Genode::snprintf(buf, sizeof(buf), "ram_quota=%zu",
+				Genode::snprintf(buf, sizeof(buf), "ram_quota=%lu",
 				                 size + ALLOC_OVERHEAD);
 				env()->parent()->resource_request(buf);
 			},
@@ -83,7 +83,7 @@ struct Genode::Expanding_ram_session_client : Upgradeable_client<Genode::Ram_ses
 			 * XXX Let transfer_quota throw 'Ram_session::Quota_exceeded'
 			 */
 			char buf[128];
-			Genode::snprintf(buf, sizeof(buf), "ram_quota=%zu", amount);
+			Genode::snprintf(buf, sizeof(buf), "ram_quota=%lu", amount);
 			env()->parent()->resource_request(buf);
 		}
 		return ret;

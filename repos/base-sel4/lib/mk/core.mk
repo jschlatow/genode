@@ -1,5 +1,3 @@
-TARGET       = core
-
 GEN_CORE_DIR = $(BASE_DIR)/src/core
 
 SRC_CC      += \
@@ -37,7 +35,7 @@ SRC_CC      += \
                capability_space.cc \
                pager.cc
 
-LIBS        += core_printf base-common syscall
+LIBS        += core_log base-common syscall
 
 INC_DIR     += $(REP_DIR)/src/core/include $(GEN_CORE_DIR)/include \
                $(REP_DIR)/src/include      $(BASE_DIR)/src/include

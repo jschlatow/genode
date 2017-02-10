@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2013-2014 Genode Labs GmbH
+ * Copyright (C) 2013-2016 Genode Labs GmbH
  *
  * This file is distributed under the terms of the GNU General Public License
  * version 2.
@@ -17,7 +17,6 @@
 
 /* Genode includes */
 #include <base/log.h>
-#include <base/semaphore.h>
 #include <util/flex_iterator.h>
 #include <rom_session/connection.h>
 #include <timer_session/connection.h>
@@ -88,7 +87,6 @@ class Vcpu_handler : public Vmm::Vcpu_dispatcher<pthread>,
 		bool _irq_win;
 
 		unsigned int      _cpu_id;
-		Genode::Semaphore _halt_sem;
 
 		unsigned int _last_inj_info;
 		unsigned int _last_inj_error;
@@ -201,9 +199,23 @@ class Vcpu_handler : public Vmm::Vcpu_dispatcher<pthread>,
 				Nova::reply(_stack_reply);
 			}
 
-			/* nothing to do at all - continue hardware accelerated */
+			unsigned long utcb_tpr    = utcb->read_tpr();
+			bool interrupt_pending    = false;
+			uint8_t tpr               = 0;
+			uint8_t pending_interrupt = 0;
+			PDMApicGetTPR(_current_vcpu, &tpr, &interrupt_pending, &pending_interrupt);
 
-			Assert(!_irq_win);
+			/* we have a pending interrupt but nothing should be requested ? */
+			if (interrupt_pending) {
+				PDMApicSetTPR(_current_vcpu, utcb_tpr);
+
+				utcb->mtd = Nova::Mtd::FPU;
+				_irq_win = check_to_request_irq_window(utcb, _current_vcpu);
+				if (_irq_win)
+					Nova::reply(_stack_reply);
+			}
+
+			/* nothing to do at all - continue hardware accelerated */
 
 			/*
 			 * Print a debug message if there actually IS something to do now.
@@ -212,7 +224,14 @@ class Vcpu_handler : public Vmm::Vcpu_dispatcher<pthread>,
 			 * by a recall request, but we haven't verified this for each flag
 			 * yet.
 			 */
+			utcb->mtd = Nova::Mtd::FPU;
 			continue_hw_accelerated(utcb, true);
+
+			if (_irq_win) {
+				_irq_win = false;
+				utcb->inj_info  = IRQ_INJ_NONE;
+				utcb->mtd      |= Nova::Mtd::INJ;
+			}
 
 			Nova::reply(_stack_reply);
 		}
@@ -325,6 +344,13 @@ class Vcpu_handler : public Vmm::Vcpu_dispatcher<pthread>,
 		{
 			PCPUMCTX pCtx  = CPUMQueryGuestCtxPtr(pVCpu);
 
+			/* avoid utcb corruption by requesting tpr state early */
+			bool interrupt_pending    = false;
+			uint8_t tpr               = 0;
+			uint8_t pending_interrupt = 0;
+			PDMApicGetTPR(pVCpu, &tpr, &interrupt_pending, &pending_interrupt);
+
+			/* don't call function hereafter which may corrupt the utcb ! */
 			using namespace Nova;
 
 			utcb->mtd |= Mtd::EIP;
@@ -421,10 +447,6 @@ class Vcpu_handler : public Vmm::Vcpu_dispatcher<pthread>,
 			utcb->write_kernel_gs_base(pCtx->msrKERNELGSBASE);
 
 			/* from HMVMXR0.cpp */
-			bool interrupt_pending    = false;
-			uint8_t tpr               = 0;
-			uint8_t pending_interrupt = 0;
-			PDMApicGetTPR(pVCpu, &tpr, &interrupt_pending, &pending_interrupt);
 			utcb->mtd |= Mtd::TPR;
 			utcb->write_tpr(tpr);
 			utcb->write_tpr_threshold(0);
@@ -436,8 +458,6 @@ class Vcpu_handler : public Vmm::Vcpu_dispatcher<pthread>,
 				else
 					utcb->write_tpr_threshold(tpr_priority);
 			}
-
-			Assert(!(VMCPU_FF_IS_SET(pVCpu, VMCPU_FF_INHIBIT_INTERRUPTS)));
 
 			return true;
 		}
@@ -514,7 +534,21 @@ class Vcpu_handler : public Vmm::Vcpu_dispatcher<pthread>,
 			if (pCtx->msrKERNELGSBASE != utcb->read_kernel_gs_base())
 				CPUMSetGuestMsr(pVCpu, MSR_K8_KERNEL_GS_BASE, utcb->read_kernel_gs_base());
 
-			PDMApicSetTPR(pVCpu, utcb->read_tpr());
+			const uint32_t tpr = utcb->read_tpr();
+
+			/* reset message transfer descriptor for next invocation */
+			Assert (!(utcb->inj_info & IRQ_INJ_VALID_MASK));
+			/* Reset irq window next time if we are still requesting it */
+			next_utcb.mtd = _irq_win ? Nova::Mtd::INJ : 0;
+
+			next_utcb.intr_state = utcb->intr_state;
+			next_utcb.ctrl[0]    = utcb->ctrl[0];
+			next_utcb.ctrl[1]    = utcb->ctrl[1];
+
+			if (next_utcb.intr_state & 3) {
+				next_utcb.intr_state &= ~3U;
+				next_utcb.mtd        |= Nova::Mtd::STA;
+			}
 
 			VMCPU_FF_CLEAR(pVCpu, VMCPU_FF_TO_R3);
 
@@ -529,12 +563,18 @@ class Vcpu_handler : public Vmm::Vcpu_dispatcher<pthread>,
 			} else
 				VMCPU_FF_CLEAR(pVCpu, VMCPU_FF_INHIBIT_INTERRUPTS);
 
+			/* functions that corrupt utcb (e.g. when logging enabled) */
+			PDMApicSetTPR(pVCpu, tpr);
+
 			return true;
 		}
 
 
 		inline bool check_to_request_irq_window(Nova::Utcb * utcb, PVMCPU pVCpu)
 		{
+			if (VMCPU_FF_IS_SET(pVCpu, VMCPU_FF_INHIBIT_INTERRUPTS))
+				return false;
+
 			if (!TRPMHasTrap(pVCpu) &&
 				!VMCPU_FF_IS_PENDING(pVCpu, (VMCPU_FF_INTERRUPT_APIC |
 				                             VMCPU_FF_INTERRUPT_PIC)))
@@ -562,8 +602,10 @@ class Vcpu_handler : public Vmm::Vcpu_dispatcher<pthread>,
 			Assert(_irq_win);
 			_irq_win = false;
 
-			if (!TRPMHasTrap(pVCpu)) {
+			/* request current tpr state from guest, it may block IRQs */
+			PDMApicSetTPR(pVCpu, utcb->read_tpr());
 
+			if (!TRPMHasTrap(pVCpu)) {
 				bool res = VMCPU_FF_TEST_AND_CLEAR(pVCpu, VMCPU_FF_INTERRUPT_NMI);
 				Assert(!res);
 
@@ -576,6 +618,13 @@ class Vcpu_handler : public Vmm::Vcpu_dispatcher<pthread>,
 
 					rc = TRPMAssertTrap(pVCpu, irq, TRPM_HARDWARE_INT);
 					Assert(RT_SUCCESS(rc));
+				}
+
+				if (!TRPMHasTrap(pVCpu)) {
+					/* happens if PDMApicSetTPR (see above) mask IRQ */
+					utcb->inj_info = IRQ_INJ_NONE;
+					utcb->mtd      = Nova::Mtd::INJ | Nova::Mtd::FPU;
+					Nova::reply(_stack_reply);
 				}
 			}
 
@@ -631,8 +680,6 @@ class Vcpu_handler : public Vmm::Vcpu_dispatcher<pthread>,
 
 		inline bool continue_hw_accelerated(Nova::Utcb * utcb, bool verbose = false)
 		{
-			Assert(!(VMCPU_FF_IS_SET(_current_vcpu, VMCPU_FF_INHIBIT_INTERRUPTS)));
-
 			uint32_t check_vm = VM_FF_HM_TO_R3_MASK | VM_FF_REQUEST
 			                    | VM_FF_PGM_POOL_FLUSH_PENDING
 			                    | VM_FF_PDM_DMA;
@@ -711,16 +758,17 @@ class Vcpu_handler : public Vmm::Vcpu_dispatcher<pthread>,
 		};
 
 
-		Vcpu_handler(size_t stack_size, const pthread_attr_t *attr,
+		Vcpu_handler(Genode::Env &env, size_t stack_size, const pthread_attr_t *attr,
 		             void *(*start_routine) (void *), void *arg,
 		             Genode::Cpu_session * cpu_session,
 		             Genode::Affinity::Location location,
-		             unsigned int cpu_id)
+		             unsigned int cpu_id, const char * name,
+		             Genode::Pd_session_capability pd_vcpu)
 		:
-			Vmm::Vcpu_dispatcher<pthread>(stack_size, *Genode::env()->pd_session(),
-			                              cpu_session, location, 
-			                              attr ? *attr : 0, start_routine, arg),
-			_vcpu(cpu_session, location),
+			Vmm::Vcpu_dispatcher<pthread>(env, stack_size, cpu_session, location,
+			                              attr ? *attr : 0, start_routine, arg,
+			                              name),
+			_vcpu(cpu_session, location, pd_vcpu),
 			_ec_sel(Genode::cap_map()->insert()),
 			_irq_win(false),
 			_cpu_id(cpu_id)
@@ -743,14 +791,18 @@ class Vcpu_handler : public Vmm::Vcpu_dispatcher<pthread>,
 			}
 		}
 
-		void halt()
+		void halt(Genode::uint64_t tsc_abs)
 		{
-			_halt_sem.down();
+			Assert(utcb() == Thread::myself()->utcb());
+
+			Genode::addr_t sem = native_thread().exc_pt_sel + Nova::SM_SEL_EC;
+			Nova::sm_ctrl(sem, Nova::SEMAPHORE_DOWNZERO, tsc_abs);
 		}
 
 		void wake_up()
 		{
-			_halt_sem.up();
+			Genode::addr_t sem = native_thread().exc_pt_sel + Nova::SM_SEL_EC;
+			Nova::sm_ctrl(sem, Nova::SEMAPHORE_UP);
 		}
 
 		int run_hw(PVMR0 pVMR0)
@@ -827,20 +879,6 @@ class Vcpu_handler : public Vmm::Vcpu_dispatcher<pthread>,
 
 				Genode::error("saving vCPU state failed");
 				return VERR_INTERNAL_ERROR;
-			}
-
-			/* reset message transfer descriptor for next invocation */
-			Assert (!(utcb->inj_info & IRQ_INJ_VALID_MASK));
-			/* Reset irq window next time if we are still requesting it */
-			next_utcb.mtd = _irq_win ? Mtd::INJ : 0;
-
-			next_utcb.intr_state = utcb->intr_state;
-			next_utcb.ctrl[0]    = utcb->ctrl[0];
-			next_utcb.ctrl[1]    = utcb->ctrl[1];
-
-			if (next_utcb.intr_state & 3) {
-				next_utcb.intr_state &= ~3U;
-				next_utcb.mtd        |= Mtd::STA;
 			}
 
 #ifdef VBOX_WITH_REM

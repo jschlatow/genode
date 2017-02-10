@@ -78,9 +78,13 @@ set vdi_image "${flavor}.vdi"
 set use_ram_fs 0
 set use_overlay_from_disk 0
 set overlay_image "overlay_${flavor}.vdi"
+set use_rumpfs 1
 
 set use_usb 0
 set use_ps2 [have_spec ps2]
+
+set use_vms 1
+set use_cpu_load 0
 
 #
 # Create .bat file to be executed by Win VM
@@ -144,7 +148,7 @@ set config_of_app {
 		<resource name="RAM" quantum="5M"/>
 		<provides> <service name="Terminal"/> </provides>
 		<config>
-			<policy label="noux" port="8888"/>
+			<policy label_prefix="noux" port="8888"/>
 		</config>
 	</start>
 
@@ -304,7 +308,7 @@ puts $noux_id "sleep 5"
 puts $noux_id "done"
 
 # Wait until VM signaled shutdown state
-run_genode_until {\[init -\> vbox\] EMT      PDMR3PowerOff: .* ns run time} 120 $serial_id
+run_genode_until {\[init\] child "vbox" exited with exit value 0} 120 $serial_id
 
 # SHA1 of copied file
 puts $noux_id "sha1sum to/test.bin"

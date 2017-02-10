@@ -172,7 +172,7 @@ struct Cpu_sampler::Main : Thread_list_change_handler
 	Main(Genode::Env &env)
 	: env(env),
 	  alloc(env.ram(), env.rm()),
-	  cpu_root(env.ep().rpc_ep(), env.ep().rpc_ep(), alloc, thread_list, *this),
+	  cpu_root(env.ep().rpc_ep(), env.ep().rpc_ep(), env, alloc, thread_list, *this),
 	  config(env, "config")
 	{
 		/*
@@ -199,7 +199,4 @@ struct Cpu_sampler::Main : Thread_list_change_handler
  ** Component **
  ***************/
 
-namespace Component {
-	Genode::size_t stack_size() { return 4*1024*sizeof(Genode::addr_t); }
-	void construct(Genode::Env &env) { static Cpu_sampler::Main inst(env); }
-}
+void Component::construct(Genode::Env &env) { static Cpu_sampler::Main inst(env); }

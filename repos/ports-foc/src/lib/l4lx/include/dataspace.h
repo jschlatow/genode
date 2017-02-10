@@ -115,9 +115,7 @@ namespace L4lx {
 					                                         use_local_addr,
 					                                         local_addr,
 					                                         executable); },
-				[&] () {
-					Genode::env()->parent()->upgrade(Rm_connection::cap(), "ram_quota=8K");
-				});
+				[&] () { Rm_connection::upgrade_ram(8*1024); });
 		}
 	};
 
@@ -157,7 +155,7 @@ namespace L4lx {
 				Genode::size_t ram_avail = Genode::env()->ram_session()->avail();
 				if (greedy && ram_avail < 4*CHUNK_SIZE) {
 					char buf[128];
-					Genode::snprintf(buf, sizeof(buf), "ram_quota=%zd",
+					Genode::snprintf(buf, sizeof(buf), "ram_quota=%ld",
 					                 4*CHUNK_SIZE - ram_avail);
 					Genode::env()->parent()->resource_request(buf);
 				}

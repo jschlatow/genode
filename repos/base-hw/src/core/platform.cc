@@ -13,11 +13,10 @@
  */
 
 /* Genode includes */
-#include <base/printf.h>
-#include <base/sleep.h>
 #include <base/log.h>
 
 /* core includes */
+#include <boot_modules.h>
 #include <core_parent.h>
 #include <map_local.h>
 #include <platform.h>
@@ -38,22 +37,6 @@ extern int _prog_img_beg;
 extern int _prog_img_end;
 
 void __attribute__((weak)) Kernel::init_trustzone(Pic & pic) { }
-
-/**
- * Format of a boot-module header
- */
-struct Bm_header
-{
-	long name; /* physical address of null-terminated string */
-	long base; /* physical address of module data */
-	long size; /* size of module data in bytes */
-};
-
-extern Bm_header _boot_modules_headers_begin;
-extern Bm_header _boot_modules_headers_end;
-extern int       _boot_modules_binaries_begin;
-extern int       _boot_modules_binaries_end;
-
 
 /**
  * Helper to initialise allocators through include/exclude region lists
@@ -133,7 +116,6 @@ Platform::Platform()
 	 * Core mem alloc must come first because it is
 	 * used by the other allocators.
 	 */
-	enum { VERBOSE = 0 };
 	init_alloc(_core_mem_alloc.phys_alloc(), _ram_regions,
 	           _core_only_ram_regions, get_page_size_log2());
 	init_alloc(_core_mem_alloc.virt_alloc(), virt_region,
@@ -155,7 +137,7 @@ Platform::Platform()
 	_init_io_mem_alloc();
 
 	/* add boot modules to ROM FS */
-	Bm_header * header = &_boot_modules_headers_begin;
+	Boot_modules_header * header = &_boot_modules_headers_begin;
 	for (; header < &_boot_modules_headers_end; header++) {
 		Rom_module * rom_module = new (core_mem_alloc())
 			Rom_module(header->base, header->size, (const char*)header->name);
@@ -165,32 +147,12 @@ Platform::Platform()
 	_init_additional();
 
 	/* print ressource summary */
-	if (VERBOSE) {
-		printf("Core virtual memory allocator\n");
-		printf("---------------------\n");
-		(*_core_mem_alloc.virt_alloc())()->dump_addr_tree();
-		printf("\n");
-		printf("RAM memory allocator\n");
-		printf("---------------------\n");
-		(*_core_mem_alloc.phys_alloc())()->dump_addr_tree();
-		printf("\n");
-		printf("IO memory allocator\n");
-		printf("-------------------\n");
-		_io_mem_alloc()->dump_addr_tree();
-		printf("\n");
-		printf("IO port allocator\n");
-		printf("-------------------\n");
-		_io_port_alloc()->dump_addr_tree();
-		printf("\n");
-		printf("IRQ allocator\n");
-		printf("-------------------\n");
-		_irq_alloc()->dump_addr_tree();
-		printf("\n");
-		printf("ROM filesystem\n");
-		printf("--------------\n");
-		_rom_fs.print_fs();
-		printf("\n");
-	}
+	log(":virt_alloc: ",   *_core_mem_alloc.virt_alloc());
+	log(":phys_alloc: ",   *_core_mem_alloc.phys_alloc());
+	log(":io_mem_alloc: ",  _io_mem_alloc);
+	log(":io_port_alloc: ", _io_port_alloc);
+	log(":irq_alloc: ",     _irq_alloc);
+	log(":rom_fs: ",        _rom_fs);
 }
 
 

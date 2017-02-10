@@ -1,7 +1,7 @@
 /*
  * \brief  I/O memory backend for ACPICA library
  * \author Alexander Boettcher
- *
+ * \date   2016-11-14
  */
 
 /*
@@ -12,11 +12,12 @@
  */
 
 #include <base/log.h>
-#include <base/env.h>
 #include <util/misc_math.h>
 
 #include <io_mem_session/connection.h>
 #include <rm_session/connection.h>
+
+#include "env.h"
 
 extern "C" {
 #include "acpi.h"
@@ -31,25 +32,23 @@ extern "C" {
 		return retval; \
 	}
 
-namespace Acpica {
-class Io_mem;
-};
+namespace Acpica { class Io_mem; };
 
 class Acpica::Io_mem
 {
 	private:
 
-		ACPI_PHYSICAL_ADDRESS _phys;
-		ACPI_SIZE             _size;
-		Genode::uint8_t *     _virt;
-		Genode::Io_mem_session_capability _io_mem;
-		unsigned              _ref;
+		ACPI_PHYSICAL_ADDRESS      _phys;
+		ACPI_SIZE                  _size;
+		Genode::uint8_t           *_virt   = nullptr;
+		Genode::Io_mem_connection *_io_mem = nullptr;
+		unsigned                   _ref;
 
 		static Acpica::Io_mem _ios[16];
 
 	public:
 
-		bool valid() const { return _io_mem.valid(); }
+		bool valid() const { return _io_mem != nullptr; }
 		bool refs() const { return _ref != ~0U; }
 		bool contains_virt (const Genode::uint8_t * v, const ACPI_SIZE s) const
 		{
@@ -76,14 +75,14 @@ class Acpica::Io_mem
 
 		void invalidate(ACPI_SIZE s)
 		{
-			if (_io_mem.valid() && refs())
-				Genode::env()->parent()->close(_io_mem);
+			if (_io_mem && refs())
+				Genode::destroy(Acpica::heap(), _io_mem);
 
 			ACPI_PHYSICAL_ADDRESS const p = _phys;
 
-			_phys = _size = 0;
-			_virt = nullptr;
-			_io_mem = Genode::Io_mem_session_capability();
+			_phys   = _size = 0;
+			_virt   = nullptr;
+			_io_mem = nullptr;
 
 			if (refs())
 				return;
@@ -139,9 +138,8 @@ class Acpica::Io_mem
 				io_mem._ref  = r;
 				io_mem._virt = 0;
 
-				Genode::Io_mem_connection io(io_mem._phys, io_mem._size);
-				io.on_destruction(Genode::Io_mem_connection::KEEP_OPEN);
-				io_mem._io_mem = io;
+				io_mem._io_mem = new (Acpica::heap())
+					Genode::Io_mem_connection(io_mem._phys, io_mem._size);
 
 				return &io_mem;
 			});
@@ -153,14 +151,18 @@ class Acpica::Io_mem
 			if (!io_mem)
 				return 0UL;
 
-			io_mem->_virt = Genode::env()->rm_session()->attach(Genode::Io_mem_session_client(io_mem->_io_mem).dataspace(), io_mem->_size);
+			io_mem->_virt = Acpica::env().rm().attach(io_mem->_io_mem->dataspace(),
+			                                          io_mem->_size);
 
 			return reinterpret_cast<Genode::addr_t>(io_mem->_virt);
 		}
 
 		Genode::addr_t pre_expand(ACPI_PHYSICAL_ADDRESS p, ACPI_SIZE s)
 		{
-			Genode::env()->parent()->close(_io_mem);
+			if (_io_mem)
+				Genode::destroy(Acpica::heap(), _io_mem);
+
+			_io_mem = nullptr;
 
 			Genode::addr_t xsize = _phys - p + _size;
 			if (!allocate(p, xsize, _ref))
@@ -171,7 +173,8 @@ class Acpica::Io_mem
 
 		Genode::addr_t post_expand(ACPI_PHYSICAL_ADDRESS p, ACPI_SIZE s)
 		{
-			Genode::env()->parent()->close(_io_mem);
+			if (_io_mem)
+				Genode::destroy(Acpica::heap(), _io_mem);
 
 			ACPI_SIZE xsize = p + s - _phys;
 			if (!allocate(_phys, xsize, _ref))
@@ -191,7 +194,7 @@ class Acpica::Io_mem
 				    !io_mem.contains_phys(p, s))
 					return 0UL;
 
-				Genode::Io_mem_dataspace_capability const io_ds = Genode::Io_mem_session_client(io_mem._io_mem).dataspace();
+				Genode::Io_mem_dataspace_capability const io_ds = io_mem._io_mem->dataspace();
 
 				/* re-attach mem of stale entries partially using this iomem */
 				unsigned stale_count = 0;
@@ -208,8 +211,7 @@ class Acpica::Io_mem
 					io2._io_mem = io_mem._io_mem;
 					Genode::addr_t virt = reinterpret_cast<Genode::addr_t>(io2._virt);
 
-					Genode::env()->rm_session()->attach_at(io_ds, virt,
-					                                       io2._size, off_phys);
+					Acpica::env().rm().attach_at(io_ds, virt, io2._size, off_phys);
 				});
 
 				/**
@@ -224,7 +226,7 @@ class Acpica::Io_mem
 					FAIL(0UL);
 
 				/* attach whole memory */
-				io_mem._virt = Genode::env()->rm_session()->attach(io_ds);
+				io_mem._virt = Acpica::env().rm().attach(io_ds);
 
 				return io_mem.to_virt(p);
 			});

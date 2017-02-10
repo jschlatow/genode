@@ -11,13 +11,10 @@
  * under the terms of the GNU General Public License version 2.
  */
 
+#include <base/component.h>
 #include <os/static_root.h>
 #include <base/log.h>
 #include <base/sleep.h>
-
-#include <os/server.h>
-
-#include <cap_session/connection.h>
 #include <dataspace/client.h>
 #include <region_map/client.h>
 #include <pd_session/client.h>
@@ -30,16 +27,28 @@
 #include "../pci_device_pd_ipc.h"
 
 
+/**
+ * Custom handling of PD-session depletion during attach operations
+ *
+ * The default implementation of 'env().rm()' automatically issues a resource
+ * request if the PD session quota gets exhausted. For the device PD, we don't
+ * want to issue resource requests but let the platform driver reflect this
+ * condition to its client.
+ */
 struct Expanding_region_map_client : Genode::Region_map_client
 {
-	Expanding_region_map_client(Genode::Capability<Region_map> cap)
-	: Region_map_client(cap) { }
+	Genode::Env &_env;
+
+	Expanding_region_map_client(Genode::Env &env)
+	:
+		Region_map_client(env.pd().address_space()), _env(env)
+	{ }
 
 	Local_addr attach(Genode::Dataspace_capability ds,
-	                          Genode::size_t size, Genode::off_t offset,
-	                          bool use_local_addr,
-	                          Local_addr local_addr,
-	                          bool executable) override
+	                  Genode::size_t size, Genode::off_t offset,
+	                  bool use_local_addr,
+	                  Local_addr local_addr,
+	                  bool executable) override
 	{
 		return Genode::retry<Genode::Region_map::Out_of_metadata>(
 			[&] () {
@@ -53,21 +62,12 @@ struct Expanding_region_map_client : Genode::Region_map_client
 				if (Genode::env()->ram_session()->avail() < UPGRADE_QUOTA)
 					throw;
 
-				char buf[32];
-				Genode::snprintf(buf, sizeof(buf), "ram_quota=%u",
-				                 UPGRADE_QUOTA);
-
-				Genode::env()->parent()->upgrade(Genode::env()->pd_session_cap(), buf);
-			});
+				Genode::String<32> arg("ram_quota=", (unsigned)UPGRADE_QUOTA);
+				_env.upgrade(Genode::Parent::Env::pd(), arg.string());
+			}
+		);
 	}
 };
-
-
-static Genode::Region_map &address_space() {
-	using namespace Genode;
-	static Expanding_region_map_client rm(Genode::env()->pd_session()->address_space());
-	return rm;
-}
 
 
 static bool map_eager(Genode::addr_t const page, unsigned log2_order)
@@ -80,15 +80,21 @@ static bool map_eager(Genode::addr_t const page, unsigned log2_order)
 
 	addr_t const page_fault_portal = myself->native_thread().exc_pt_sel + 14;
 
-	/* setup faked page fault information */
-	utcb->set_msg_word(((addr_t)&utcb->qual[2] - (addr_t)utcb->msg) / sizeof(addr_t));
-	utcb->ip      = reinterpret_cast<addr_t>(map_eager);
-	utcb->qual[1] = page;
-	utcb->crd_rcv = Nova::Mem_crd(page >> 12, log2_order - 12, mapping_rw);
+	while (true) {
+		/* setup faked page fault information */
+		utcb->set_msg_word(((addr_t)&utcb->qual[2] - (addr_t)utcb->msg) /
+		                   sizeof(addr_t));
+		utcb->ip      = reinterpret_cast<addr_t>(map_eager);
+		utcb->qual[1] = page;
+		utcb->crd_rcv = Nova::Mem_crd(page >> 12, log2_order - 12, mapping_rw);
 
-	/* trigger faked page fault */
-	Genode::uint8_t res = Nova::call(page_fault_portal);
-	return res == Nova::NOVA_OK;
+		/* trigger faked page fault */
+		Genode::uint8_t res = Nova::call(page_fault_portal);
+
+		bool const retry = utcb->msg_words();
+		if (res != Nova::NOVA_OK || !retry)
+			return res == Nova::NOVA_OK;
+	};
 }
 
 
@@ -104,7 +110,7 @@ void Platform::Device_pd_component::attach_dma_mem(Genode::Dataspace_capability 
 	addr_t page = ~0UL;
 
 	try {
-		page = address_space().attach_at(ds_cap, phys);
+		page = _address_space.attach_at(ds_cap, phys);
 	} catch (Rm_session::Out_of_metadata) {
 		throw;
 	} catch (Rm_session::Region_conflict) {
@@ -115,7 +121,7 @@ void Platform::Device_pd_component::attach_dma_mem(Genode::Dataspace_capability 
 	/* sanity check */
 	if ((page == ~0UL) || (page != phys)) {
 		if (page != ~0UL)
-			address_space().detach(page);
+			_address_space.detach(page);
 
 		Genode::error("attachment of DMA memory @ ",
 		              Genode::Hex(phys), "+", Genode::Hex(size), " failed");
@@ -134,13 +140,14 @@ void Platform::Device_pd_component::attach_dma_mem(Genode::Dataspace_capability 
 	}
 }
 
-void Platform::Device_pd_component::assign_pci(Genode::Io_mem_dataspace_capability io_mem_cap, Genode::uint16_t rid)
+void Platform::Device_pd_component::assign_pci(Genode::Io_mem_dataspace_capability io_mem_cap,
+                                               Genode::uint16_t rid)
 {
 	using namespace Genode;
 
 	Dataspace_client ds_client(io_mem_cap);
 
-	addr_t page = address_space().attach(io_mem_cap);
+	addr_t page = _address_space.attach(io_mem_cap);
 	/* sanity check */
 	if (!page)
 		throw Rm_session::Region_conflict();
@@ -170,37 +177,33 @@ void Platform::Device_pd_component::assign_pci(Genode::Io_mem_dataspace_capabili
 		              "phys=", Genode::Hex(ds_client.phys_addr()), " "
 		              "virt=", Genode::Hex(page));
 	else
-		Genode::log("assignment of ", rid, " succeeded");
+		Genode::log("assignment of PCI device ", Rid(rid), " succeeded");
 
 	/* we don't need the mapping anymore */
-	address_space().detach(page);
+	_address_space.detach(page);
 }
-
-
-using namespace Genode;
 
 
 struct Main
 {
-	Server::Entrypoint &ep;
+	Genode::Env &env;
 
-	Platform::Device_pd_component pd_component;
-	Static_root<Platform::Device_pd> root;
+	Expanding_region_map_client rm { env };
 
-	Main(Server::Entrypoint &ep)
-	: ep(ep), root(ep.manage(pd_component))
+	Platform::Device_pd_component pd_component { rm };
+
+	Genode::Static_root<Platform::Device_pd> root { env.ep().manage(pd_component) };
+
+	Main(Genode::Env &env) : env(env)
 	{
-		env()->parent()->announce(ep.manage(root));
+		env.parent().announce(env.ep().manage(root));
 	}
 };
 
 
-/************
- ** Server **
- ************/
+/***************
+ ** Component **
+ ***************/
 
-namespace Server {
-	char const *name()             { return "device_pd_ep";    }
-	size_t stack_size()            { return 1024*sizeof(long); }
-	void construct(Entrypoint &ep) { static Main server(ep);   }
-}
+void Component::construct(Genode::Env &env) { static Main main(env); }
+

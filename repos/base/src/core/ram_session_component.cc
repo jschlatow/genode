@@ -78,8 +78,10 @@ int Ram_session_component::_transfer_quota(Ram_session_component *dst, size_t am
 
 	/* decrease quota limit of this session - check against used quota */
 	if (_quota_limit < amount + _payload) {
-		warning("Insufficient quota for transfer: ", Cstring(_label));
-		warning("  have ", _quota_limit - _payload, ", need ", amount);
+		warning("insufficient quota for transfer: "
+		        "'", Cstring(_label), "' to '", Cstring(dst->_label), "' "
+		        "have ", (_quota_limit - _payload)/1024, " KiB, "
+		        "need ", amount/1024, " KiB");
 		return -3;
 	}
 
@@ -142,11 +144,32 @@ Ram_dataspace_capability Ram_session_component::alloc(size_t ds_size, Cache_attr
 	 */
 	void *ds_addr = 0;
 	bool alloc_succeeded = false;
-	for (size_t align_log2 = log2(ds_size); align_log2 >= 12; align_log2--) {
-		if (_ram_alloc->alloc_aligned(ds_size, &ds_addr, align_log2,
-		                              _phys_start, _phys_end).ok()) {
-			alloc_succeeded = true;
-			break;
+
+	/*
+	 * If no physical constraint exists, try to allocate physical memory at
+	 * high locations (3G for 32-bit / 4G for 64-bit platforms) in order to
+	 * preserve lower physical regions for device drivers, which may have DMA
+	 * constraints.
+	 */
+	if (_phys_start == 0 && _phys_end == ~0UL) {
+		addr_t const high_start = (sizeof(void *) == 4 ? 3UL : 4UL) << 30;
+		for (size_t align_log2 = log2(ds_size); align_log2 >= 12; align_log2--) {
+			if (_ram_alloc->alloc_aligned(ds_size, &ds_addr, align_log2,
+			                              high_start, _phys_end).ok()) {
+				alloc_succeeded = true;
+				break;
+			}
+		}
+	}
+
+	/* apply constraints or re-try because higher memory allocation failed */
+	if (!alloc_succeeded) {
+		for (size_t align_log2 = log2(ds_size); align_log2 >= 12; align_log2--) {
+			if (_ram_alloc->alloc_aligned(ds_size, &ds_addr, align_log2,
+			                              _phys_start, _phys_end).ok()) {
+				alloc_succeeded = true;
+				break;
+			}
 		}
 	}
 
@@ -157,7 +180,9 @@ Ram_dataspace_capability Ram_session_component::alloc(size_t ds_size, Cache_attr
 	 * fragmentation could cause a failing allocation.
 	 */
 	if (!alloc_succeeded) {
-		error("out of physical memory while allocating ", ds_size, " bytes");
+		error("out of physical memory while allocating ", ds_size, " bytes ",
+		      "in range [", Hex(_phys_start), "-", Hex(_phys_end), "] - label ",
+		      Cstring(_label));
 		throw Quota_exceeded();
 	}
 
@@ -171,7 +196,7 @@ Ram_dataspace_capability Ram_session_component::alloc(size_t ds_size, Cache_attr
 		ds = new (&_ds_slab)
 			Dataspace_component(ds_size, (addr_t)ds_addr, cached, true, this);
 	} catch (Allocator::Out_of_memory) {
-		warning("Could not allocate metadata");
+		warning("could not allocate metadata");
 		/* cleanup unneeded resources */
 		_ram_alloc->free(ds_addr);
 
@@ -239,6 +264,10 @@ int Ram_session_component::transfer_quota(Ram_session_capability ram_session_cap
 {
 	auto lambda = [&] (Ram_session_component *dst) {
 		return _transfer_quota(dst, amount); };
+
+	if (this->cap() == ram_session_cap)
+		return 0;
+
 	return _ram_session_ep->apply(ram_session_cap, lambda);
 }
 
@@ -274,7 +303,7 @@ Ram_session_component::~Ram_session_component()
 	     _free_ds(ds->cap()));
 
 	if (_payload != 0)
-		warning("Remaining payload of ", _payload, " in ram session to destroy");
+		warning("remaining payload of ", _payload, " in ram session to destroy");
 
 	if (!_ref_account) return;
 

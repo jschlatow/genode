@@ -65,6 +65,7 @@ int try_module_get(struct module *);
 
 #define module_param(name, type, perm)
 #define module_param_named(name, value, type, perm)
+
 #define module_param_unsafe(name, type, perm)
 #define module_param_named_unsafe(name, value, type, perm)
 #define MODULE_PARM_DESC(_parm, desc)

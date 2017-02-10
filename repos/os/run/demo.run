@@ -102,11 +102,9 @@ append config {
 		<resource name="RAM" quantum="1M"/>
 		<provides> <service name="Report"/> <service name="ROM"/> </provides>
 		<config>
-			<rom>
-				<policy label="status_bar -> focus"      report="nitpicker -> focus"/>
-				<policy label="nitpicker_config -> xray" report="xray_trigger -> xray"/>
-				<policy label="xray_trigger -> hover"    report="nitpicker -> hover"/>
-			</rom>
+			<policy label="status_bar -> focus"      report="nitpicker -> focus"/>
+			<policy label="nitpicker_config -> xray" report="xray_trigger -> xray"/>
+			<policy label="xray_trigger -> hover"    report="nitpicker -> hover"/>
 		</config>
 	</start>
 
@@ -150,8 +148,8 @@ append config {
 					</else>
 				</if>
 				<inline>
-					<policy label="pointer"                   domain="pointer"/>
-					<policy label="status_bar"                domain="panel"/>
+					<policy label_prefix="pointer"            domain="pointer"/>
+					<policy label_prefix="status_bar"         domain="panel"/>
 					<policy label_prefix="scout -> launchpad" domain="launchpad"/>
 					<default-policy                           domain=""/>
 

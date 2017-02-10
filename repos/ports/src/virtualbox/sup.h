@@ -15,7 +15,7 @@
 #define _SUP_H_
 
 /* Genode includes */
-#include <cpu_session/cpu_session.h>
+#include <base/component.h>
 
 /* VirtualBox includes */
 #include <VBox/vmm/vm.h>
@@ -23,7 +23,12 @@
 #include <VBox/com/ptr.h>
 #include <iprt/param.h>
 
+#if VBOX_VERSION_MAJOR == 4
 #include "MachineImpl.h"
+HRESULT genode_setup_machine(ComObjPtr<Machine> machine);
+
+HRESULT genode_check_memory_config(ComObjPtr<Machine> machine);
+#endif
 
 /**
  * Returns true if a vCPU could be started. If false we run without
@@ -34,7 +39,8 @@ bool create_emt_vcpu(pthread_t * pthread, size_t stack,
                      void *(*start_routine)(void *), void *arg,
                      Genode::Cpu_session * cpu_session,
                      Genode::Affinity::Location location,
-                     unsigned int cpu_id);
+                     unsigned int cpu_id,
+                     const char * name);
 
 
 uint64_t genode_cpu_hz();
@@ -42,11 +48,9 @@ void genode_update_tsc(void (*update_func)(void), unsigned long update_us);
 
 Genode::Cpu_session * get_vcpu_cpu_session();
 
+Genode::Env &genode_env();
+
 void genode_VMMR0_DO_GVMM_CREATE_VM(PSUPVMMR0REQHDR pReqHdr);
 void genode_VMMR0_DO_GVMM_REGISTER_VMCPU(PVMR0 pVMR0, VMCPUID idCpu);
-
-HRESULT genode_setup_machine(ComObjPtr<Machine> machine);
-
-HRESULT genode_check_memory_config(ComObjPtr<Machine> machine);
 
 #endif /* _SUP_H_ */

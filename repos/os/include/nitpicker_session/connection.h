@@ -26,6 +26,10 @@ namespace Nitpicker { class Connection; }
 class Nitpicker::Connection : public Genode::Connection<Session>,
                               public Session_client
 {
+	public:
+
+		enum { RAM_QUOTA = 36*1024UL };
+
 	private:
 
 		Framebuffer::Session_client _framebuffer;
@@ -48,8 +52,7 @@ class Nitpicker::Connection : public Genode::Connection<Session>,
 			 * Declare ram-quota donation
 			 */
 			using Genode::Arg_string;
-			enum { SESSION_METADATA = 36*1024 };
-			Arg_string::set_arg(argbuf, sizeof(argbuf), "ram_quota", SESSION_METADATA);
+			Arg_string::set_arg(argbuf, sizeof(argbuf), "ram_quota", RAM_QUOTA);
 
 			return session(parent, argbuf);
 		}
@@ -67,7 +70,7 @@ class Nitpicker::Connection : public Genode::Connection<Session>,
 
 			/* request frame-buffer and input sub sessions */
 			_framebuffer(framebuffer_session()),
-			_input(input_session())
+			_input(env, input_session())
 		{ }
 
 		/**
@@ -90,20 +93,12 @@ class Nitpicker::Connection : public Genode::Connection<Session>,
 
 		void buffer(Framebuffer::Mode mode, bool use_alpha)
 		{
-			enum { ARGBUF_SIZE = 128 };
-			char argbuf[ARGBUF_SIZE];
-			argbuf[0] = 0;
-
 			Genode::size_t const needed = ram_quota(mode, use_alpha);
 			Genode::size_t const upgrade = needed > _session_quota
 			                             ? needed - _session_quota
 			                             : 0;
-
 			if (upgrade > 0) {
-				Genode::Arg_string::set_arg(argbuf, sizeof(argbuf), "ram_quota",
-				                            upgrade);
-
-				Genode::env()->parent()->upgrade(cap(), argbuf);
+				this->upgrade_ram(upgrade);
 				_session_quota += upgrade;
 			}
 
@@ -113,7 +108,7 @@ class Nitpicker::Connection : public Genode::Connection<Session>,
 		/**
 		 * Return sub session for Nitpicker's input service
 		 */
-		Input::Session *input() { return &_input; }
+		Input::Session_client *input() { return &_input; }
 
 		/**
 		 * Return sub session for session's frame buffer

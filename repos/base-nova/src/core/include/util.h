@@ -16,7 +16,7 @@
 
 /* Genode includes */
 #include <rm_session/rm_session.h>
-#include <base/printf.h>
+#include <base/log.h>
 
 /* base-internal includes */
 #include <base/internal/page_size.h>
@@ -40,43 +40,6 @@ namespace Genode {
 		return size_log2 > MAX_MAP_LOG2 ? MAX_MAP_LOG2 : size_log2;
 	}
 
-
-	inline void print_page_fault(const char *msg, addr_t pf_addr, addr_t pf_ip,
-	                             Region_map::State::Fault_type pf_type,
-	                             unsigned long faulter_badge)
-	{
-		Platform_thread * faulter = reinterpret_cast<Platform_thread *>(faulter_badge);
-		printf("%s (%s pf_addr=%p pf_ip=%p from %02lx '%s':'%s')\n", msg,
-		       pf_type == Region_map::State::WRITE_FAULT ? "WRITE" : "READ",
-		       (void *)pf_addr, (void *)pf_ip,
-		       faulter_badge, faulter ? faulter->pd_name() : "unknown",
-		       faulter ? faulter->name() : "unknown");
-	}
-
-
-	inline void backtrace()
-	{
-		using namespace Genode;
-		log("\nbacktrace");
-		log(" ", __builtin_return_address(0));
-		log(" ", __builtin_return_address(1));
-		log(" ", __builtin_return_address(2));
-		log(" ", __builtin_return_address(3));
-		log(" ", __builtin_return_address(4));
-	}
-
-
-	inline void hexdump(void *addr)
-	{
-		unsigned char *s = (unsigned char *)addr;
-		printf("\nhexdump at 0x%p:\n", addr);
-		for (unsigned j = 0; j < 4; j++) {
-			printf("  ");
-			for (unsigned i = 0; i < 16; i++)
-				printf("0x%02x ", s[j*16 + i]);
-			printf("\n");
-		}
-	}
 }
 
 #endif /* _CORE__INCLUDE__UTIL_H_ */

@@ -141,7 +141,7 @@ append config {
 				<dir name="tmp"/>
 			</content>
 			<!-- constrain sessions according to their labels -->
-			<policy label="fs_log"          root="/samples"    writeable="yes" />
+			<policy label_prefix="fs_log"   root="/samples"    writeable="yes" />
 			<policy label="noux -> home"    root="/home"       writeable="yes" />
 			<policy label="noux -> samples" root="/samples" />
 			<policy label="noux -> tmp"     root="/tmp"        writeable="yes" />
@@ -265,6 +265,9 @@ run_genode_until "$match_string" 120
 
 regexp $match_string $output all func
 
-run_genode_until "\\\[init -> terminal] \[0\]*$func" 60 [output_spawn_id]
+run_genode_until "\\\[init -> terminal] \[0\]*$func" 90 [output_spawn_id]
 
 exec rm bin/bash.tar
+exec rm bin/coreutils.tar
+exec rm bin/diffutils.tar
+exec rm bin/vim.tar

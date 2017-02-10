@@ -499,7 +499,6 @@ namespace Terminal {
 }
 
 
-
 int main(int, char **)
 {
 	using namespace Genode;
@@ -511,13 +510,8 @@ int main(int, char **)
 	static Timer::Connection       timer;
 	static Cap_connection          cap;
 
-	Dataspace_capability ev_ds_cap = input.dataspace();
-
-	Input::Event *ev_buf = static_cast<Input::Event *>
-	                       (env()->rm_session()->attach(ev_ds_cap));
-
 	/* initialize entry point that serves the root interface */
-	enum { STACK_SIZE = sizeof(addr_t)*1024 };
+	enum { STACK_SIZE = 2*sizeof(addr_t)*1024 };
 	static Rpc_entrypoint ep(&cap, STACK_SIZE, "terminal_ep");
 
 	static Sliced_heap sliced_heap(env()->ram_session(), env()->rm_session());
@@ -628,13 +622,10 @@ int main(int, char **)
 			}
 		}
 
-		unsigned num_events = input.flush();
-
-		for (Input::Event *event = ev_buf; num_events--; event++) {
-
-			bool press   = (event->type() == Input::Event::PRESS   ? true : false);
-			bool release = (event->type() == Input::Event::RELEASE ? true : false);
-			int  keycode =  event->code();
+		input.for_each_event([&] (Input::Event const &event) {
+			bool press   = (event.type() == Input::Event::PRESS   ? true : false);
+			bool release = (event.type() == Input::Event::RELEASE ? true : false);
+			int  keycode =  event.code();
 
 			if (press || release)
 				scancode_tracker.submit(keycode, press);
@@ -644,7 +635,7 @@ int main(int, char **)
 
 			/* setup first key repeat */
 			repeat_cnt = repeat_delay;
-		}
+		});
 	}
 	return 0;
 }

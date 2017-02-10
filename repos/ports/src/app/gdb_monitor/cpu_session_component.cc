@@ -36,7 +36,7 @@ Cpu_session &Cpu_session_component::parent_cpu_session()
 
 Rpc_entrypoint &Cpu_session_component::thread_ep()
 {
-	return *_thread_ep;
+	return _ep;
 }
 
 
@@ -299,18 +299,22 @@ Capability<Cpu_session::Native_cpu> Cpu_session_component::native_cpu()
 }
 
 
-Cpu_session_component::Cpu_session_component(Rpc_entrypoint *thread_ep,
+Cpu_session_component::Cpu_session_component(Genode::Env &env,
+                                             Rpc_entrypoint &ep,
                                              Allocator *md_alloc,
                                              Pd_session_capability core_pd,
                                              Signal_receiver *exception_signal_receiver,
-                                             const char *args)
-: _thread_ep(thread_ep),
+                                             const char *args,
+                                             Affinity const &affinity)
+: _env(env),
+  _ep(ep),
   _md_alloc(md_alloc),
   _core_pd(core_pd),
-  _parent_cpu_session(env()->parent()->session<Cpu_session>(args)),
+  _parent_cpu_session(env.session<Cpu_session>(_id_space_element.id(), args, affinity)),
   _exception_signal_receiver(exception_signal_receiver),
   _native_cpu_cap(_setup_native_cpu())
 {
+	_ep.manage(this);
 }
 
 
@@ -323,13 +327,15 @@ Cpu_session_component::~Cpu_session_component()
 	}
 
 	_cleanup_native_cpu();
+
+	_ep.dissolve(this);
 }
 
 
 int Cpu_session_component::ref_account(Cpu_session_capability) { return -1; }
 
 
-int Cpu_session_component::transfer_quota(Cpu_session_capability, size_t) { return -1; }
+int Cpu_session_component::transfer_quota(Cpu_session_capability, Genode::size_t) { return -1; }
 
 
 Cpu_session::Quota Cpu_session_component::quota() { return Quota(); }

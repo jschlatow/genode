@@ -20,6 +20,7 @@
 #include <trace/source_registry.h>
 
 /* core includes */
+#include <boot_modules.h>
 #include <core_parent.h>
 #include <platform.h>
 #include <nova_util.h>
@@ -61,18 +62,6 @@ Utcb *__main_thread_utcb;
  * Virtual address range consumed by core's program image
  */
 extern unsigned _prog_img_beg, _prog_img_end;
-
-
-
-extern addr_t sc_idle_base;
-addr_t sc_idle_base = 0;
-
-
-
-/**
- *  Capability selector of root PD
- */
-addr_t __core_pd_sel;
 
 
 /**
@@ -120,9 +109,8 @@ static void page_fault_handler()
 	addr_t pf_sp   = utcb->sp;
 	addr_t pf_type = utcb->qual[0];
 
-	print_page_fault("\nPAGE-FAULT IN CORE", pf_addr, pf_ip,
-	                 (pf_type & Ipc_pager::ERR_W) ? Region_map::State::WRITE_FAULT
-	                                              : Region_map::State::READ_FAULT, 0);
+	error("\nPAGE-FAULT IN CORE addr=", Hex(pf_addr), " ip=", Hex(pf_ip),
+	      " (", (pf_type & Ipc_pager::ERR_W) ? "write" : "read", ")");
 
 	log("\nstack pointer ", Hex(pf_sp), ", qualifiers ", Hex(pf_type), " ",
 	    pf_type & Ipc_pager::ERR_I ? "I" : "i",
@@ -225,7 +213,7 @@ static void startup_handler()
 }
 
 
-static void init_core_page_fault_handler()
+static void init_core_page_fault_handler(addr_t const core_pd_sel)
 {
 	/* create echo EC */
 	enum {
@@ -235,20 +223,20 @@ static void init_core_page_fault_handler()
 
 	addr_t ec_sel = cap_map()->insert(1);
 
-	uint8_t ret = create_ec(ec_sel, __core_pd_sel, boot_cpu(),
+	uint8_t ret = create_ec(ec_sel, core_pd_sel, boot_cpu(),
 	                        CORE_PAGER_UTCB_ADDR, core_pager_stack_top(),
 	                        EXC_BASE, GLOBAL);
 	if (ret)
 		log(__func__, ": create_ec returned ", ret);
 
 	/* set up page-fault portal */
-	create_pt(PT_SEL_PAGE_FAULT, __core_pd_sel, ec_sel,
+	create_pt(PT_SEL_PAGE_FAULT, core_pd_sel, ec_sel,
 	          Mtd(Mtd::QUAL | Mtd::ESP | Mtd::EIP),
 	          (addr_t)page_fault_handler);
 	revoke(Obj_crd(PT_SEL_PAGE_FAULT, 0, Obj_crd::RIGHT_PT_CTRL));
 
 	/* startup portal for global core threads */
-	create_pt(PT_SEL_STARTUP, __core_pd_sel, ec_sel,
+	create_pt(PT_SEL_STARTUP, core_pd_sel, ec_sel,
 	          Mtd(Mtd::EIP | Mtd::ESP),
 	          (addr_t)startup_handler);
 	revoke(Obj_crd(PT_SEL_STARTUP, 0, Obj_crd::RIGHT_PT_CTRL));
@@ -258,7 +246,13 @@ static void init_core_page_fault_handler()
 static bool cpuid_invariant_tsc()
 {
 	unsigned long cpuid = 0x80000007, edx = 0;
-	asm volatile ("cpuid" : "+a" (cpuid), "=d" (edx) : : "ebx", "ecx");
+#ifdef __x86_64__
+	asm volatile ("cpuid" : "+a" (cpuid), "=d" (edx) : : "rbx", "rcx");
+#else
+	asm volatile ("push %%ebx  \n"
+	              "cpuid       \n"
+	              "pop  %%ebx" : "+a" (cpuid), "=d" (edx) : : "ecx");
+#endif
 	return edx & 0x100;
 }
 
@@ -292,10 +286,10 @@ Platform::Platform() :
 	__main_thread_utcb = (Utcb *)(__initial_sp - get_page_size());
 
 	/* set core pd selector */
-	__core_pd_sel = hip->sel_exc;
+	_core_pd_sel = hip->sel_exc;
 
 	/* create lock used by capability allocator */
-	Nova::create_sm(Nova::SM_SEL_EC, __core_pd_sel, 0);
+	Nova::create_sm(Nova::SM_SEL_EC, core_pd_sel(), 0);
 
 	/* locally map the whole I/O port range */
 	enum { ORDER_64K = 16 };
@@ -329,6 +323,17 @@ Platform::Platform() :
 		nova_die();
 	}
 
+	/* init genode cpu ids based on kernel cpu ids (used for syscalls) */
+	if (sizeof(map_cpu_ids) / sizeof(map_cpu_ids[0]) < hip->cpu_max()) {
+		error("number of max CPUs is larger than expected - ", hip->cpu_max(),
+		      " vs ", sizeof(map_cpu_ids) / sizeof(map_cpu_ids[0]));
+		nova_die();
+	}
+	if (!hip->remap_cpu_ids(map_cpu_ids, boot_cpu())) {
+		error("re-ording cpu_id failed");
+		nova_die();
+	}
+
 	/* map idle SCs */
 	unsigned const log2cpu = log2(hip->cpu_max());
 	if ((1U << log2cpu) != hip->cpu_max()) {
@@ -336,13 +341,13 @@ Platform::Platform() :
 		nova_die();
 	}
 
-	sc_idle_base = cap_map()->insert(log2cpu + 1);
+	addr_t sc_idle_base = cap_map()->insert(log2cpu + 1);
 	if (sc_idle_base & ((1UL << log2cpu) - 1)) {
 		error("unaligned sc_idle_base value ", Hex(sc_idle_base));
 		nova_die();
 	}
-	if(map_local(__main_thread_utcb, Obj_crd(0, log2cpu),
-	             Obj_crd(sc_idle_base, log2cpu), true))
+	if (map_local(__main_thread_utcb, Obj_crd(0, log2cpu),
+	              Obj_crd(sc_idle_base, log2cpu), true))
 		nova_die();
 
 	/* test reading out idle SCs */
@@ -370,7 +375,7 @@ Platform::Platform() :
 #endif
 
 	/* set up page fault handler for core - for debugging */
-	init_core_page_fault_handler();
+	init_core_page_fault_handler(core_pd_sel());
 
 	if (verbose_boot_info) {
 		if (hip->has_feature_vmx())
@@ -378,9 +383,18 @@ Platform::Platform() :
 		if (hip->has_feature_svm())
 			log("Hypervisor features SVM");
 		log("Hypervisor reports ", _cpus.width(), "x", _cpus.height(), " "
-		    "CPU", _cpus.total() > 1 ? "s" : " ", " - boot CPU is ", boot_cpu());
+		    "CPU", _cpus.total() > 1 ? "s" : " ");
 		if (!cpuid_invariant_tsc())
 			warning("CPU has no invariant TSC.");
+
+		log("CPU ID (genode->kernel:package:core:thread) remapping");
+		unsigned const cpus = hip->cpus();
+		for (unsigned i = 0; i < cpus; i++)
+			log(" remap (", i, "->", map_cpu_ids[i], ":",
+			      hip->cpu_desc_of_cpu(map_cpu_ids[i])->package, ":",
+			      hip->cpu_desc_of_cpu(map_cpu_ids[i])->core, ":",
+			      hip->cpu_desc_of_cpu(map_cpu_ids[i])->thread, ") ",
+			      boot_cpu() == map_cpu_ids[i] ? "boot cpu" : "");
 	}
 
 	/* initialize core allocators */
@@ -398,10 +412,27 @@ Platform::Platform() :
 	_core_mem_alloc.virt_alloc()->add_range(virt_beg, virt_end - virt_beg);
 
 	/* exclude core image from core's virtual address allocator */
-	addr_t core_virt_beg = trunc_page((addr_t)&_prog_img_beg);
-	addr_t core_virt_end = round_page((addr_t)&_prog_img_end);
-	size_t core_size     = core_virt_end - core_virt_beg;
+	addr_t const core_virt_beg = trunc_page((addr_t)&_prog_img_beg);
+	addr_t const core_virt_end = round_page((addr_t)&_prog_img_end);
+	addr_t const binaries_beg  = trunc_page((addr_t)&_boot_modules_binaries_begin);
+	addr_t const binaries_end  = round_page((addr_t)&_boot_modules_binaries_end);
+
+	size_t const core_size     = binaries_beg - core_virt_beg;
 	region_alloc()->remove_range(core_virt_beg, core_size);
+
+	if (verbose_boot_info || binaries_end != core_virt_end) {
+		log("core     image  ",
+		    Hex_range<addr_t>(core_virt_beg, core_virt_end - core_virt_beg));
+		log("binaries region ",
+		    Hex_range<addr_t>(binaries_beg,  binaries_end - binaries_beg),
+		    " free for reuse");
+	}
+	if (binaries_end != core_virt_end)
+		nova_die();
+
+	/* ROM modules are un-used by core - de-detach region */
+	addr_t const binaries_size  = binaries_end - binaries_beg;
+	unmap_local(__main_thread_utcb, binaries_beg, binaries_size >> 12);
 
 	/* preserve Bios Data Area (BDA) in core's virtual address space */
 	region_alloc()->remove_range(BDA_VIRT_ADDR, 0x1000);
@@ -559,114 +590,24 @@ Platform::Platform() :
 	 * From now on, it is save to use the core allocators...
 	 */
 
-	/*
-	 * Allocate ever an extra page behind the command line pointer. If it turns
-	 * out that this page is unused, because the command line was short enough,
-	 * the mapping is revoked and the virtual and physical regions are put back
-	 * to the allocator.
-	 */
-	mem_desc = (Hip::Mem_desc *)mem_desc_base;
-	prev_cmd_line_page = ~0UL, curr_cmd_line_page = 0;
-	addr_t mapped_cmd_line = 0;
-	addr_t aux     = ~0UL;
-	size_t aux_len = 0;
 	/* build ROM file system */
+	mem_desc = (Hip::Mem_desc *)mem_desc_base;
 	for (unsigned i = 0; i < num_mem_desc; i++, mem_desc++) {
 		if (mem_desc->type != Hip::Mem_desc::MULTIBOOT_MODULE) continue;
 		if (!mem_desc->addr || !mem_desc->size || !mem_desc->aux) continue;
 
-		/* convenience */
-		addr_t const rom_mem_start = trunc_page(mem_desc->addr);
-		addr_t const rom_mem_end   = round_page(mem_desc->addr + mem_desc->size);
-		addr_t const rom_mem_size  = rom_mem_end - rom_mem_start;
-		bool const aux_in_rom_area = (rom_mem_start <= mem_desc->aux) &&
-		                             (mem_desc->aux < rom_mem_end);
-		addr_t const pages_mapped  = (rom_mem_size >> get_page_size_log2()) +
-		                             (aux_in_rom_area ? 1 : 0);
+		/* assume core's ELF image has one-page header */
+		addr_t const core_phys_start = trunc_page(mem_desc->addr + get_page_size());
+		addr_t const core_virt_start = (addr_t) &_prog_img_beg;
 
-		/* map ROM + extra page for the case aux crosses page boundary */
-		addr_t core_local_addr = _map_pages(rom_mem_start >> get_page_size_log2(),
-		                                    pages_mapped);
-		if (!core_local_addr) {
-			error("could not map multi boot module");
-			nova_die();
+		/* add boot modules to ROM FS */
+		Boot_modules_header * header = &_boot_modules_headers_begin;
+		for (; header < &_boot_modules_headers_end; header++) {
+			Rom_module * rom_module = new (core_mem_alloc())
+				Rom_module(header->base - core_virt_start + core_phys_start,
+				           header->size, (const char*)header->name);
+			_rom_fs.insert(rom_module);
 		}
-
-		/* adjust core_local_addr of module if it was not page aligned */
-		core_local_addr += mem_desc->addr - rom_mem_start;
-
-		char *name = nullptr;
-		if (aux_in_rom_area) {
-			aux = core_local_addr + (mem_desc->aux - mem_desc->addr);
-			aux_len = strlen(reinterpret_cast<char const *>(aux)) + 1;
-
-			/* all behind rom module will be cleared, copy the command line */
-			char *name_tmp = commandline_to_basename(reinterpret_cast<char *>(aux));
-			unsigned name_tmp_size = aux_len - (name_tmp - reinterpret_cast<char *>(aux));
-			name = new (core_mem_alloc()) char [name_tmp_size];
-			memcpy(name, name_tmp, name_tmp_size);
-
-		} else {
-
-			curr_cmd_line_page = mem_desc->aux >> get_page_size_log2();
-			if (curr_cmd_line_page != prev_cmd_line_page) {
-				int err = 1;
-				if (curr_cmd_line_page == prev_cmd_line_page + 1) {
-					/* try to allocate subsequent virtual region */
-					addr_t const virt = mapped_cmd_line + get_page_size() * 2;
-					addr_t const phys = round_page(mem_desc->aux);
-
-					if (region_alloc()->alloc_addr(get_page_size(), virt).ok()) {
-						/* we got the virtual region */
-						err = map_local(__main_thread_utcb, phys, virt, 1,
-						                Nova::Rights(true, false, false), true);
-						if (!err) {
-							/* we got the mapping */
-							mapped_cmd_line    += get_page_size();
-							prev_cmd_line_page += 1;
-						}
-					}
-				}
-
-				/* allocate new pages if it was not successful beforehand */
-				if (err) {
-					mapped_cmd_line = _map_pages(curr_cmd_line_page, 2);
-					prev_cmd_line_page = curr_cmd_line_page;
-
-					if (!mapped_cmd_line) {
-						error("could not map command line");
-						nova_die();
-					}
-				}
-			}
-			aux = mapped_cmd_line + (mem_desc->aux - trunc_page(mem_desc->aux));
-			aux_len = strlen(reinterpret_cast<char const *>(aux)) + 1;
-			name = commandline_to_basename(reinterpret_cast<char *>(aux));
-
-		}
-
-		/* set zero out range */
-		addr_t const zero_out = core_local_addr + mem_desc->size;
-		/* zero out behind rom module */
-		memset(reinterpret_cast<void *>(zero_out), 0, round_page(zero_out) -
-		       zero_out);
-
-		if (verbose_boot_info)
-			log("map multi-boot module: physical ",
-			    Hex((addr_t)mem_desc->addr, Hex::PREFIX, Hex::PAD), "+",
-			    Hex((size_t)mem_desc->size, Hex::PREFIX, Hex::PAD), " - ",
-			    Cstring(name));
-
-		/* revoke mapping of rom module - not needed */
-		unmap_local(__main_thread_utcb, trunc_page(core_local_addr),
-		            pages_mapped);
-		region_alloc()->free(reinterpret_cast<void *>(trunc_page(core_local_addr)),
-		                     pages_mapped << get_page_size_log2());
-
-		/* create rom module */
-		Rom_module *rom_module = new (core_mem_alloc())
-		                         Rom_module(rom_mem_start, mem_desc->size, name);
-		_rom_fs.insert(rom_module);
 	}
 
 	/* export hypervisor info page as ROM module */
@@ -695,9 +636,10 @@ Platform::Platform() :
 	_gsi_base_sel = (hip->mem_desc_offset - hip->cpu_desc_offset) / hip->cpu_desc_size;
 
 	if (verbose_boot_info) {
-		log(":virt_alloc: "); (*_core_mem_alloc.virt_alloc())()->dump_addr_tree();
-		log(":phys_alloc: "); (*_core_mem_alloc.phys_alloc())()->dump_addr_tree();
-		log(":io_mem_alloc: "); _io_mem_alloc()->dump_addr_tree();
+		log(":virt_alloc: ",  *_core_mem_alloc.virt_alloc());
+		log(":phys_alloc: ",  *_core_mem_alloc.phys_alloc());
+		log(":io_mem_alloc: ", _io_mem_alloc);
+		log(":rom_fs: ",       _rom_fs);
 	}
 
 	/* add capability selector ranges to map */
@@ -719,9 +661,11 @@ Platform::Platform() :
 	}
 
 	/* add idle ECs to trace sources */
-	for (unsigned i = 0; i < hip->cpu_max(); i++) {
+	for (unsigned genode_cpu_id = 0; genode_cpu_id < _cpus.width(); genode_cpu_id++) {
 
-		if (!hip->is_cpu_enabled(i))
+		unsigned kernel_cpu_id = Platform::kernel_cpu_id(genode_cpu_id);
+
+		if (!hip->is_cpu_enabled(kernel_cpu_id))
 			continue;
 
 		struct Idle_trace_source : Trace::Source::Info_accessor, Trace::Control,
@@ -752,11 +696,22 @@ Platform::Platform() :
 		};
 
 		Idle_trace_source *source = new (core_mem_alloc())
-			Idle_trace_source(Affinity::Location(i, 0, hip->cpu_max(), 1),
-			                  sc_idle_base + i);
+			Idle_trace_source(Affinity::Location(kernel_cpu_id, 0,
+			                                     _cpus.width(), 1),
+			                  sc_idle_base + kernel_cpu_id);
 
 		Trace::sources().insert(source);
 	}
+}
+
+
+unsigned Platform::kernel_cpu_id(unsigned genode_cpu_id)
+{
+	if (genode_cpu_id >= sizeof(map_cpu_ids) / sizeof(map_cpu_ids[0])) {
+		error("invalid genode cpu id ", genode_cpu_id);
+		return ~0U;
+	}
+	return map_cpu_ids[genode_cpu_id];
 }
 
 

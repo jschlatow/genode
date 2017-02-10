@@ -3186,22 +3186,18 @@ static inline bool ipv4_is_loopback(__be32 addr)
  ** linux/random.h **
  ********************/
 
-static inline void get_random_bytes(void *buf, int nbytes)
-{
-	char *b = (char *)buf;
+void get_random_bytes(void *buf, int nbytes);
 
-	/* FIXME not random */
-	int i;
-	for (i = 0; i < nbytes; ++i)
-		b[i] = i + 1;
-}
+#define get_random_once(buf, nbytes)           \
+	({                                         \
+		static bool initialized = false;       \
+		if (!initialized) {                    \
+			get_random_bytes((buf), (nbytes)); \
+			initialized = true;                \
+		}                                      \
+	})
 
-static inline void get_random_once(void *buf, int nbytes)
-{
-	return get_random_bytes(buf, nbytes);
-}
-
-static inline u32 prandom_u32(void) { return 4; /* fair dice roll */ }
+u32 prandom_u32(void);
 
 static inline void prandom_bytes(void *buf, size_t nbytes)
 {

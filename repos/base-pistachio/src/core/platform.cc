@@ -25,6 +25,7 @@
 #include <base/internal/globals.h>
 
 /* core includes */
+#include <boot_modules.h>
 #include <core_parent.h>
 #include <map_local.h>
 #include <platform.h>
@@ -46,8 +47,8 @@ namespace Pistachio {
 using namespace Genode;
 
 
-static const bool verbose              = false;
-static const bool verbose_core_pf      = false;
+static const bool verbose              = true;
+static const bool verbose_core_pf      = true;
 static const bool verbose_region_alloc = false;
 
 
@@ -204,7 +205,9 @@ static void _core_pager_loop()
 
 Platform::Sigma0::Sigma0()
 :
-	Pager_object(Cpu_session_capability(), Thread_capability(), 0, Affinity::Location())
+	Pager_object(Cpu_session_capability(), Thread_capability(),
+	             0, Affinity::Location(),
+	             Session_label(), Cpu_session::Name("sigma0"))
 {
 	cap(Capability_space::import(Pistachio::get_sigma0(), Rpc_obj_key()));
 }
@@ -220,7 +223,9 @@ Platform::Sigma0 *Platform::sigma0()
 Platform::Core_pager::Core_pager(Platform_pd *core_pd)
 :
 	Platform_thread(0, "core.pager"),
-	Pager_object(Cpu_session_capability(), Thread_capability(), 0, Affinity::Location())
+	Pager_object(Cpu_session_capability(), Thread_capability(),
+	             0, Affinity::Location(),
+	             Session_label(), Cpu_session::Name(name()))
 {
 	Platform_thread::pager(sigma0());
 
@@ -416,37 +421,45 @@ void Platform::_setup_mem_alloc()
 		 * Suck out sigma0. The spec says that we get only "conventional
 		 * memory". Let's hope this is true.
 		 */
-		bool succ;
+		bool succ = true;
 		unsigned int bytes_got = 0;
-		do {
+		while (succ) {
 			addr_t addr;
 			Region region;
 
 			succ = sigma0_req_region(&addr, size_log2);
-			if (succ) {
-				/* XXX do not allocate page0 */
-				if (addr == 0) {
-//					L4_Fpage_t f = L4_FpageLog2(0, pslog2);
-//					f += L4_FullyAccessible;
-//					L4_Flush(f);
 
-				} else {
-					region.start = addr; region.end = addr + size;
-					if (region.intersects(stack_area_virtual_base(),
-					                      stack_area_virtual_size()) ||
-						intersects_kip_archdep(kip, addr, size)) {
-						unmap_local(region.start, size >> get_page_size_log2());
-					} else {
-						add_region(region, _ram_alloc);
-						add_region(region, _core_address_ranges());
-					}
-					remove_region(region, _io_mem_alloc);
-					remove_region(region, _region_alloc);
-				}
+			if (!succ)
+				continue;
 
-				bytes_got += size;
+			/* XXX do not allocate page0 */
+			if (addr == 0) {
+//				L4_Fpage_t f = L4_FpageLog2(0, pslog2);
+//				f += L4_FullyAccessible;
+//				L4_Flush(f);
+				continue;
 			}
-		} while (succ);
+
+			/* exclude phys ram which is unaccessible - 1:1 mappings! */
+			if (addr >= _vm_start + _vm_size)
+				continue;
+			if ((addr + size > _vm_start + _vm_size) || ( addr + size <= addr))
+				size = _vm_start + _vm_size - addr;
+
+			region.start = addr; region.end = addr + size;
+			if (region.intersects(stack_area_virtual_base(),
+			                      stack_area_virtual_size()) ||
+				intersects_kip_archdep(kip, addr, size)) {
+				unmap_local(region.start, size >> get_page_size_log2());
+			} else {
+				add_region(region, _ram_alloc);
+				add_region(region, _core_address_ranges());
+			}
+			remove_region(region, _io_mem_alloc);
+			remove_region(region, _region_alloc);
+
+			bytes_got += size;
+		}
 
 		log("Got ", bytes_got >> 10, "K in ", size >> 10, "K pieces.");
 	}
@@ -463,20 +476,6 @@ void Platform::_setup_preemption()
 	 */
 	L4_Set_Priority(Pistachio::L4_Myself(),
 	                Platform_thread::DEFAULT_PRIORITY);
-}
-
-
-static Pistachio::L4_KernelInterfacePage_t *init_kip()
-{
-	using namespace Pistachio;
-
-	/* completely map program image */
-	addr_t beg = trunc_page((addr_t)&_prog_img_beg);
-	addr_t end = round_page((addr_t)&_prog_img_end);
-	for ( ; beg < end; beg += Pistachio::get_page_size())
-		L4_Sigma0_GetPage(get_sigma0(), L4_Fpage(beg, Pistachio::get_page_size()));
-
-	return get_kip();
 }
 
 
@@ -501,11 +500,7 @@ void Platform::_setup_basics()
 	dump_kip_memdesc(kip);
 
 	/* add KIP as ROM module */
-	_kip_rom = Rom_module((addr_t)kip, sizeof(L4_KernelInterfacePage_t), "pistachio_kip");
 	_rom_fs.insert(&_kip_rom);
-
-	/* update multi-boot info pointer from KIP */
-	void *mb_info_ptr = (void *)kip->BootInfo;
 
 	// Get virtual bootinfo address.
 
@@ -515,15 +510,7 @@ void Platform::_setup_basics()
 	if (L4_IsNilFpage(bipage))
 		panic("Could not map BootInfo.");
 
-	if (!L4_BootInfo_Valid(mb_info_ptr))
-		panic("No valid boot info.");
-
-	if (L4_BootInfo_Size(mb_info_ptr) > get_page_size())
-		panic("TODO Our multiboot info is bigger than a page...");
-
 	/* done magic */
-
-	if (verbose) log("MBI @ ", mb_info_ptr);
 
 	/* get UTCB memory */
 	Platform_pd::touch_utcb_space();
@@ -568,11 +555,9 @@ void Platform::_setup_basics()
 	_region_alloc.remove_range(stack_area_virtual_base(),
 	                           stack_area_virtual_size());
 
-	/* remove KIP and MBI area from region and IO_MEM allocator */
+	/* remove KIP area from region and IO_MEM allocator */
 	remove_region(Region((addr_t)kip, (addr_t)kip + kip_size), _region_alloc);
 	remove_region(Region((addr_t)kip, (addr_t)kip + kip_size), _io_mem_alloc);
-	remove_region(Region((addr_t)mb_info_ptr, (addr_t)mb_info_ptr + _mb_info.size()), _region_alloc);
-	remove_region(Region((addr_t)mb_info_ptr, (addr_t)mb_info_ptr + _mb_info.size()), _io_mem_alloc);
 
 	/* remove utcb area */
 	addr_t utcb_ptr = (addr_t)Platform_pd::_core_utcb_ptr;
@@ -593,31 +578,12 @@ void Platform::_setup_basics()
 
 void Platform::_setup_rom()
 {
-	Rom_module rom;
-
-	Pistachio::L4_Word_t page_size = Pistachio::get_page_size();
-
-	for (unsigned i = 0; i < _mb_info.num_modules();  i++) {
-		if (!(rom = _mb_info.get_module(i)).valid()) continue;
-
-		Rom_module *new_rom = new(core_mem_alloc()) Rom_module(rom);
-
-		_rom_fs.insert(new_rom);
-
-		if (verbose)
-			log(" mod[", i, "] ", *new_rom);
-
-		/* zero remainder of last ROM page */
-		size_t count = page_size - rom.size() % page_size;
-		if (count != page_size)
-			memset(reinterpret_cast<void *>(rom.addr() + rom.size()), 0, count);
-
-		/* remove ROM area from region and IO_MEM allocator */
-		remove_region(Region(new_rom->addr(), new_rom->addr() + new_rom->size()), _region_alloc);
-		remove_region(Region(new_rom->addr(), new_rom->addr() + new_rom->size()), _io_mem_alloc);
-
-		/* add area to core-accessible ranges */
-		add_region(Region(new_rom->addr(), new_rom->addr() + new_rom->size()), _core_address_ranges());
+	/* add boot modules to ROM FS */
+	Boot_modules_header * header = &_boot_modules_headers_begin;
+	for (; header < &_boot_modules_headers_end; header++) {
+		Rom_module * rom = new (core_mem_alloc())
+			Rom_module(header->base, header->size, (const char*)header->name);
+		_rom_fs.insert(rom);
 	}
 }
 
@@ -634,7 +600,8 @@ Platform::Platform() :
 	_ram_alloc(nullptr), _io_mem_alloc(core_mem_alloc()),
 	_io_port_alloc(core_mem_alloc()), _irq_alloc(core_mem_alloc()),
 	_region_alloc(core_mem_alloc()),
-	_mb_info(init_kip()->BootInfo)
+	_kip_rom((addr_t)Pistachio::get_kip(),
+	         sizeof(Pistachio::L4_KernelInterfacePage_t), "pistachio_kip")
 {
 	/*
 	 * We must be single-threaded at this stage and so this is safe.
@@ -658,13 +625,13 @@ Platform::Platform() :
 	 * hold the meta data for the ROM modules as initialized by '_setup_rom'.
 	 */
 	if (verbose) {
-		log(":ram_alloc: ");    _ram_alloc()->dump_addr_tree();
-		log(":region_alloc: "); _region_alloc()->dump_addr_tree();
-		log(":io_mem: ");       _io_mem_alloc()->dump_addr_tree();
-		log(":io_port: ");      _io_port_alloc()->dump_addr_tree();
-		log(":irq: ");          _irq_alloc()->dump_addr_tree();
-		log(":rom_fs: ");       _rom_fs.print_fs();
-		log(":core ranges: ");  _core_address_ranges()()->dump_addr_tree();
+		log(":ram_alloc: ",     _ram_alloc);
+		log(":region_alloc: ",  _region_alloc);
+		log(":io_mem: ",        _io_mem_alloc);
+		log(":io_port: ",       _io_port_alloc);
+		log(":irq: ",           _irq_alloc);
+		log(":rom_fs: ",        _rom_fs);
+		log(":core ranges: ",   _core_address_ranges);
 	}
 
 	/*

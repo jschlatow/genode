@@ -135,7 +135,7 @@ class Block::Root_multiple_clients : public Root_component< ::Session_component>
 				throw Root::Unavailable();
 			}
 
-			Factory *factory = new (&_alloc) Factory(num);
+			Block::Factory *factory = new (&_alloc) Block::Factory(num);
 			::Session_component *session = new (&_alloc)
 				::Session_component(*factory, _env.ep(), tx_buf_size);
 			log("session opened at device ", num, " for '", label, "'");
@@ -145,8 +145,8 @@ class Block::Root_multiple_clients : public Root_component< ::Session_component>
 		void _destroy_session(::Session_component *session)
 		{
 			Driver_factory &factory = session->factory();
-			destroy(&_alloc, session);
-			destroy(&_alloc, &factory);
+			Genode::destroy(&_alloc, session);
+			Genode::destroy(&_alloc, &factory);
 		}
 
 	public:
@@ -186,7 +186,5 @@ struct Block::Main
 };
 
 
-namespace Component {
-	Genode::size_t stack_size()      { return 2 * 1024 * sizeof(long); }
-	void construct(Genode::Env &env) { static Block::Main server(env); }
-}
+
+void Component::construct(Genode::Env &env) { static Block::Main server(env); }

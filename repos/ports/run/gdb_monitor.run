@@ -59,11 +59,11 @@ set config {
 			<service name="Uart"/>
 		</provides>
 		<config>
-			<policy label="gdb_monitor" uart="1"/>
+			<policy label_prefix="gdb_monitor" uart="1"/>
 		</config>
 	</start>
 	<start name="gdb_monitor">
-		<resource name="RAM" quantum="4M"/>
+		<resource name="RAM" quantum="5M"/>
 		<config>
 			<target name="test-gdb_monitor">
 				<config>

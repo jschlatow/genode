@@ -18,6 +18,7 @@
 #include <base/thread.h>
 #include <base/object_pool.h>
 #include <base/capability.h>
+#include <base/session_label.h>
 #include <cap_session/cap_session.h>
 #include <pager/capability.h>
 
@@ -74,7 +75,6 @@ namespace Genode {
 			addr_t _initial_esp;
 			addr_t _initial_eip;
 			addr_t _client_exc_pt_sel;
-			addr_t _client_exc_vcpu;
 
 			Lock   _state_lock;
 
@@ -115,11 +115,13 @@ namespace Genode {
 
 			} _state;
 
-			Cpu_session_capability _cpu_session_cap;
-			Thread_capability      _thread_cap;
-			Exception_handlers     _exceptions;
+			Cpu_session_capability   _cpu_session_cap;
+			Thread_capability        _thread_cap;
+			Affinity::Location const _location;
+			Exception_handlers       _exceptions;
 
-			addr_t _pd;
+			addr_t _pd_target;
+			addr_t _pd_source;
 
 			void _copy_state_from_utcb(Nova::Utcb * utcb);
 			void _copy_state_to_utcb(Nova::Utcb * utcb);
@@ -148,11 +150,11 @@ namespace Genode {
 
 		public:
 
-			const Affinity::Location location;
-
 			Pager_object(Cpu_session_capability cpu_session_cap,
 			             Thread_capability thread_cap,
-			             unsigned long badge, Affinity::Location location);
+			             unsigned long badge, Affinity::Location location,
+			             Genode::Session_label const &,
+			             Cpu_session::Name const &);
 
 			virtual ~Pager_object();
 
@@ -172,11 +174,20 @@ namespace Genode {
 				_exception_sigh = sigh;
 			}
 
+			Affinity::Location location() const { return _location; }
+
 			/**
 			 * Assign PD selector to PD
 			 */
-			void assign_pd(addr_t pd_sel) { _pd = pd_sel; }
-			addr_t pd_sel() const { return _pd; }
+			void assign_pd(addr_t pd_sel)
+			{
+				if (_pd_target == _pd_source)
+					_pd_source = pd_sel;
+
+				_pd_target = pd_sel;
+			}
+			addr_t pd_sel()    const { return _pd_target; }
+			addr_t pd_source() const { return _pd_source; }
 
 			void exception(uint8_t exit_id);
 
@@ -184,7 +195,6 @@ namespace Genode {
 			 * Return base of initial portal window
 			 */
 			addr_t exc_pt_sel_client() { return _client_exc_pt_sel; }
-			addr_t exc_pt_vcpu() { return _client_exc_vcpu; }
 
 			/**
 			 * Set initial stack pointer used by the startup handler
@@ -321,14 +331,6 @@ namespace Genode {
 			void cleanup_call();
 
 			/**
-			 * Open receive window for initial portals for vCPU.
-			 */
-			void prepare_vCPU_portals()
-			{
-				_client_exc_vcpu = cap_map()->insert(Nova::NUM_INITIAL_VCPU_PT_LOG2);
-			}
-
-			/**
 			 * Portal called by thread that causes a out of memory in kernel.
 			 */
 			addr_t get_oom_portal();
@@ -342,6 +344,7 @@ namespace Genode {
 			enum Oom {
 				SEND = 1, REPLY = 2, SELF = 4,
 				SRC_CORE_PD = ~0UL, SRC_PD_UNKNOWN = 0,
+				NO_NOTIFICATION = 0
 			};
 
 			/**
@@ -358,10 +361,19 @@ namespace Genode {
 			 * /param pd      debug feature - string of PD (transfer_from)
 			 * /param thread  debug feature - string of EC (transfer_from)
 			 */
-			uint8_t handle_oom(addr_t pd_sel       = SRC_CORE_PD,
-			                   const char * pd     = "core",
+			uint8_t handle_oom(addr_t pd_sel = SRC_CORE_PD,
+			                   const char * pd = "core",
 			                   const char * thread = "unknown",
 			                   Policy = Policy::UPGRADE_CORE_TO_DST);
+			static uint8_t handle_oom(addr_t pd_from, addr_t pd_to,
+			                           char const * src_pd,
+			                           char const * src_thread,
+			                           Policy policy,
+			                           addr_t sm_notify = NO_NOTIFICATION,
+			                           char const * dst_pd = "unknown",
+			                           char const * dst_thread = "unknown");
+
+			void print(Output &out) const;
 	};
 
 	/**
@@ -398,6 +410,7 @@ namespace Genode {
 			 * constructor.
 			 */
 			void ep(Pager_entrypoint *ep) { _ep = ep; }
+			Pager_entrypoint *ep() { return _ep; }
 
 			/**
 			 * Thread interface

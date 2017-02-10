@@ -32,7 +32,7 @@ struct Report_rom::Main
 
 	Genode::Sliced_heap sliced_heap { env.ram(), env.rm() };
 
-	Rom::Registry rom_registry { sliced_heap, config_rom };
+	Rom::Registry rom_registry { sliced_heap, env.ram(), env.rm(), config_rom };
 
 	Genode::Attached_rom_dataspace config_rom { env, "config" };
 
@@ -48,12 +48,6 @@ struct Report_rom::Main
 	}
 };
 
-
-/***************
- ** Component **
- ***************/
-
-Genode::size_t Component::stack_size() { return 4*1024*sizeof(long); }
 
 void Component::construct(Genode::Env &env) { static Report_rom::Main main(env); }
 

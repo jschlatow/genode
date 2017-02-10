@@ -175,19 +175,19 @@ struct Pci_driver
 
 		Genode::size_t donate = 4096;
 		Genode::retry<Platform::Device::Quota_exceeded>(
-			[&] () { client.config_write(devfn, val, _access_size(val)); } ,
+			[&] () { client.config_write(devfn, val, _access_size(val)); },
 			[&] () {
-				char quota[32];
-				Genode::snprintf(quota, sizeof(quota), "ram_quota=%zd",
-				                 donate);
-				Genode::env()->parent()->upgrade(_pci.cap(), quota);
+				_pci.upgrade_ram(donate);
 				donate *= 2;
 			});
 	}
 
 	int first_device(int *bus, int *dev, int *fun)
 	{
-		_cap = _pci.first_device(CLASS_NETWORK, CLASS_MASK);
+		_cap = Genode::retry<Platform::Session::Out_of_metadata>(
+			[&] () { return _pci.first_device(CLASS_NETWORK, CLASS_MASK); },
+			[&] () { _pci.upgrade_ram(4096); });
+
 		if (!_cap.valid())
 			return -1;
 
@@ -200,8 +200,10 @@ struct Pci_driver
 		int result = -1;
 
 		_last_cap = _cap;
+		_cap = Genode::retry<Platform::Session::Out_of_metadata>(
+			[&] () { return _pci.next_device(_cap, CLASS_NETWORK, CLASS_MASK); },
+			[&] () { _pci.upgrade_ram(4096); });
 
-		_cap = _pci.next_device(_cap, CLASS_NETWORK, CLASS_MASK);
 		if (_cap.valid()) {
 			_bus_address(bus, dev, fun);
 			result = 0;
@@ -223,10 +225,7 @@ struct Pci_driver
 			Ram_dataspace_capability ram_cap = Genode::retry<Platform::Session::Out_of_metadata>(
 				[&] () { return _pci.alloc_dma_buffer(size); },
 				[&] () {
-					char quota[32];
-					Genode::snprintf(quota, sizeof(quota), "ram_quota=%zd",
-					                 donate);
-					Genode::env()->parent()->upgrade(_pci.cap(), quota);
+					_pci.upgrade_ram(donate);
 					donate = donate * 2 > size ? 4096 : donate * 2;
 				});
 
@@ -437,8 +436,8 @@ struct Slab_backend_alloc : public Genode::Allocator,
                             public Genode::Region_map_client
 {
 	enum {
-		VM_SIZE    = 1024 * 1024,
-		BLOCK_SIZE =  64 * 1024,
+		VM_SIZE    = 2 * 1024 * 1024,
+		BLOCK_SIZE =       64 * 1024,
 		ELEMENTS   = VM_SIZE / BLOCK_SIZE,
 	};
 
@@ -546,13 +545,12 @@ struct Slab
 		NUM_SLABS = (SLAB_STOP_LOG2 - SLAB_START_LOG2) + 1,
 	};
 
-	Slab_backend_alloc &_back_alloc;
 	Slab_alloc         *_allocator[NUM_SLABS];
 	Genode::addr_t      _start;
 	Genode::addr_t      _end;
 
 	Slab(Slab_backend_alloc &alloc)
-	: _back_alloc(alloc), _start(alloc.start()), _end(alloc.end())
+	: _start(alloc.start()), _end(alloc.end())
 	{
 		for (unsigned i = 0; i < NUM_SLABS; i++)
 			_allocator[i] = new (Genode::env()->heap())

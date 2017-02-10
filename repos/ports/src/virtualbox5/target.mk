@@ -15,8 +15,6 @@ SRC_CC = frontend/main.cc frontend/console.cc \
          hm.cc thread.cc dynlib.cc unimpl.cc
 
 # use implementation of VBOX 4
-vpath devices.cc $(REP_DIR)/src/virtualbox
-vpath drivers.cc $(REP_DIR)/src/virtualbox
 vpath dynlib.cc  $(REP_DIR)/src/virtualbox
 vpath libc.cc    $(REP_DIR)/src/virtualbox
 vpath logger.cc  $(REP_DIR)/src/virtualbox
@@ -54,6 +52,9 @@ SRC_CC += HostServices/SharedClipboard/service.cpp
 SRC_CC += frontend/dummy/errorinfo.cc frontend/dummy/virtualboxbase.cc
 SRC_CC += frontend/dummy/autostart.cc frontend/dummy/rest.cc
 SRC_CC += frontend/dummy/host.cc
+
+#vbox 4 include
+INC_DIR += $(REP_DIR)/src/virtualbox
 
 INC_DIR += $(VBOX_DIR)/Main/include
 INC_DIR += $(VBOX_DIR)/VMM/include

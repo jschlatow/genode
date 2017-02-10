@@ -12,24 +12,22 @@
  */
 
 /* Genode includes */
-#include <base/sleep.h>
+#include <base/component.h>
 
 /* VMM utility includes */
 #include <vmm/vcpu_thread.h>
 #include <vmm/vcpu_dispatcher.h>
 #include <vmm/printf.h>
 
-using Genode::Cap_connection;
-using Genode::sleep_forever;
 
-
+template <typename T>
 class Vcpu_dispatcher : public Vmm::Vcpu_dispatcher<Genode::Thread>
 {
 	private:
 
 		typedef Vcpu_dispatcher This;
 
-		Vmm::Vcpu_same_pd _vcpu_thread;
+		T _vcpu_thread;
 
 		/**
 		 * Shortcut for calling 'Vmm::Vcpu_dispatcher::register_handler'
@@ -48,19 +46,23 @@ class Vcpu_dispatcher : public Vmm::Vcpu_dispatcher<Genode::Thread>
 		 ** Virtualization event handlers **
 		 ***********************************/
 
-		void _svm_startup()
+		void _vcpu_startup()
 		{
-			Vmm::log("_svm_startup called");
+			Vmm::log(name(), " ", __func__, " called");
 		}
 
 	public:
 
 		enum Type { SVM, VTX };
 
-		Vcpu_dispatcher(Cap_connection &cap, Type type)
+		Vcpu_dispatcher(Genode::Env &env, Type type, char const * name,
+		                Genode::Capability<Genode::Pd_session> pd_cap)
 		:
-			Vmm::Vcpu_dispatcher<Genode::Thread>(STACK_SIZE, cap, Genode::env()->cpu_session(), Genode::Affinity::Location()),
-			_vcpu_thread(STACK_SIZE, Genode::env()->cpu_session(), Genode::Affinity::Location())
+			Vmm::Vcpu_dispatcher<Genode::Thread>(env, STACK_SIZE, &env.cpu(),
+			                                     Genode::Affinity::Location(),
+			                                     name),
+			_vcpu_thread(&env.cpu(), Genode::Affinity::Location(), pd_cap,
+			             STACK_SIZE)
 		{
 			using namespace Nova;
 
@@ -73,7 +75,7 @@ class Vcpu_dispatcher : public Vmm::Vcpu_dispatcher<Genode::Thread>
 
 			/* register virtualization event handlers */
 			if (type == SVM) {
-				_register_handler<0xfe, &This::_svm_startup>
+				_register_handler<0xfe, &This::_vcpu_startup>
 					(exc_base, mtd_all);
 			}
 
@@ -83,14 +85,16 @@ class Vcpu_dispatcher : public Vmm::Vcpu_dispatcher<Genode::Thread>
 };
 
 
-int main(int argc, char **argv)
+void Component::construct(Genode::Env &env)
 {
-	Genode::log("--- VBox started ---");
+	typedef Vcpu_dispatcher<Vmm::Vcpu_same_pd> Vcpu_s;
 
-	static Cap_connection cap;
-	static Vcpu_dispatcher vcpu_dispatcher(cap, Vcpu_dispatcher::SVM);
+	static Vcpu_s vcpu_s_1(env, Vcpu_s::SVM, "vcpu_s_1", env.pd_session_cap());
+	static Vcpu_s vcpu_s_2(env, Vcpu_s::SVM, "vcpu_s_2", env.pd_session_cap());
 
-	Genode::log("going to sleep forever...");
-	sleep_forever();
-	return 0;
+	typedef Vcpu_dispatcher<Vmm::Vcpu_other_pd> Vcpu_o;
+
+	static Genode::Pd_connection remote_pd("VM");
+	static Vcpu_o vcpu_o_1(env, Vcpu_o::SVM, "vcpu_o_1", remote_pd);
+	static Vcpu_o vcpu_o_2(env, Vcpu_o::SVM, "vcpu_o_2", remote_pd);
 }

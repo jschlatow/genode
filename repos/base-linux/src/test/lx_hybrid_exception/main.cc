@@ -13,7 +13,7 @@
 
 /* Genode includes */
 #include <base/component.h>
-#include <base/printf.h>
+#include <base/log.h>
 
 /* Linux includes */
 #include <stdlib.h>
@@ -27,24 +27,21 @@ static int exit_status;
 static void exit_on_suspended() { exit(exit_status); }
 
 
-Genode::size_t Component::stack_size() { return 16*1024*sizeof(long); }
-
-
 /*
  * Component implements classical main function in construct.
  */
 void Component::construct(Genode::Env &env)
 {
-	printf("--- lx_hybrid exception test ---\n");
+	log("--- lx_hybrid exception test ---");
 
 	try {
-		printf("Throwing Test_exception\n");
+		log("Throwing Test_exception");
 		throw Test_exception();
 	} catch (Test_exception) {
-		printf("Caught Test_exception\n");
+		log("Caught Test_exception");
 	}
 
-	printf("--- returning from main ---\n");
+	log("--- returning from main ---");
 	exit_status = 0;
 	env.ep().schedule_suspend(exit_on_suspended, nullptr);
 }

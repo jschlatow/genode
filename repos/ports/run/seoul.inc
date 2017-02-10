@@ -212,7 +212,7 @@ append_platform_drv_config
 
 append_if $use_nic_session config {
 	<start name="nic_drv" priority="-2">
-		<resource name="RAM" quantum="4M"/>
+		<resource name="RAM" quantum="8M"/>
 		<provides><service name="Nic"/></provides>
 		<route> <any-service><any-child/><parent/></any-service> </route>
 	</start>
@@ -289,8 +289,8 @@ append_if $use_fancy_stuff config {
 			<domain name="panel"   layer="2" content="client" label="no" focus="none" />
 			<domain name=""        layer="3" content="client" focus="click"
 			                       hover="always" ypos="18" height="-18" />
-			<policy label="pointer"    domain="pointer"/>
-			<policy label="status_bar" domain="panel"/>
+			<policy label_prefix="pointer"    domain="pointer"/>
+			<policy label_prefix="status_bar" domain="panel"/>
 			<default-policy domain=""/>
 		</config>
 		<route>
@@ -315,9 +315,7 @@ append_if $use_fancy_stuff config {
 		<resource name="RAM" quantum="1M"/>
 		<provides> <service name="Report"/> <service name="ROM"/> </provides>
 		<config>
-			<rom>
-				<policy label="status_bar -> focus" report="nitpicker -> focus"/>
-			</rom>
+			<policy label="status_bar -> focus" report="nitpicker -> focus"/>
 		</config>
 	</start>
 	<start name="launchpad" priority="-2">

@@ -545,6 +545,8 @@ class Genode::Cstring
 		{ }
 
 		void print(Output &out) const { out.out_string(_str, _len); }
+
+		size_t length() const { return _len; }
 };
 
 
@@ -595,18 +597,6 @@ class Genode::String
 			}
 		};
 
-		template <typename... T>
-		void _init(T &&... args)
-		{
-			/* initialize string content */
-			Local_output output(_buf);
-			Genode::print(output, args...);
-
-			/* add terminating null */
-			_buf[output.num_chars()] = 0;
-			_len = output.num_chars() + 1;
-		}
-
 	public:
 
 		constexpr static size_t size() { return CAPACITY; }
@@ -616,6 +606,12 @@ class Genode::String
 		/**
 		 * Constructor
 		 *
+		 * The constructor accepts a non-zero number of arguments, which
+		 * are concatenated in the resulting 'String' object. In order to
+		 * generate the textual representation of the arguments, the
+		 * argument types must support the 'Output' interface, e.g., by
+		 * providing 'print' method.
+		 *
 		 * If the textual representation of the supplied arguments exceeds
 		 * 'CAPACITY', the resulting string gets truncated. The caller may
 		 * check for this condition by evaluating the 'length' of the
@@ -623,16 +619,36 @@ class Genode::String
 		 * may fit perfectly into the buffer or may have been truncated.
 		 * In general, it would be safe to assume the latter.
 		 */
-		template <typename T>
-		String(T const &arg) { _init(arg); }
+		template <typename T, typename... TAIL>
+		String(T const &arg, TAIL &&... args)
+		{
+			/* initialize string content */
+			Local_output output(_buf);
+			Genode::print(output, arg, args...);
+
+			/* add terminating null */
+			_buf[output.num_chars()] = 0;
+			_len = output.num_chars() + 1;
+		}
+
+		/**
+		 * Constructor
+		 *
+		 * Overload for the common case of constructing a 'String' from a
+		 * string literal.
+		 */
+		String(char const *cstr) : _len(min(Genode::strlen(cstr) + 1, CAPACITY))
+		{
+			Genode::strncpy(_buf, cstr, _len);
+		}
 
 		/**
 		 * Copy constructor
 		 */
 		template <unsigned N>
-		String(String<N> const &other) : _len(min(other._len, CAPACITY))
+		String(String<N> const &other) : _len(min(other.length(), CAPACITY))
 		{
-			Genode::strncpy(_buf, other._buf, _len);
+			Genode::strncpy(_buf, other.string(), _len);
 		}
 
 		/**

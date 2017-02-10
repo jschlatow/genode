@@ -117,9 +117,24 @@ int SUPR3CallVMMR0Ex(PVMR0 pVMR0, VMCPUID idCpu, unsigned
 
 	case VMMR0_DO_GVMM_SCHED_HALT:
 	{
+		const uint64_t u64NowGip = RTTimeNanoTS();
+		const uint64_t ns_diff = u64Arg > u64NowGip ? u64Arg - u64NowGip : 0;
+
+		if (!ns_diff)
+			return VINF_SUCCESS;
+
+		uint64_t const tsc_offset = genode_cpu_hz() * ns_diff / (1000*1000*1000);
+		uint64_t const tsc_abs    = Genode::Trace::timestamp() + tsc_offset;
+
+		using namespace Genode;
+
+		if (ns_diff > RT_NS_1SEC)
+			warning(" more than 1 sec vcpu halt ", ns_diff, " ns");
+
 		Vcpu_handler *vcpu_handler = lookup_vcpu_handler(idCpu);
 		Assert(vcpu_handler);
-		vcpu_handler->halt();
+		vcpu_handler->halt(tsc_abs);
+
 		return VINF_SUCCESS;
 	}
 
@@ -127,6 +142,11 @@ int SUPR3CallVMMR0Ex(PVMR0 pVMR0, VMCPUID idCpu, unsigned
 	{
 		Vcpu_handler *vcpu_handler = lookup_vcpu_handler(idCpu);
 		Assert(vcpu_handler);
+
+		/* don't wake the currently running thread again */
+		if (vcpu_handler->utcb() == Genode::Thread::myself()->utcb())
+			return VINF_SUCCESS;
+
 		vcpu_handler->wake_up();
 		return VINF_SUCCESS;
 	}
@@ -260,7 +280,7 @@ extern "C" void pthread_yield(void)
 }
 
 
-void *operator new (Genode::size_t size, int log2_align)
+void *operator new (__SIZE_TYPE__ size, int log2_align)
 {
 	static Libc::Mem_alloc_impl heap(Genode::env()->rm_session());
 	return heap.alloc(size, log2_align);
@@ -272,24 +292,28 @@ bool create_emt_vcpu(pthread_t * pthread, size_t stack,
                      void *(*start_routine)(void *), void *arg,
                      Genode::Cpu_session * cpu_session,
                      Genode::Affinity::Location location,
-                     unsigned int cpu_id)
+                     unsigned int cpu_id, const char * name)
 {
 	Nova::Hip * hip = hip_rom.local_addr<Nova::Hip>();
 
 	if (!hip->has_feature_vmx() && !hip->has_feature_svm())
 		return false;
 
+	static Genode::Pd_connection pd_vcpus("VM");
+
 	Vcpu_handler *vcpu_handler = 0;
 
 	if (hip->has_feature_vmx())
-		vcpu_handler = new (0x10) Vcpu_handler_vmx(stack, attr, start_routine,
+		vcpu_handler = new (0x10) Vcpu_handler_vmx(genode_env(),
+		                                           stack, attr, start_routine,
 		                                           arg, cpu_session, location,
-		                                           cpu_id);
+		                                           cpu_id, name, pd_vcpus);
 
 	if (hip->has_feature_svm())
-		vcpu_handler = new (0x10) Vcpu_handler_svm(stack, attr, start_routine,
+		vcpu_handler = new (0x10) Vcpu_handler_svm(genode_env(),
+		                                           stack, attr, start_routine,
 		                                           arg, cpu_session, location,
-		                                           cpu_id);
+		                                           cpu_id, name, pd_vcpus);
 
 	Assert(!(reinterpret_cast<unsigned long>(vcpu_handler) & 0xf));
 

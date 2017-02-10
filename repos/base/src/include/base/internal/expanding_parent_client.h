@@ -87,13 +87,14 @@ class Genode::Expanding_parent_client : public Parent_client
 		 ** Parent interface **
 		 **********************/
 
-		Session_capability session(Service_name const &name,
+		Session_capability session(Client::Id          id,
+		                           Service_name const &name,
 		                           Session_args const &args,
 		                           Affinity     const &affinity) override
 		{
 			enum { NUM_ATTEMPTS = 2 };
 			return retry<Parent::Quota_exceeded>(
-				[&] () { return Parent_client::session(name, args, affinity); },
+				[&] () { return Parent_client::session(id, name, args, affinity); },
 				[&] () {
 
 					/*
@@ -107,14 +108,14 @@ class Genode::Expanding_parent_client : public Parent_client
 							.ulong_value(0);
 
 					char buf[128];
-					snprintf(buf, sizeof(buf), "ram_quota=%zu", ram_quota);
+					snprintf(buf, sizeof(buf), "ram_quota=%lu", ram_quota);
 
 					resource_request(Resource_args(buf));
 				},
 				NUM_ATTEMPTS);
 		}
 
-		void upgrade(Session_capability to_session, Upgrade_args const &args) override
+		Upgrade_result upgrade(Client::Id id, Upgrade_args const &args) override
 		{
 			/*
 			 * If the upgrade fails, attempt to issue a resource request twice.
@@ -131,8 +132,8 @@ class Genode::Expanding_parent_client : public Parent_client
 			 * caller to issue (and respond to) a resource request.
 			 */
 			enum { NUM_ATTEMPTS = 2 };
-			retry<Parent::Quota_exceeded>(
-				[&] () { Parent_client::upgrade(to_session, args); },
+			return retry<Parent::Quota_exceeded>(
+				[&] () { return Parent_client::upgrade(id, args); },
 				[&] () { resource_request(Resource_args(args.string())); },
 				NUM_ATTEMPTS);
 		}

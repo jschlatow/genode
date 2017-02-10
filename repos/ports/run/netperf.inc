@@ -4,7 +4,10 @@
 # \date   2013-04-18
 #
 
-if {[have_include "power_on/qemu"]} {
+# setting environment variable FORCE_QEMU permits running netperf in qemu
+set force_qemu [info exists ::env(FORCE_QEMU)]
+
+if {[expr [have_include "power_on/qemu"] && !$force_qemu]} {
 	puts "\nNetperf running on Qemu is not recommended.\n"
 	exit
 }
@@ -127,11 +130,11 @@ append_if [have_spec gpio] config {
 
 append_if $use_nic_bridge config {
 	<start name="nic_bridge">
-		<resource name="RAM" quantum="4M"/>
+		<resource name="RAM" quantum="5M"/>
 		<provides><service name="Nic"/></provides>
 		<config>}
 append_if [expr $use_nic_bridge && [have_spec linux]] config "
-			<policy label=\"netserver_genode\" ip_addr=\"$lx_ip_addr\"/>"
+			<policy label_prefix=\"netserver_genode\" ip_addr=\"$lx_ip_addr\"/>"
 append_if $use_nic_bridge config {
 		</config>
 		<route>
@@ -174,7 +177,7 @@ append_if $use_wifi_driver config {
 		<resource name="RAM" quantum="4M"/>
 		<provides> <service name="File_system"/> </provides>
 		<config>
-			<policy label="config_rom" root="/"/>
+			<policy label_prefix="config_rom" root="/"/>
 			<policy label="wifi_drv -> config" root="/" writeable="yes"/>
 			<content>
 				<inline name="wlan_configuration">}

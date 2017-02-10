@@ -38,20 +38,18 @@
 
 static const bool verbose = false;
 
-using Genode::size_t;
-
 /*
  * We cannot use the libc's version of malloc because it does not satisfies
  * the alignment constraints asserted by 'Runtime/r3/alloc.cpp'.
  */
 
-extern "C" void *malloc(size_t size)
+extern "C" void *malloc(::size_t size)
 {
 	return Libc::mem_alloc()->alloc(size, Genode::log2(RTMEM_ALIGNMENT));
 }
 
 
-extern "C" void *calloc(size_t nmemb, size_t size)
+extern "C" void *calloc(::size_t nmemb, ::size_t size)
 {
 	void *ret = malloc(nmemb*size);
 	if (ret)
@@ -66,7 +64,7 @@ extern "C" void free(void *ptr)
 }
 
 
-extern "C" void *realloc(void *ptr, Genode::size_t size)
+extern "C" void *realloc(void *ptr, ::size_t size)
 {
 	if (!ptr)
 		return malloc(size);
@@ -113,12 +111,12 @@ extern "C" char *getenv(const char *name)
 		               "+rem_printf.e.l.f"
 //		               "+rem_run.e.l.f"
 //		               "+pgm.e.l.f"
-		               "+pdm"
+//		               "+pdm"
 //		               "+cpum.e.l.f"
 //		               "+dev_pcnet.e.l.f"
 //		               "+dev_pic.e.l.f"
 //		               "+dev_apic.e.l.f"
-		               "+dev_vmm.e"
+//		               "+dev_vmm.e"
 //		               "+usb_mouse.e.l.f"
 //		               "+main.e.l.f"
 //		               "+hgcm.e.l.f"
@@ -131,7 +129,6 @@ extern "C" char *getenv(const char *name)
 	    Genode::strcmp(name, "VBOX_RELEASE_LOG_FLAGS") == 0)
 		return (char *)"thread";
 
-	Genode::warning("getenv called for non-existent variable \"", name, "\"");
 	return 0;
 }
 

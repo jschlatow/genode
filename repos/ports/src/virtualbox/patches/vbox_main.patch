@@ -138,19 +138,6 @@ index feebfcd..4136d6d 100644
  };
  
  #endif // ____H_H_FRAMEBUFFERIMPL
-diff --git a/src/app/virtualbox/src/VBox/Main/include/MachineImpl.h b/src/app/virtualbox/src/VBox/Main/include/MachineImpl.h
-index bb91290..d3c6d85 100644
---- a/src/app/virtualbox/src/VBox/Main/include/MachineImpl.h
-+++ b/src/app/virtualbox/src/VBox/Main/include/MachineImpl.h
-@@ -1213,7 +1213,7 @@ private:
-     HRESULT setMachineState(MachineState_T aMachineState);
-     HRESULT updateMachineStateOnClient();
- 
--    HRESULT mRemoveSavedState;
-+    bool mRemoveSavedState;
- 
-     ConsoleTaskData mConsoleTaskData;
- 
 diff --git a/src/app/virtualbox/src/VBox/Main/include/NetworkServiceRunner.h b/src/app/virtualbox/src/VBox/Main/include/NetworkServiceRunner.h
 index f0ec275..78a390e 100644
 --- a/src/app/virtualbox/src/VBox/Main/include/NetworkServiceRunner.h
@@ -667,6 +654,42 @@ index 69e3109..3c534df 100644
  /**
   * Parses one key value pair.
   *
+@@ -4566,6 +4620,8 @@
+     return rc;
+ }
+ 
++#endif /* #if 0 */
++
+ /**
+  * Removes the key interfaces from all disk attachments, useful when
+  * changing the key store or dropping it.
+@@ -4650,6 +4706,8 @@
+     return hrc;
+ }
+ 
++#if 0
++
+ /**
+  * Configures the encryption support for the disk identified by the gien UUID with
+  * the given key.
+@@ -5344,6 +5402,8 @@
+     fireVRDEServerInfoChangedEvent(mEventSource);
+ }
+ 
++#endif /* #if 0 */
++
+ HRESULT Console::i_sendACPIMonitorHotPlugEvent()
+ {
+     LogFlowThisFuncEnter();
+@@ -5385,6 +5445,8 @@
+     return rc;
+ }
+ 
++#if 0
++
+ HRESULT Console::onVideoCaptureChange()
+ {
+     AutoCaller autoCaller(this);
 @@ -6490,6 +6544,8 @@ void Console::onMouseCapabilityChange(BOOL supportsAbsolute, BOOL supportsRelati
      fireMouseCapabilityChangedEvent(mEventSource, supportsAbsolute, supportsRelative, supportsMT, needsHostCursor);
  }
@@ -920,27 +943,6 @@ index 69e3109..3c534df 100644
  /**
   * Thread for powering down the Console.
   *
-@@ -10367,8 +10467,6 @@ Console::i_pdmIfSecKey_KeyRelease(PPDMISECKEY pInterface, const char *pszId)
- }
- 
- 
--
--
- /**
-  * The Main status driver instance data.
-  */
-@@ -10461,9 +10559,11 @@ DECLCALLBACK(int) Console::drvStatus_MediumEjected(PPDMIMEDIANOTIFY pInterface,
-                     alock.release();
- 
-                     ComPtr<IMediumAttachment> pNewMediumAtt;
-+#if 0
-                     rc = pThis->pConsole->mControl->EjectMedium(pMediumAtt, pNewMediumAtt.asOutParam());
-                     if (SUCCEEDED(rc))
-                         fireMediumChangedEvent(pThis->pConsole->mEventSource, pNewMediumAtt);
-+#endif
- 
-                     alock.acquire();
-                     if (pNewMediumAtt != pMediumAtt)
 diff --git a/src/app/virtualbox/src/VBox/Main/src-client/ConsoleImpl2.cpp b/src/app/virtualbox/src/VBox/Main/src-client/ConsoleImpl2.cpp
 index caed4be..19c3dc0 100644
 --- a/src/app/virtualbox/src/VBox/Main/src-client/ConsoleImpl2.cpp
@@ -969,28 +971,8 @@ index caed4be..19c3dc0 100644
  /**
   * Translate IDE StorageControllerType_T to string representation.
   */
-@@ -522,12 +525,12 @@ static LONG GetNextUsedPort(LONG aPortUsed[30], LONG lBaseVal, uint32_t u32Size)
- 
- #define MAX_BIOS_LUN_COUNT   4
- 
--static int SetBiosDiskInfo(ComPtr<IMachine> pMachine, PCFGMNODE pCfg, PCFGMNODE pBiosCfg,
-+static HRESULT SetBiosDiskInfo(ComPtr<IMachine> pMachine, PCFGMNODE pCfg, PCFGMNODE pBiosCfg,
-                            Bstr controllerName, const char * const s_apszBiosConfig[4])
- {
-     HRESULT             hrc;
- #define MAX_DEVICES     30
--#define H()     AssertMsgReturn(!FAILED(hrc), ("hrc=%Rhrc\n", hrc), VERR_GENERAL_FAILURE)
-+#define H()     AssertMsgReturn(!FAILED(hrc), ("hrc=%Rhrc\n", hrc), E_FAIL)
- 
-     LONG lPortLUN[MAX_BIOS_LUN_COUNT];
-     LONG lPortUsed[MAX_DEVICES];
-@@ -599,9 +602,11 @@ static int SetBiosDiskInfo(ComPtr<IMachine> pMachine, PCFGMNODE pCfg, PCFGMNODE
-             LogFlowFunc(("Top %d HBA ports = %s, %d\n", j, s_apszBiosConfig[j], lPortLUN[j]));
-         }
-     }
--    return VINF_SUCCESS;
-+#undef H
-+    return S_OK;
+@@ -602,6 +602,7 @@ static int SetBiosDiskInfo(ComPtr<IMachine> pMachine, PCFGMNODE pCfg, PCFGMNODE
+     return S_OK;
  }
  
 +#if 0
@@ -1149,19 +1131,16 @@ diff --git a/src/app/virtualbox/src/VBox/Main/src-client/DisplayImpl.cpp b/src/a
 index fed0ac3..bc3c334 100644
 --- a/src/app/virtualbox/src/VBox/Main/src-client/DisplayImpl.cpp
 +++ b/src/app/virtualbox/src/VBox/Main/src-client/DisplayImpl.cpp
-@@ -16,9 +16,12 @@
-  */
- 
+@@ -16,7 +16,9 @@
  #include "DisplayImpl.h"
-+#include "MachineImpl.h"
  #include "DisplayUtils.h"
  #include "ConsoleImpl.h"
 +#if 0
  #include "ConsoleVRDPServer.h"
 +#endif
+ #include "GuestImpl.h"
  #include "VMMDev.h"
  
- #include "AutoCaller.h"
 @@ -1067,7 +1070,9 @@ void Display::handleResizeCompletedEMT(BOOL fResizeContext)
           * Must be done before calling NotifyUpdate below.
           */
@@ -1516,21 +1495,6 @@ index 3889a01..5fcb53c 100644
      cchBufLeft = sizeof(szPath) - cchBufLeft;
  
      int vrc = VINF_SUCCESS;
-@@ -8096,10 +8100,14 @@ HRESULT Machine::launchVMProcess(IInternalSessionControl *aControl,
-         }
-         strSupStartLogArg.append(strStartupLogFile);
-     }
-+#if defined(VBOX_WITH_QTGUI) || defined(VBOX_WITH_VBOXSDL) || defined(VBOX_WITH_HEADLESS)
-     const char *pszSupStartupLogArg = strSupStartLogArg.c_str();
-+#endif
- #else
-+#if defined(VBOX_WITH_QTGUI) || defined(VBOX_WITH_VBOXSDL) || defined(VBOX_WITH_HEADLESS)
-     const char *pszSupStartupLogArg = NULL;
- #endif
-+#endif
- 
- 
- #ifdef VBOX_WITH_QTGUI
 @@ -8500,6 +8508,7 @@ HRESULT Machine::prepareRegister()
  
      // Ensure the settings are saved. If we are going to be registered and
@@ -1648,29 +1612,15 @@ index c61ea6f..ed4bb7a 100644
  #include "AutoCaller.h"
  #include "Logging.h"
  
-@@ -679,16 +681,21 @@ DECLCALLBACK(int) Medium::Task::fntMediumTask(RTTHREAD aThread, void *pvUser)
- 
-     HRESULT rc = pTask->handler();
- 
-+    Progress * p = nullptr;
-+
-     /* complete the progress if run asynchronously */
-     if (pTask->isAsync())
-     {
-         if (!pTask->mProgress.isNull())
--            pTask->mProgress->notifyComplete(rc);
-+            p = pTask->mProgress;
-     }
- 
-     /* pTask is no longer needed, delete it. */
+@@ -697,7 +704,7 @@ DECLCALLBACK(int) Medium::Task::fntMediumTask(RTTHREAD aThread, void *pvUser)
      delete pTask;
  
-+    if (p)
-+         p->notifyComplete(rc);
-+
-     LogFlowFunc(("rc=%Rhrc\n", rc));
-     LogFlowFuncLeave();
+     /* complete the progress if run asynchronously */
+-    if (!pProgress.isNull())
++    if (pProgress && !pProgress.isNull())
+         pProgress->notifyComplete(rc);
  
+     LogFlowFunc(("rc=%Rhrc\n", rc));
 @@ -1231,7 +1238,7 @@ HRESULT Medium::init(VirtualBox *aVirtualBox,
          else
          {
@@ -1857,3 +1807,31 @@ index 3520c9c..e3288af 100644
      }
  
      return false;
+--- a/src/app/virtualbox/src/VBox/Main/src-server/SystemPropertiesImpl.cpp
++++ b/src/app/virtualbox/src/VBox/Main/src-server/SystemPropertiesImpl.cpp
+@@ -1191,8 +1191,8 @@
+ HRESULT SystemProperties::setLoggingLevel(const Utf8Str &aLoggingLevel)
+ {
+     Utf8Str useLoggingLevel(aLoggingLevel);
+-    if (useLoggingLevel.isEmpty())
+-        useLoggingLevel = VBOXSVC_LOG_DEFAULT;
++//    if (useLoggingLevel.isEmpty())
++//        useLoggingLevel = VBOXSVC_LOG_DEFAULT;
+     int rc = RTLogGroupSettings(RTLogRelDefaultInstance(), useLoggingLevel.c_str());
+     //  If failed and not the default logging level - try to use the default logging level.
+     if (RT_FAILURE(rc))
+--- a/src/app/virtualbox/include/iprt/string.h
++++ b/src/app/virtualbox/include/iprt/string.h
+@@ -113,12 +113,6 @@
+ RT_C_DECLS_END
+ #endif
+ 
+-#if !defined(RT_OS_LINUX) || !defined(_GNU_SOURCE)
+-RT_C_DECLS_BEGIN
+-void *memrchr(const char *pv, int ch, size_t cb);
+-RT_C_DECLS_END
+-#endif
+-
+ 
+ /** @def RT_USE_RTC_3629
+  * When defined the UTF-8 range will stop at  0x10ffff.  If not defined, the

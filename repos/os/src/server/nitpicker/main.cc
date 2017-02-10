@@ -1072,7 +1072,7 @@ class Nitpicker::Root : public Genode::Root_component<Session_component>
 			session->destroy_all_views();
 			_mode.forget(*session);
 
-			destroy(md_alloc(), session);
+			Genode::destroy(md_alloc(), session);
 		}
 
 	public:
@@ -1397,13 +1397,4 @@ void Nitpicker::Main::handle_fb_mode()
 }
 
 
-/***************
- ** Component **
- ***************/
-
-namespace Component {
-
-	Genode::size_t stack_size() { return 4*1024*sizeof(long); }
-
-	void construct(Genode::Env &env) { static Nitpicker::Main nitpicker(env); }
-}
+void Component::construct(Genode::Env &env) { static Nitpicker::Main nitpicker(env); }

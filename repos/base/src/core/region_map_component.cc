@@ -149,6 +149,17 @@ struct Genode::Region_map_component::Fault_area
 
 using namespace Genode;
 
+static void print_page_fault(char const *msg,
+                             addr_t pf_addr,
+                             addr_t pf_ip,
+                             Region_map::State::Fault_type pf_type,
+                             Pager_object const &obj)
+{
+	log(msg, " (",
+	    pf_type == Region_map::State::WRITE_FAULT ? "WRITE" : "READ",
+	    " pf_addr=", Hex(pf_addr), " pf_ip=", Hex(pf_ip), " from ", obj, ")");
+}
+
 
 /***********************
  ** Region-map client **
@@ -168,7 +179,7 @@ int Rm_client::pager(Ipc_pager &pager)
 	addr_t pf_ip   = pager.fault_ip();
 
 	if (verbose_page_faults)
-		print_page_fault("page fault", pf_addr, pf_ip, pf_type, badge());
+		print_page_fault("page fault", pf_addr, pf_ip, pf_type, *this);
 
 	auto lambda = [&] (Region_map_component *region_map,
 	                   Rm_region            *region,
@@ -187,7 +198,7 @@ int Rm_client::pager(Ipc_pager &pager)
 			/* print a warning if it's no managed-dataspace */
 			if (region_map == member_rm())
 				print_page_fault("no RM attachment", pf_addr, pf_ip,
-				                 pf_type, badge());
+				                 pf_type, *this);
 
 			/* register fault at responsible region map */
 			if (region_map)
@@ -223,7 +234,7 @@ int Rm_client::pager(Ipc_pager &pager)
 
 			/* attempted there is no attachment return an error condition */
 			print_page_fault("attempted write at read-only memory",
-			                 pf_addr, pf_ip, pf_type, badge());
+			                 pf_addr, pf_ip, pf_type, *this);
 
 			/* register fault at responsible region map */
 			region_map->fault(this, src_fault_area.fault_addr(), pf_type);
@@ -262,7 +273,7 @@ void Rm_faulter::fault(Region_map_component *faulting_region_map,
 {
 	Lock::Guard lock_guard(_lock);
 
-	_faulting_region_map = faulting_region_map;
+	_faulting_region_map = faulting_region_map->weak_ptr();
 	_fault_state         = fault_state;
 
 	_pager_object->unresolved_page_fault_occurred();
@@ -274,10 +285,14 @@ void Rm_faulter::dissolve_from_faulting_region_map(Region_map_component * caller
 	/* serialize access */
 	Lock::Guard lock_guard(_lock);
 
-	if (_faulting_region_map)
-		_faulting_region_map->discard_faulter(this, _faulting_region_map != caller);
+	{
+		Locked_ptr<Region_map_component> locked_ptr(_faulting_region_map);
 
-	_faulting_region_map = 0;
+		if (locked_ptr.valid())
+			locked_ptr->discard_faulter(this, &*locked_ptr != caller);
+	}
+
+	_faulting_region_map = Genode::Weak_ptr<Genode::Region_map_component>();
 }
 
 
@@ -286,7 +301,7 @@ void Rm_faulter::continue_after_resolved_fault()
 	Lock::Guard lock_guard(_lock);
 
 	_pager_object->wake_up();
-	_faulting_region_map = 0;
+	_faulting_region_map = Genode::Weak_ptr<Genode::Region_map_component>();
 	_fault_state = Region_map::State();
 }
 
@@ -376,16 +391,6 @@ Region_map_component::attach(Dataspace_capability ds_cap, size_t size,
 		/* store attachment info in meta data */
 		_map.metadata(r, Rm_region((addr_t)r, size, true, dsc, offset, this));
 		Rm_region *region = _map.metadata(r);
-
-		/* also update region list */
-		Rm_region_ref *p;
-		try { p = new(&_ref_slab) Rm_region_ref(region); }
-		catch (Allocator::Out_of_memory) {
-			_map.free(r);
-			throw Out_of_metadata();
-		}
-
-		_regions.insert(p);
 
 		/* inform dataspace about attachment */
 		dsc->attached_to(region);
@@ -537,16 +542,6 @@ void Region_map_component::detach(Local_addr local_addr)
 	 * region maps.
 	 */
 	unmap_managed(this, &region, 1);
-
-	/* update region list */
-	Rm_region_ref *p = _regions.first();
-	for (; p; p = p->next())
-		if (p->region() == region_ptr) break;
-
-	if (p) {
-		_regions.remove(p);
-		destroy(&_ref_slab, p);
-	}
 }
 
 
@@ -626,7 +621,6 @@ Region_map_component::Region_map_component(Rpc_entrypoint   &ep,
 :
 	_ds_ep(&ep), _thread_ep(&ep), _session_ep(&ep),
 	_md_alloc(md_alloc),
-	_ref_slab(&_md_alloc),
 	_map(&_md_alloc), _pager_ep(&pager_ep),
 	_ds(align_addr(vm_size, get_page_size_log2())),
 	_ds_cap(_type_deduction_helper(_ds_ep->manage(&_ds)))
@@ -642,6 +636,8 @@ Region_map_component::Region_map_component(Rpc_entrypoint   &ep,
 Region_map_component::~Region_map_component()
 {
 	_ds_ep->dissolve(this);
+
+	lock_for_destruction();
 
 	/* dissolve all clients from pager entrypoint */
 	Rm_client *cl;
@@ -670,17 +666,17 @@ Region_map_component::~Region_map_component()
 	} while (cl);
 
 	/* detach all regions */
-	Rm_region_ref *ref;
-	do {
-		void * local_addr;
+	while (true) {
+		addr_t out_addr = 0;
+
 		{
 			Lock::Guard lock_guard(_lock);
-			ref = _ref_slab.first_object();
-			if (!ref) break;
-			local_addr = reinterpret_cast<void *>(ref->region()->base());
+			if (!_map.any_block_addr(&out_addr))
+				break;
 		}
-		detach(local_addr);
-	} while (ref);
+
+		detach(out_addr);
+	}
 
 	/* revoke dataspace representation */
 	_ds_ep->dissolve(&_ds);
