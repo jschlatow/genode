@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is distributed under the terms of the GNU General Public License
  * version 2.
@@ -15,12 +15,13 @@
 #include <util/list.h>
 #include <base/log.h>
 #include <base/lock.h>
-#include <base/env.h>
 
 /* VirtualBox includes */
 #include <VBox/vmm/iom.h>
 #include <VBox/err.h>
 #include <VBox/vmm/pdmdev.h>
+
+#include "vmm.h"
 
 static bool verbose = false;
 
@@ -169,7 +170,7 @@ class Guest_ioports
 				            Genode::Hex(cPorts), " - '",
 				            pDevIns && pDevIns->pReg ? pDevIns->pReg->szName : 0, "'");
 
-			_ranges.insert(new (Genode::env()->heap())
+			_ranges.insert(new (vmm_heap())
 			               Range(pDevIns, PortStart, cPorts, pvUser,
 			                     pfnOutCallback, pfnInCallback,
 			                     pfnOutStringCallback, pfnInStringCallback));
@@ -203,7 +204,7 @@ class Guest_ioports
 				r = r->next();
 				_ranges.remove(s);
 
-				destroy(Genode::env()->heap(), s);
+				destroy(vmm_heap(), s);
 			}
 
 			return deleted ? VINF_SUCCESS : VERR_GENERAL_FAILURE;

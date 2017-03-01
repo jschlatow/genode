@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__SPEC__TL16C750__SERIAL_H_
@@ -16,6 +16,7 @@
 
 /* core includes */
 #include <board.h>
+#include <platform.h>
 
 /* Genode includes */
 #include <drivers/uart_base.h>
@@ -36,7 +37,7 @@ namespace Genode
 			 */
 			Serial(unsigned const baud_rate)
 			:
-				Tl16c750_base(Board::TL16C750_3_MMIO_BASE,
+				Tl16c750_base(Platform::mmio_to_virt(Board::TL16C750_3_MMIO_BASE),
 				              Board::TL16C750_CLOCK, baud_rate)
 			{ }
 	};

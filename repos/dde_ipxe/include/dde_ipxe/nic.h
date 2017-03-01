@@ -2,14 +2,13 @@
  * \brief  DDE iPXE NIC API
  * \author Christian Helmuth
  * \date   2010-09-05
- *
  */
 
 /*
- * Copyright (C) 2010-2013 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 #ifndef _DDE_IPXE__NIC_H_
@@ -84,11 +83,9 @@ extern int dde_ipxe_nic_link_state(unsigned if_index);
 /**
  * Initialize network sub-system
  *
- * \param ep pointer to Server::Entrypoint
- *
  * \return  number of network devices
  */
-extern int dde_ipxe_nic_init(void *ep);
+extern int dde_ipxe_nic_init();
 
 #ifdef __cplusplus
 } /* extern "C" */

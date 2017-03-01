@@ -13,10 +13,10 @@
  */
 
 /*
- * Copyright (C) 2006-2016 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -186,7 +186,7 @@ void genode_exit(int status)
 	for (func = &_dtors_start; func != &_dtors_end; (*func++)());
 
 	/* inform parent about the exit status */
-	Genode::env()->parent()->exit(status);
+	Genode::env_deprecated()->parent()->exit(status);
 
 	/* wait for destruction by the parent */
 	Genode::sleep_forever();
@@ -250,3 +250,24 @@ extern "C" int _main()
 	/* never reached */
 	return 0;
 }
+
+
+static int exit_status;
+static void exit_on_suspended() { genode_exit(exit_status); }
+
+
+extern int main(int argc, char **argv, char **envp);
+
+
+void Component::construct(Genode::Env &env) __attribute__((weak));
+void Component::construct(Genode::Env &env)
+{
+	/* call real main function */
+	exit_status = main(genode_argc, genode_argv, genode_envp);
+
+	/* trigger suspend in the entry point */
+	env.ep().schedule_suspend(exit_on_suspended, nullptr);
+
+	/* return to entrypoint and exit via exit_on_suspended() */
+}
+

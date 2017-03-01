@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <drivers/trustzone.h>
@@ -20,6 +20,8 @@
 #include <cpu.h>
 #include <trustzone.h>
 #include <csu.h>
+
+#include <base/internal/unmanaged_singleton.h>
 
 using namespace Genode;
 
@@ -33,7 +35,7 @@ bool secure_irq(unsigned const i)
 	if (i == Board::EPIT_2_IRQ)                           return true;
 	if (i == Board::I2C_2_IRQ)                            return SECURE_I2C;
 	if (i == Board::I2C_3_IRQ)                            return SECURE_I2C;
-	if (i == Board::ESDHCV2_1_IRQ)                        return SECURE_ESDHC;
+	if (i == Board::SDHC_IRQ)                             return SECURE_ESDHC;
 	if (i >= Board::GPIO1_IRQL && i <= Board::GPIO4_IRQH) return SECURE_GPIO;
 	if (i >= Board::GPIO5_IRQL && i <= Board::GPIO7_IRQH) return SECURE_GPIO;
 	return false;
@@ -59,49 +61,6 @@ void Kernel::init_trustzone(Pic & pic)
 
 	/* configure central security unit */
 	Genode::Csu csu(Board::CSU_BASE);
-}
-
-
-Native_region * Platform::_ram_regions(unsigned const i)
-{
-	static Native_region _regions[] =
-	{
-		{ Trustzone::SECURE_RAM_BASE, Trustzone::SECURE_RAM_SIZE },
-	};
-	return i < sizeof(_regions)/sizeof(_regions[0]) ? &_regions[i] : 0;
-}
-
-
-Native_region * mmio_regions(unsigned const i)
-{
-	static Native_region _regions[] =
-	{
-		{ 0x07000000, 0x1000000  }, /* security controller */
-		{ 0x10000000, 0x30000000 }, /* SATA, IPU, GPU      */
-		{ 0x50000000, 0x20000000 }, /* Misc.               */
-		{ Trustzone::NONSECURE_RAM_BASE, Trustzone::NONSECURE_RAM_SIZE },
-	};
-	return i < sizeof(_regions)/sizeof(_regions[0]) ? &_regions[i] : 0;
-}
-
-
-Native_region * Platform::_core_only_mmio_regions(unsigned const i)
-{
-	static Native_region _regions[] =
-	{
-		/* core UART */
-		{ Board::UART_1_MMIO_BASE, Board::UART_1_MMIO_SIZE },
-
-		/* core timer */
-		{ Board::EPIT_1_MMIO_BASE, Board::EPIT_1_MMIO_SIZE },
-
-		/* interrupt controller */
-		{ Board::IRQ_CONTROLLER_BASE, Board::IRQ_CONTROLLER_SIZE },
-
-		/* central security unit */
-		{ Board::CSU_BASE, Board::CSU_SIZE },
-	};
-	return i < sizeof(_regions)/sizeof(_regions[0]) ? &_regions[i] : 0;
 }
 
 

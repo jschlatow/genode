@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* core includes */
@@ -81,13 +81,8 @@ void Pager_entrypoint::entry()
 				if (!locked_ptr.valid()) return;
 
 				Hw::Address_space * as = static_cast<Hw::Address_space*>(&*locked_ptr);
-				Page_flags const flags =
-					Page_flags::apply_mapping(_mapping.writable,
-											  _mapping.cacheable,
-											  _mapping.io_mem);
-				as->insert_translation(_mapping.virt_address,
-									   _mapping.phys_address,
-									   1 << _mapping.size_log2, flags);
+				as->insert_translation(_mapping.virt(), _mapping.phys(),
+				                       _mapping.size(), _mapping.flags());
 			}
 
 			/* let pager object go back to no-fault state */

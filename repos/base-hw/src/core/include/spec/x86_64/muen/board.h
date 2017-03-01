@@ -5,16 +5,14 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__SPEC__X86_64__MUEN__BOARD_H_
 #define _CORE__INCLUDE__SPEC__X86_64__MUEN__BOARD_H_
-
-#include <base/internal/globals.h>
 
 namespace Genode
 {
@@ -32,8 +30,6 @@ namespace Genode
 			TIMER_VECTOR_KERNEL = 32,
 			TIMER_VECTOR_USER   = 50,
 		};
-
-		void init() { Genode::init_log(); }
 	};
 }
 

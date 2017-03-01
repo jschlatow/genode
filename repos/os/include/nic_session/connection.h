@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2009-2013 Genode Labs GmbH
+ * Copyright (C) 2009-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__NIC_SESSION__CONNECTION_H_
@@ -55,7 +55,7 @@ struct Nic::Connection : Genode::Connection<Session>, Session_client
 	:
 		Genode::Connection<Session>(env, _session(env.parent(), label,
 		                                          tx_buf_size, rx_buf_size)),
-		Session_client(cap(), tx_block_alloc)
+		Session_client(cap(), *tx_block_alloc, env.rm())
 	{ }
 
 	/**
@@ -68,11 +68,11 @@ struct Nic::Connection : Genode::Connection<Session>, Session_client
 	Connection(Genode::Range_allocator *tx_block_alloc,
 	           Genode::size_t           tx_buf_size,
 	           Genode::size_t           rx_buf_size,
-	           char const              *label = "")
+	           char const              *label = "") __attribute__((deprecated))
 	:
-		Genode::Connection<Session>(_session(*Genode::env()->parent(), label,
+		Genode::Connection<Session>(_session(*Genode::env_deprecated()->parent(), label,
 		                                     tx_buf_size, rx_buf_size)),
-		Session_client(cap(), tx_block_alloc)
+		Session_client(cap(), *tx_block_alloc, *Genode::env_deprecated()->rm_session())
 	{ }
 };
 

@@ -8,10 +8,10 @@
  */
 
 /*
- * Copyright (C) 2014-2016 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__VFS__INLINE_FILE_SYSTEM_H_
@@ -33,15 +33,16 @@ class Vfs::Inline_file_system : public Single_file_system
 
 		Inline_file_system(Genode::Env&,
 		                   Genode::Allocator&,
-		                   Genode::Xml_node config)
+		                   Genode::Xml_node config,
+		                   Io_response_handler &)
 		:
 			Single_file_system(NODE_TYPE_FILE, name(), config),
 			_base(config.content_base()),
 			_size(config.content_size())
 		{ }
 
-		static char const *name() { return "inline"; }
-
+		static char const *name()   { return "inline"; }
+		char const *type() override { return "inline"; }
 
 		/********************************
 		 ** Directory service interface **
@@ -95,6 +96,8 @@ class Vfs::Inline_file_system : public Single_file_system
 			out_count = num_bytes;
 			return READ_OK;
 		}
+
+		bool read_ready(Vfs_handle *) override { return true; }
 };
 
 #endif /* _INCLUDE__VFS__INLINE_FILE_SYSTEM_H_ */

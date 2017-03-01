@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2005-2013 Genode Labs GmbH
+ * Copyright (C) 2005-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__SCOUT__CANVAS_H_
@@ -79,11 +79,18 @@ class Scout::Canvas : public Canvas_base
 {
 	private:
 
+		Genode::Allocator  &_alloc;
 		Genode::Surface<PT> _surface;
 
 	public:
 
-		Canvas(PT *base, Area size) : _surface(base, size) { }
+		/**
+		 * Constructor
+		 *
+		 * \param alloc  allocator to be used for allocating textures
+		 */
+		Canvas(PT *base, Area size, Genode::Allocator &alloc)
+		: _alloc(alloc), _surface(base, size) { }
 
 		Area size() const { return _surface.size(); }
 
@@ -145,14 +152,14 @@ class Scout::Canvas : public Canvas_base
 		{
 			using namespace Genode;
 
-			PT *pixel = (PT *)env()->heap()->alloc(size.count()*sizeof(PT));
+			PT *pixel = (PT *)_alloc.alloc(size.count()*sizeof(PT));
 
 			unsigned char *alpha = 0;
 
 			if (has_alpha)
-				alpha = (unsigned char *)env()->heap()->alloc(size.count());
+				alpha = (unsigned char *)_alloc.alloc(size.count());
 
-			return new (env()->heap()) Genode::Texture<PT>(pixel, alpha, size);
+			return new (_alloc) Genode::Texture<PT>(pixel, alpha, size);
 		}
 
 		virtual void free_texture(Texture_base *texture_base)
@@ -164,11 +171,11 @@ class Scout::Canvas : public Canvas_base
 			Genode::size_t const num_pixels = texture->size().count();
 
 			if (texture->alpha())
-				env()->heap()->free(texture->alpha(), num_pixels);
+				_alloc.free(texture->alpha(), num_pixels);
 
-			env()->heap()->free(texture->pixel(), sizeof(PT)*num_pixels);
+			_alloc.free(texture->pixel(), sizeof(PT)*num_pixels);
 
-			destroy(env()->heap(), texture);
+			destroy(_alloc, texture);
 		}
 
 		virtual void set_rgba_texture(Texture_base *texture_base,

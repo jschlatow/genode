@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 .section ".text"
@@ -36,5 +36,7 @@ _start:
 
 .bss
 	.p2align 8
-	.space 32*1024
+	.global __initial_stack_base
+	__initial_stack_base:
+	.space 4*1024
 	_stack_high:

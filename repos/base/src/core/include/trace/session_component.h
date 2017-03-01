@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__TRACE__SESSION_COMPONENT_H_
@@ -35,16 +35,16 @@ class Genode::Trace::Session_component
 {
 	private:
 
-		Ram_session         &_ram;
-		Allocator_guard      _md_alloc;
-		Tslab<Subject, 4096> _subjects_slab;
-		Tslab<Trace::Policy, 4096>  _policies_slab;
-		unsigned             _parent_levels;
-		Session_label        _label;
-		Source_registry     &_sources;
-		Policy_registry     &_policies;
-		Subject_registry     _subjects;
-		unsigned             _policy_cnt;
+		Ram_session                 &_ram;
+		Allocator_guard              _md_alloc;
+		Tslab<Trace::Subject, 4096>  _subjects_slab;
+		Tslab<Trace::Policy, 4096>   _policies_slab;
+		unsigned                     _parent_levels;
+		Session_label                _label;
+		Source_registry             &_sources;
+		Policy_registry             &_policies;
+		Subject_registry             _subjects;
+		unsigned                     _policy_cnt;
 
 		struct Argument_buffer
 		{
@@ -57,13 +57,13 @@ class Genode::Trace::Session_component
 			:
 				ram(ram),
 				ds(ram.alloc(size)),
-				base(env()->rm_session()->attach(ds)),
+				base(env_deprecated()->rm_session()->attach(ds)),
 				size(ds.call<Dataspace::Rpc_size>())
 			{ }
 
 			~Argument_buffer()
 			{
-				env()->rm_session()->detach(base);
+				env_deprecated()->rm_session()->detach(base);
 				ram.free(ds);
 			}
 		} _argument_buffer;

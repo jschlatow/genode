@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _DOMAIN_H_
@@ -66,7 +66,7 @@ class Net::Domain_base
 
 		Domain_name const _name;
 
-		Domain_base(Genode::Xml_node const &node);
+		Domain_base(Genode::Xml_node const node);
 };
 
 
@@ -93,13 +93,13 @@ class Net::Domain : public Domain_base
 
 		void _read_forward_rules(Genode::Cstring  const &protocol,
 		                         Domain_tree            &domains,
-		                         Genode::Xml_node const &node,
+		                         Genode::Xml_node const  node,
 		                         char             const *type,
 		                         Forward_rule_tree      &rules);
 
 		void _read_transport_rules(Genode::Cstring  const &protocol,
 		                           Domain_tree            &domains,
-		                           Genode::Xml_node const &node,
+		                           Genode::Xml_node const  node,
 		                           char             const *type,
 		                           Transport_rule_list    &rules);
 
@@ -109,7 +109,7 @@ class Net::Domain : public Domain_base
 		struct No_next_hop : Genode::Exception { };
 
 		Domain(Configuration          &config,
-		       Genode::Xml_node const &node,
+		       Genode::Xml_node const  node,
 		       Genode::Allocator      &alloc);
 
 		void create_rules(Domain_tree &domains);

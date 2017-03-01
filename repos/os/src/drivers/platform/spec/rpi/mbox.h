@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _DRIVERS__PLATFORM__SPEC__RPI__MBOX_H_
@@ -18,7 +18,7 @@
 #include <util/mmio.h>
 #include <base/env.h>
 #include <os/attached_mmio.h>
-#include <os/attached_ram_dataspace.h>
+#include <base/attached_ram_dataspace.h>
 #include <base/log.h>
 #include <dataspace/client.h>
 #include <timer_session/connection.h>
@@ -26,6 +26,8 @@
 class Mbox : Genode::Attached_mmio
 {
 	private:
+
+		Genode::Env &_env;
 
 		enum { verbose = false };
 
@@ -52,8 +54,8 @@ class Mbox : Genode::Attached_mmio
 		};
 
 		enum { MSG_BUFFER_SIZE = 0x1000 };
-		Genode::Attached_ram_dataspace _msg_buffer = { Genode::env()->ram_session(),
-		                                              MSG_BUFFER_SIZE };
+		Genode::Attached_ram_dataspace _msg_buffer { _env.ram(), _env.rm(),
+		                                             MSG_BUFFER_SIZE };
 
 		addr_t const _msg_phys = { Dataspace_client(_msg_buffer.cap()).phys_addr() };
 
@@ -61,7 +63,9 @@ class Mbox : Genode::Attached_mmio
 		{
 			Timer::Connection timer;
 			void usleep(unsigned us) { timer.usleep(us); }
-		} _delayer;;
+
+			Delayer(Genode::Env &env) : timer(env) { }
+		} _delayer { _env };
 
 		template <typename MESSAGE>
 		MESSAGE &_message()
@@ -71,7 +75,8 @@ class Mbox : Genode::Attached_mmio
 
 	public:
 
-		Mbox() : Genode::Attached_mmio(BASE, SIZE) { }
+		Mbox(Genode::Env &env)
+		: Genode::Attached_mmio(env, BASE, SIZE), _env(env) { }
 
 		/**
 		 * Return reference to typed message buffer

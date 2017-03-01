@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__REPORT_SESSION__CONNECTION_H_
@@ -22,7 +22,7 @@ namespace Report { struct Connection; }
 
 struct Report::Connection : Genode::Connection<Session>, Session_client
 {
-	enum { RAM_QUOTA = 4*4096 }; /* value used for 'Slave::Connection' */
+	enum { RAM_QUOTA = 6*4096 }; /* value used for 'Slave::Connection' */
 
 	/**
 	 * Issue session request
@@ -33,7 +33,7 @@ struct Report::Connection : Genode::Connection<Session>, Session_client
 	                                     char const *label, size_t buffer_size)
 	{
 		return session(parent, "label=\"%s\", ram_quota=%ld, buffer_size=%zd",
-		               label, 2*4096 + buffer_size, buffer_size);
+		               label, 10*1024 + buffer_size, buffer_size);
 	}
 
 	/**
@@ -52,9 +52,24 @@ struct Report::Connection : Genode::Connection<Session>, Session_client
 	 * \deprecated  Use the constructor with 'Env &' as first
 	 *              argument instead
 	 */
-	Connection(char const *label, size_t buffer_size = 4096)
+	Connection(char const *label, size_t buffer_size = 4096) __attribute__((deprecated))
 	:
-		Genode::Connection<Session>(_session(*Genode::env()->parent(), label, buffer_size)),
+		Genode::Connection<Session>(_session(*Genode::env_deprecated()->parent(), label, buffer_size)),
+		Session_client(cap())
+	{ }
+
+	/**
+	 * Constructor
+	 *
+	 * \deprecated
+	 * \noapi
+	 *
+	 * This variant solely exists to be called by deprecated functions. It
+	 * will be removed as soon as those functions are gone.
+	 */
+	Connection(bool, char const *label, size_t buffer_size = 4096)
+	:
+		Genode::Connection<Session>(_session(*Genode::env_deprecated()->parent(), label, buffer_size)),
 		Session_client(cap())
 	{ }
 };

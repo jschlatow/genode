@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2013-2016 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* core includes */
@@ -41,14 +41,14 @@ void Thread::exception(unsigned const cpu)
 		if (_cpu->retry_undefined_instr(*this)) { return; }
 		Genode::warning(*this, ": undefined instruction at ip=",
 		                Genode::Hex(ip));
-		_stop();
+		_die();
 		return;
 	case RESET:
 		return;
 	default:
 		Genode::warning(*this, ": triggered an unknown exception ",
 		                cpu_exception);
-		_stop();
+		_die();
 		return;
 	}
 }
@@ -56,7 +56,7 @@ void Thread::exception(unsigned const cpu)
 
 void Thread::_mmu_exception()
 {
-	_become_inactive(AWAITS_RESUME);
+	_become_inactive(AWAITS_RESTART);
 	if (in_fault(_fault_addr, _fault_writes)) {
 		_fault_pd     = (addr_t)_pd->platform_pd();
 		_fault_signal = (addr_t)_fault.signal_context();
@@ -141,6 +141,6 @@ void Thread_event::_signal_acknowledged()
 	 *        functions.
 	 */
 	cpu_pool()->cpu(Cpu::executing_id())->translation_table_insertions();
-	_thread->_resume();
+	_thread->_restart();
 }
 

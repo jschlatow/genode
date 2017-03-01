@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2013-2015 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is distributed under the terms of the GNU General Public License
  * version 2.
@@ -27,6 +27,7 @@
 
 #include "console.h"
 #include "fb.h"
+#include "vmm.h"
 
 static const bool debug = false;
 
@@ -73,7 +74,7 @@ void fireStateChangedEvent(IEventSource* aSource,
 	if (a_state != MachineState_PoweredOff)
 		return;
 
-	Genode::env()->parent()->exit(0);
+	genode_env().parent().exit(0);
 }
 
 void fireRuntimeErrorEvent(IEventSource* aSource, BOOL a_fatal,
@@ -123,7 +124,7 @@ void GenodeConsole::update_video_mode()
 		                    32);
 }
 
-void GenodeConsole::handle_input(unsigned)
+void GenodeConsole::handle_input()
 {
 	static LONG64 mt_events [64];
 	unsigned      mt_number = 0;
@@ -273,7 +274,7 @@ void GenodeConsole::handle_input(unsigned)
 				                        RTTimeMilliTS());
 }
 
-void GenodeConsole::handle_mode_change(unsigned)
+void GenodeConsole::handle_mode_change()
 {
 	IFramebuffer *pFramebuffer = NULL;
 	HRESULT rc = i_getDisplay()->QueryFramebuffer(0, &pFramebuffer);
@@ -296,7 +297,7 @@ void GenodeConsole::init_clipboard()
 	if (mode == ClipboardMode_Bidirectional ||
 	    mode == ClipboardMode_HostToGuest) {
 
-		_clipboard_rom = new Genode::Attached_rom_dataspace("clipboard");
+		_clipboard_rom = new Genode::Attached_rom_dataspace(genode_env(), "clipboard");
 		_clipboard_rom->sigh(_clipboard_signal_dispatcher);
 
 		clipboard_rom = _clipboard_rom;
@@ -305,14 +306,14 @@ void GenodeConsole::init_clipboard()
 	if (mode == ClipboardMode_Bidirectional ||
 	    mode == ClipboardMode_GuestToHost) {
 
-		_clipboard_reporter = new Genode::Reporter("clipboard");
+		_clipboard_reporter = new Genode::Reporter(genode_env(), "clipboard");
 		_clipboard_reporter->enabled(true);
 
 		clipboard_reporter = _clipboard_reporter;
 	}
 }
 
-void GenodeConsole::handle_cb_rom_change(unsigned)
+void GenodeConsole::handle_cb_rom_change()
 {
 	if (!_clipboard_rom)
 		return;
@@ -320,7 +321,7 @@ void GenodeConsole::handle_cb_rom_change(unsigned)
 	vboxClipboardSync(nullptr);
 }
 
-void GenodeConsole::event_loop(IKeyboard * gKeyboard, IMouse * gMouse)
+void GenodeConsole::init_backends(IKeyboard * gKeyboard, IMouse * gMouse)
 {
 	_vbox_keyboard = gKeyboard;
 	_vbox_mouse = gMouse;
@@ -333,17 +334,6 @@ void GenodeConsole::event_loop(IKeyboard * gKeyboard, IMouse * gMouse)
 	Genodefb *fb = dynamic_cast<Genodefb *>(pFramebuffer);
 
 	fb->mode_sigh(_mode_change_signal_dispatcher);
-
-	for (;;) {
-
-		Genode::Signal sig = _receiver.wait_for_signal();
-		Genode::Signal_dispatcher_base *dispatcher =
-			dynamic_cast<Genode::Signal_dispatcher_base *>(sig.context());
-
-		if (dispatcher)
-			dispatcher->dispatch(sig.num());
-	}
-
 }
 
 void GenodeConsole::i_onMouseCapabilityChange(BOOL supportsAbsolute,

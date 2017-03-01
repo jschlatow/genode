@@ -1,5 +1,5 @@
-if {![have_spec foc] && ![have_spec nova]} {
-	puts "\nThe Noux GDB scenario is supported on NOVA and Fiasco.OC only\n"
+if {!([have_spec nova] || ([have_spec foc] && [have_spec 32bit]))} {
+	puts "\nThe Noux GDB scenario is only supported for NOVA or 32-bit Fiasco.OC\n"
 	exit 0
 }
 
@@ -26,7 +26,16 @@ set build_components {
 	app/gdb_monitor
 }
 
-lappend_if [have_spec gpio]    build_components drivers/gpio
+lappend build_components "lib/gdbserver_platform-$::env(KERNEL)"
+
+proc gpio_drv { } { if {[have_spec rpi] && [have_spec hw]}  { return hw_gpio_drv }
+                    if {[have_spec rpi] && [have_spec foc]} { return foc_gpio_drv }
+                    return gpio_drv }
+
+lappend_if [have_spec gpio] build_components drivers/gpio
+
+lappend_if [have_spec nova] build_components lib/ld/nova
+lappend_if [have_spec foc]  build_components lib/ld/foc
 
 lappend build_components noux-pkg/[noux_gdb_pkg_name]
 
@@ -39,11 +48,20 @@ append_platform_drv_build_components
 
 build $build_components
 
+# GDB loads symbols from 'bin/ld.lib.so'
+if { [have_spec nova] } {
+	exec ln -sf ld-nova.lib.so bin/ld.lib.so
+}
+if { [have_spec foc] } {
+	exec ln -sf ld-foc.lib.so bin/ld.lib.so
+}
+
 # names of the binaries needed for the GDB monitor test
 set gdb_target_binaries {
 	test-gdb_monitor
 	ld.lib.so
 	libc.lib.so
+	libm.lib.so
 }
 lappend gdb_target_binaries ${gdb_target_binary_name}
 
@@ -96,12 +114,12 @@ append_if [have_spec ps2] config {
 			<provides><service name="Input"/></provides>
 		</start>}
 
-append_if [have_spec gpio] config {
-	<start name="gpio_drv">
-		<resource name="RAM" quantum="4M"/>
-		<provides><service name="Gpio"/></provides>
+append_if [have_spec gpio] config "
+	<start name=\"[gpio_drv]\">
+		<resource name=\"RAM\" quantum=\"4M\"/>
+		<provides><service name=\"Gpio\"/></provides>
 		<config/>
-	</start>}
+	</start>"
 
 append_if [expr ![have_spec ps2] && [have_spec usb]] config {
 		<start name="usb_drv">
@@ -150,11 +168,11 @@ append config {
 		<start name="noux">
 			<resource name="RAM" quantum="1G"/>
 			<route>
-				<service name="Terminal">
-					<if-arg key="label" value=""/><child name="terminal_noux"/>
+				<service name="Terminal" label="">
+					<child name="terminal_noux"/>
 				</service>
-				<service name="Terminal">
-					<if-arg key="label" value="/dev/gdb"/><child name="terminal_gdb"/>
+				<service name="Terminal" label="/dev/gdb">
+					<child name="terminal_gdb"/>
 				</service>
 				<any-service><parent/><any-child/></any-service>
 			</route>
@@ -201,12 +219,17 @@ install_config $config
 # Boot modules
 #
 
+# evaluated by the run tool
+proc binary_name_gdbserver_platform_lib_so { } {
+	return "gdbserver_platform-$::env(KERNEL).lib.so"
+}
+
 # generic modules
 set boot_modules {
 	core init timer ld.lib.so noux terminal terminal_crosslink
 	libc.lib.so libm.lib.so libc_noux.lib.so ncurses.lib.so expat.lib.so
 	libc_pipe.lib.so libc_terminal.lib.so
-	gdb_monitor test-gdb_monitor
+	gdb_monitor gdbserver_platform.lib.so test-gdb_monitor
 	gdb.tar test-gdb_monitor.tar test-gdb_monitor-src.tar
 }
 
@@ -215,7 +238,7 @@ lappend_if [have_spec       linux] boot_modules fb_sdl
 lappend_if [have_spec framebuffer] boot_modules fb_drv
 lappend_if [have_spec         ps2] boot_modules ps2_drv
 lappend_if [have_spec         usb] boot_modules usb_drv
-lappend_if [have_spec        gpio] boot_modules gpio_drv
+lappend_if [have_spec        gpio] boot_modules [gpio_drv]
 
 append_platform_drv_boot_modules
 

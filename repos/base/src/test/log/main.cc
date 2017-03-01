@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/component.h>
@@ -29,6 +29,9 @@ void Component::construct(Genode::Env &env)
 
 	typedef String<128> Label;
 	log("multiarg string:    ", Label(Char('"'), "parent -> child.", 7, Char('"')));
+
+	String<32> hex(Hex(3));
+	log("String(Hex(3)):     ", hex);
 
 	log("Test done.");
 }

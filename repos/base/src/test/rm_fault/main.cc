@@ -11,17 +11,17 @@
  */
 
 /*
- * Copyright (C) 2008-2013 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/component.h>
 #include <base/log.h>
 #include <base/child.h>
 #include <rm_session/connection.h>
-#include <os/attached_ram_dataspace.h>
+#include <base/attached_ram_dataspace.h>
 
 using namespace Genode;
 
@@ -228,7 +228,7 @@ void Component::construct(Env &env)
 		 * Distinguish parent from child by requesting an service that is only
 		 * available to the parent.
 		 */
-		Rm_connection rm;
+		Rm_connection rm(env);
 		static Main_parent parent(env);
 		log("-- parent role started --");
 	}

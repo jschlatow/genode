@@ -5,28 +5,19 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
+
+/* Genode includes */
 #include <timer_session/connection.h>
-#include "ata_driver.h"
-#include "atapi_driver.h"
 
-
-struct Timer_delayer : Mmio::Delayer, Timer::Connection
-{
-	void usleep(unsigned us) { Timer::Connection::usleep(us); }
-};
-
-
-Mmio::Delayer &Hba::delayer()
-{
-	static Timer_delayer d;
-	return d;
-}
+/* local includes */
+#include <ata_driver.h>
+#include <atapi_driver.h>
 
 
 struct Ahci
@@ -41,9 +32,17 @@ struct Ahci
 		ATAPI_SIG_QEMU = 0xeb140000, /* will be fixed in Qemu */
 	};
 
+	struct Timer_delayer : Mmio::Delayer, Timer::Connection
+	{
+		Timer_delayer(Genode::Env &env)
+		: Timer::Connection(env) { }
+
+		void usleep(unsigned us) { Timer::Connection::usleep(us); }
+	} _delayer { env };
+
 	Ahci_root     &root;
-	Platform::Hba &platform_hba = Platform::init(env, Hba::delayer());
-	Hba            hba          = { platform_hba };
+	Platform::Hba &platform_hba = Platform::init(env, _delayer);
+	Hba            hba          { env, platform_hba, _delayer };
 
 	enum { MAX_PORTS = 32 };
 	Port_driver   *ports[MAX_PORTS];
@@ -69,7 +68,7 @@ struct Ahci
 		hba.init();
 
 		/* search for devices */
-		scan_ports(env.rm());
+		scan_ports(env.rm(), env.ram());
 	}
 
 	bool atapi(unsigned sig)
@@ -114,7 +113,7 @@ struct Ahci
 		log("64-bit support: ", hba.supports_64bit() ? "yes" : "no");
 	}
 
-	void scan_ports(Genode::Region_map &rm)
+	void scan_ports(Genode::Region_map &rm, Genode::Ram_session &ram)
 	{
 		Genode::log("number of ports: ", hba.port_count(), " "
 		            "pi: ", Genode::Hex(hba.read<Hba::Pi>()));
@@ -150,13 +149,13 @@ struct Ahci
 			switch (sig) {
 
 				case ATA_SIG:
-					ports[i] = new (&alloc) Ata_driver(alloc, port, root,
+					ports[i] = new (&alloc) Ata_driver(alloc, port, ram, root,
 					                                   ready_count);
 					break;
 
 				case ATAPI_SIG:
 				case ATAPI_SIG_QEMU:
-					ports[i] = new (&alloc) Atapi_driver(port, root,
+					ports[i] = new (&alloc) Atapi_driver(port, ram, root,
 					                                     ready_count);
 					break;
 
@@ -238,5 +237,3 @@ long Ahci_driver::device_number(char const *model_num, char const *serial_num)
 {
 	return sata_ahci()->device_number(model_num, serial_num);
 }
-
-

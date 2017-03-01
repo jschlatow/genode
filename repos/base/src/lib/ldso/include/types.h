@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__TYPES_H_
@@ -17,7 +17,7 @@
 #include <base/exception.h>
 #include <base/env.h>
 #include <base/shared_object.h>
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 #include <util/fifo.h>
 #include <util/misc_math.h>
 #include <util/string.h>

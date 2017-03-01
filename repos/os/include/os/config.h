@@ -5,11 +5,17 @@
  */
 
 /*
- * Copyright (C) 2010-2013 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
+
+#ifndef INCLUDED_BY_OS_CONFIG_CC
+#ifndef INCLUDED_FROM_OS_SESSION_POLICY_H
+#warning os/config.h is deprecated, use 'Attached_rom_dataspace' instead
+#endif
+#endif
 
 #ifndef _INCLUDE__OS__CONFIG_H_
 #define _INCLUDE__OS__CONFIG_H_
@@ -26,7 +32,7 @@ namespace Genode {
 	/**
 	 * Return singleton instance of config
 	 */
-	Volatile_object<Config> &config();
+	Reconstructible<Config> &config();
 }
 
 

@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2009-2013 Genode Labs GmbH
+ * Copyright (C) 2009-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__LOADER_SESSION__CONNECTION_H_
@@ -40,7 +40,7 @@ struct Loader::Connection : Genode::Connection<Session>, Session_client
 	 * \deprecated  Use the constructor with 'Env &' as first
 	 *              argument instead
 	 */
-	Connection(size_t ram_quota)
+	Connection(size_t ram_quota) __attribute__((deprecated))
 	:
 		Genode::Connection<Session>(session("ram_quota=%ld", ram_quota)),
 		Session_client(cap())

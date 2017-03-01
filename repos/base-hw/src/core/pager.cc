@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -23,29 +23,6 @@
 #include <base/internal/capability_space.h>
 
 using namespace Genode;
-
-
-/*************
- ** Mapping **
- *************/
-
-Mapping::Mapping(addr_t const va, addr_t const pa,
-                 Cache_attribute const c, bool const io,
-                 unsigned const sl2, bool const w)
-:
-	virt_address(va), phys_address(pa), cacheable(c),
-	io_mem(io), size_log2(sl2), writable(w)
-{ }
-
-
-Mapping::Mapping()
-:
-virt_address(0), phys_address(0), cacheable(CACHED),
-	io_mem(0), size_log2(0), writable(0)
-{ }
-
-
-void Mapping::prepare_map_operation() { }
 
 
 /***************

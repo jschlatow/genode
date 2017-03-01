@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _LIB__LDSO__SPEC__ARM__RELOCATION_H_
@@ -78,7 +78,7 @@ class Linker::Reloc_non_plt : public Reloc_non_plt_generic
 
 	public:
 
-		Reloc_non_plt(Dependency const &dep, Elf::Rela const *, unsigned long)
+		Reloc_non_plt(Dependency const &dep, Elf::Rela const *, unsigned long, bool)
 		: Reloc_non_plt_generic(dep)
 		{
 			error("LD: DT_RELA not supported");

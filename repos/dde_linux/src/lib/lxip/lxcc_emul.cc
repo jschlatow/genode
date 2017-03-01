@@ -1,14 +1,16 @@
-/**
+/*
  * \brief  Linux emulation code
  * \author Sebastian Sumpf
+ * \author Emery Hemingway
+ * \author Christian Helmuth
  * \date   2013-08-28
  */
 
 /*
- * Copyright (C) 2013-2016 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 /* Genode includes */
@@ -26,19 +28,28 @@
 #include <lx.h>
 
 
+/* Lx_kit */
+#include <lx_kit/env.h>
+
 /*********************************
  ** Lx::Backend_alloc interface **
  *********************************/
 
 #include <lx_kit/backend_alloc.h>
 
+static Lx_kit::Env *lx_env;
+
+void Lx::lxcc_emul_init(Lx_kit::Env &env)
+{
+	lx_env = &env;
+}
 
 struct Memory_object_base : Genode::Object_pool<Memory_object_base>::Entry
 {
 	Memory_object_base(Genode::Ram_dataspace_capability cap)
 	: Genode::Object_pool<Memory_object_base>::Entry(cap) {}
 
-	void free() { Genode::env()->ram_session()->free(ram_cap()); }
+	void free() { lx_env->ram().free(ram_cap()); }
 
 	Genode::Ram_dataspace_capability ram_cap()
 	{
@@ -56,8 +67,8 @@ Lx::backend_alloc(Genode::addr_t size, Genode::Cache_attribute cached)
 {
 	using namespace Genode;
 
-	Genode::Ram_dataspace_capability cap = env()->ram_session()->alloc(size);
-	Memory_object_base *o = new (env()->heap()) Memory_object_base(cap);
+	Genode::Ram_dataspace_capability cap = lx_env->ram().alloc(size);
+	Memory_object_base *o = new (lx_env->heap()) Memory_object_base(cap);
 
 	memory_pool.insert(o);
 	return cap;
@@ -77,7 +88,7 @@ void Lx::backend_free(Genode::Ram_dataspace_capability cap)
 
 		object = o; /* save for destroy */
 	});
-	destroy(env()->heap(), object);
+	destroy(lx_env->heap(), object);
 }
 
 
@@ -102,7 +113,8 @@ void *alloc_large_system_hash(const char *tablename,
 	unsigned long nlog2 = ilog2(elements);
 	nlog2 <<= (1 << nlog2) < elements ? 1 : 0;
 
-	void *table = Genode::env()->heap()->alloc(elements * bucketsize);
+	void *table;
+	lx_env->heap().alloc(elements * bucketsize, &table);
 
 	if (_hash_mask)
 		*_hash_mask = (1 << nlog2) - 1;
@@ -163,6 +175,12 @@ char *strcpy(char *to, const char *from)
 	char *save = to;
 	for (; (*to = *from); ++from, ++to);
  	return(save);
+}
+
+
+char *strncpy(char *dst, const char* src, size_t n)
+{
+	return Genode::strncpy(dst, src, n);
 }
 
 
@@ -247,6 +265,30 @@ size_t strlcpy(char *dest, const char *src, size_t size)
 }
 
 
+/* from linux/lib/string.c */
+char *strstr(char const *s1, char const *s2)
+{
+	size_t l1, l2;
+
+	l2 = strlen(s2);
+	if (!l2)
+		return (char *)s1;
+	l1 = strlen(s1);
+	while (l1 >= l2) {
+		l1--;
+		if (!memcmp(s1, s2, l2))
+			return (char *)s1;
+		s1++;
+	}
+	return NULL;
+}
+
+void *memset(void *s, int c, size_t n)
+{
+	return Genode::memset(s, c, n);
+}
+
+
 void *memcpy(void *d, const void *s, size_t n)
 {
 	return Genode::memcpy(d, s, n);
@@ -263,38 +305,56 @@ void *memmove(void *d, const void *s, size_t n)
  ** linux/sched.h **
  *******************/
 
-static Genode::Signal_receiver *_sig_rec;
-
-
-void Lx::event_init(Genode::Signal_receiver &sig_rec)
+struct Timeout : Genode::Signal_handler<Timeout>
 {
-	_sig_rec = &sig_rec;
-}
+	Genode::Entrypoint &ep;
+	Timer::Connection timer;
+	void (*tick)();
 
-
-struct Timeout : Genode::Signal_dispatcher<Timeout>
-{
-	void handle(unsigned) { update_jiffies(); }
-
-	Timeout(Timer::Session_client &timer, signed long msec)
-	: Signal_dispatcher<Timeout>(*_sig_rec, *this, &Timeout::handle)
+	void handle()
 	{
-		if (msec > 0) {
-			timer.sigh(*this);
-			timer.trigger_once(msec*1000);
-		}
+		update_jiffies();
+
+		/* tick the higher layer of the component */
+		tick();
+	}
+
+	Timeout(Genode::Env &env, Genode::Entrypoint &ep, void (*ticker)())
+	:
+		Signal_handler<Timeout>(ep, *this, &Timeout::handle),
+		ep(ep), timer(env), tick(ticker)
+	{
+		timer.sigh(*this);
+	}
+
+	void schedule(signed long msec)
+	{
+		timer.trigger_once(msec * 1000);
+	}
+
+	void wait()
+	{
+		ep.wait_and_dispatch_one_signal();
 	}
 };
 
 
-static void wait_for_timeout(signed long timeout)
-{
-	static Timer::Connection timer;
-	Timeout to(timer, timeout);
+static Timeout *_timeout;
+static Genode::Signal_context_capability tick_sig_cap;
 
-	/* dispatch signal */
-	Genode::Signal s = _sig_rec->wait_for_signal();
-	static_cast<Genode::Signal_dispatcher_base *>(s.context())->dispatch(s.num());
+void Lx::event_init(Genode::Env &env, Genode::Entrypoint &ep, void (*ticker)())
+{
+	static Timeout handler(env, ep, ticker);
+	_timeout = &handler;
+}
+
+signed long schedule_timeout(signed long timeout)
+{
+	long start = jiffies;
+	_timeout->schedule(timeout);
+	_timeout->wait();
+	timeout -= jiffies - start;
+	return timeout < 0 ? 0 : timeout;
 }
 
 
@@ -303,19 +363,14 @@ long schedule_timeout_uninterruptible(signed long timeout)
 	return schedule_timeout(timeout);
 }
 
-
-signed long schedule_timeout(signed long timeout)
-{
-	long start = jiffies;
-	wait_for_timeout(timeout);
-	timeout -= jiffies - start;
-	return timeout < 0 ? 0 : timeout;
-}
-
-
 void poll_wait(struct file * filp, wait_queue_head_t * wait_address, poll_table *p)
 {
-	wait_for_timeout(0);
+	_timeout->wait();
+}
+
+bool poll_does_not_wait(const poll_table *p)
+{
+	return p == nullptr;
 }
 
 
@@ -394,7 +449,7 @@ struct page *alloc_pages(gfp_t gfp_mask, unsigned int order)
 {
 	Avl_page *p;
 	try {
-		p = (Avl_page *)new (Genode::env()->heap()) Avl_page(PAGE_SIZE << order);
+		p = (Avl_page *)new (lx_env->heap()) Avl_page(PAGE_SIZE << order);
 		tree.insert(p);
 	} catch (...) { return 0; }
 
@@ -417,7 +472,7 @@ void __free_page_frag(void *addr)
 	Avl_page *p = tree.first()->find_by_address((Genode::addr_t)addr);
 
 	tree.remove(p);
-	destroy(Genode::env()->heap(), p);
+	destroy(lx_env->heap(), p);
 }
 
 
@@ -443,7 +498,7 @@ void put_page(struct page *page)
 	Avl_page *p = tree.first()->find_by_address((Genode::addr_t)page->addr);
 
 	tree.remove(p);
-	destroy(Genode::env()->heap(), p);
+	destroy(lx_env->heap(), p);
 }
 
 
@@ -636,3 +691,82 @@ size_t csum_and_copy_to_iter(void *addr, size_t bytes, __wsum *csum, struct iov_
  ******************/
 
 void __wake_up(wait_queue_head_t *q, bool all) { }
+
+
+/***********************
+ ** linux/workqueue.h **
+ ***********************/
+
+static void execute_delayed_work(unsigned long dwork)
+{
+	delayed_work *d = (delayed_work *)dwork;
+	d->work.func(&d->work);
+}
+
+
+bool mod_delayed_work(struct workqueue_struct *wq, struct delayed_work *dwork,
+                      unsigned long delay)
+{
+	/* treat delayed work without delay like any other work */
+	if (delay == 0) {
+		execute_delayed_work((unsigned long)dwork);
+	} else {
+		if (!dwork->timer.function) {
+			setup_timer(&dwork->timer, execute_delayed_work,
+			            (unsigned long)dwork);
+		}
+		mod_timer(&dwork->timer, delay);
+	}
+	return true;
+}
+
+int schedule_delayed_work(struct delayed_work *dwork, unsigned long delay)
+{
+	return mod_delayed_work(0, dwork, delay);
+}
+
+
+/*******************
+ ** linux/timer.h **
+ *******************/
+
+static unsigned long round_jiffies(unsigned long j, bool force_up)
+{
+	unsigned remainder = j % HZ;
+
+	/*
+	 * from timer.c
+	 *
+	 * If the target jiffie is just after a whole second (which can happen
+	 * due to delays of the timer irq, long irq off times etc etc) then
+	 * we should round down to the whole second, not up. Use 1/4th second
+	 * as cutoff for this rounding as an extreme upper bound for this.
+	 * But never round down if @force_up is set.
+	 */
+
+	/* per default round down */
+	j = j - remainder;
+
+	/* round up if remainder more than 1/4 second (or if we're forced to) */
+	if (remainder >= HZ/4 || force_up)
+		j += HZ;
+
+	return j;
+}
+
+unsigned long round_jiffies(unsigned long j)
+{
+	return round_jiffies(j, false);
+}
+
+
+unsigned long round_jiffies_up(unsigned long j)
+{
+	return round_jiffies(j, true);
+}
+
+
+unsigned long round_jiffies_relative(unsigned long j)
+{
+	return round_jiffies(j + jiffies, false) - jiffies;
+}

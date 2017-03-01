@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015-2016 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Core includes */
@@ -23,4 +23,6 @@ void Kernel::Cpu_context::_init(size_t const stack_size, addr_t const table)
 	 * stack, i.e. increasing sp by the size of one stack.
 	 */
 	sp = sp + stack_size;
+	translation_table(table);
+	protection_domain(0);
 }

@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2014-2016 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -24,6 +24,7 @@
 
 #include "undef.h"
 
+#include <rump/env.h>
 #include <rump_fs/fs.h>
 #include <sys/resource.h>
 #include "file_system.h"
@@ -78,6 +79,10 @@ class File_system::Session_component : public Session_rpc_object
 
 			case Packet_descriptor::WRITE:
 				res_length = node.write((char const *)content, length, offset);
+				break;
+
+			case Packet_descriptor::READ_READY:
+				/* not supported */
 				break;
 			}
 
@@ -153,7 +158,7 @@ class File_system::Session_component : public Session_rpc_object
 		                  bool                writeable,
 		                  Allocator          &md_alloc)
 		:
-			Session_rpc_object(env.ram().alloc(tx_buf_size), env.ep().rpc_ep()),
+			Session_rpc_object(env.ram().alloc(tx_buf_size), env.rm(), env.ep().rpc_ep()),
 			_md_alloc(md_alloc),
 			_root(*new (&_md_alloc) Directory(_md_alloc, root_dir, false)),
 			_writable(writeable),
@@ -173,7 +178,7 @@ class File_system::Session_component : public Session_rpc_object
 		~Session_component()
 		{
 			Dataspace_capability ds = tx_sink()->dataspace();
-			env()->ram_session()->free(static_cap_cast<Ram_dataspace>(ds));
+			Rump::env().env().ram().free(static_cap_cast<Ram_dataspace>(ds));
 			destroy(&_md_alloc, &_root);
 		}
 
@@ -491,11 +496,13 @@ struct File_system::Main
 
 	Root fs_root { env, sliced_heap };
 
-	Attached_rom_dataspace config { env, "config" };
-
 	Main(Genode::Env &env) : env(env)
 	{
-		File_system::init(env, heap, config.xml());
+		Rump::construct_env(env);
+
+		rump_io_backend_init();
+
+		File_system::init();
 
 			/* set all bits but the stickies */
 		rump_sys_umask(S_ISUID|S_ISGID|S_ISVTX);

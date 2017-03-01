@@ -11,10 +11,10 @@
  */
 
 /*
- * Copyright (C) 2010-2013 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INPUT_H_
@@ -39,9 +39,10 @@ class Input::Session_component : public Rpc_object<Session>
 {
 	private:
 
-		Session_client _real_input;
-		Motion_delta  &_motion_delta;
-		Event  * const _ev_buf;
+		Session_client     _real_input;
+		Motion_delta      &_motion_delta;
+		Attached_dataspace _ev_ds;
+		Event      * const _ev_buf;
 
 		Genode::Signal_context_capability _sigh;
 
@@ -50,17 +51,14 @@ class Input::Session_component : public Rpc_object<Session>
 		/**
 		 * Constructor
 		 */
-		Session_component(Session_capability real_input,
+		Session_component(Region_map        &rm,
+		                  Session_capability real_input,
 		                  Motion_delta      &motion_delta)
 		:
-			_real_input(real_input), _motion_delta(motion_delta),
-			_ev_buf(env()->rm_session()->attach(_real_input.dataspace()))
+			_real_input(rm, real_input), _motion_delta(motion_delta),
+			_ev_ds(rm, _real_input.dataspace()),
+			_ev_buf(_ev_ds.local_addr<Event>())
 		{ }
-
-		/**
-		 * Destructor
-		 */
-		~Session_component() { env()->rm_session()->detach(_ev_buf); }
 
 
 		/*****************************

@@ -6,10 +6,10 @@
 
 /*
  * Copyright (C) 2012 Ksys Labs LLC
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -19,6 +19,7 @@
 #include <timer_session/connection.h>
 #include <nic/packet_allocator.h>
 #include <os/config.h>
+#include <base/sleep.h>
 
 extern "C" {
 #include <lwip/sockets.h>
@@ -89,8 +90,8 @@ int main()
 
 	enum { ADDR_STR_SZ = 16 };
 	char serv_addr[ADDR_STR_SZ] = { 0 };
-	Xml_node libc_node = config()->xml_node().sub_node("libc");
-	try { libc_node.attribute("server_ip").value(serv_addr, ADDR_STR_SZ); }
+	Xml_node config_node = config()->xml_node();
+	try { config_node.attribute("server_ip").value(serv_addr, ADDR_STR_SZ); }
 	catch(...) {
 		error("Missing \"server_ip\" attribute.");
 		throw Xml_node::Nonexistent_attribute();
@@ -123,9 +124,9 @@ int main()
 		log("Connect to server ...");
 
 		unsigned port = 0;
-		try { libc_node.attribute("http_port").value(&port); }
+		try { config_node.attribute("server_port").value(&port); }
 		catch (...) {
-			error("Missing \"http_port\" attribute.");
+			error("Missing \"server_port\" attribute.");
 			throw Xml_node::Nonexistent_attribute();
 		}
 
@@ -166,5 +167,13 @@ int main()
 	}
 
 	log("Test done");
+
+	/*
+	 * FIXME Cleaning up LWIP when returning from the main function
+	 *       sporadically leads to endless errors "Error: sys_arch_mbox_fetch:
+	 *       unknown exception occured!". We let the client sleep here to
+	 *       prevent tests from failing due to a flooded log.
+	 */
+	sleep_forever();
 	return 0;
 }

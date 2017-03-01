@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _THEME_H_
@@ -41,7 +41,9 @@ class Decorator::Theme
 {
 	private:
 
-		Genode::Allocator &_alloc;
+		Genode::Ram_session &_ram;
+		Genode::Region_map  &_rm;
+		Genode::Allocator   &_alloc;
 
 	public:
 
@@ -54,7 +56,8 @@ class Decorator::Theme
 
 		enum Element_type { ELEMENT_TYPE_CLOSER, ELEMENT_TYPE_MAXIMIZER };
 
-		Theme(Genode::Allocator &alloc) : _alloc(alloc) { }
+		Theme(Genode::Ram_session &ram, Genode::Region_map &rm, Genode::Allocator &alloc)
+		: _ram(ram), _rm(rm), _alloc(alloc) { }
 
 		Area background_size() const;
 

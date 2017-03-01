@@ -1,5 +1,5 @@
-# Tested for nova and hw_x86_64_muen.
-if {(![have_spec nova] && ![have_spec hw_x86_64_muen])} {
+# Tested for nova and muen.
+if {(![have_spec nova] && ![have_spec muen])} {
 	puts "Platform is unsupported."
 	exit 0
 }
@@ -41,6 +41,10 @@ set boot_modules {
 	dynamic_rom
 }
 
+set virtualbox_binary "virtualbox-rem"
+if {[have_spec muen]} { set virtualbox_binary "virtualbox-muen" }
+if {[have_spec nova]} { set virtualbox_binary "virtualbox-nova" }
+
 set config_of_app {
 
 	<start name="input_merger">
@@ -57,13 +61,9 @@ append config_of_app {
 		</config>
 		<route> }
 append_if [expr $use_ps2] config_of_app {
-			<service name="Input">
-				<if-arg key="label" value="ps2" /> <child name="ps2_drv" />
-			</service> }
+			<service name="Input" label="ps2"> <child name="ps2_drv" /> </service> }
 append_if [expr $use_usb] config_of_app {
-			<service name="Input">
-				<if-arg key="label" value="usb_hid" /> <child name="usb_drv" />
-			</service> }
+			<service name="Input" label="usb_hid"> <child name="usb_drv" /> </service> }
 append config_of_app {
 			<any-service> <parent /> <any-child /> </any-service>
 		</route>
@@ -99,7 +99,7 @@ append config_of_app {
 	</start>
 
 	<start name="report_rom">
-		<resource name="RAM" quantum="1M"/>
+		<resource name="RAM" quantum="2M"/>
 		<provides> <service name="Report"/> <service name="ROM"/> </provides>
 		<config>
 			<policy label="vbox_pointer -> hover"               report="nitpicker -> hover"/>
@@ -149,15 +149,23 @@ append config_of_app {
 
 for { set i 1} { $i <= $use_vms } { incr i} {
 append config_of_app "
-			<policy label_prefix=\"nit_fb$i\" rom=\"shape$i\"/>"
+			<policy label=\"nit_fb$i\" rom=\"shape$i\"/>"
 }
 
 append config_of_app {
 		</config>
 		<route>
-			<service name="Nitpicker"> <child name="nitpicker"/>  </service>
-			<service name="ROM">       <child name="report_rom"/> </service>
-			<any-service> <parent/> <any-child/> </any-service>
+			<service name="Nitpicker"> <child name="nitpicker"/>  </service>}
+
+for { set i 1} { $i <= $use_vms } { incr i} {
+append config_of_app "
+			<service name=\"ROM\" label=\"shape$i\"> <child name=\"report_rom\"/> </service>"
+}
+
+append config_of_app {
+			<service name="ROM" label="hover"> <child name="report_rom"/> </service>
+			<service name="ROM" label="xray"> <child name="report_rom"/> </service>
+			<any-service> <parent/> </any-service>
 		</route>
 	</start>}
 
@@ -182,8 +190,8 @@ for { set i 1} { $i <= $use_vms } { incr i} {
 			<service name=\"ROM\" label=\"nit_fb${i}.config\"> <child name=\"nit_fb-config\"/> </service>"
 
 	append config_of_app {
-			<service name="LOG"> <parent/> </service>
 			<service name="Nitpicker"> <child name="nitpicker"/> </service>
+			<any-service> <parent /> </any-service>
 		</route>
 	</start>}
 }
@@ -227,17 +235,16 @@ for { set i 1} { $i <= $use_vms } { incr i} {
 append config_of_app {
 		</config>
 		<route>
-			<service name="RM"> <parent/> </service>
-			<service name="LOG"> <parent/> </service>
 			<service name="Timer"> <child name="timer"/> </service>
+			<any-service> <parent /> </any-service>
 		</route>
 	</start>}
 
 for { set i 1} { $i <= $use_vms } { incr i} {
 	append config_of_app "
 	<start name=\"vbox${i}\" priority=\"-2\">"
-	append_if [expr $use_vbox4] config_of_app {
-		<binary name="virtualbox" />}
+	append_if [expr $use_vbox4] config_of_app "
+		<binary name=\"$virtualbox_binary\" />"
 	append_if [expr $use_vbox5] config_of_app {
 		<binary name="virtualbox5" />}
 
@@ -252,30 +259,29 @@ for { set i 1} { $i <= $use_vms } { incr i} {
 		<config ld_verbose=\"yes\" vbox_file=\"${vbox_file}\" vm_name=\"${flavor}\" xhci=\"no\">"
 	}
 	append config_of_app {
-			<libc stdout="/dev/log" stderr="/dev/log" rtc="/dev/rtc">
-				<vfs>
-					<dir name="dev">
-						<log/> <rtc/>}
+			<libc stdout="/dev/log" stderr="/dev/log" rtc="/dev/rtc"/>
+			<vfs>
+				<dir name="dev">
+					<log/> <rtc/>}
 
 	append_if [expr !$use_rumpfs] config_of_app {
-						<block name="sda3" label="raw" block_buffer_count="128" />}
+					<block name="sda3" label="raw" block_buffer_count="128" />}
 	append config_of_app {
-						</dir>}
+				</dir>}
 
 	append_if [expr $use_ram_fs] config_of_app {
-					<dir name="ram">  <fs label="from_ram_fs"/> </dir>}
+				<dir name="ram">  <fs label="from_ram_fs"/> </dir>}
 
 	append config_of_app "
-					<rom name=\"${vbox_file}\"/>"
+				<rom name=\"${vbox_file}\"/>"
 	append_if [expr !$use_rumpfs] config_of_app "
-					<rom name=\"${raw_image}\"/>"
+				<rom name=\"${raw_image}\"/>"
 
 	append_if [expr $use_rumpfs || $use_ram_fs] config_of_app {
-					<fs />}
+				<fs />}
 
 	append config_of_app {
-				</vfs>
-			</libc>
+			</vfs>
 		</config>
 		<route>}
 
@@ -291,9 +297,7 @@ for { set i 1} { $i <= $use_vms } { incr i} {
 			<service name=\"Input\"> <child name=\"nit_fb${i}\" /> </service>"
 	append config_of_app {
 			<service name="Report"><child name="report_rom" /></service>
-			<service name="ROM">
-				<if-arg key="label" value="usb_devices"/> <child name="report_rom"/>
-			</service>
+			<service name="ROM" label="usb_devices"> <child name="report_rom" /> </service>
 			<any-service> <parent/> <any-child /> </any-service>
 		</route>
 	</start>}

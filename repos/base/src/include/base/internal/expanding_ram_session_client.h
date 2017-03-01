@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BASE__INTERNAL__EXPANDING_RAM_SESSION_CLIENT_H_
@@ -62,7 +62,7 @@ struct Genode::Expanding_ram_session_client : Upgradeable_client<Genode::Ram_ses
 				enum { ALLOC_OVERHEAD = 4096U };
 				Genode::snprintf(buf, sizeof(buf), "ram_quota=%lu",
 				                 size + ALLOC_OVERHEAD);
-				env()->parent()->resource_request(buf);
+				env_deprecated()->parent()->resource_request(buf);
 			},
 			NUM_ATTEMPTS);
 	}
@@ -84,7 +84,7 @@ struct Genode::Expanding_ram_session_client : Upgradeable_client<Genode::Ram_ses
 			 */
 			char buf[128];
 			Genode::snprintf(buf, sizeof(buf), "ram_quota=%lu", amount);
-			env()->parent()->resource_request(buf);
+			env_deprecated()->parent()->resource_request(buf);
 		}
 		return ret;
 	}

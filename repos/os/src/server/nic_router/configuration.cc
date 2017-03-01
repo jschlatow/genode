@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* local includes */
@@ -27,7 +27,7 @@ using namespace Genode;
  ** Utilities **
  ***************/
 
-static unsigned read_rtt_sec(Xml_node const &node)
+static unsigned read_rtt_sec(Xml_node const node)
 {
 	unsigned const rtt_sec = node.attribute_value("rtt_sec", 0UL);
 	if (!rtt_sec) {
@@ -48,7 +48,7 @@ Configuration::Configuration(Xml_node const node, Allocator &alloc)
 	_rtt_sec(read_rtt_sec(node)), _node(node)
 {
 	/* read domains */
-	node.for_each_sub_node("domain", [&] (Xml_node const &node) {
+	node.for_each_sub_node("domain", [&] (Xml_node const node) {
 		try { _domains.insert(*new (_alloc) Domain(*this, node, _alloc)); }
 		catch (Domain::Invalid) { warning("invalid domain"); }
 	});

@@ -6,10 +6,10 @@
 
 /*
  * Copyright (C) 2012 Intel Corporation
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__RTC_SESSION__CONNECTION_H_
@@ -28,7 +28,7 @@ struct Rtc::Connection : Genode::Connection<Session>, Session_client
 	 */
 	Connection(Genode::Env &env)
 	:
-		Genode::Connection<Rtc::Session>(env, session(env.parent(), "ram_quota=4K")),
+		Genode::Connection<Rtc::Session>(env, session(env.parent(), "ram_quota=8K")),
 		Session_client(cap())
 	{ }
 
@@ -39,9 +39,9 @@ struct Rtc::Connection : Genode::Connection<Session>, Session_client
 	 * \deprecated  Use the constructor with 'Env &' as first
 	 *              argument instead
 	 */
-	Connection()
+	Connection() __attribute__((deprecated))
 	:
-		Genode::Connection<Rtc::Session>(session("ram_quota=4K")),
+		Genode::Connection<Rtc::Session>(session("ram_quota=8K")),
 		Session_client(cap())
 	{ }
 };

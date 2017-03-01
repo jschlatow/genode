@@ -5,18 +5,22 @@
  */
 
 /*
- * Copyright (C) 2011-2016 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__OS__SESSION_POLICY_H_
 #define _INCLUDE__OS__SESSION_POLICY_H_
 
 #include <util/arg_string.h>
-#include <os/config.h>
 #include <base/session_label.h>
+
+/* to be removed along with the \deprecated API */
+#define INCLUDED_FROM_OS_SESSION_POLICY_H
+#include <os/config.h>
+#undef INCLUDED_FROM_OS_SESSION_POLICY_H
 
 namespace Genode {
 
@@ -64,7 +68,7 @@ struct Genode::Xml_node_label_score
 			Prefix const prefix = node.attribute_value("label_prefix", Prefix());
 
 			if (!strcmp(label.string(), prefix.string(), prefix.length() - 1))
-				prefix_match = prefix.length()-1;
+				prefix_match = prefix.length();
 		}
 
 		if (suffix_present) {
@@ -75,7 +79,7 @@ struct Genode::Xml_node_label_score
 				unsigned const offset = label.length() - suffix.length();
 
 				if (!strcmp(label.string() + offset, suffix.string()))
-					suffix_match = suffix.length()-1;
+					suffix_match = suffix.length();
 			}
 		}
 	}

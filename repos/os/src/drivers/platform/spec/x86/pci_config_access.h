@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2008-2015 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _X86_PCI_CONFIG_ACCESS_H_
@@ -23,6 +23,8 @@ namespace Platform {
 	class Config_access
 	{
 		private:
+
+			Genode::Env &_env;
 
 			enum { REG_ADDR = 0xcf8, REG_DATA = 0xcfc, REG_SIZE = 4 };
 
@@ -47,7 +49,7 @@ namespace Platform {
 				 * Once created, each I/O-port session persists until
 				 * the PCI driver gets killed by its parent.
 				 */
-				static Genode::Io_port_connection io_port(port, REG_SIZE);
+				static Genode::Io_port_connection io_port(_env, port, REG_SIZE);
 				return &io_port;
 			}
 
@@ -78,6 +80,8 @@ namespace Platform {
 			}
 
 		public:
+
+			Config_access(Genode::Env &env) : _env(env) { }
 
 			/**
 			 * Read value from config space of specified device/function

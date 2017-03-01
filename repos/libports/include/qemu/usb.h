@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__QEMU__USB_H_
@@ -101,7 +101,9 @@ namespace Qemu {
 	 *
 	 * \return Pointer to Controller object that is used to access the xHCI device state
 	 */
-	Controller *usb_init(Timer_queue &tq, Pci_device &pd, Genode::Signal_receiver &sr);
+	Controller *usb_init(Timer_queue &tq, Pci_device &pd,
+	                     Genode::Signal_receiver &sr,
+	                     Genode::Allocator &, Genode::Env &);
 
 	/**
 	 * Reset USB libray

@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BASE__INTERNAL__REGION_MAP_MMAP_H_
@@ -107,7 +107,7 @@ class Genode::Region_map_mmap : public Region_map, public Dataspace
 		{
 			/* detach sub RM session when destructed */
 			if (_sub_rm && _is_attached())
-				env()->rm_session()->detach((void *)_base);
+				env_deprecated()->rm_session()->detach((void *)_base);
 		}
 
 

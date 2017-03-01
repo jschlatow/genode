@@ -8,10 +8,10 @@
  */
 
 /*
- * Copyright (C) 2011-2015 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 .include "macros.s"
@@ -37,9 +37,15 @@
 
 /* mtc virt addresses */
 .set MT_BASE, 0xffff0000
-.set MT_BUFFER, MT_BASE + (_mt_buffer - _mt_begin)
-.set MT_MASTER, MT_BASE + (_mt_master_context_begin - _mt_begin)
-.set MT_TSS, MT_BASE + (_mt_tss - _mt_begin)
+.set MT_BUFFER,    MT_BASE + (_mt_buffer - _mt_begin)
+.set MT_MASTER,    MT_BASE + (_mt_master_context_begin - _mt_begin)
+.set MT_TSS,       MT_BASE + (_mt_tss - _mt_begin)
+.set MT_ISR,       MT_BASE
+.set MT_IRQ_STACK, MT_BASE + (_mt_kernel_interrupt_stack - _mt_begin)
+.set MT_ISR_ENTRY_SIZE, 12
+
+.set IDT_FLAGS_PRIVILEGED,   0x8e00
+.set IDT_FLAGS_UNPRIVILEGED, 0xee00
 
 .macro _isr_entry
 	.align 4, 0x90
@@ -58,6 +64,15 @@
 	nop
 	push $\vector
 	jmp _mt_kernel_entry_pic
+.endm
+
+.macro _idt_entry addr flags
+	.word \addr & 0xffff
+	.word 0x0008
+	.word \flags
+	.word \addr >> 16
+	.long \addr >> 32
+	.long 0
 .endm
 
 .section .text
@@ -79,8 +94,6 @@
 	 * On user exceptions the CPU has to jump to one of the following
 	 * Interrupt Service Routines (ISRs) to switch to a kernel context.
 	 */
-	.global _mt_isrs
-	_mt_isrs:
 	_exception           0
 	_exception           1
 	_exception           2
@@ -254,68 +267,47 @@
 	mov $1, %rax
 	vmcall
 
-	/************************************************
-	 ** Space for Interrupt Descriptor Table (IDT) **
-	 ** See Intel SDM Vol. 3A, section 6.10        **
-	 ************************************************/
+	/*****************************************
+	 ** Interrupt Descriptor Table (IDT)    **
+	 ** See Intel SDM Vol. 3A, section 6.10 **
+	 *****************************************/
 
 	.global _mt_idt
 	.align 8
 	_mt_idt:
-	.space 1 << MIN_PAGE_SIZE_LOG2
 
-	/***********************************************
-	 ** Space for 64-bit Task State Segment (TSS) **
-	 ** See Intel SDM Vol. 3A, section 7.7        **
-	 ***********************************************/
+	/* first 128 entries */
+	.set isr_addr, MT_ISR
+	.rept 0x80
+	_idt_entry isr_addr IDT_FLAGS_PRIVILEGED
+	.set isr_addr, isr_addr + MT_ISR_ENTRY_SIZE
+	.endr
+
+	/* syscall entry 0x80 */
+	_idt_entry isr_addr IDT_FLAGS_UNPRIVILEGED
+	.set isr_addr, isr_addr + MT_ISR_ENTRY_SIZE
+
+	/* remaing entries */
+	.rept 127
+	_idt_entry isr_addr IDT_FLAGS_PRIVILEGED
+	.set isr_addr, isr_addr + MT_ISR_ENTRY_SIZE
+	.endr
+
+	/****************************************
+	 ** Task State Segment (TSS)           **
+	 ** See Intel SDM Vol. 3A, section 7.7 **
+	 ****************************************/
 
 	.global _mt_tss
 	.align 8
 	_mt_tss:
-	.space 104
+	.space 4
+	.quad MT_IRQ_STACK
+	.quad MT_IRQ_STACK
+	.quad MT_IRQ_STACK
+	.space 76
 
-	/******************************************
-	 ** Global Descriptor Table (GDT)        **
-	 ** See Intel SDM Vol. 3A, section 3.5.1 **
-	 ******************************************/
-
-	.align 4
-	.space 2
-
-	.global _mt_gdt_ptr
-	.global _mt_gdt_start
-	_mt_gdt_ptr:
-	.word _mt_gdt_end - _mt_gdt_start - 1 /* limit        */
-	.long _mt_gdt_start                   /* base address */
-
-	.align 8
-	_mt_gdt_start:
-	/* Null descriptor */
-	.quad 0
-	/* 64-bit code segment descriptor */
-	.long 0
-	/* GDTE_LONG | GDTE_PRESENT | GDTE_CODE | GDTE_NON_SYSTEM */
-	.long 0x209800
-	/* 64-bit data segment descriptor */
-	.long 0
-	/* GDTE_LONG | GDTE_PRESENT | GDTE_TYPE_DATA_A | GDTE_TYPE_DATA_W | GDTE_NON_SYSTEM */
-	.long 0x209300
-	/* 64-bit user code segment descriptor */
-	.long 0
-	/* GDTE_LONG | GDTE_PRESENT | GDTE_CODE | GDTE_NON_SYSTEM */
-	.long 0x20f800
-	/* 64-bit user data segment descriptor */
-	.long 0
-	/* GDTE_LONG | GDTE_PRESENT | GDTE_TYPE_DATA_A | GDTE_TYPE_DATA_W | GDTE_NON_SYSTEM */
-	.long 0x20f300
-	/* Task segment descriptor */
-	.long (MT_TSS & 0xffff) << 16 | TSS_LIMIT
-	/* GDTE_PRESENT | GDTE_SYS_TSS */
-	.long ((MT_TSS >> 24) & 0xff) << 24 | ((MT_TSS >> 16) & 0xff) | TSS_TYPE
-	.long MT_TSS >> 32
-	.long 0
-	.global _mt_gdt_end
-	_mt_gdt_end:
+	_define_gdt MT_TSS
 
 	/************************************************
 	 ** Temporary interrupt stack                  **

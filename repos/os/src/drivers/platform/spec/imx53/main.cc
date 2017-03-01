@@ -5,16 +5,15 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/log.h>
-#include <base/sleep.h>
-#include <base/rpc_server.h>
-#include <cap_session/connection.h>
+#include <base/heap.h>
+#include <base/component.h>
 #include <root/component.h>
 #include <platform_session/platform_session.h>
 
@@ -113,10 +112,12 @@ class Platform::Root : public Genode::Root_component<Platform::Session_component
 {
 	private:
 
-		Iim   _iim;
-		Iomux _iomux;
-		Ccm   _ccm;
-		Src   _src;
+		Genode::Env &_env;
+
+		Iim   _iim   { _env };
+		Iomux _iomux { _env };
+		Ccm   _ccm   { _env };
+		Src   _src   { _env };
 
 	protected:
 
@@ -125,23 +126,27 @@ class Platform::Root : public Genode::Root_component<Platform::Session_component
 
 	public:
 
-		Root(Genode::Rpc_entrypoint *session_ep,
-		     Genode::Allocator *md_alloc)
-		: Genode::Root_component<Session_component>(session_ep, md_alloc) { }
+		Root(Genode::Env       &env,
+		     Genode::Allocator &md_alloc)
+		: Genode::Root_component<Session_component>(env.ep(), md_alloc), _env(env)
+		{ }
 };
 
 
-int main(int, char **)
+struct Main
 {
-	using namespace Genode;
+	Genode::Env &  env;
+	Genode::Heap   heap { env.ram(), env.rm() };
+	Platform::Root root { env, heap };
 
+	Main(Genode::Env & env) : env(env) {
+		env.parent().announce(env.ep().manage(root)); }
+};
+
+
+void Component::construct(Genode::Env &env)
+{
 	Genode::log("--- i.MX53 platform driver ---");
 
-	static Cap_connection cap;
-	static Rpc_entrypoint ep(&cap, 4096, "imx53_plat_ep");
-	static Platform::Root plat_root(&ep, env()->heap());
-	env()->parent()->announce(ep.manage(&plat_root));
-
-	sleep_forever();
-	return 0;
+	static Main main(env);
 }

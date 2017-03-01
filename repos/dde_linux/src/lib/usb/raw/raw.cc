@@ -1,14 +1,14 @@
-/**
+/*
  * \brief  Server side USB session implementation
  * \author Sebastian Sumpf
  * \date   2014-12-08
  */
 
 /*
- * Copyright (C) 2014-2016 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 #include <base/log.h>
@@ -75,66 +75,18 @@ struct Device : List<Device>::Element
 		return nullptr;
 	}
 
-
-	static Genode::Reporter &device_list_reporter()
-	{
-		static Genode::Reporter _r("devices", "devices", 512*1024);
-		return _r;
-	}
-
-	static void report_device_list()
-	{
-		Genode::Reporter::Xml_generator xml(device_list_reporter(), [&] ()
-		{
-
-			for (Device *d = list()->first(); d; d = d->next()) {
-				xml.node("device", [&] ()
-				{
-					char buf[16];
-
-					unsigned const bus = d->udev->bus->busnum;
-					unsigned const dev = d->udev->devnum;
-
-					Genode::snprintf(buf, sizeof(buf), "usb-%d-%d", bus, dev);
-					xml.attribute("label", buf);
-
-					Genode::snprintf(buf, sizeof(buf), "0x%4x",
-					                 d->udev->descriptor.idVendor);
-					xml.attribute("vendor_id", buf);
-
-					Genode::snprintf(buf, sizeof(buf), "0x%4x",
-					                 d->udev->descriptor.idProduct);
-					xml.attribute("product_id", buf);
-
-					Genode::snprintf(buf, sizeof(buf), "0x%4x", bus);
-					xml.attribute("bus", buf);
-
-					Genode::snprintf(buf, sizeof(buf), "0x%4x", dev);
-					xml.attribute("dev", buf);
-
-					usb_interface *iface = d->interface(0);
-					Genode::snprintf(buf, sizeof(buf), "0x%02x",
-					                 iface->cur_altsetting->desc.bInterfaceClass);
-					xml.attribute("class", buf);
-				});
-			}
-		});
-	}
+	static void report_device_list();
 
 	Device(usb_device *udev) : udev(udev)
 	{
 		list()->insert(this);
-
-		if (device_list_reporter().enabled())
-			report_device_list();
+		report_device_list();
 	}
 
 	~Device()
 	{
 		list()->remove(this);
-
-		if (device_list_reporter().enabled())
-			report_device_list();
+		report_device_list();
 	}
 
 	usb_interface *interface(unsigned index)
@@ -568,17 +520,17 @@ class Usb::Session_component : public Session_rpc_object,
 {
 	private:
 
-		Genode::Entrypoint                  &_ep;
-		unsigned long                        _vendor;
-		unsigned long                        _product;
-		long                                 _bus = 0;
-		long                                 _dev = 0;
-		Device                              *_device = nullptr;
-		Signal_context_capability            _sigh_state_change;
-		Signal_rpc_member<Session_component> _packet_avail;
-		Signal_rpc_member<Session_component> _ready_ack;
-		Worker                               _worker;
-		Ram_dataspace_capability             _tx_ds;
+		Genode::Entrypoint                &_ep;
+		unsigned long                      _vendor;
+		unsigned long                      _product;
+		long                               _bus = 0;
+		long                               _dev = 0;
+		Device                            *_device = nullptr;
+		Signal_context_capability          _sigh_state_change;
+		Signal_handler<Session_component>  _packet_avail;
+		Signal_handler<Session_component>  _ready_ack;
+		Worker                             _worker;
+		Ram_dataspace_capability           _tx_ds;
 
 
 		void _signal_state_change()
@@ -587,7 +539,7 @@ class Usb::Session_component : public Session_rpc_object,
 				Signal_transmitter(_sigh_state_change).submit(1);
 		}
 
-		void _receive(unsigned)
+		void _receive()
 		{
 			_worker.packet_avail();
 			Lx::scheduler().schedule();
@@ -600,10 +552,12 @@ class Usb::Session_component : public Session_rpc_object,
 			DEVICE_REMOVE,
 		};
 
-		Session_component(Genode::Ram_dataspace_capability tx_ds, Genode::Entrypoint &ep,
+		Session_component(Genode::Ram_dataspace_capability tx_ds,
+		                  Genode::Entrypoint &ep,
+		                  Genode::Region_map &rm,
 		                  unsigned long vendor, unsigned long product,
 		                  long bus, long dev)
-		: Session_rpc_object(tx_ds, ep.rpc_ep()),
+		: Session_rpc_object(tx_ds, ep.rpc_ep(), rm),
 		  _ep(ep),
 		  _vendor(vendor), _product(product), _bus(bus), _dev(dev),
 		  _packet_avail(ep, *this, &Session_component::_receive),
@@ -802,12 +756,15 @@ class Usb::Root : public Genode::Root_component<Session_component>
 
 		Genode::Env        &_env;
 
-		Genode::Signal_rpc_member<Usb::Root> _config_dispatcher = {
+		Genode::Signal_handler<Usb::Root> _config_handler = {
 			_env.ep(), *this, &Usb::Root::_handle_config };
 
-		Genode::Reporter _config_reporter { "config" };
+		Genode::Reporter _config_reporter { _env, "config" };
 
-		void _handle_config(unsigned)
+		Genode::Reporter _device_list_reporter {
+			_env, "devices", "devices", 512*1024 };
+
+		void _handle_config()
 		{
 			Lx_kit::env().config_rom().update();
 
@@ -863,7 +820,7 @@ class Usb::Root : public Genode::Root_component<Session_component>
 
 				Ram_dataspace_capability tx_ds = _env.ram().alloc(tx_buf_size);
 				Session_component *session = new (md_alloc())
-					Session_component(tx_ds, _env.ep(), vendor, product, bus, dev);
+					Session_component(tx_ds, _env.ep(), _env.rm(), vendor, product, bus, dev);
 				::Session::list()->insert(session);
 				return session;
 			} catch (Genode::Session_policy::No_policy_defined) {
@@ -886,22 +843,73 @@ class Usb::Root : public Genode::Root_component<Session_component>
 	public:
 
 		Root(Genode::Env &env,
-		     Genode::Allocator *md_alloc)
-		: Genode::Root_component<Session_component>(&env.ep().rpc_ep(), md_alloc),
+		     Genode::Allocator &md_alloc,
+		     bool report_device_list)
+		: Genode::Root_component<Session_component>(env.ep(), md_alloc),
 			_env(env)
 		{
-			Lx_kit::env().config_rom().sigh(_config_dispatcher);
+			Lx_kit::env().config_rom().sigh(_config_handler);
+			_device_list_reporter.enabled(report_device_list);
+		}
+
+		Genode::Reporter &device_list_reporter()
+		{
+			return _device_list_reporter;
 		}
 };
 
 
+static Genode::Constructible<Usb::Root> root;
+
+
 void Raw::init(Genode::Env &env, bool report_device_list)
 {
-	Device::device_list_reporter().enabled(report_device_list);
-	static Usb::Root root(env, &Lx::Malloc::mem());
-	env.parent().announce(env.ep().rpc_ep().manage(&root));
+	root.construct(env, Lx::Malloc::mem(), report_device_list);
+	env.parent().announce(env.ep().manage(*root));
 }
 
+
+void Device::report_device_list()
+{
+	if (!root->device_list_reporter().enabled())
+		return;
+
+	Genode::Reporter::Xml_generator xml(root->device_list_reporter(), [&] ()
+	{
+
+		for (Device *d = list()->first(); d; d = d->next()) {
+			xml.node("device", [&] ()
+			{
+				char buf[16];
+
+				unsigned const bus = d->udev->bus->busnum;
+				unsigned const dev = d->udev->devnum;
+
+				Genode::snprintf(buf, sizeof(buf), "usb-%d-%d", bus, dev);
+				xml.attribute("label", buf);
+
+				Genode::snprintf(buf, sizeof(buf), "0x%4x",
+				                 d->udev->descriptor.idVendor);
+				xml.attribute("vendor_id", buf);
+
+				Genode::snprintf(buf, sizeof(buf), "0x%4x",
+				                 d->udev->descriptor.idProduct);
+				xml.attribute("product_id", buf);
+
+				Genode::snprintf(buf, sizeof(buf), "0x%4x", bus);
+				xml.attribute("bus", buf);
+
+				Genode::snprintf(buf, sizeof(buf), "0x%4x", dev);
+				xml.attribute("dev", buf);
+
+				usb_interface *iface = d->interface(0);
+				Genode::snprintf(buf, sizeof(buf), "0x%02x",
+				                 iface->cur_altsetting->desc.bInterfaceClass);
+				xml.attribute("class", buf);
+			});
+		}
+	});
+}
 
 /*****************
  ** C interface **

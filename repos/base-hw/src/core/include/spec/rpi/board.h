@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2012-2016 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__BOARD_H_
@@ -18,16 +18,13 @@
 /* core includes */
 #include <drivers/board_base.h>
 
-namespace Genode
+namespace Genode { struct Board; }
+
+struct Genode::Board : Board_base
 {
-	class Board : public Board_base
-	{
-		public:
+	void init() { }
 
-			void init() { }
-
-			static bool is_smp() { return false; }
-	};
-}
+	static constexpr bool SMP = false;
+};
 
 #endif /* _CORE__INCLUDE__BOARD_H_ */

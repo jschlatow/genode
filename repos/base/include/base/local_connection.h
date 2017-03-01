@@ -8,10 +8,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BASE__LOCAL_CONNECTION_H_
@@ -35,7 +35,7 @@ struct Genode::Local_connection_base : Noncopyable
 
 	protected:
 
-		Session_state _session_state;
+		Constructible<Session_state> _session_state;
 
 	private:
 
@@ -59,18 +59,31 @@ struct Genode::Local_connection_base : Noncopyable
 		                      Parent::Client::Id id,
 		                      Args const &args, Affinity const &affinity,
 		                      size_t ram_quota)
-		:
-			_session_state(service, id_space, id, _init_args(args, ram_quota),
-			               affinity)
 		{
-			_session_state.service().initiate_request(_session_state);
+			enum { NUM_ATTEMPTS = 10 };
+			for (unsigned i = 0; i < NUM_ATTEMPTS; i++) {
+				_session_state.construct(service, id_space, id,
+				                         label_from_args(args.string()),
+				                         _init_args(args, ram_quota), affinity);
+
+				_session_state->service().initiate_request(*_session_state);
+
+				if (_session_state->phase == Session_state::QUOTA_EXCEEDED)
+					ram_quota += 4096;
+				else
+					break;
+			}
+
+			if (_session_state->phase == Session_state::QUOTA_EXCEEDED)
+				warning("giving up to increase session quota for ", service.name(), " session "
+				        "after ", (int)NUM_ATTEMPTS, " attempts");
 		}
 
 		~Local_connection_base()
 		{
-			if (_session_state.alive()) {
-				_session_state.phase = Session_state::CLOSE_REQUESTED;
-				_session_state.service().initiate_request(_session_state);
+			if (_session_state->alive()) {
+				_session_state->phase = Session_state::CLOSE_REQUESTED;
+				_session_state->service().initiate_request(*_session_state);
 			}
 		}
 };
@@ -83,13 +96,13 @@ class Genode::Local_connection : Local_connection_base
 
 		typedef typename CONNECTION::Session_type SESSION;
 
-		Lazy_volatile_object <typename SESSION::Client> _client;
+		Constructible <typename SESSION::Client> _client;
 
 	public:
 
 		Capability<SESSION> cap() const
 		{
-			return reinterpret_cap_cast<SESSION>(_session_state.cap);
+			return reinterpret_cap_cast<SESSION>(_session_state->cap);
 		}
 
 		SESSION &session()
@@ -98,16 +111,18 @@ class Genode::Local_connection : Local_connection_base
 			 * If session comes from a local service (e.g,. a virtualized
 			 * RAM session, we return the reference to the corresponding
 			 * component object, which can be called directly.
-			 *
-			 * Otherwise, if the session is provided
 			 */
-			if (_session_state.local_ptr)
-				return *static_cast<SESSION *>(_session_state.local_ptr);
+			if (_session_state->local_ptr)
+				return *static_cast<SESSION *>(_session_state->local_ptr);
 
 			/*
-			 * The session is provided remotely. So return a client-stub
-			 * for interacting with the session.
+			 * The session is provided remotely. So return a client stub for
+			 * interacting with the session. We construct the client object if
+			 * we have a valid session capability.
 			 */
+			if (!_client.constructed() && _session_state->cap.valid())
+				_client.construct(cap());
+
 			if (_client.constructed())
 				return *_client;
 
@@ -115,7 +130,7 @@ class Genode::Local_connection : Local_connection_base
 			 * This error is printed if the session could not be
 			 * established or the session is provided by a child service.
 			 */
-			error(SESSION::service_name(), " session (", _session_state.args(), ") "
+			error(SESSION::service_name(), " session (", _session_state->args(), ") "
 			      "unavailable");
 			throw Parent::Service_denied();
 		}
@@ -127,8 +142,7 @@ class Genode::Local_connection : Local_connection_base
 			Local_connection_base(service, id_space, id, args,
 			                      affinity, CONNECTION::RAM_QUOTA)
 		{
-			if (_session_state.cap.valid())
-				_client.construct(cap());
+			service.wakeup();
 		}
 };
 

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2010-2013 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BLOCK_SESSION__SERVER_H_
@@ -36,9 +36,20 @@ class Block::Session_rpc_object : public Genode::Rpc_object<Session, Session_rpc
 		 *               for the tx packet stream
 		 * \param ep     entry point used for packet-stream channel
 		 */
-		Session_rpc_object(Genode::Dataspace_capability tx_ds,
+		Session_rpc_object(Genode::Region_map &local_rm,
+		                   Genode::Dataspace_capability tx_ds,
 		                   Genode::Rpc_entrypoint &ep)
-		: _tx(tx_ds, ep) { }
+		: _tx(tx_ds, local_rm, ep) { }
+
+		/**
+		 * Constructor
+		 *
+		 * \deprecated
+		 * \noapi
+		 */
+		Session_rpc_object(Genode::Dataspace_capability tx_ds,
+		                   Genode::Rpc_entrypoint &ep) __attribute__((deprecated))
+		: _tx(tx_ds, *Genode::env_deprecated()->rm_session(), ep) { }
 
 		/**
 		 * Return capability to packet-stream channel

@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2015-2016 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* core includes */
@@ -22,7 +22,6 @@
 
 /* base includes */
 #include <base/internal/unmanaged_singleton.h>
-#include <base/internal/globals.h>
 
 using namespace Kernel;
 
@@ -44,25 +43,22 @@ Genode::Board & Kernel::board() {
  */
 extern "C" void init_kernel()
 {
-	/*
-	 * As atomic operations are broken in physical mode on some platforms
-	 * we must avoid the use of 'cmpxchg' by now (includes not using any
-	 * local static objects.
-	 */
-
-	board().init();
+	static volatile bool initialized = false;
+	if (Cpu::executing_id()) while (!initialized) ;
 
 	/* initialize cpu pool */
 	cpu_pool();
 
 	/* initialize current cpu */
-	cpu_pool()->cpu(Cpu::executing_id())->init(*pic(), *core_pd(), board());
+	cpu_pool()->cpu(Cpu::executing_id())->init(*pic()/*, *core_pd(), board()*/);
 
 	Core_thread::singleton();
 
-	Genode::init_log();
-	Genode::log("");
-	Genode::log("kernel initialized");
+	if (!Cpu::executing_id()) {
+		initialized = true;
+		Genode::log("");
+		Genode::log("kernel initialized");
+	}
 
 	kernel();
 }

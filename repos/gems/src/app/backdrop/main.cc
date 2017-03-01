@@ -5,22 +5,23 @@
  */
 
 /*
- * Copyright (C) 2009-2014 Genode Labs GmbH
+ * Copyright (C) 2009-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
+#include <base/component.h>
+#include <base/heap.h>
+#include <base/attached_rom_dataspace.h>
 #include <nitpicker_session/connection.h>
-#include <base/printf.h>
 #include <util/misc_math.h>
-#include <os/config.h>
 #include <decorator/xml_utils.h>
 #include <nitpicker_gfx/box_painter.h>
 #include <nitpicker_gfx/texture_painter.h>
-#include <os/attached_dataspace.h>
-#include <util/volatile_object.h>
+#include <base/attached_dataspace.h>
+#include <util/reconstructible.h>
 #include <os/texture_rgb565.h>
 #include <os/texture_rgb888.h>
 
@@ -30,15 +31,23 @@
 #include <gems/xml_anchor.h>
 #include <gems/texture_utils.h>
 
-using namespace Genode;
+/* libc includes */
+#include <libc/component.h>
 
+using namespace Genode;
 
 namespace Backdrop { struct Main; }
 
 
 struct Backdrop::Main
 {
-	Nitpicker::Connection nitpicker;
+	Genode::Env &env;
+
+	Genode::Heap heap { env.ram(), env.rm() };
+
+	Genode::Attached_rom_dataspace config { env, "config" };
+
+	Nitpicker::Connection nitpicker { env, "backdrop" };
 
 	struct Buffer
 	{
@@ -56,26 +65,30 @@ struct Backdrop::Main
 			nitpicker.buffer(mode, false);
 
 			if (mode.format() != Framebuffer::Mode::RGB565) {
-				PWRN("Color mode %d not supported\n", (int)mode.format());
+				Genode::warning("Color mode %d not supported\n", (int)mode.format());
 				return Dataspace_capability();
 			}
 
 			return nitpicker.framebuffer()->dataspace();
 		}
 
-		Attached_dataspace fb_ds { _ds_cap(nitpicker) };
+		Attached_dataspace fb_ds;
 
 		Genode::size_t surface_num_bytes() const
 		{
 			return size().count()*mode.bytes_per_pixel();
 		}
 
-		Attached_ram_dataspace surface_ds { env()->ram_session(), surface_num_bytes() };
+		Attached_ram_dataspace surface_ds;
 
 		/**
 		 * Constructor
 		 */
-		Buffer(Nitpicker::Connection &nitpicker) : nitpicker(nitpicker) { }
+		Buffer(Genode::Env &env, Nitpicker::Connection &nitpicker)
+		:	nitpicker(nitpicker),
+			fb_ds(env.rm(), _ds_cap(nitpicker)),
+			surface_ds(env.ram(), env.rm(), surface_num_bytes())
+		{ }
 
 		/**
 		 * Return size of virtual framebuffer
@@ -102,7 +115,7 @@ struct Backdrop::Main
 		}
 	};
 
-	Lazy_volatile_object<Buffer> buffer;
+	Constructible<Buffer> buffer;
 
 	Nitpicker::Session::View_handle view_handle = nitpicker.create_view();
 
@@ -117,20 +130,18 @@ struct Backdrop::Main
 		nitpicker.execute();
 	}
 
-	Signal_receiver &sig_rec;
-
 	/**
 	 * Function called on config change or mode change
 	 */
-	void handle_config(unsigned);
+	void handle_config();
 
-	Signal_dispatcher<Main> config_dispatcher = {
-		sig_rec, *this, &Main::handle_config};
+	Signal_handler<Main> config_dispatcher = {
+		env.ep(), *this, &Main::handle_config };
 
-	void handle_sync(unsigned);
+	void handle_sync();
 
-	Signal_dispatcher<Main> sync_dispatcher = {
-		sig_rec, *this, &Main::handle_sync};
+	Signal_handler<Main> sync_handler = {
+		env.ep(), *this, &Main::handle_sync};
 
 	template <typename PT>
 	void paint_texture(Surface<PT> &, Texture<PT> const &, Surface_base::Point, bool);
@@ -138,14 +149,13 @@ struct Backdrop::Main
 	void apply_image(Xml_node);
 	void apply_fill(Xml_node);
 
-	Main(Signal_receiver &sig_rec) : sig_rec(sig_rec)
+	Main(Genode::Env &env) : env(env)
 	{
-		/* trigger application of initial config */
-		Signal_transmitter(config_dispatcher).submit();
-
 		nitpicker.mode_sigh(config_dispatcher);
 
-		config()->sigh(config_dispatcher);
+		config.sigh(config_dispatcher);
+
+		handle_config();
 	}
 };
 
@@ -222,7 +232,7 @@ void Backdrop::Main::apply_image(Xml_node operation)
 	typedef Surface_base::Area  Area;
 
 	if (!operation.has_attribute("png")) {
-		PWRN("missing 'png' attribute in <image> node");
+		Genode::warning("missing 'png' attribute in <image> node");
 		return;
 	}
 
@@ -230,11 +240,11 @@ void Backdrop::Main::apply_image(Xml_node operation)
 	png_file_name[0] = 0;
 	operation.attribute("png").value(png_file_name, sizeof(png_file_name));
 
-	File file(png_file_name, *env()->heap());
+	File file(png_file_name, heap);
 
 	Anchor anchor(operation);
 
-	Png_image png_image(file.data<void>());
+	Png_image png_image(env.ram(), env.rm(), heap, file.data<void>());
 
 	Area const scaled_size = calc_scaled_size(operation, png_image.size(),
 	                                          Area(buffer->mode.width(),
@@ -267,8 +277,8 @@ void Backdrop::Main::apply_image(Xml_node operation)
 	Texture<Pixel_rgb888> *png_texture = png_image.texture<Pixel_rgb888>();
 
 	/* create texture with the scaled image */
-	Chunky_texture<Pixel_rgb888> scaled_texture(*env()->ram_session(), scaled_size);
-	scale(*png_texture, scaled_texture);
+	Chunky_texture<Pixel_rgb888> scaled_texture(env.ram(), env.rm(), scaled_size);
+	scale(*png_texture, scaled_texture, heap);
 
 	png_image.release_texture(png_texture);
 
@@ -278,8 +288,8 @@ void Backdrop::Main::apply_image(Xml_node operation)
 
 	/* create texture with down-sampled scaled image */
 	typedef Pixel_rgb565 PT;
-	Chunky_texture<PT> texture(*env()->ram_session(), scaled_size);
-	convert_pixel_format(scaled_texture, texture, alpha);
+	Chunky_texture<PT> texture(env.ram(), env.rm(), scaled_size);
+	convert_pixel_format(scaled_texture, texture, alpha, heap);
 
 	/* paint texture onto surface */
 	Surface<PT> surface = buffer->surface<PT>();
@@ -305,20 +315,20 @@ void Backdrop::Main::apply_fill(Xml_node operation)
 }
 
 
-void Backdrop::Main::handle_config(unsigned)
+void Backdrop::Main::handle_config()
 {
-	config()->reload();
+	config.update();
 
-	buffer.construct(nitpicker);
+	buffer.construct(env, nitpicker);
 
 	/* clear surface */
 	apply_fill(Xml_node("<fill color=\"#000000\"/>"));
 
 	/* apply graphics primitives defined in the config */
 	try {
-		for (unsigned i = 0; i < config()->xml_node().num_sub_nodes(); i++) {
+		for (unsigned i = 0; i < config.xml().num_sub_nodes(); i++) {
 			try {
-				Xml_node operation = config()->xml_node().sub_node(i);
+				Xml_node operation = config.xml().sub_node(i);
 
 				if (operation.has_type("image"))
 					apply_image(operation);
@@ -336,11 +346,11 @@ void Backdrop::Main::handle_config(unsigned)
 	} catch (...) { /* ignore failure to obtain config */ }
 
 	/* schedule buffer refresh */
-	nitpicker.framebuffer()->sync_sigh(sync_dispatcher);
+	nitpicker.framebuffer()->sync_sigh(sync_handler);
 }
 
 
-void Backdrop::Main::handle_sync(unsigned)
+void Backdrop::Main::handle_sync()
 {
 	buffer->flush_surface();
 	_update_view();
@@ -356,21 +366,6 @@ void Backdrop::Main::handle_sync(unsigned)
 extern "C" void _sigprocmask() { }
 
 
-int main(int argc, char **argv)
-{
-	static Signal_receiver sig_rec;
+void Libc::Component::construct(Libc::Env &env) {
+	static Backdrop::Main application(env); }
 
-	static Backdrop::Main application(sig_rec);
-
-	/* process incoming signals */
-	for (;;) {
-		using namespace Genode;
-
-		Signal sig = sig_rec.wait_for_signal();
-		Signal_dispatcher_base *dispatcher =
-			dynamic_cast<Signal_dispatcher_base *>(sig.context());
-
-		if (dispatcher)
-			dispatcher->dispatch(sig.num());
-	}
-}

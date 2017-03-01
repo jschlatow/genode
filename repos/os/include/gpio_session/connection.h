@@ -7,10 +7,10 @@
 
 /*
  * Copyright (C) 2012 Ksys Labs LLC
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__GPIO_SESSION__CONNECTION_H_
@@ -40,7 +40,7 @@ struct Gpio::Connection : Genode::Connection<Session>, Session_client
 	 * \deprecated  Use the constructor with 'Env &' as first
 	 *              argument instead
 	 */
-	Connection(unsigned long gpio_pin)
+	Connection(unsigned long gpio_pin) __attribute__((deprecated))
 	:
 		Genode::Connection<Session>(session("ram_quota=8K, gpio=%zd", gpio_pin)),
 		Session_client(cap())

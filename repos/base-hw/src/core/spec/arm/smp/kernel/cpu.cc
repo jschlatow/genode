@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015-2016 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* core includes */
@@ -23,19 +23,6 @@
 /* spin-lock used to synchronize kernel access of different cpus */
 Kernel::Lock & Kernel::data_lock() {
 	return *unmanaged_singleton<Kernel::Lock>(); }
-
-
-/**
- * Setup non-boot CPUs
- */
-extern "C" void init_kernel_mp()
-{
-	using namespace Kernel;
-
-	cpu_pool()->cpu(Genode::Cpu::executing_id())->init(*pic(), *core_pd(), board());
-
-	kernel();
-}
 
 
 void Kernel::Cpu_domain_update::_domain_update() {

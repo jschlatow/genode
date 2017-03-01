@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2009-2013 Genode Labs GmbH
+ * Copyright (C) 2009-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__NIC_SESSION__CLIENT_H_
@@ -38,11 +38,12 @@ class Nic::Session_client : public Genode::Rpc_client<Session>
 		 *                         transmission buffer
 		 */
 		Session_client(Session_capability       session,
-		               Genode::Range_allocator *tx_buffer_alloc)
+		               Genode::Range_allocator &tx_buffer_alloc,
+		               Genode::Region_map      &rm)
 		:
 			Genode::Rpc_client<Session>(session),
-			_tx(call<Rpc_tx_cap>(), tx_buffer_alloc),
-			_rx(call<Rpc_rx_cap>())
+			_tx(call<Rpc_tx_cap>(), rm, tx_buffer_alloc),
+			_rx(call<Rpc_rx_cap>(),rm )
 		{ }
 
 

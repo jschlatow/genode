@@ -5,27 +5,16 @@
  */
 
 /*
- * Copyright (C) 2008-2013 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifdef QT_MAIN_STACK_SIZE
 
-#include <base/thread.h>
+#include <libc/component.h>
 
-using namespace Genode;
-
-extern int qt_main(int argc, char *argv[]);
-
-#define qt_main main
-
-int main(int argc, char *argv[])
-{
-	Genode::Thread::myself()->stack_size(QT_MAIN_STACK_SIZE);
-	
-	return qt_main(argc, argv);
-}
+Genode::size_t Libc::Component::stack_size() { return QT_MAIN_STACK_SIZE; }
 
 #endif /* QT_MAIN_STACK_SIZE */

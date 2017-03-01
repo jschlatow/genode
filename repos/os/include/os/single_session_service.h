@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__OS__SINGLE_SESSION_SERVICE_H_
@@ -40,7 +40,8 @@ class Genode::Single_session_service
 		 */
 		struct Client : SESSION::Client
 		{
-			Client(Session_capability cap) : SESSION::Client(cap) { }
+			Client(Session_capability cap)                 : SESSION::Client(cap) { }
+			Client(Region_map &rm, Session_capability cap) : SESSION::Client(rm, cap) { }
 			Session_capability cap() const { return *this; }
 		};
 
@@ -54,6 +55,9 @@ class Genode::Single_session_service
 	public:
 
 		Single_session_service(Session_capability cap) : _client(cap) { }
+
+		Single_session_service(Region_map &rm, Session_capability cap)
+		: _client(rm, cap) { }
 
 		Service &service() { return _service; }
 };

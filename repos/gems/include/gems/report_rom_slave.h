@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__GEMS__REPORT_ROM_SLAVE_H_
@@ -16,6 +16,7 @@
 
 /* Genode includes */
 #include <base/lock.h>
+#include <os/static_parent_services.h>
 #include <os/slave.h>
 #include <report_session/connection.h>
 #include <rom_session/connection.h>
@@ -25,7 +26,14 @@ class Report_rom_slave : public Genode::Noncopyable
 {
 	private:
 
-		class Policy : public Genode::Slave::Policy
+		class Policy
+		:
+			private Genode::Static_parent_services<Genode::Rom_session,
+			                                       Genode::Cpu_session,
+			                                       Genode::Pd_session,
+			                                       Genode::Ram_session,
+			                                       Genode::Log_session>,
+			public Genode::Slave::Policy
 		{
 			private:
 
@@ -34,14 +42,6 @@ class Report_rom_slave : public Genode::Noncopyable
 				bool                    _announced;
 
 			protected:
-
-				char const **_permitted_services() const
-				{
-					static char const *permitted_services[] = {
-						"CPU", "PD", "RAM", "LOG", 0 };
-
-					return permitted_services;
-				};
 
 				static Name           _name()  { return "report_rom"; }
 				static Genode::size_t _quota() { return 1024*1024; }
@@ -53,7 +53,7 @@ class Report_rom_slave : public Genode::Noncopyable
 				       Genode::Ram_session_capability ram,
 				       const char                    *config)
 				:
-					Genode::Slave::Policy(_name(), _name(), ep, rm, ram, _quota())
+					Genode::Slave::Policy(_name(), _name(), *this, ep, rm, ram, _quota())
 				{
 					if (config)
 						configure(config);

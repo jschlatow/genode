@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__VM_SESSION__CONNECTION_H_
@@ -60,9 +60,9 @@ struct Genode::Vm_connection : Connection<Vm_session>, Vm_session_client
 	 */
 	Vm_connection(const char *label = "",
 	              long priority = Cpu_session::DEFAULT_PRIORITY,
-	              unsigned long affinity = 0)
+	              unsigned long affinity = 0) __attribute__((deprecated))
 	:
-		Connection<Vm_session>(_session(*env()->parent(), label, priority, affinity)),
+		Connection<Vm_session>(_session(*env_deprecated()->parent(), label, priority, affinity)),
 		Vm_session_client(cap())
 	{ }
 };

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2008-2013 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__FRAMEBUFFER_SESSION__CONNECTION_H_
@@ -41,6 +41,7 @@ class Framebuffer::Connection : public Genode::Connection<Session>,
 
 			enum { ARGBUF_SIZE = 128 };
 			char argbuf[ARGBUF_SIZE];
+			argbuf[0] = 0;
 
 			/* donate ram quota for storing server-side meta data */
 			Arg_string::set_arg(argbuf, sizeof(argbuf), "ram_quota", RAM_QUOTA);
@@ -84,9 +85,9 @@ class Framebuffer::Connection : public Genode::Connection<Session>,
 		 */
 		Connection(unsigned     width  = 0,
 		           unsigned     height = 0,
-		           Mode::Format format = Mode::INVALID)
+		           Mode::Format format = Mode::INVALID) __attribute__((deprecated))
 		:
-			Genode::Connection<Session>(_connect(*Genode::env()->parent(),
+			Genode::Connection<Session>(_connect(*Genode::env_deprecated()->parent(),
 			                                     width, height, format)),
 			Session_client(cap())
 		{ }

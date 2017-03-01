@@ -5,17 +5,17 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__OS__REPORTER_H_
 #define _INCLUDE__OS__REPORTER_H_
 
-#include <util/volatile_object.h>
-#include <os/attached_dataspace.h>
+#include <util/reconstructible.h>
+#include <base/attached_dataspace.h>
 #include <report_session/connection.h>
 #include <util/xml_generator.h>
 
@@ -41,13 +41,13 @@ class Genode::Reporter : Noncopyable
 		struct Connection
 		{
 			Report::Connection report;
-			Attached_dataspace ds = { report.dataspace() };
+			Attached_dataspace ds = { *env_deprecated()->rm_session(), report.dataspace() };
 
 			Connection(char const *name, size_t buffer_size)
-			: report(name, buffer_size) { }
+			: report(false, name, buffer_size) { }
 		};
 
-		Lazy_volatile_object<Connection> _conn;
+		Constructible<Connection> _conn;
 
 		/**
 		 * Return size of report buffer
@@ -61,8 +61,21 @@ class Genode::Reporter : Noncopyable
 
 	public:
 
-		Reporter(char const *xml_name, char const *label = nullptr,
+		Reporter(Env &env, char const *xml_name, char const *label = nullptr,
 		         size_t buffer_size = 4096)
+		:
+			_xml_name(xml_name), _label(label ? label : xml_name),
+			_buffer_size(buffer_size)
+		{ }
+
+		/**
+		 * Constructor
+		 *
+		 * \deprecated
+		 * \noapi
+		 */
+		Reporter(char const *xml_name, char const *label = nullptr,
+		         size_t buffer_size = 4096) __attribute__((deprecated))
 		:
 			_xml_name(xml_name), _label(label ? label : xml_name),
 			_buffer_size(buffer_size)

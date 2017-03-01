@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015-2016 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* core includes */
@@ -18,5 +18,6 @@
 void Kernel::Thread::_call_update_pd()
 {
 	Pd * const pd = (Pd *) user_arg_1();
-	if (Cpu_domain_update::_do_global(pd->asid)) { _pause(); }
+	if (Cpu_domain_update::_do_global(pd->asid)) {
+		_become_inactive(AWAITS_RESTART); }
 }

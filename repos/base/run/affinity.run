@@ -5,14 +5,12 @@
 #
 
 if {
-	![have_spec hw_arndale]    &&
-	![have_spec hw_wand_quad]  &&
-	![have_spec hw_panda]      &&
-	![have_spec foc_x86_32]    &&
-	![have_spec foc_x86_64]    &&
-	![have_spec foc_panda]     &&
-	![have_spec foc_arndale]   &&
-	![have_spec foc_odroid_x2] &&
+	![have_spec arndale]    &&
+	![have_spec wand_quad]  &&
+	![have_spec panda]      &&
+	![have_spec x86_32]     &&
+	![have_spec x86_64]     &&
+	![have_spec foc]        &&
 	![have_spec nova]
 } {
 	puts "Platform is unsupported."
@@ -33,7 +31,7 @@ set config {
 		<parent-provides>
 			<service name="LOG"/>
 			<service name="CPU"/>
-			<service name="RM"/>
+			<service name="PD"/>
 			<service name="RAM"/>
 			<service name="ROM"/>
 			<service name="IO_MEM"/>
@@ -56,7 +54,7 @@ append config {
 
 install_config $config
 
-set boot_modules { core init test-affinity }
+set boot_modules { core ld.lib.so init test-affinity }
 
 lappend_if [have_spec arndale] boot_modules platform_drv
 

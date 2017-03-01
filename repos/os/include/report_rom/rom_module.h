@@ -5,23 +5,23 @@
  */
 
 /*
- * Copyright (C) 2014-2016 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__REPORT_ROM__ROM_MODULE_H_
 #define _INCLUDE__REPORT_ROM__ROM_MODULE_H_
 
 /* Genode includes */
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 #include <os/session_policy.h>
 #include <base/attached_ram_dataspace.h>
 
 namespace Rom {
 	using Genode::size_t;
-	using Genode::Lazy_volatile_object;
+	using Genode::Constructible;
 	using Genode::Attached_ram_dataspace;
 
 	class Module;
@@ -138,7 +138,7 @@ struct Rom::Module : Module_list::Element, Readable_module
 		 * allow for the immediate release of the underlying backing store when
 		 * the module gets destructed.
 		 */
-		Lazy_volatile_object<Attached_ram_dataspace> _ds;
+		Constructible<Attached_ram_dataspace> _ds;
 
 		/**
 		 * Content size, which may less than the capacilty of '_ds'.

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _ATA_DRIVER_H_
@@ -181,16 +181,17 @@ struct Ata_driver : Port_driver
 	typedef ::String<Identity::Serial_number> Serial_string;
 	typedef ::String<Identity::Model_number>  Model_string;
 
-	Genode::Lazy_volatile_object<Identity>      info;
-	Genode::Lazy_volatile_object<Serial_string> serial;
-	Genode::Lazy_volatile_object<Model_string>  model;
+	Genode::Constructible<Identity>      info;
+	Genode::Constructible<Serial_string> serial;
+	Genode::Constructible<Model_string>  model;
 
 	Io_command                               *io_cmd = nullptr;
 	Block::Packet_descriptor                  pending[32];
 
 	Ata_driver(Genode::Allocator &alloc,
-	           Port &port, Ahci_root &root, unsigned &sem)
-	: Port_driver(port, root, sem), alloc(alloc)
+	           Port &port, Genode::Ram_session &ram,
+	           Ahci_root &root, unsigned &sem)
+	: Port_driver(port, ram, root, sem), alloc(alloc)
 	{
 		Port::init();
 		identify_device();

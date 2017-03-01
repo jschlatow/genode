@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _IRQ_HANDLER_H_
@@ -16,7 +16,6 @@
 
 /* Genode includes */
 #include <irq_session/connection.h>
-#include <os/server.h>
 
 class Irq_handler
 {
@@ -31,9 +30,9 @@ class Irq_handler
 
 	public:
 
-		Irq_handler(Server::Entrypoint &ep, int irq_number)
+		Irq_handler(Genode::Env &env, int irq_number)
 		:
-			_irq(irq_number),
+			_irq(env, irq_number),
 			_dispatcher(_sig_rec, *this, &Irq_handler::_handle)
 		{
 			_irq.sigh(_dispatcher);

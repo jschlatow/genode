@@ -7,10 +7,10 @@
  */
 
 /*
- * Copyright (C) 2014-2016 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__SPEC__ARM__PL310_H_
@@ -19,10 +19,7 @@
 /* Genode includes */
 #include <util/mmio.h>
 
-namespace Arm
-{
-	struct Pl310;
-}
+namespace Arm { struct Pl310; }
 
 
 /**
@@ -68,7 +65,8 @@ class Arm::Pl310 : public Genode::Mmio
 
 		Pl310(Genode::addr_t const base) : Mmio(base) { }
 
-		void enable() {}
+		void enable()  {}
+		void disable() {}
 
 		void clean_invalidate()
 		{

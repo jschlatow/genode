@@ -5,16 +5,16 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__OS__DYNAMIC_ROM_SESSION_H_
 #define _INCLUDE__OS__DYNAMIC_ROM_SESSION_H_
 
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 #include <base/rpc_server.h>
 #include <base/session_label.h>
 #include <base/attached_ram_dataspace.h>
@@ -64,7 +64,7 @@ class Genode::Dynamic_rom_session : public Rpc_object<Rom_session>
 
 		size_t _ds_size = 4096;
 
-		Lazy_volatile_object<Attached_ram_dataspace> _ds;
+		Constructible<Attached_ram_dataspace> _ds;
 
 		void _notify_client()
 		{

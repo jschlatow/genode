@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _UPLINK_H_
@@ -46,7 +46,7 @@ class Net::Uplink : public Nic::Packet_allocator,
 
 	public:
 
-		Uplink(Genode::Entrypoint &ep,
+		Uplink(Genode::Env        &env,
 		       Genode::Timer      &timer,
 		       Genode::Allocator  &alloc,
 		       Configuration      &config);

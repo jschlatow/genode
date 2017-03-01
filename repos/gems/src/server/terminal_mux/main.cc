@@ -5,20 +5,20 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
 #include <base/env.h>
-#include <base/component.h>
+#include <libc/component.h>
 #include <base/heap.h>
 #include <base/session_label.h>
 #include <util/arg_string.h>
 #include <root/component.h>
-#include <os/attached_ram_dataspace.h>
+#include <base/attached_ram_dataspace.h>
 #include <timer_session/connection.h>
 
 /* terminal includes */
@@ -297,7 +297,7 @@ class Terminal::Session_component : public Genode::Rpc_object<Session, Session_c
 			return num_bytes;
 		}
 
-		void _write(Genode::size_t num_bytes)
+		Genode::size_t _write(Genode::size_t num_bytes)
 		{
 			unsigned char *src = _io_buffer.local_addr<unsigned char>();
 
@@ -306,6 +306,8 @@ class Terminal::Session_component : public Genode::Rpc_object<Session, Session_c
 				/* submit character to sequence decoder */
 				_decoder.insert(src[i]);
 			}
+
+			return num_bytes;
 		}
 
 		Genode::Dataspace_capability _dataspace()
@@ -706,7 +708,7 @@ struct Main
 				c = 8;
 
 			/*
-			 * Handle C-y by switching to the menu
+			 * Handle C-x by switching to the menu
 			 */
 			enum { KEYCODE_C_X = 24 };
 			if (c == KEYCODE_C_X) {
@@ -721,4 +723,4 @@ struct Main
 };
 
 
-void Component::construct(Genode::Env &env) { static Main inst(env); }
+void Libc::Component::construct(Libc::Env &env) { static Main inst(env); }

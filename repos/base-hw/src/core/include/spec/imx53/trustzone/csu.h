@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2012 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__SPEC__IMX53__TRUSTZONE__CSU_H_
@@ -101,7 +101,7 @@ namespace Genode {
 			typedef Csl<0x78> Csl30;
 			typedef Csl<0x7c> Csl31;
 
-			Csu(addr_t const base) : Mmio(base)
+			Csu(addr_t const base) : Mmio(Platform::mmio_to_virt(base))
 			{
 				/* Power (CCM, SRC, DPLLIP1-4, GPC and OWIRE) */
 				write<Csl09::Slave_a>(Csl00::UNSECURE);

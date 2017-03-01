@@ -1,0 +1,11 @@
+# kernel to use
+KERNEL ?= linux
+
+
+##
+## Kernel-specific run tool configuration
+##
+
+RUN_OPT = --include boot_dir/linux \
+          --include power_on/linux --include log/linux
+

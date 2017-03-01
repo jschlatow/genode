@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2010-2014 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -72,6 +72,7 @@ static Input::Event translate_event(Input::Event  const ev,
 
 	case Input::Event::INVALID:
 	case Input::Event::WHEEL:
+	case Input::Event::CHARACTER:
 		return ev;
 	}
 	return Input::Event();
@@ -223,7 +224,7 @@ struct Nit_fb::Main : View_updater
 
 	Nitpicker::Session::View_handle view = nitpicker.create_view();
 
-	Genode::Attached_dataspace input_ds { nitpicker.input()->dataspace() };
+	Genode::Attached_dataspace input_ds { env.rm(), nitpicker.input()->dataspace() };
 
 	Framebuffer::Mode _initial_mode()
 	{

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 /* Genode includes */
@@ -29,13 +29,11 @@
 #include <dwc_otg_dbg.h>
 #undef new
 
-#include <usb_irq.h>
-
-
 using namespace Genode;
 
 namespace Genode { template <unsigned long> class Sp804_base; }
 
+unsigned dwc_irq();
 
 
 /**
@@ -164,7 +162,7 @@ enum {
 static resource _dwc_otg_resource[] =
 {
 	{ DWC_BASE, DWC_BASE + DWC_SIZE - 1, "dwc_otg", IORESOURCE_MEM },
-	{ DWC_IRQ, DWC_IRQ, "dwc_otg-irq" /* name unused */, IORESOURCE_IRQ }
+	{ dwc_irq(), dwc_irq(), "dwc_otg-irq" /* name unused */, IORESOURCE_IRQ }
 };
 
 
@@ -252,8 +250,6 @@ extern "C" void dwc_otg_fiq_nop(struct fiq_state *state) { TRACE; }
 extern "C" void dwc_otg_fiq_fsm(struct fiq_state *state, int num_channels) { TRACE; }
 
 unsigned char _dwc_otg_fiq_stub, _dwc_otg_fiq_stub_end;
-
-extern int fiq_enable, fiq_fsm_enable;
 
 
 /***********************

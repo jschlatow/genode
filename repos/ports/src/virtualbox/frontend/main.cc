@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2013-2014 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is distributed under the terms of the GNU General Public License
  * version 2.
@@ -14,9 +14,10 @@
 
 
 /* Genode includes */
+#include <base/attached_rom_dataspace.h>
+#include <base/heap.h>
 #include <base/log.h>
-#include <base/component.h>
-#include <os/config.h>
+#include <libc/component.h>
 
 /* Virtualbox includes */
 #include <iprt/initterm.h>
@@ -87,7 +88,7 @@ RTDECL(int) RTPathUserHome(char *pszPath, size_t cchPath)
 }
 
 
-HRESULT setupmachine()
+HRESULT setupmachine(Genode::Env &env)
 {
 	HRESULT rc;
 
@@ -95,13 +96,13 @@ HRESULT setupmachine()
 	static com::Utf8Str vm_name(c_vbox_vmname);
 
 	/* Machine object */
-	ComObjPtr<Machine> machine;
+	static ComObjPtr<Machine> machine;
 	rc = machine.createObject();
 	if (FAILED(rc))
 		return rc;
 
 	/* Virtualbox object */
-	ComObjPtr<VirtualBox> virtualbox;
+	static ComObjPtr<VirtualBox> virtualbox;
 	rc = virtualbox.createObject();
 	if (FAILED(rc))
 		return rc;
@@ -119,7 +120,7 @@ HRESULT setupmachine()
 		return rc;
 
 	// open a session
-	ComObjPtr<Session> session;
+	static ComObjPtr<Session> session;
 	rc = session.createObject();
 	if (FAILED(rc))
 		return rc;
@@ -129,17 +130,17 @@ HRESULT setupmachine()
 		return rc;
 
 	/* Console object */
-	ComPtr<IConsole> gConsole;
+	static ComPtr<IConsole> gConsole;
 	rc = session->COMGETTER(Console)(gConsole.asOutParam());
 
 	/* handle input of Genode and forward it to VMM layer */
-	ComPtr<GenodeConsole> genodeConsole = gConsole;
+	static ComPtr<GenodeConsole> genodeConsole = gConsole;
 	RTLogPrintf("genodeConsole = %p\n", genodeConsole);
 
 	genodeConsole->init_clipboard();
 
 	/* Display object */
-	ComPtr<IDisplay> display;
+	static ComPtr<IDisplay> display;
 	rc = gConsole->COMGETTER(Display)(display.asOutParam());
 	if (FAILED(rc))
 		return rc;
@@ -152,7 +153,7 @@ HRESULT setupmachine()
 	unsigned uScreenId;
 	for (uScreenId = 0; uScreenId < cMonitors; uScreenId++)
 	{
-		Genodefb *fb = new Genodefb();
+		Genodefb *fb = new Genodefb(env);
 		display->SetFramebuffer(uScreenId, fb);
 	}
 
@@ -181,20 +182,19 @@ HRESULT setupmachine()
 	Assert (&*gMouse);
 
 	/* request keyboard object */
-	ComPtr<IKeyboard> gKeyboard;
+	static ComPtr<IKeyboard> gKeyboard;
 	rc = gConsole->COMGETTER(Keyboard)(gKeyboard.asOutParam());
 	if (FAILED(rc))
 		return rc;
 	Assert (&*gKeyboard);
 
-	genodeConsole->event_loop(gKeyboard, gMouse);
+	genodeConsole->init_backends(gKeyboard, gMouse);
 
-	Assert(!"return not expected");
-	return E_FAIL;
+	return rc;
 }
 
 
-static Genode::Env *genode_env_ptr;
+static Genode::Env *genode_env_ptr = nullptr;
 
 
 Genode::Env &genode_env()
@@ -207,7 +207,14 @@ Genode::Env &genode_env()
 }
 
 
-void Component::construct(Genode::Env &env)
+Genode::Allocator &vmm_heap()
+{
+	static Genode::Heap heap (genode_env().ram(), genode_env().rm());
+	return heap;
+}
+
+
+void Libc::Component::construct(Libc::Env &env)
 {
 	/* make Genode environment accessible via the global 'genode_env()' */
 	genode_env_ptr = &env;
@@ -215,10 +222,10 @@ void Component::construct(Genode::Env &env)
 	try {
 		using namespace Genode;
 
-		Xml_node node = config()->xml_node();
-		Xml_node::Attribute vbox_file = node.attribute("vbox_file");
+		Attached_rom_dataspace config(env, "config");
+		Xml_node::Attribute vbox_file = config.xml().attribute("vbox_file");
 		vbox_file.value(c_vbox_file, sizeof(c_vbox_file));
-		Xml_node::Attribute vm_name = node.attribute("vm_name");
+		Xml_node::Attribute vm_name = config.xml().attribute("vm_name");
 		vm_name.value(c_vbox_vmname, sizeof(c_vbox_vmname));
 	} catch (...) {
 		Genode::error("missing attributes in configuration, minimum requirements: ");
@@ -229,19 +236,19 @@ void Component::construct(Genode::Env &env)
 	/* enable stdout/stderr for VBox Log infrastructure */
 	init_libc_vbox_logger();
 
-	static char  argv0[] = { '_', 'm', 'a', 'i', 'n', 0};
-	static char *argv[1] = { argv0 };
-	char **dummy_argv = argv;
+	Libc::with_libc([&] () {
+		static char  argv0[] = { '_', 'm', 'a', 'i', 'n', 0};
+		static char *argv[1] = { argv0 };
+		char **dummy_argv = argv;
 
-	int rc = RTR3InitExe(1, &dummy_argv, 0);
-	if (RT_FAILURE(rc))
-		throw -1;
+		int rc = RTR3InitExe(1, &dummy_argv, 0);
+		if (RT_FAILURE(rc))
+			throw -1;
 
-	HRESULT hrc = setupmachine();
-	if (FAILED(hrc)) {
-		Genode::error("startup of VMM failed - reason ", hrc, " - exiting ...");
-		throw -2;
-	}
-
-	Genode::error("VMM exiting ...");
+		HRESULT hrc = setupmachine(env);
+		if (FAILED(hrc)) {
+			Genode::error("startup of VMM failed - reason ", hrc, " - exiting ...");
+			throw -2;
+		}
+	});
 }

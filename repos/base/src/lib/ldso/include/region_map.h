@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2015-2016 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__REGION_MAP_H_
@@ -20,7 +20,7 @@
 #include <region_map/client.h>
 #include <base/allocator_avl.h>
 #include <util/retry.h>
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 
 /* base-internal includes */
 #include <base/internal/page_size.h>
@@ -60,7 +60,7 @@ class Linker::Region_map
 
 	public:
 
-		typedef Lazy_volatile_object<Region_map> Constructible_region_map;
+		typedef Constructible<Region_map> Constructible_region_map;
 
 		static Constructible_region_map &r();
 

@@ -5,17 +5,17 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__GEMS__LOCAL_REPORTER_H_
 #define _INCLUDE__GEMS__LOCAL_REPORTER_H_
 
 /* Genode includes */
-#include <os/attached_dataspace.h>
+#include <base/attached_dataspace.h>
 #include <util/xml_generator.h>
 #include <report_session/client.h>
 
@@ -27,9 +27,10 @@ struct Local_reporter
 
 	char const *_name;
 
-	Local_reporter(char const *name, Genode::Capability<Report::Session> session_cap)
+	Local_reporter(Genode::Region_map &rm, char const *name,
+	               Genode::Capability<Report::Session> session_cap)
 	:
-		_session(session_cap), _ds(_session.dataspace()), _name(name)
+		_session(session_cap), _ds(rm, _session.dataspace()), _name(name)
 	{ }
 
 	struct Xml_generator : public Genode::Xml_generator

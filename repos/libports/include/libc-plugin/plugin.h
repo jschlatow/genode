@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2010-2013 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _LIBC_PLUGIN__PLUGIN_H_
@@ -23,11 +23,14 @@
 #include <sys/stat.h>
 #include <sys/mount.h>  /* for 'struct statfs' */
 
+namespace Genode { class Env; }
+
 namespace Libc {
 
 	using namespace Genode;
 	
 	class File_descriptor;
+
 	
 	typedef Genode::Path<PATH_MAX> Absolute_path;
 
@@ -69,6 +72,11 @@ namespace Libc {
 			virtual bool supports_symlink(const char *oldpath, const char *newpath);
 			virtual bool supports_unlink(const char *path);
 			virtual bool supports_mmap();
+
+			/*
+			 * Should be overwritten for plugins that require the Genode environment
+			 */
+			virtual void init(Genode::Env &env) { }
 
 			virtual File_descriptor *accept(File_descriptor *,
 			                                struct ::sockaddr *addr,

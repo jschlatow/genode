@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__SPEC__ARM_V7__LONG_TRANSLATION_TABLE_H_
@@ -203,7 +203,9 @@ class Genode::Long_translation_table
 
 				static typename Descriptor::access_t create(Page_flags const &f)
 				{
-					if (f.device) {  return Attribute_index::bits(DEVICE); }
+					if (f.type == Genode::DEVICE)
+						return Attribute_index::bits(DEVICE);
+
 					switch (f.cacheable) {
 					case CACHED:         return Attribute_index::bits(CACHED);
 					case WRITE_COMBINED:

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__VFS__TYPES_H_
@@ -21,7 +21,6 @@
 #include <base/lock.h>
 #include <base/env.h>
 #include <base/signal.h>
-#include <base/printf.h>
 #include <dataspace/client.h>
 #include <os/path.h>
 

@@ -1,4 +1,4 @@
- /*
+/*
  * \brief  Emulation of the Linux kernel API
  * \author Sebastian Sumpf
  * \date   2013-08-19
@@ -8,10 +8,10 @@
  */
 
 /*
- * Copyright (C) 2012-2016 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 #ifndef _LX_EMUL_H_
@@ -1022,7 +1022,7 @@ void setup_timer(struct timer_list *timer,void (*function)(unsigned long),
 int  timer_pending(const struct timer_list * timer);
 int  del_timer(struct timer_list *timer);
 void timer_stats_timer_clear_start_info(struct timer_list *);
-long round_jiffies_relative(unsigned long);
+unsigned long round_jiffies_relative(unsigned long);
 
 unsigned long round_jiffies(unsigned long);
 unsigned long round_jiffies_up(unsigned long);

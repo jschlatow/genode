@@ -9,10 +9,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 /***********************
@@ -89,7 +89,7 @@ bool flush_delayed_work(struct delayed_work *dwork);
 bool queue_work(struct workqueue_struct *wq, struct work_struct *work);
 
 #define DECLARE_DELAYED_WORK(n, f) \
-	struct delayed_work n
+	struct delayed_work n = { .work = { .func = f }, .timer = { .function = 0 } }
 
 bool mod_delayed_work(struct workqueue_struct *, struct delayed_work *,
                       unsigned long);

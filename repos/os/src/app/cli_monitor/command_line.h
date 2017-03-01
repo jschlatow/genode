@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _COMMAND_LINE_H_
@@ -16,7 +16,10 @@
 
 #include <line_editor.h>
 
-class Command_line
+namespace Cli_monitor { class Command_line; }
+
+
+class Cli_monitor::Command_line
 {
 	private:
 

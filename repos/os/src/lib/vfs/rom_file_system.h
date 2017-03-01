@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014-2016 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__VFS__ROM_FILE_SYSTEM_H_
@@ -62,7 +62,8 @@ class Vfs::Rom_file_system : public Single_file_system
 
 		Rom_file_system(Genode::Env &env,
 		                Genode::Allocator&,
-		                Genode::Xml_node config)
+		                Genode::Xml_node config,
+		                Io_response_handler &)
 		:
 			Single_file_system(NODE_TYPE_FILE, name(), config),
 			_label(config),
@@ -70,8 +71,8 @@ class Vfs::Rom_file_system : public Single_file_system
 			_rom(env, _label.string)
 		{ }
 
-		static char const *name() { return "rom"; }
-
+		static char const *name()   { return "rom"; }
+		char const *type() override { return "rom"; }
 
 		/*********************************
 		 ** Directory-service interface **
@@ -154,6 +155,8 @@ class Vfs::Rom_file_system : public Single_file_system
 			out_count = num_bytes;
 			return READ_OK;
 		}
+
+		bool read_ready(Vfs_handle *) override { return true; }
 };
 
 #endif /* _INCLUDE__VFS__ROM_FILE_SYSTEM_H_ */

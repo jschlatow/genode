@@ -5,16 +5,17 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 #ifndef _LX_KIT__PCI_DEV_REGISTRY_H_
 #define _LX_KIT__PCI_DEV_REGISTRY_H_
 
 /* Linux emulation environment includes */
+#include <lx_kit/pci.h>
 #include <lx_kit/internal/pci_dev.h>
 
 namespace Lx {

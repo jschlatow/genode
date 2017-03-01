@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014-2016 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__VFS__LOG_FILE_SYSTEM_H_
@@ -16,7 +16,7 @@
 
 #include <log_session/connection.h>
 #include <vfs/single_file_system.h>
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 
 namespace Vfs { class Log_file_system; }
 
@@ -28,8 +28,8 @@ class Vfs::Log_file_system : public Single_file_system
 		typedef Genode::String<64> Label;
 		Label _label;
 
-		Genode::Lazy_volatile_object<Genode::Log_connection>     _log_connection;
-		Genode::Lazy_volatile_object<Genode::Log_session_client> _log_client;
+		Genode::Constructible<Genode::Log_connection>     _log_connection;
+		Genode::Constructible<Genode::Log_session_client> _log_client;
 
 		Genode::Log_session & _log_session(Genode::Env &env)
 		{
@@ -50,15 +50,16 @@ class Vfs::Log_file_system : public Single_file_system
 
 		Log_file_system(Genode::Env &env,
 		                Genode::Allocator&,
-		                Genode::Xml_node config)
+		                Genode::Xml_node config,
+		                Io_response_handler &)
 		:
 			Single_file_system(NODE_TYPE_CHAR_DEVICE, name(), config),
 			_label(config.attribute_value("label", Label())),
 			_log(_log_session(env))
 		{ }
 
-		static const char *name() { return "log"; }
-
+		static const char *name()   { return "log"; }
+		char const *type() override { return "log"; }
 
 		/********************************
 		 ** File I/O service interface **
@@ -89,6 +90,8 @@ class Vfs::Log_file_system : public Single_file_system
 			out_count = 0;
 			return READ_OK;
 		}
+
+		bool read_ready(Vfs_handle *) override { return false; }
 };
 
 #endif /* _INCLUDE__VFS__LOG_FILE_SYSTEM_H_ */

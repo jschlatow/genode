@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__LINKER_H_
@@ -19,6 +19,13 @@
 #include <elf.h>
 #include <file.h>
 #include <util.h>
+
+/*
+ * Mark functions that are used during the linkers self-relocation phase as
+ * always inline. Some platforms (riscv)  perform function calls through the
+ * GOT that is not initialized (zero) at this state.
+ */
+#define SELF_RELOC __attribute__((always_inline))
 
 /**
  * Forward declartions and helpers

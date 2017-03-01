@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 #ifndef _INCLUDE__USB_SESSION__RPC_OBJECT_H_
 #define _INCLUDE__USB_SESSION__RPC_OBJECT_H_
@@ -36,8 +36,9 @@ class Usb::Session_rpc_object : public Genode::Rpc_object<Session, Session_rpc_o
 		 * \param ep     entry point used for packet-stream channel
 		 */
 		Session_rpc_object(Genode::Dataspace_capability tx_ds,
-		                   Genode::Rpc_entrypoint &ep)
-		: _tx(tx_ds, ep) { }
+		                   Genode::Rpc_entrypoint &ep,
+		                   Genode::Region_map &rm)
+		: _tx(tx_ds, rm, ep) { }
 
 		/**
 		 * Return capability to packet-stream channel

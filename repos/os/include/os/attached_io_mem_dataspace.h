@@ -7,11 +7,13 @@
  */
 
 /*
- * Copyright (C) 2011-2013 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
+
+#warning os/attached_io_mem_dataspace.h is deprecated, use base/attached_io_mem_dataspace.h instead
 
 #ifndef _INCLUDE__OS__ATTACHED_IO_MEM_DATASPACE_H_
 #define _INCLUDE__OS__ATTACHED_IO_MEM_DATASPACE_H_

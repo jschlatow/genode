@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2010-2013 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -59,7 +59,7 @@ void Thread::_thread_start()
 void Thread::_deinit_platform_thread()
 {
 	if (!_cpu_session)
-		_cpu_session = env()->cpu_session();
+		_cpu_session = env_deprecated()->cpu_session();
 
 	_cpu_session->kill_thread(_thread_cap);
 }
@@ -69,11 +69,11 @@ void Thread::start()
 {
 	/* if no CPU session is given, use it from the environment */
 	if (!_cpu_session)
-		_cpu_session = env()->cpu_session();
+		_cpu_session = env_deprecated()->cpu_session();
 
 	/* create thread at core */
 	addr_t const utcb = (addr_t)&_stack->utcb();
-	_thread_cap = _cpu_session->create_thread(env()->pd_session_cap(), name(),
+	_thread_cap = _cpu_session->create_thread(env_deprecated()->pd_session_cap(), name(),
 	                                          _affinity, Weight(), utcb);
 	if (!_thread_cap.valid())
 		throw Cpu_session::Thread_creation_failed();

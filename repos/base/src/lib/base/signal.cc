@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2008-2013 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -18,7 +18,7 @@
 #include <base/thread.h>
 #include <base/sleep.h>
 #include <base/trace/events.h>
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 
 /* base-internal includes */
 #include <base/internal/globals.h>
@@ -37,11 +37,11 @@ class Signal_handler_thread : Thread, Lock
 		 * thread because on some platforms (e.g., Fiasco.OC), the calling
 		 * thread context is used for implementing the signal-source protocol.
 		 */
-		Lazy_volatile_object<Signal_source_client> _signal_source;
+		Constructible<Signal_source_client> _signal_source;
 
 		void entry()
 		{
-			_signal_source.construct(env()->pd_session()->alloc_signal_source());
+			_signal_source.construct(env_deprecated()->pd_session()->alloc_signal_source());
 			unlock();
 			Signal_receiver::dispatch_signals(&(*_signal_source));
 		}
@@ -68,7 +68,7 @@ class Signal_handler_thread : Thread, Lock
 
 		~Signal_handler_thread()
 		{
-			env()->pd_session()->free_signal_source(*_signal_source);
+			env_deprecated()->pd_session()->free_signal_source(*_signal_source);
 		}
 };
 
@@ -76,11 +76,11 @@ class Signal_handler_thread : Thread, Lock
 /*
  * The signal-handler thread will be constructed before global constructors are
  * called and, consequently, must not be a global static object. Otherwise, the
- * Lazy_volatile_object constructor will be executed twice.
+ * 'Constructible' constructor will be executed twice.
  */
-static Lazy_volatile_object<Signal_handler_thread> & signal_handler_thread()
+static Constructible<Signal_handler_thread> & signal_handler_thread()
 {
-	static Lazy_volatile_object<Signal_handler_thread> inst;
+	static Constructible<Signal_handler_thread> inst;
 	return inst;
 }
 
@@ -232,7 +232,7 @@ Signal_context_capability Signal_receiver::manage(Signal_context *context)
 	retry<Pd_session::Out_of_metadata>(
 		[&] () {
 			/* use signal context as imprint */
-			context->_cap = env()->pd_session()->alloc_context(_cap, (long)context);
+			context->_cap = env_deprecated()->pd_session()->alloc_context(_cap, (long)context);
 		},
 		[&] () {
 			size_t const quota = 1024*sizeof(long);
@@ -241,7 +241,7 @@ Signal_context_capability Signal_receiver::manage(Signal_context *context)
 
 			log("upgrading quota donation for PD session (", quota, " bytes)");
 
-			env()->parent()->upgrade(Parent::Env::pd(), buf);
+			env_deprecated()->parent()->upgrade(Parent::Env::pd(), buf);
 		}
 	);
 
@@ -252,6 +252,12 @@ Signal_context_capability Signal_receiver::manage(Signal_context *context)
 void Signal_receiver::block_for_signal()
 {
 	_signal_available.down();
+}
+
+
+void Signal_receiver::unblock_signal_waiter(Rpc_entrypoint &)
+{
+	_signal_available.up();
 }
 
 
@@ -284,12 +290,12 @@ void Signal_receiver::dispatch_signals(Signal_source *signal_source)
 		Signal_context *context = (Signal_context *)(source_signal.imprint());
 
 		if (!context) {
-			error("received null signal imprint, stop signal handling");
+			error("received null signal imprint, stop signal dispatcher");
 			sleep_forever();
 		}
 
 		if (!signal_context_registry()->test_and_lock(context)) {
-			warning("encountered dead signal context");
+			warning("encountered dead signal context ", context, " in signal dispatcher");
 			continue;
 		}
 
@@ -298,7 +304,7 @@ void Signal_receiver::dispatch_signals(Signal_source *signal_source)
 			Signal::Data signal(context, source_signal.num());
 			context->_receiver->local_submit(signal);
 		} else {
-			warning("signal context with no receiver");
+			warning("signal context ", context, " with no receiver in signal dispatcher");
 		}
 
 		/* free context lock that was taken by 'test_and_lock' */

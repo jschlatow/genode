@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2011-2013 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -17,6 +17,7 @@
 
 /* core includes */
 #include <boot_modules.h>
+#include <memory_region.h>
 #include <core_parent.h>
 #include <map_local.h>
 #include <platform.h>
@@ -29,101 +30,72 @@
 #include <trustzone.h>
 
 /* base-internal includes */
+#include <base/internal/crt0.h>
 #include <base/internal/stack_area.h>
 
 using namespace Genode;
 
-extern int _prog_img_beg;
-extern int _prog_img_end;
-
 void __attribute__((weak)) Kernel::init_trustzone(Pic & pic) { }
-
-/**
- * Helper to initialise allocators through include/exclude region lists
- */
-static void init_alloc(Range_allocator * const alloc,
-                       Region_pool incl_regions, Region_pool excl_regions,
-                       unsigned const granu_log2 = 0)
-{
-	/* make all include regions available */
-	Native_region * r = incl_regions(0);
-	for (unsigned i = 0; r; r = incl_regions(++i)) {
-		if (granu_log2) {
-			addr_t const b = trunc(r->base, granu_log2);
-			addr_t const s = round(r->size, granu_log2);
-			alloc->add_range(b, s);
-		}
-		else alloc->add_range(r->base, r->size);
-	}
-	/* preserve all exclude regions */
-	r = excl_regions(0);
-	for (unsigned i = 0; r; r = excl_regions(++i)) {
-		if (granu_log2) {
-			addr_t const b = trunc(r->base, granu_log2);
-			addr_t const s = round(r->size, granu_log2);
-			alloc->remove_range(b, s);
-		}
-		else alloc->remove_range(r->base, r->size);
-	}
-}
 
 
 /**************
  ** Platform **
  **************/
 
-addr_t Platform::core_translation_tables()
+Bootinfo const & Platform::_bootinfo() {
+	return *reinterpret_cast<Bootinfo*>(round_page((addr_t)&_prog_img_end)); }
+
+addr_t Platform::mmio_to_virt(addr_t mmio) {
+	return _bootinfo().core_mmio.virt_addr(mmio); }
+
+Translation_table * Platform::core_translation_table() {
+	return _bootinfo().table; }
+
+Translation_table_allocator * Platform::core_translation_table_allocator() {
+	return _bootinfo().table_allocator->alloc(); }
+
+void Platform::_init_io_mem_alloc()
 {
-	size_t sz = max((size_t)Translation_table::TABLE_LEVEL_X_SIZE_LOG2,
-	                get_page_size_log2());
-	return align_addr<addr_t>((addr_t)&_boot_modules_binaries_end, sz);
+	/* add entire adress space minus the RAM memory regions */
+	_io_mem_alloc.add_range(0, ~0x0UL);
+	_bootinfo().ram_regions.for_each([this] (Memory_region const &r) {
+		_io_mem_alloc.remove_range(r.base, r.size); });
+};
+
+
+Memory_region_array const & Platform::_core_virt_regions()
+{
+	return *unmanaged_singleton<Memory_region_array>(
+	Memory_region(stack_area_virtual_base(), stack_area_virtual_size()));
 }
 
 
-Native_region * Platform::_core_only_ram_regions(unsigned const i)
+addr_t Platform::core_phys_addr(addr_t virt)
 {
-	static Native_region _r[] =
+	addr_t ret = 0;
+	_bootinfo().elf_mappings.for_each([&] (Mapping const & m)
 	{
-		/* core image */
-		{ (addr_t)&_prog_img_beg,
-		  (size_t)((addr_t)&_prog_img_end - (addr_t)&_prog_img_beg) },
-
-		/* boot modules */
-		{ (addr_t)&_boot_modules_binaries_begin,
-		  (size_t)((addr_t)&_boot_modules_binaries_end -
-		           (addr_t)&_boot_modules_binaries_begin) },
-
-		/* translation table allocator */
-		{ core_translation_tables(), core_translation_tables_size() }
-	};
-	return i < sizeof(_r)/sizeof(_r[0]) ? &_r[i] : 0;
+		if (virt >= m.virt() && virt < (m.virt() + m.size()))
+			ret = (virt - m.virt()) + m.phys();
+	});
+	return ret;
 }
-
-static Native_region * virt_region(unsigned const i) {
-	static Native_region r = { VIRT_ADDR_SPACE_START, VIRT_ADDR_SPACE_SIZE };
-	return i ? 0 : &r; }
 
 
 Platform::Platform()
 :
 	_io_mem_alloc(core_mem_alloc()),
 	_io_port_alloc(core_mem_alloc()),
-	_irq_alloc(core_mem_alloc()),
-	_vm_start(VIRT_ADDR_SPACE_START), _vm_size(VIRT_ADDR_SPACE_SIZE)
+	_irq_alloc(core_mem_alloc())
 {
-	/*
-	 * Initialise platform resource allocators.
-	 * Core mem alloc must come first because it is
-	 * used by the other allocators.
-	 */
-	init_alloc(_core_mem_alloc.phys_alloc(), _ram_regions,
-	           _core_only_ram_regions, get_page_size_log2());
-	init_alloc(_core_mem_alloc.virt_alloc(), virt_region,
-	           _core_only_ram_regions, get_page_size_log2());
-
-	/* preserve stack area in core's virtual address space */
-	_core_mem_alloc.virt_alloc()->remove_range(stack_area_virtual_base(),
-	                                           stack_area_virtual_size());
+	_core_mem_alloc.virt_alloc()->add_range(VIRT_ADDR_SPACE_START,
+	                                        VIRT_ADDR_SPACE_SIZE);
+	_core_virt_regions().for_each([this] (Memory_region const & r) {
+		_core_mem_alloc.virt_alloc()->remove_range(r.base, r.size); });
+	_bootinfo().elf_mappings.for_each([this] (Mapping const & m) {
+		_core_mem_alloc.virt_alloc()->remove_range(m.virt(), m.size()); });
+	_bootinfo().ram_regions.for_each([this] (Memory_region const & region) {
+		_core_mem_alloc.phys_alloc()->add_range(region.base, region.size); });
 
 	_init_io_port_alloc();
 
@@ -140,7 +112,8 @@ Platform::Platform()
 	Boot_modules_header * header = &_boot_modules_headers_begin;
 	for (; header < &_boot_modules_headers_end; header++) {
 		Rom_module * rom_module = new (core_mem_alloc())
-			Rom_module(header->base, header->size, (const char*)header->name);
+			Rom_module(Platform::core_phys_addr(header->base), header->size,
+			           (const char*)header->name);
 		_rom_fs.insert(rom_module);
 	}
 

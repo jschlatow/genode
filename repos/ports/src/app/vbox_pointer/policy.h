@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _VBOX_POINTER_POLICY_H_
@@ -34,8 +34,7 @@ namespace Vbox_pointer {
 
 struct Vbox_pointer::Pointer_updater
 {
-	virtual void update_pointer(Policy *initiator)      = 0;
-	virtual Genode::Signal_receiver & signal_receiver() = 0;
+	virtual void update_pointer(Policy &initiator) = 0;
 };
 
 
@@ -53,12 +52,15 @@ class Vbox_pointer::Policy_registry : private Genode::List<Policy_entry>
 {
 	private:
 
-		Pointer_updater &_updater;
+		Pointer_updater   &_updater;
+		Genode::Env       &_env;
+		Genode::Allocator &_alloc;
 
 	public:
 
-		Policy_registry(Pointer_updater &updater)
-		: _updater(updater) { }
+		Policy_registry(Pointer_updater &updater, Genode::Env &env,
+		                Genode::Allocator &alloc)
+		: _updater(updater), _env(env), _alloc(alloc) { }
 
 		void update(Genode::Xml_node config);
 

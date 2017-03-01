@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2010-2013 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__PACKET_STREAM_RX__CLIENT_H_
@@ -42,9 +42,11 @@ class Packet_stream_rx::Client : public Genode::Rpc_client<CHANNEL>
 		/**
 		 * Constructor
 		 */
-		Client(Genode::Capability<CHANNEL> channel_cap) :
+		Client(Genode::Capability<CHANNEL> channel_cap,
+		       Genode::Region_map &rm)
+		:
 			Genode::Rpc_client<CHANNEL>(channel_cap),
-			_sink(Base::template call<Rpc_dataspace>())
+			_sink(Base::template call<Rpc_dataspace>(), rm)
 		{
 			/* wire data-flow signals for the packet receiver */
 			_sink.register_sigh_ack_avail(Base::template call<Rpc_ack_avail>());

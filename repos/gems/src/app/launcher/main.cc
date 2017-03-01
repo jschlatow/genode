@@ -5,17 +5,17 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
 #include <base/component.h>
 #include <decorator/xml_utils.h>
-#include <util/volatile_object.h>
-#include <os/attached_rom_dataspace.h>
+#include <util/reconstructible.h>
+#include <base/attached_rom_dataspace.h>
 #include <nitpicker_session/connection.h>
 
 /* local includes */
@@ -78,7 +78,7 @@ struct Launcher::Main
 		return 0;
 	}
 
-	Subsystem_manager _subsystem_manager { _env.ep(), _env.pd(),
+	Subsystem_manager _subsystem_manager { _env,
 	                                       _ram_preservation(_config.xml()),
 	                                       _exited_child_handler };
 
@@ -98,7 +98,7 @@ struct Launcher::Main
 
 	Label _focus_prefix;
 
-	Genode::Attached_rom_dataspace _focus_rom { "focus" };
+	Genode::Attached_rom_dataspace _focus_rom { _env, "focus" };
 
 	void _handle_focus_update();
 

@@ -7,10 +7,10 @@
  */
 
 /*
- * Copyright (C) 2010-2013 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -19,6 +19,7 @@
 #include <base/env.h>
 #include <cpu_thread/client.h>
 #include <foc/native_capability.h>
+#include <foc_native_cpu/client.h>
 
 /* base-internal includes */
 #include <base/internal/stack.h>
@@ -48,13 +49,14 @@ void Thread::_init_platform_thread(size_t weight, Type type)
 {
 	/* if no cpu session is given, use it from the environment */
 	if (!_cpu_session)
-		_cpu_session = env()->cpu_session();
+		_cpu_session = env_deprecated()->cpu_session();
 
 	if (type == NORMAL)
 	{
 		/* create thread at core */
-		_thread_cap = _cpu_session->create_thread(env()->pd_session_cap(), name(),
-		                                          Location(), Weight(weight));
+		_thread_cap = _cpu_session->create_thread(env_deprecated()->pd_session_cap(),
+		                                          name(), Location(),
+		                                          Weight(weight));
 
 		/* assign thread to protection domain */
 		if (!_thread_cap.valid())
@@ -64,7 +66,7 @@ void Thread::_init_platform_thread(size_t weight, Type type)
 	}
 	/* adjust values whose computation differs for a main thread */
 	native_thread().kcap = Fiasco::MAIN_THREAD_CAP;
-	_thread_cap = env()->parent()->main_thread_cap();
+	_thread_cap = env_deprecated()->parent()->main_thread_cap();
 
 	if (!_thread_cap.valid())
 		throw Cpu_session::Thread_creation_failed();
@@ -79,11 +81,11 @@ void Thread::start()
 {
 	using namespace Fiasco;
 
-	Cpu_thread_client cpu_thread(_thread_cap);
+	Foc_native_cpu_client native_cpu(_cpu_session->native_cpu());
 
 	/* get gate-capability and badge of new thread */
-	Thread_state state;
-	try { state = cpu_thread.state(); }
+	Foc_thread_state state;
+	try { state = native_cpu.thread_state(_thread_cap); }
 	catch (...) { throw Cpu_session::Thread_creation_failed(); }
 
 	/* remember UTCB of the new thread */
@@ -97,6 +99,7 @@ void Thread::start()
 	l4_utcb_tcr_u(foc_utcb)->user[UTCB_TCR_THREAD_OBJ] = (addr_t)this;
 
 	/* register initial IP and SP at core */
+	Cpu_thread_client cpu_thread(_thread_cap);
 	cpu_thread.start((addr_t)_thread_start, _stack->top());
 }
 

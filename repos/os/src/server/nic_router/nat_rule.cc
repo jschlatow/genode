@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -35,7 +35,7 @@ bool Nat_rule::higher(Nat_rule *rule)
 Nat_rule::Nat_rule(Domain_tree    &domains,
                    Port_allocator &tcp_port_alloc,
                    Port_allocator &udp_port_alloc,
-                   Xml_node const &node)
+                   Xml_node const  node)
 :
 	Leaf_rule(domains, node),
 	_tcp_port_alloc(tcp_port_alloc, node.attribute_value("tcp-ports", 0UL)),

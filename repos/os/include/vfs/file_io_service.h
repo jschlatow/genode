@@ -1,23 +1,34 @@
 /*
  * \brief  Interface for operations provided by file I/O service
  * \author Norman Feske
+ * \author Emery Hemingway
+ * \author Christian Helmuth
  * \date   2011-02-17
  */
 
 /*
- * Copyright (C) 2011-2014 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__VFS__FILE_IO_SERVICE_H_
 #define _INCLUDE__VFS__FILE_IO_SERVICE_H_
 
+#include <vfs/vfs_handle.h>
+
 namespace Vfs {
 	class Vfs_handle;
+	struct Io_response_handler;
 	struct File_io_service;
 }
+
+
+struct Vfs::Io_response_handler
+{
+	virtual void handle_io_response(Vfs::Vfs_handle::Context *context) = 0;
+};
 
 
 struct Vfs::File_io_service
@@ -44,10 +55,43 @@ struct Vfs::File_io_service
 
 	enum Read_result { READ_ERR_AGAIN,     READ_ERR_WOULD_BLOCK,
 	                   READ_ERR_INVALID,   READ_ERR_IO,
-	                   READ_ERR_INTERRUPT, READ_OK };
+	                   READ_ERR_INTERRUPT, READ_QUEUED,
+	                   READ_OK };
 
 	virtual Read_result read(Vfs_handle *vfs_handle, char *dst, file_size count,
 	                         file_size &out_count) = 0;
+
+	/**
+	 * Read from handle with potential queueing of operation
+	 *
+	 * \return false if queue is full
+	 */
+	virtual bool queue_read(Vfs_handle *vfs_handle, char *dst, file_size count,
+	                        Read_result &out_result, file_size &out_count)
+	{
+		out_result = read(vfs_handle, dst, count, out_count);
+		return true;
+	}
+
+	virtual Read_result complete_read(Vfs_handle *vfs_handle,
+	                                  char *dst, file_size count,
+	                                  file_size &out_count)
+	{ return read(vfs_handle, dst, count, out_count); }
+
+	/**
+	 * Return true if the handle has readable data
+	 */
+	virtual bool read_ready(Vfs_handle *) = 0;
+
+	/**
+	 * Explicitly indicate interest in read-ready for a handle
+	 *
+	 * For example, the file-system-session plugin can then send READ_READY
+	 * packets to the server.
+	 *
+	 * \return false if notification setup failed
+	 */
+	virtual bool notify_read_ready(Vfs_handle *) { return true; }
 
 
 	/***************

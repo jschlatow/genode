@@ -8,10 +8,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__DEPRECATED__ENV_H_
@@ -35,8 +35,22 @@ namespace Genode {
 
 	/**
 	 * Return the interface to the component's environment
+	 *
+	 * \noapi
+	 * \deprecated
 	 */
-	extern Env_deprecated *env();
+	extern Env_deprecated *env_deprecated();
+
+	/**
+	 * Return the interface to the component's environment
+	 *
+	 * \deprecated
+	 */
+	static inline Env_deprecated *env() __attribute__((deprecated));
+	static inline Env_deprecated *env()
+	{
+		return env_deprecated();
+	}
 }
 
 

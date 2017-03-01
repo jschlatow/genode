@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2009-2013 Genode Labs GmbH
+ * Copyright (C) 2009-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -84,5 +84,5 @@ void Genode::Thread::_init_platform_thread(size_t, Type type)
 {
 	if (type == NORMAL) { return; }
 	native_thread().l4id.raw = main_thread_tid.raw;
-	_thread_cap   = env()->parent()->main_thread_cap();
+	_thread_cap   = env_deprecated()->parent()->main_thread_cap();
 }

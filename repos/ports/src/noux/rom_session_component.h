@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _NOUX__ROM_SESSION_COMPONENT_H_
@@ -32,14 +32,16 @@ struct Noux::Rom_dataspace_info : Dataspace_info
 	~Rom_dataspace_info() { }
 
 	Dataspace_capability fork(Ram_session        &,
+	                          Region_map         &,
+	                          Allocator          &alloc,
 	                          Dataspace_registry &ds_registry,
 	                          Rpc_entrypoint     &) override
 	{
-		ds_registry.insert(new (env()->heap()) Rom_dataspace_info(ds_cap()));
+		ds_registry.insert(new (alloc) Rom_dataspace_info(ds_cap()));
 		return ds_cap();
 	}
 
-	void poke(addr_t dst_offset, void const *src, size_t len)
+	void poke(Region_map &, addr_t dst_offset, char const *src, size_t len)
 	{
 		error("attempt to poke onto a ROM dataspace");
 	}
@@ -72,6 +74,7 @@ class Noux::Rom_session_component : public Rpc_object<Rom_session>
 
 	private:
 
+		Allocator            &_alloc;
 		Rpc_entrypoint       &_ep;
 		Vfs::Dir_file_system &_root_dir;
 		Dataspace_registry   &_ds_registry;
@@ -94,14 +97,14 @@ class Noux::Rom_session_component : public Rpc_object<Rom_session>
 			~Vfs_dataspace() { root_dir.release(name.string(), ds); }
 		};
 
-		Lazy_volatile_object<Vfs_dataspace> _rom_from_vfs;
+		Constructible<Vfs_dataspace> _rom_from_vfs;
 
 		/**
 		 * Wrapped ROM session at core
 		 */
-		Lazy_volatile_object<Rom_connection> _rom_from_parent;
+		Constructible<Rom_connection> _rom_from_parent;
 
-		Dataspace_capability _init_ds_cap(Name const &name)
+		Dataspace_capability _init_ds_cap(Env &env, Name const &name)
 		{
 			if (name.string()[0] == '/') {
 				_rom_from_vfs.construct(_root_dir, name);
@@ -111,7 +114,7 @@ class Noux::Rom_session_component : public Rpc_object<Rom_session>
 			if (name == forked_magic_binary_name())
 				return Dataspace_capability();
 
-			_rom_from_parent.construct(name.string());
+			_rom_from_parent.construct(env, name.string());
 			Dataspace_capability ds = _rom_from_parent->dataspace();
 			return ds;
 		}
@@ -120,23 +123,26 @@ class Noux::Rom_session_component : public Rpc_object<Rom_session>
 
 	public:
 
-		Rom_session_component(Rpc_entrypoint &ep, Vfs::Dir_file_system &root_dir,
+		Rom_session_component(Allocator &alloc, Env &env, Rpc_entrypoint &ep,
+		                      Vfs::Dir_file_system &root_dir,
 		                      Dataspace_registry &ds_registry, Name const &name)
 		:
-			_ep(ep), _root_dir(root_dir), _ds_registry(ds_registry),
-			_ds_cap(_init_ds_cap(name))
+			_alloc(alloc), _ep(ep), _root_dir(root_dir), _ds_registry(ds_registry),
+			_ds_cap(_init_ds_cap(env, name))
 		{
 			_ep.manage(this);
-			_ds_registry.insert(new (env()->heap()) Rom_dataspace_info(_ds_cap));
+			_ds_registry.insert(new (alloc) Rom_dataspace_info(_ds_cap));
 		}
 
 		~Rom_session_component()
 		{
+			Rom_dataspace_info *ds_info = nullptr;
+
 			/*
 			 * Lookup and lock ds info instead of directly accessing
 			 * the '_ds_info' member.
 			 */
-			_ds_registry.apply(_ds_cap, [this] (Dataspace_info *info) {
+			_ds_registry.apply(_ds_cap, [&] (Rom_dataspace_info *info) {
 
 				if (!info) {
 					error("~Rom_session_component: unexpected !info");
@@ -146,7 +152,10 @@ class Noux::Rom_session_component : public Rpc_object<Rom_session>
 				_ds_registry.remove(info);
 
 				info->dissolve_users();
+
+				ds_info = info;
 			});
+			destroy(_alloc, ds_info);
 			_ep.dissolve(this);
 		}
 

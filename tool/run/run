@@ -439,13 +439,40 @@ proc kernel_location_from_config_file { config_file default_location } {
 
 
 ##
+# Return name of kernel-specific binary for a given generic name
+#
+# The boot_dir plugin may provide functions named 'binary_name_<binary>'
+# where '<binary>' stands for a generic name like "timer" or "nic". The
+# function returns the name of the binary to integrate into the boot
+# directory under the name '<binary>'.
+#
+# If no such function exists, it returns the argument as is. This is the
+# case for regular binaries that appear in the boot directory under their
+# original name.
+#
+proc kernel_specific_binary { binary } {
+
+	regsub -all {\.} $binary "_" function_suffix
+	set function_name "binary_name_$function_suffix"
+
+	if {[info procs $function_name] == $function_name} {
+		set binary_name [$function_name]
+		puts "using '$binary_name' as '$binary'"
+		return [$function_name]
+	}
+
+	return $binary
+}
+
+
+##
 # Copy the specified binaries from the 'bin/' directory to the run
 # directory and try to strip executables.
 #
 proc copy_and_strip_genode_binaries_to_run_dir { binaries } {
 
 	foreach binary $binaries {
-		exec cp bin/$binary [run_dir]/genode
+		exec cp bin/[kernel_specific_binary $binary] [run_dir]/genode/$binary
 		catch {
 			exec [cross_dev_prefix]strip [run_dir]/genode/$binary || true }
 	}
@@ -710,7 +737,7 @@ proc generate_boot_modules_asm {path modules} {
 ##
 # Link core image containing given modules
 #
-proc build_core {lib modules target} {
+proc build_core {lib modules target link_address} {
 
 	# generate assembly code aggregating the modules data
 	set asm_src [generate_boot_modules_asm [run_dir]/genode $modules]
@@ -729,7 +756,7 @@ proc build_core {lib modules target} {
 	# link final image
 	exec [cross_dev_prefix]g++ {*}$arch -nostdlib {*}[core_ld_opts] \
 	                           -Wl,-z -Wl,max-page-size=0x1000 \
-	                           -Wl,-Ttext=[core_link_address] -Wl,-gc-sections \
+	                           -Wl,-Ttext=$link_address -Wl,-gc-sections \
 	                           -Wl,-nostdlib -Wl,--whole-archive -Wl,--start-group \
 	                           $lib [run_dir].boot_modules.o -Wl,--no-whole-archive \
 	                           -Wl,--end-group $libgcc -o $target
@@ -740,6 +767,7 @@ proc build_core {lib modules target} {
 # Generate bootable core image containing all boot-modules
 #
 proc build_core_image {binaries} {
+
 	# boot module list without core
 	set idx [lsearch $binaries "core"]
 	set modules [lreplace $binaries $idx $idx]
@@ -748,12 +776,20 @@ proc build_core_image {binaries} {
 	copy_and_strip_genode_binaries_to_run_dir $modules
 	lappend modules "config"
 
+	set core_obj core/[kernel_specific_binary core.o]
+
 	# create core binary without modules for debugging
-	build_core core/core.o {} [run_dir].core
+	build_core $core_obj {} [run_dir].core [core_link_address]
 
 	# create core binary containing the boot modules
-	build_core core/core.o $modules [run_dir]/image.elf
+	build_core $core_obj $modules [run_dir]/image.elf [core_link_address]
 	exec [cross_dev_prefix]strip [run_dir]/image.elf
+
+	# Save config part of the image.elf for easy inspection
+	exec cp -f  [run_dir]/genode/config [run_dir].config
+
+	# remove individual binaries, which are now contained in 'image.elf'
+	exec rm -rf [run_dir]/genode
 }
 
 

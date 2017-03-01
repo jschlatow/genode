@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2014-2016 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* core includes */
@@ -243,6 +243,7 @@ Cpu_domain_update::Cpu_domain_update() {
  *****************/
 
 /**
+ * FIXME THIS IS ONLY USED BY IDLE THREAD
  * Enable kernel-entry assembly to get an exclusive stack for every CPU
  *
  * The stack alignment is determined as follows:
@@ -264,7 +265,6 @@ Cpu_context::Cpu_context(Genode::Translation_table * const table)
 {
 	sp = (addr_t)kernel_stack;
 	ip = (addr_t)kernel;
-	core_pd()->admit(this);
 
 	/*
 	 * platform specific initialization, has to be done after

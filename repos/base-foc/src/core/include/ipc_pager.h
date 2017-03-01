@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__IPC_PAGER_H_
@@ -23,6 +23,7 @@
 #include <base/thread_state.h>
 #include <util/touch.h>
 #include <foc/native_capability.h>
+#include <foc/thread_state.h>
 
 /* base-internal includes */
 #include <base/internal/native_thread.h>
@@ -192,13 +193,13 @@ namespace Genode {
 			 * Copy the exception registers from the last exception
 			 * to the given Thread_state object.
 			 */
-			void get_regs(Thread_state *state);
+			void get_regs(Foc_thread_state *state);
 
 			/*
 			 * Copy the exception reply registers from the given
 			 * Thread_state object
 			 */
-			void set_regs(Thread_state state);
+			void set_regs(Foc_thread_state state);
 	};
 }
 

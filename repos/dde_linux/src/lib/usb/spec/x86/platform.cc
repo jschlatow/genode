@@ -1,14 +1,14 @@
-/**
+/*
  * \brief  X86 platform initialization
  * \author Sebastian Sumpf
  * \date   2013-05-17
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 #include <platform.h>
@@ -43,7 +43,3 @@ void platform_hcd_init(Services *s)
 	if (s->uhci)
 		module_uhci_hcd_init();
 }
-
-
-
-

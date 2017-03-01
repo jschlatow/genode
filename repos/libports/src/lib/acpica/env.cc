@@ -5,14 +5,14 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 #include <acpica/acpica.h>
 #include <platform_session/client.h>
 
@@ -46,7 +46,7 @@ struct Acpica::Env
 	: env(env), heap(heap) { }
 };
 
-static Genode::Lazy_volatile_object<Acpica::Env> instance;
+static Genode::Constructible<Acpica::Env> instance;
 
 
 Genode::Allocator & Acpica::heap()     { return instance->heap; }

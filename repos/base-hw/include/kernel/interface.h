@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2011-2013 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__KERNEL__INTERFACE_H_
@@ -23,24 +23,25 @@ namespace Kernel
 	/**
 	 * Kernel names of the kernel calls
 	 */
-	constexpr Call_arg call_id_pause_current_thread() { return  0; }
-	constexpr Call_arg call_id_resume_local_thread()  { return  1; }
-	constexpr Call_arg call_id_yield_thread()         { return  2; }
-	constexpr Call_arg call_id_send_request_msg()     { return  3; }
-	constexpr Call_arg call_id_send_reply_msg()       { return  4; }
-	constexpr Call_arg call_id_await_request_msg()    { return  5; }
-	constexpr Call_arg call_id_kill_signal_context()  { return  6; }
-	constexpr Call_arg call_id_submit_signal()        { return  7; }
-	constexpr Call_arg call_id_await_signal()         { return  8; }
-	constexpr Call_arg call_id_ack_signal()           { return  9; }
-	constexpr Call_arg call_id_print_char()           { return 10; }
-	constexpr Call_arg call_id_update_data_region()   { return 11; }
-	constexpr Call_arg call_id_update_instr_region()  { return 12; }
-	constexpr Call_arg call_id_ack_cap()              { return 13; }
-	constexpr Call_arg call_id_delete_cap()           { return 14; }
-	constexpr Call_arg call_id_timeout()              { return 15; }
-	constexpr Call_arg call_id_timeout_age_us()       { return 16; }
-	constexpr Call_arg call_id_timeout_max_us()       { return 17; }
+	constexpr Call_arg call_id_stop_thread()              { return  0; }
+	constexpr Call_arg call_id_restart_thread()           { return  1; }
+	constexpr Call_arg call_id_yield_thread()             { return  2; }
+	constexpr Call_arg call_id_send_request_msg()         { return  3; }
+	constexpr Call_arg call_id_send_reply_msg()           { return  4; }
+	constexpr Call_arg call_id_await_request_msg()        { return  5; }
+	constexpr Call_arg call_id_kill_signal_context()      { return  6; }
+	constexpr Call_arg call_id_submit_signal()            { return  7; }
+	constexpr Call_arg call_id_await_signal()             { return  8; }
+	constexpr Call_arg call_id_cancel_next_await_signal() { return  9; }
+	constexpr Call_arg call_id_ack_signal()               { return 10; }
+	constexpr Call_arg call_id_print_char()               { return 11; }
+	constexpr Call_arg call_id_update_data_region()       { return 12; }
+	constexpr Call_arg call_id_update_instr_region()      { return 13; }
+	constexpr Call_arg call_id_ack_cap()                  { return 14; }
+	constexpr Call_arg call_id_delete_cap()               { return 15; }
+	constexpr Call_arg call_id_timeout()                  { return 16; }
+	constexpr Call_arg call_id_timeout_age_us()           { return 17; }
+	constexpr Call_arg call_id_timeout_max_us()           { return 18; }
 
 
 	/*****************************************************************
@@ -118,38 +119,56 @@ namespace Kernel
 
 
 	/**
-	 * Pause execution of calling thread
+	 * Wait for a user event signaled by a 'restart_thread' syscall
+	 *
+	 * The stop syscall always targets the calling thread that, therefore must
+	 * be in the 'active' thread state. The thread then switches to the
+	 * 'stopped' thread state in wich it waits for a restart. The restart
+	 * syscall can only be used on a thread in the 'stopped' or the 'active'
+	 * thread state. The thread then switches back to the 'active' thread
+	 * state and the syscall returns whether the thread was stopped. Both
+	 * syscalls are not core-restricted. In contrast to the 'stop' syscall,
+	 * 'restart' may target any thread in the same PD as the caller. Thread
+	 * state and UTCB content of a thread don't change while in the 'stopped'
+	 * state. The 'stop/restart' feature is used when an active thread wants
+	 * to wait for an event that is not known to the kernel. Actually, the
+	 * syscalls are used when waiting for locks and when doing infinite
+	 * waiting on thread exit.
 	 */
-	inline void pause_current_thread()
+	inline void stop_thread()
 	{
-		call(call_id_pause_current_thread());
+		call(call_id_stop_thread());
 	}
 
 
 	/**
-	 * Cancel blocking of a thread of the current domain if possible
+	 * End blocking of a stopped thread
 	 *
 	 * \param thread_id  capability id of the targeted thread
 	 *
-	 * \return  wether thread was in a cancelable blocking beforehand
+	 * \return  wether the thread was stopped beforehand
+	 *
+	 * For details see the 'stop_thread' syscall.
 	 */
-	inline bool resume_local_thread(capid_t const thread_id)
+	inline bool restart_thread(capid_t const thread_id)
 	{
-		return call(call_id_resume_local_thread(), thread_id);
+		return call(call_id_restart_thread(), thread_id);
 	}
 
 
 	/**
-	 * Let the current thread give up its remaining timeslice
+	 * Yield the callers remaining CPU time for this super period
 	 *
-	 * \param thread_id  capability id of the benefited thread
-	 *
-	 * If thread_id is valid the call will resume the targeted thread
-	 * additionally.
+	 * Does its best that the caller is scheduled as few as possible in the
+	 * current scheduling super-period without touching the thread or pause
+	 * state of the thread. In the next superperiod, however, the thread is
+	 * scheduled 'normal' again. The syscall is not core-restricted and always
+	 * targets the caller. It is actually used in locks to help another thread
+	 * reach a desired point in execution by releasing pressure from the CPU.
 	 */
-	inline void yield_thread(capid_t const thread_id)
+	inline void yield_thread()
 	{
-		call(call_id_yield_thread(), thread_id);
+		call(call_id_yield_thread());
 	}
 
 	/**
@@ -261,6 +280,22 @@ namespace Kernel
 	inline int await_signal(capid_t const receiver_id)
 	{
 		return call(call_id_await_signal(), receiver_id);
+	}
+
+	/**
+	 * Request to cancel the next signal blocking of a local thread
+	 *
+	 * \param thread_id  capability id of the targeted thread
+	 *
+	 * Does not block. Targeted thread must be in the same PD as the caller.
+	 * If the targeted thread is in a signal blocking, cancels the blocking
+	 * directly. Otherwise, stores the request and avoids the next signal
+	 * blocking of the targeted thread as if it was immediately cancelled.
+	 * If the target thread already holds a request, further ones get ignored.
+	 */
+	inline void cancel_next_await_signal(capid_t const thread_id)
+	{
+		call(call_id_cancel_next_await_signal(), thread_id);
 	}
 
 

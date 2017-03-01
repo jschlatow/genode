@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__REGULATOR_SESSION__CONNECTION_H_
@@ -54,9 +54,9 @@ struct Regulator::Connection : Genode::Connection<Session>, Session_client
 	 * \param regulator  identifier for the specific regulator
 	 * \param label      string identifier of the client
 	 */
-	Connection(Regulator_id regulator, const char * label = "")
+	Connection(Regulator_id regulator, const char * label = "") __attribute__((deprecated))
 	:
-		Genode::Connection<Session>(_session(*Genode::env()->parent(), label, regulator)),
+		Genode::Connection<Session>(_session(*Genode::env_deprecated()->parent(), label, regulator)),
 		Session_client(cap())
 	{ }
 };

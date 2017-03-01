@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BASE__ALLOCATOR_AVL_H_
@@ -192,6 +192,8 @@ class Genode::Allocator_avl_base : public Range_allocator
 		                     Block *dst1, Block *dst2);
 
 	protected:
+
+		Avl_tree<Block> const & _block_tree() const { return _addr_tree; }
 
 		/**
 		 * Clean up the allocator and detect dangling allocations

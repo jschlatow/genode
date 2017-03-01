@@ -2,7 +2,7 @@
 # Build
 #
 
-if {[have_spec hw_odroid_xu]} {
+if {[have_spec odroid_xu]} {
 	puts "Run script not supported on this platform."; exit 0 }
 
 set build_components {
@@ -18,10 +18,15 @@ set build_components {
 	app/pointer
 }
 
-lappend_if [have_spec usb]  build_components drivers/usb
-lappend_if [have_spec gpio] build_components drivers/gpio
+proc gpio_drv { } { if {[have_spec rpi] && [have_spec hw]}  { return hw_gpio_drv }
+                    if {[have_spec rpi] && [have_spec foc]} { return foc_gpio_drv }
+                    return gpio_drv }
 
 source ${genode_dir}/repos/base/run/platform_drv.inc
+
+lappend_if [need_usb_hid]   build_components drivers/usb
+lappend_if [have_spec gpio] build_components drivers/gpio
+
 append_platform_drv_build_components
 
 build $build_components
@@ -68,12 +73,12 @@ append_if [have_spec framebuffer] config {
 		<config buffered="yes"/>
 	</start>}
 
-append_if [have_spec gpio] config {
-	<start name="gpio_drv">
-		<resource name="RAM" quantum="4M"/>
-		<provides><service name="Gpio"/></provides>
+append_if [have_spec gpio] config "
+	<start name=\"[gpio_drv]\">
+		<resource name=\"RAM\" quantum=\"4M\"/>
+		<provides><service name=\"Gpio\"/></provides>
 		<config/>
-	</start>}
+	</start>"
 
 append_if [have_spec imx53] config {
 	<start name="input_drv">
@@ -88,7 +93,7 @@ append_if [have_spec ps2] config {
 		<provides><service name="Input"/></provides>
 	</start>}
 
-append_if [expr ![have_spec ps2] && [have_spec usb]] config {
+append_if [need_usb_hid] config {
 	<start name="usb_drv">
 		<resource name="RAM" quantum="12M"/>
 		<provides><service name="Input"/></provides>
@@ -139,14 +144,16 @@ append config {
 			<report activity="yes" affinity="yes"/>
 		</config>
 		<route>
-			<any-service> <child name="report_rom"/> <any-child/> <parent/> </any-service>
+			<service name="Report"> <child name="report_rom"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
 
 	<start name="cpu_load_display">
 		<resource name="RAM" quantum="6M"/>
 		<route>
-			<any-service> <child name="report_rom"/> <any-child/> <parent/> </any-service>
+			<service name="ROM" label="trace_subjects"> <child name="report_rom"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
 
@@ -182,7 +189,8 @@ append config {
 		<resource name="RAM" quantum="1M"/>
 		<configfile name="cpu_burner1.config"/>
 		<route>
-			<any-service> <child name="dynamic_rom"/> <any-child/> <parent/> </any-service>
+			<service name="ROM" label="cpu_burner1.config"> <child name="dynamic_rom"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
 
@@ -191,7 +199,8 @@ append config {
 		<resource name="RAM" quantum="1M"/>
 		<configfile name="cpu_burner2.config"/>
 		<route>
-			<any-service> <child name="dynamic_rom"/> <any-child/> <parent/> </any-service>
+			<service name="ROM" label="cpu_burner2.config"> <child name="dynamic_rom"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
 </config>}
@@ -209,7 +218,7 @@ foreach file { genode_logo.png grid.png } {
 
 # generic modules
 set boot_modules {
-	core init
+	core ld.lib.so init
 	timer
 	nitpicker report_rom dynamic_rom pointer
 	cpu_load_display cpu_burner trace_subject_reporter
@@ -221,8 +230,8 @@ append_platform_drv_boot_modules
 lappend_if [have_spec linux]            boot_modules fb_sdl
 lappend_if [have_spec ps2]              boot_modules ps2_drv
 lappend_if [have_spec framebuffer]      boot_modules fb_drv
-lappend_if [have_spec usb]              boot_modules usb_drv
-lappend_if [have_spec gpio]             boot_modules gpio_drv
+lappend_if [need_usb_hid]               boot_modules usb_drv
+lappend_if [have_spec gpio]             boot_modules [gpio_drv]
 lappend_if [have_spec imx53]            boot_modules input_drv
 
 build_boot_image $boot_modules

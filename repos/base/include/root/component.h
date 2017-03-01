@@ -8,10 +8,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__ROOT__COMPONENT_H_
@@ -123,6 +123,18 @@ class Genode::Root_component : public Rpc_object<Typed_root<SESSION_TYPE> >,
 			POLICY::aquire(args.string());
 
 			/*
+			 * Guard to ensure that 'release' is called whenever the scope
+			 * is left with an exception.
+			 */
+			struct Guard
+			{
+				bool ack = false;
+				Root_component &root;
+				Guard(Root_component &root) : root(root) { }
+				~Guard() { if (!ack) root.release(); }
+			} aquire_guard { *this };
+
+			/*
 			 * We need to decrease 'ram_quota' by
 			 * the size of the session object.
 			 */
@@ -130,8 +142,9 @@ class Genode::Root_component : public Rpc_object<Typed_root<SESSION_TYPE> >,
 			size_t needed = sizeof(SESSION_TYPE) + md_alloc()->overhead(sizeof(SESSION_TYPE));
 
 			if (needed > ram_quota) {
-				error("insufficient ram quota, provided=", ram_quota,
-				      ", required=", needed);
+				warning("insufficient ram quota "
+				        "for ", SESSION_TYPE::service_name(), " session, "
+				        "provided=", ram_quota, ", required=", needed);
 				throw Root::Quota_exceeded();
 			}
 
@@ -155,10 +168,14 @@ class Genode::Root_component : public Rpc_object<Typed_root<SESSION_TYPE> >,
 
 			SESSION_TYPE *s = 0;
 			try { s = _create_session(adjusted_args, affinity); }
-			catch (Allocator::Out_of_memory) { throw Root::Unavailable(); }
+			catch (Allocator::Out_of_memory) {
+				error("out of memory for session creation, '", args, "'");
+				throw Root::Unavailable();
+			}
 
 			_ep->manage(s);
 
+			aquire_guard.ack = true;
 			return *s;
 		}
 
@@ -266,6 +283,7 @@ class Genode::Root_component : public Rpc_object<Typed_root<SESSION_TYPE> >,
 		{
 			try {
 				return _create(args, affinity); }
+			catch (Root::Quota_exceeded) { throw Service::Quota_exceeded(); }
 			catch (...) {
 				throw typename Local_service<SESSION_TYPE>::Factory::Denied(); }
 		}

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2012-2016 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__FILE_SYSTEM_SESSION__CONNECTION_H_
@@ -76,7 +76,7 @@ struct File_system::Connection_base : Genode::Connection<Session>, Session_clien
 	:
 		Genode::Connection<Session>(env, _session(env.parent(), label, root,
 		                                          writeable, tx_buf_size)),
-		Session_client(cap(), tx_block_alloc)
+		Session_client(cap(), tx_block_alloc, env.rm())
 	{ }
 
 	/**
@@ -90,11 +90,11 @@ struct File_system::Connection_base : Genode::Connection<Session>, Session_clien
 	                size_t                   tx_buf_size = DEFAULT_TX_BUF_SIZE,
 	                char const              *label       = "",
 	                char const              *root        = "/",
-	                bool                     writeable   = true)
+	                bool                     writeable   = true) __attribute__((deprecated))
 	:
-		Genode::Connection<Session>(_session(*Genode::env()->parent(), label,
+		Genode::Connection<Session>(_session(*Genode::env_deprecated()->parent(), label,
 		                                     root, writeable, tx_buf_size)),
-		Session_client(cap(), tx_block_alloc)
+		Session_client(cap(), tx_block_alloc, *Genode::env_deprecated()->rm_session())
 	{ }
 };
 

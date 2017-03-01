@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013-2015 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _DRIVERS__INPUT__SPEC__IMX53__MPR121_H_
@@ -16,7 +16,7 @@
 
 /* Genode includes */
 #include <drivers/board_base.h>
-#include <os/attached_io_mem_dataspace.h>
+#include <base/attached_io_mem_dataspace.h>
 #include <input/event_queue.h>
 #include <input/event.h>
 #include <input/keycodes.h>
@@ -52,13 +52,16 @@ class Input::Buttons {
 
 	public:
 
-		Buttons(Server::Entrypoint &ep) :
-		            _irq_handler(ep, Genode::Board_base::I2C_2_IRQ),
-		            _i2c_ds(Genode::Board_base::I2C_2_BASE,
-		                    Genode::Board_base::I2C_2_SIZE),
-		            _i2c((Genode::addr_t)_i2c_ds.local_addr<void>(),
-		                  _irq_handler),
-		            _state(0)
+		Buttons(Genode::Env &env, Timer::Connection &timer)
+		:
+			_irq_handler(env, Genode::Board_base::I2C_2_IRQ),
+			_i2c_ds(env,
+			        Genode::Board_base::I2C_2_BASE,
+			        Genode::Board_base::I2C_2_SIZE),
+			_i2c(timer,
+			     (Genode::addr_t)_i2c_ds.local_addr<void>(),
+			     _irq_handler),
+			_state(0)
 		{
 			static Genode::uint8_t init_cmd[][2] = {
 				{0x41, 0x8 }, {0x42, 0x5 }, {0x43, 0x8 },

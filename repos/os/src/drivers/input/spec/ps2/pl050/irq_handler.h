@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2007-2015 Genode Labs GmbH
+ * Copyright (C) 2007-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _IRQ_HANDLER_H_
@@ -28,7 +28,6 @@ class Irq_handler
 
 		Genode::Irq_connection                  _irq;
 		Genode::Signal_rpc_member<Irq_handler>  _dispatcher;
-		Serial_interface                       *_channel;
 		Input_driver                           &_input_driver;
 
 		void _handle(unsigned)
@@ -42,13 +41,11 @@ class Irq_handler
 
 	public:
 
-		Irq_handler(Server::Entrypoint &ep,
-		            int irq_number, Serial_interface *channel,
-		            Input_driver &input_driver)
+		Irq_handler(Server::Entrypoint &ep, int irq_number,
+		            Serial_interface &, Input_driver &input_driver)
 		:
 			_irq(irq_number),
 			_dispatcher(ep, *this, &Irq_handler::_handle),
-			_channel(channel),
 			_input_driver(input_driver)
 		{
 			_irq.sigh(_dispatcher);

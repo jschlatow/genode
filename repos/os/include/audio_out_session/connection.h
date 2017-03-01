@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__AUDIO_OUT_SESSION__CONNECTION_H_
@@ -31,7 +31,7 @@ struct Audio_out::Connection : Genode::Connection<Session>, Audio_out::Session_c
 	Capability<Audio_out::Session> _session(Genode::Parent &parent, char const *channel)
 	{
 		return session(parent, "ram_quota=%ld, channel=\"%s\"",
-		               2*4096 + sizeof(Stream), channel);
+		               2*4096 + 2048 + sizeof(Stream), channel);
 	}
 
 	/**
@@ -50,7 +50,7 @@ struct Audio_out::Connection : Genode::Connection<Session>, Audio_out::Session_c
 	           bool         progress_signal = false)
 	:
 		Genode::Connection<Session>(env, _session(env.parent(), channel)),
-		Session_client(cap(), alloc_signal, progress_signal)
+		Session_client(env.rm(), cap(), alloc_signal, progress_signal)
 	{ }
 
 	/**
@@ -62,10 +62,10 @@ struct Audio_out::Connection : Genode::Connection<Session>, Audio_out::Session_c
 	 */
 	Connection(const char *channel,
 	           bool        alloc_signal = true,
-	           bool        progress_signal = false)
+	           bool        progress_signal = false) __attribute__((deprecated))
 	:
-		Genode::Connection<Session>(_session(*Genode::env()->parent(), channel)),
-		Session_client(cap(), alloc_signal, progress_signal)
+		Genode::Connection<Session>(_session(*Genode::env_deprecated()->parent(), channel)),
+		Session_client(*Genode::env_deprecated()->rm_session(), cap(), alloc_signal, progress_signal)
 	{ }
 };
 

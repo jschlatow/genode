@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__PAGER_H_
@@ -19,7 +19,6 @@
 #include <base/object_pool.h>
 #include <base/capability.h>
 #include <base/session_label.h>
-#include <cap_session/cap_session.h>
 #include <pager/capability.h>
 
 /* NOVA includes */
@@ -121,7 +120,6 @@ namespace Genode {
 			Exception_handlers       _exceptions;
 
 			addr_t _pd_target;
-			addr_t _pd_source;
 
 			void _copy_state_from_utcb(Nova::Utcb * utcb);
 			void _copy_state_to_utcb(Nova::Utcb * utcb);
@@ -179,15 +177,8 @@ namespace Genode {
 			/**
 			 * Assign PD selector to PD
 			 */
-			void assign_pd(addr_t pd_sel)
-			{
-				if (_pd_target == _pd_source)
-					_pd_source = pd_sel;
-
-				_pd_target = pd_sel;
-			}
+			void assign_pd(addr_t pd_sel) { _pd_target = pd_sel; }
 			addr_t pd_sel()    const { return _pd_target; }
-			addr_t pd_source() const { return _pd_source; }
 
 			void exception(uint8_t exit_id);
 
@@ -225,14 +216,6 @@ namespace Genode {
 				transmitter.submit();
 
 				return true;
-			}
-
-			/**
-			 * Return entry point address
-			 */
-			addr_t handler_address()
-			{
-				return reinterpret_cast<addr_t>(_invoke_handler);
 			}
 
 			/**
@@ -404,15 +387,6 @@ namespace Genode {
 			                      size_t const stack_size);
 
 			/**
-			 * Set entry point, which the activation serves
-			 *
-			 * This function is only called by the 'Pager_entrypoint'
-			 * constructor.
-			 */
-			void ep(Pager_entrypoint *ep) { _ep = ep; }
-			Pager_entrypoint *ep() { return _ep; }
-
-			/**
 			 * Thread interface
 			 */
 			void entry();
@@ -440,11 +414,6 @@ namespace Genode {
 	 */
 	class Pager_entrypoint : public Object_pool<Pager_object>
 	{
-		private:
-
-			Pager_activation_base *_activation;
-			Rpc_cap_factory       &_cap_factory;
-
 		public:
 
 			/**
@@ -459,7 +428,8 @@ namespace Genode {
 			/**
 			 * Associate Pager_object with the entry point
 			 */
-			Pager_capability manage(Pager_object *obj);
+			Pager_capability manage(Pager_object *) {
+				return Pager_capability(); }
 
 			/**
 			 * Dissolve Pager_object from entry point

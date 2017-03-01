@@ -11,6 +11,10 @@ if {[have_include power_on/qemu]} {
 	set usb_raw_device $::env(USB_RAW_DEVICE)
 }
 
+proc gpio_drv { } { if {[have_spec rpi] && [have_spec hw]}  { return hw_gpio_drv }
+                    if {[have_spec rpi] && [have_spec foc]} { return foc_gpio_drv }
+                    return gpio_drv }
+
 #
 # Build
 #
@@ -52,22 +56,22 @@ append config {
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>}
 
-append_if [have_spec gpio] config {
-	<start name="gpio_drv">
-		<resource name="RAM" quantum="4M"/>
-		<provides><service name="Gpio"/></provides>
+append_if [have_spec gpio] config "
+	<start name=\"[gpio_drv]\">
+		<resource name=\"RAM\" quantum=\"4M\"/>
+		<provides><service name=\"Gpio\"/></provides>
 		<config/>
-	</start>}
+	</start>"
 
 append_platform_drv_config
 
 append config {
 	<start name="timer">
-		<resource name="RAM" quantum="1M"/>
+		<resource name="RAM" quantum="2M"/>
 		<provides><service name="Timer"/></provides>
 	</start>
 	<start name="usb_drv">
-		<resource name="RAM" quantum="7M"/>
+		<resource name="RAM" quantum="32M"/>
 		<provides><service name="Usb"/></provides>
 		<config uhci="yes" ehci="yes" xhci="yes">
 			<raw>
@@ -76,11 +80,11 @@ append config {
 		</config>
 	</start>
 	<start name="usb_terminal">
-		<resource name="RAM" quantum="2M"/>
+		<resource name="RAM" quantum="4M"/>
 		<provides><service name="Terminal"/></provides>
 	</start>
 	<start name="test-terminal_echo">
-		<resource name="RAM" quantum="1M"/>
+		<resource name="RAM" quantum="2M"/>
 	</start>
 </config>}
 
@@ -92,11 +96,11 @@ install_config $config
 
 # generic modules
 set boot_modules {
-	core init timer usb_drv test-terminal_echo
+	core ld.lib.so init timer usb_drv test-terminal_echo
 	usb_terminal
 }
 
-lappend_if [have_spec gpio]             boot_modules gpio_drv
+lappend_if [have_spec gpio] boot_modules [gpio_drv]
 
 append_platform_drv_boot_modules
 

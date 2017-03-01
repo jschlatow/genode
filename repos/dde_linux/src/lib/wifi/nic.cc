@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2012-2016 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 /* Genode includes */
@@ -17,7 +17,6 @@
 #include <base/rpc_server.h>
 #include <base/snprintf.h>
 #include <base/tslab.h>
-#include <cap_session/connection.h>
 #include <nic/xml_node.h>
 #include <nic/component.h>
 #include <root/component.h>
@@ -91,9 +90,8 @@ class Wifi_session_component : public Nic::Session_component
 		Wifi_session_component(Genode::size_t const tx_buf_size,
 		                       Genode::size_t const rx_buf_size,
 		                       Genode::Allocator   &rx_block_md_alloc,
-		                       Genode::Ram_session &ram_session,
-		                       Server::Entrypoint  &ep, net_device *ndev)
-		: Session_component(tx_buf_size, rx_buf_size, rx_block_md_alloc, ram_session, ep),
+		                       Genode::Env  &env, net_device *ndev)
+		: Session_component(tx_buf_size, rx_buf_size, rx_block_md_alloc, env),
 		  _ndev(ndev)
 		{
 			_ndev->lx_nic_device = this;
@@ -197,9 +195,7 @@ class Root : public Genode::Root_component<Wifi_session_component,
 
 			session = new (md_alloc())
 			          Wifi_session_component(tx_buf_size, rx_buf_size,
-			                                *md_alloc(),
-			                                _env.ram(),
-			                                _env.ep(), device);
+			                                *md_alloc(), _env, device);
 			return session;
 		}
 

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__GEMS__PNG_IMAGE_H_
@@ -45,6 +45,10 @@ class Png_image
 			return arg;
 		};
 
+		Genode::Ram_session &_ram;
+		Genode::Region_map  &_rm;
+		Genode::Allocator   &_alloc;
+
 		struct Read_struct
 		{
 			/* start of PNG data */
@@ -55,9 +59,9 @@ class Png_image
 
 			static void callback(png_structp png_ptr, png_bytep dst, png_size_t len)
 			{
-				Png_image *png = (Png_image *)png_get_io_ptr(png_ptr);
-				Genode::memcpy(dst, png->_read_struct.data + png->_read_struct.pos, len);
-				png->_read_struct.pos += len;
+				Read_struct &read_struct = *(Read_struct *)png_get_io_ptr(png_ptr);
+				Genode::memcpy(dst, read_struct.data + read_struct.pos, len);
+				read_struct.pos += len;
 			}
 
 			png_structp png_ptr =
@@ -114,20 +118,22 @@ class Png_image
 
 		struct Row
 		{
+			Genode::Allocator &alloc;
 			size_t const row_num_bytes;
 			png_bytep const row_ptr;
 
-			Row(png_structp png_ptr, png_infop info_ptr)
+			Row(Genode::Allocator &alloc, png_structp png_ptr, png_infop info_ptr)
 			:
+				alloc(alloc),
 				row_num_bytes(png_get_rowbytes(png_ptr, info_ptr)*8),
-				row_ptr((png_bytep)Genode::env()->heap()->alloc(row_num_bytes))
+				row_ptr((png_bytep)alloc.alloc(row_num_bytes))
 			{ }
 
 			~Row()
 			{
-				Genode::env()->heap()->free(row_ptr, row_num_bytes);
+				alloc.free(row_ptr, row_num_bytes);
 			}
-		} _row { _read_struct.png_ptr, _info.info_ptr };
+		} _row { _alloc, _read_struct.png_ptr, _info.info_ptr };
 
 	public:
 
@@ -137,7 +143,25 @@ class Png_image
 		 * \throw Read_struct_failed
 		 * \throw Info_failed
 		 */
-		Png_image(void *data) : _read_struct(data) { }
+		Png_image(Genode::Ram_session &ram, Genode::Region_map &rm,
+		          Genode::Allocator &alloc, void *data)
+		:
+			_ram(ram), _rm(rm), _alloc(alloc), _read_struct(data)
+		{ }
+
+		/**
+		 * Constructor
+		 *
+		 * \deprecated
+		 * \noapi
+		 */
+		Png_image(void *data) __attribute__((deprecated))
+		:
+			_ram(*Genode::env_deprecated()->ram_session()),
+			_rm(*Genode::env_deprecated()->rm_session()),
+			_alloc(*Genode::env_deprecated()->heap()),
+			_read_struct(data)
+		{ }
 
 		/**
 		 * Return size of PNG image
@@ -153,8 +177,8 @@ class Png_image
 		template <typename PT>
 		Genode::Texture<PT> *texture()
 		{
-			Genode::Texture<PT> *texture = new (Genode::env()->heap())
-				Chunky_texture<PT>(*Genode::env()->ram_session(), size());
+			Genode::Texture<PT> *texture = new (_alloc)
+				Chunky_texture<PT>(_ram, _rm, size());
 
 			/* fill texture with PNG image data */
 			for (unsigned i = 0; i < size().h(); i++) {
@@ -174,7 +198,7 @@ class Png_image
 			Chunky_texture<PT> *chunky_texture =
 				static_cast<Chunky_texture<PT> *>(texture);
 
-			Genode::destroy(Genode::env()->heap(), chunky_texture);
+			Genode::destroy(_alloc, chunky_texture);
 		}
 };
 

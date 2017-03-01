@@ -7,10 +7,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -77,8 +77,36 @@ void Signal::_inc_ref()
 Signal::Signal(Signal::Data data) : _data(data)
 {
 	if (_data.context) {
-		_data.context->_ref_cnt = 1;
-		_data.context->_destroy_lock.lock();
+		_data.context->_ref_cnt++;
+
+		/*
+		 * Defer the destruction of the context until the handling of the
+		 * 'Signal' has completed.
+		 *
+		 * Normally, the context can only have one 'Signal' in flight, which is
+		 * destroyed before 'pending_signal' is called the next time. However,
+		 * one exception is a signal handler that unexpectedly calls
+		 * 'pending_signal' itself (i.e., via 'wait_and_dispatch_one_signal').
+		 * As this is dangerous programming pattern (that should be fixed), we
+		 * print a warning.
+		 *
+		 * In this situation, the context-destroy lock is already taken by the
+		 * outer scope. To avoid a deadlock during the attempt to create
+		 * a second 'Signal' object for the same context, we take the lock
+		 * only in the outer scope (where the context's reference counter
+		 * is in its clear state).
+		 */
+		if (_data.context->_ref_cnt == 1) {
+			_data.context->_destroy_lock.lock();
+		} else {
+
+			/* print warning only once to avoid flooding the log */
+			static bool printed;
+			if (!printed) {
+				warning("attempt to handle the same signal context twice (nested)");
+				printed = true;
+			}
+		}
 	}
 }
 
@@ -120,12 +148,12 @@ Signal Signal_receiver::wait_for_signal()
 {
 	for (;;) {
 
-		/* block until the receiver has received a signal */
-		block_for_signal();
-
 		try {
 			return pending_signal();
 		} catch (Signal_not_pending) { }
+
+		/* block until the receiver has received a signal */
+		block_for_signal();
 	}
 }
 
@@ -190,7 +218,7 @@ void Signal_receiver::_unsynchronized_dissolve(Signal_context * const context)
 	_platform_begin_dissolve(context);
 
 	/* tell core to stop sending signals referring to the context */
-	env()->pd_session()->free_context(context->_cap);
+	env_deprecated()->pd_session()->free_context(context->_cap);
 
 	/* restore default initialization of signal context */
 	context->_receiver = 0;

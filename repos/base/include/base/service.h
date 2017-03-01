@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BASE__SERVICE_H_
@@ -108,10 +108,9 @@ class Genode::Service : Noncopyable
 		/**
 		 * Return the RAM session to be used for trading resources
 		 */
-		Ram_session_capability ram() const
-		{
-			return _ram;
-		}
+		virtual Ram_session_capability ram() const { return _ram; }
+
+		virtual bool operator == (Service const &other) const { return this == &other; }
 };
 
 
@@ -130,7 +129,10 @@ class Genode::Local_service : public Service
 			class Denied : Exception { };
 
 			/**
+			 * Create session
+			 *
 			 * \throw Denied
+			 * \throw Quota_exceeded
 			 */
 			virtual SESSION &create(Args const &, Affinity)  = 0;
 
@@ -192,7 +194,7 @@ class Genode::Local_service : public Service
 			case Session_state::CREATE_REQUESTED:
 
 				try {
-					SESSION &rpc_obj = _factory.create(session.args(),
+					SESSION &rpc_obj = _factory.create(Session_state::Server_args(session).string(),
 					                                   session.affinity());
 					session.local_ptr = &rpc_obj;
 					session.cap       = rpc_obj.cap();
@@ -200,6 +202,8 @@ class Genode::Local_service : public Service
 				}
 				catch (typename Factory::Denied) {
 					session.phase = Session_state::INVALID_ARGS; }
+				catch (Quota_exceeded) {
+					session.phase = Session_state::QUOTA_EXCEEDED; }
 
 				break;
 
@@ -225,6 +229,7 @@ class Genode::Local_service : public Service
 				break;
 
 			case Session_state::INVALID_ARGS:
+			case Session_state::QUOTA_EXCEEDED:
 			case Session_state::AVAILABLE:
 			case Session_state::CAP_HANDED_OUT:
 			case Session_state::CLOSED:
@@ -272,9 +277,10 @@ class Genode::Parent_service : public Service
 				session.id_at_parent.construct(session.parent_client,
 				                               _env.id_space());
 				try {
+
 					session.cap = _env.session(name().string(),
 					                           session.id_at_parent->id(),
-					                           session.args().string(),
+					                           Session_state::Server_args(session).string(),
 					                           session.affinity());
 
 					session.phase = Session_state::AVAILABLE;
@@ -316,6 +322,7 @@ class Genode::Parent_service : public Service
 				break;
 
 			case Session_state::INVALID_ARGS:
+			case Session_state::QUOTA_EXCEEDED:
 			case Session_state::AVAILABLE:
 			case Session_state::CAP_HANDED_OUT:
 			case Session_state::CLOSED:
@@ -347,7 +354,7 @@ class Genode::Child_service : public Service
 		/*
 		 * In contrast to local services and parent services, session-state
 		 * objects for child services are owned by the server. This enables
-		 * the server to asynchronouly respond to close requests when the
+		 * the server to asynchronously respond to close requests when the
 		 * client is already gone.
 		 */
 		Factory &_factory(Factory &) override { return _server_factory; }

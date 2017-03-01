@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2008-2013 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BASE__ATTACHED_RAM_DATASPACE_H_
@@ -109,9 +109,9 @@ class Genode::Attached_ram_dataspace
 		 *              'Region_map &' arguments instead.
 		 */
 		Attached_ram_dataspace(Ram_session *ram, size_t size,
-		                       Cache_attribute cached = CACHED)
+		                       Cache_attribute cached = CACHED) __attribute__((deprecated))
 		:
-			_size(size), _ram(ram), _rm(env()->rm_session()), _cached(cached)
+			_size(size), _ram(ram), _rm(env_deprecated()->rm_session()), _cached(cached)
 		{
 			_alloc_and_attach();
 		}

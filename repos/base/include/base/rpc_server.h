@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BASE__RPC_SERVER_H_
@@ -21,7 +21,7 @@
 #include <base/lock.h>
 #include <base/log.h>
 #include <base/trace/events.h>
-#include <cap_session/cap_session.h>
+#include <pd_session/pd_session.h>
 
 namespace Genode {
 
@@ -31,6 +31,8 @@ namespace Genode {
 	class Rpc_object_base;
 	template <typename, typename> struct Rpc_object;
 	class Rpc_entrypoint;
+
+	class Signal_receiver;
 }
 
 
@@ -293,6 +295,14 @@ struct Genode::Rpc_object : Rpc_object_base, Rpc_dispatcher<RPC_INTERFACE, SERVE
  */
 class Genode::Rpc_entrypoint : Thread, public Object_pool<Rpc_object_base>
 {
+	/**
+	 * This is only needed because in 'base-hw' we need the Thread
+	 * pointer of the entrypoint to cancel its next signal blocking.
+	 * Remove it as soon as signal dispatching in 'base-hw' doesn't need
+	 * multiple threads anymore.
+	 */
+	friend class Signal_receiver;
+
 	private:
 
 		/**
@@ -396,7 +406,7 @@ class Genode::Rpc_entrypoint : Thread, public Object_pool<Rpc_object_base>
 		/**
 		 * Constructor
 		 *
-		 * \param cap_session  'Cap_session' for creating capabilities
+		 * \param pd_session   'Pd_session' for creating capabilities
 		 *                     for the RPC objects managed by this entry
 		 *                     point
 		 * \param stack_size   stack size of entrypoint thread

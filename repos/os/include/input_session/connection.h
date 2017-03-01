@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2008-2016 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__INPUT_SESSION__CONNECTION_H_
@@ -27,7 +27,7 @@ struct Input::Connection : Genode::Connection<Session>, Session_client
 	 * \noapi
 	 */
 	Capability<Input::Session> _session(Genode::Parent &parent, char const *label) {
-		return session(parent, "ram_quota=16K, label=\"%s\"", label); }
+		return session(parent, "ram_quota=18K, label=\"%s\"", label); }
 
 	/**
 	 * Constructor
@@ -35,7 +35,7 @@ struct Input::Connection : Genode::Connection<Session>, Session_client
 	Connection(Genode::Env &env, char const *label = "")
 	:
 		Genode::Connection<Input::Session>(env, _session(env.parent(), label)),
-		Session_client(env, cap())
+		Session_client(env.rm(), cap())
 	{ }
 
 	/**
@@ -45,11 +45,11 @@ struct Input::Connection : Genode::Connection<Session>, Session_client
 	 * \deprecated  Use the constructor with 'Env &' as first
 	 *              argument instead
 	 */
-	Connection()
+	Connection() __attribute__((deprecated))
 	:
 		Genode::Connection<Input::Session>(
-			session(*Genode::env()->parent(), "ram_quota=16K")),
-		Session_client(cap())
+			session(*Genode::env_deprecated()->parent(), "ram_quota=18K")),
+		Session_client(*Genode::env_deprecated()->rm_session(), cap())
 	{ }
 };
 

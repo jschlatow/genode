@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2012-2016 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -76,6 +76,10 @@ class File_system::Session_component : public Session_rpc_object
 
 			case Packet_descriptor::WRITE:
 				res_length = node.write((char const *)content, length, offset);
+				break;
+
+			case Packet_descriptor::READ_READY:
+				/* not supported */
 				break;
 			}
 
@@ -154,7 +158,7 @@ class File_system::Session_component : public Session_rpc_object
 		                  bool         writable,
 		                  Allocator   &md_alloc)
 		:
-			Session_rpc_object(env.ram().alloc(tx_buf_size), env.ep().rpc_ep()),
+			Session_rpc_object(env.ram().alloc(tx_buf_size), env.rm(), env.ep().rpc_ep()),
 			_env(env),
 			_md_alloc(md_alloc),
 			_root(*new (&_md_alloc) Directory(_md_alloc, root_dir, false)),

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/log.h>
@@ -186,7 +186,7 @@ void Root_proxy::_handle_session_request(Xml_node request)
 		catch (Root::Invalid_args) {
 			_env.parent().session_response(id, Parent::INVALID_ARGS); }
 		catch (Root::Quota_exceeded) {
-			_env.parent().session_response(id, Parent::INVALID_ARGS); }
+			_env.parent().session_response(id, Parent::QUOTA_EXCEEDED); }
 		catch (Root::Unavailable) {
 			_env.parent().session_response(id, Parent::INVALID_ARGS); }
 	}

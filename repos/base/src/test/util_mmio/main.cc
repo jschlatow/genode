@@ -5,15 +5,16 @@
  */
 
 /*
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
-#include <util/mmio.h>
+#include <base/component.h>
 #include <base/log.h>
+#include <util/mmio.h>
 
 using namespace Genode;
 
@@ -186,8 +187,11 @@ int compare_mem(uint8_t * base1, uint8_t * base2, size_t size)
 void error(unsigned line) { error("Test in line ", line, " failed"); }
 
 
-int main()
+void Component::construct(Genode::Env &)
 {
+	using ::Cpu_state;
+
+
 	/************************************
 	 ** 'Genode::Mmio::Register' tests **
 	 ************************************/
@@ -465,6 +469,5 @@ int main()
 	}
 
 	log("Test done");
-	return 0;
 }
 

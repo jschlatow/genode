@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__MAP_LOCAL_H_
@@ -30,8 +30,7 @@ namespace Genode {
 	 * \return true on success
 	 */
 	bool map_local(addr_t from_phys, addr_t to_virt, size_t num_pages,
-	               Page_flags flags = { true, true, false, false,
-	                                    false, CACHED });
+	               Page_flags flags = PAGE_FLAGS_KERN_DATA);
 
 	/**
 	 * Unmap pages from core's address space

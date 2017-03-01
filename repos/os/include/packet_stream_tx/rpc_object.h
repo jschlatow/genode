@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2010-2013 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__PACKET_STREAM_TX__RPC_OBJECT_H_
@@ -43,9 +43,10 @@ class Packet_stream_tx::Rpc_object : public Genode::Rpc_object<CHANNEL, Rpc_obje
 		 *            interface
 		 */
 		Rpc_object(Genode::Dataspace_capability ds,
+		           Genode::Region_map     &rm,
 		           Genode::Rpc_entrypoint &ep)
 		:
-			_ep(ep), _cap(_ep.manage(this)), _sink(ds),
+			_ep(ep), _cap(_ep.manage(this)), _sink(ds, rm),
 
 			/* init signal handlers with default handlers of sink */
 			_sigh_ready_to_ack(_sink.sigh_ready_to_ack()),

@@ -7,10 +7,10 @@
  */
 
 /*
- * Copyright (C) 2011-2013 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* core includes */
@@ -32,7 +32,7 @@ void Genode::Ipc_pager::_parse_exception()
 }
 
 
-void Genode::Ipc_pager::get_regs(Thread_state *state)
+void Genode::Ipc_pager::get_regs(Foc_thread_state *state)
 {
 	state->ip   = _regs.pc;
 	state->sp   = _regs.sp;
@@ -54,7 +54,7 @@ void Genode::Ipc_pager::get_regs(Thread_state *state)
 }
 
 
-void Genode::Ipc_pager::set_regs(Thread_state state)
+void Genode::Ipc_pager::set_regs(Foc_thread_state state)
 {
 	_regs.pc    = state.ip;
 	_regs.sp    = state.sp;

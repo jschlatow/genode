@@ -4,7 +4,7 @@
 # \date   2013-11-29
 #
 
-if {[have_spec hw_odroid_xu]} {
+if {[have_spec odroid_xu]} {
 	puts "Run script does not support this platform."
 	exit 0
 }
@@ -39,6 +39,10 @@ build $build_components
 
 create_boot_directory
 
+proc gpio_drv { } { if {[have_spec rpi] && [have_spec hw]}  { return hw_gpio_drv }
+                    if {[have_spec rpi] && [have_spec foc]} { return foc_gpio_drv }
+                    return gpio_drv }
+
 append config {
 <config>
 	<parent-provides>
@@ -60,12 +64,12 @@ append config {
 		<provides><service name="Timer"/></provides>
 	</start>}
 
-append_if [have_spec gpio] config {
-	<start name="gpio_drv">
-		<resource name="RAM" quantum="4M"/>
-		<provides><service name="Gpio"/></provides>
+append_if [have_spec gpio] config "
+	<start name=\"[gpio_drv]\">
+		<resource name=\"RAM\" quantum=\"4M\"/>
+		<provides><service name=\"Gpio\"/></provides>
 		<config/>
-	</start>}
+	</start>"
 
 append_if $use_usb_driver config {
 	<start name="usb_drv">
@@ -174,14 +178,14 @@ catch { exec dd if=/dev/zero of=bin/index.bin bs=512 count=400 }
 
 # generic modules
 set boot_modules {
-	core init timer ld.lib.so
+	core ld.lib.so init timer
 	libc.lib.so libm.lib.so
 	lwip.lib.so zlib.lib.so
 	lighttpd nic_bridge http_blk index.bin test-rom_blk
 }
 
 # platform-specific modules
-lappend_if [have_spec gpio]          boot_modules gpio_drv
+lappend_if [have_spec gpio]          boot_modules [gpio_drv]
 lappend_if $use_usb_driver           boot_modules usb_drv
 lappend_if $use_nic_driver           boot_modules nic_drv
 

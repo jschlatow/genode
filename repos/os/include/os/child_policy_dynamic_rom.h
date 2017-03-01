@@ -8,10 +8,10 @@
  */
 
 /*
- * Copyright (C) 2012-2016 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__OS__CHILD_POLICY_DYNAMIC_ROM_H_
@@ -20,7 +20,7 @@
 #include <ram_session/ram_session.h>
 #include <rom_session/rom_session.h>
 #include <base/rpc_server.h>
-#include <os/attached_ram_dataspace.h>
+#include <base/attached_ram_dataspace.h>
 
 namespace Genode { class Child_policy_dynamic_rom_file; }
 
@@ -31,6 +31,7 @@ class Genode::Child_policy_dynamic_rom_file : public Rpc_object<Rom_session>,
 	private:
 
 		Ram_session *_ram;
+		Region_map  &_rm;
 
 		/*
 		 * The ROM module may be written and consumed by different threads,
@@ -72,13 +73,37 @@ class Genode::Child_policy_dynamic_rom_file : public Rpc_object<Rom_session>,
 		 *
 		 * If 'ram' is 0, the child policy is ineffective.
 		 */
-		Child_policy_dynamic_rom_file(const char     *module_name,
+		Child_policy_dynamic_rom_file(Region_map     &rm,
+		                              char const     *module_name,
 		                              Rpc_entrypoint &ep,
 		                              Ram_session    *ram)
 		:
 			Service("ROM", Ram_session_capability()),
-			_ram(ram),
-			_fg(0, 0), _bg(0, 0),
+			_ram(ram), _rm(rm),
+			_fg(*_ram, _rm, 0), _bg(*_ram, _rm, 0),
+			_bg_has_pending_data(false),
+			_ep(ep),
+			_rom_session_cap(_ep.manage(this)),
+			_module_name(module_name)
+		{ }
+
+		/**
+		 * Constructor
+		 *
+		 * \param ram  RAM session used to allocate the backing store
+		 *             for buffering ROM module data
+		 *
+		 * \deprecated
+		 *
+		 * If 'ram' is 0, the child policy is ineffective.
+		 */
+		Child_policy_dynamic_rom_file(char const     *module_name,
+		                              Rpc_entrypoint &ep,
+		                              Ram_session    *ram) __attribute__((deprecated))
+		:
+			Service("ROM", Ram_session_capability()),
+			_ram(ram), _rm(*env_deprecated()->rm_session()),
+			_fg(*_ram, _rm, 0), _bg(*_ram, _rm, 0),
 			_bg_has_pending_data(false),
 			_ep(ep),
 			_rom_session_cap(_ep.manage(this)),
@@ -169,6 +194,7 @@ class Genode::Child_policy_dynamic_rom_file : public Rpc_object<Rom_session>,
 				break;
 
 			case Session_state::INVALID_ARGS:
+			case Session_state::QUOTA_EXCEEDED:
 			case Session_state::AVAILABLE:
 			case Session_state::CAP_HANDED_OUT:
 			case Session_state::CLOSED:

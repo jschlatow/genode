@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2008-2013 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__HELLO_SESSION__CONNECTION_H_
@@ -26,7 +26,7 @@ struct Hello::Connection : Genode::Connection<Session>, Session_client
 	:
 		/* create session */
 		Genode::Connection<Hello::Session>(env, session(env.parent(),
-		                                                "ram_quota=4K")),
+		                                                "ram_quota=6K")),
 
 		/* initialize RPC interface */
 		Session_client(cap()) { }

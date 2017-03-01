@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015-2016 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* core includes */
@@ -16,8 +16,10 @@
 
 void Kernel::Cpu_context::_init(size_t const stack_size, addr_t const table)
 {
-	r12 = stack_size;
+	r12           = stack_size;
 	cpu_exception = Genode::Cpu::Ttbr0::init(table);
+	protection_domain(0);
+	translation_table(table);
 	sctlr = Cpu::Sctlr::init_value();
 	ttbrc = Cpu::Ttbcr::init_virt_kernel();
 	mair0 = Cpu::Mair0::init_virt_kernel();

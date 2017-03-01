@@ -5,17 +5,17 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BASE__HEAP_H_
 #define _INCLUDE__BASE__HEAP_H_
 
 #include <util/list.h>
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 #include <ram_session/ram_session.h>
 #include <region_map/region_map.h>
 #include <base/allocator_avl.h>
@@ -71,7 +71,7 @@ class Genode::Heap : public Allocator
 		};
 
 		Lock                           _lock;
-		Volatile_object<Allocator_avl> _alloc;        /* local allocator    */
+		Reconstructible<Allocator_avl> _alloc;        /* local allocator    */
 		Dataspace_pool                 _ds_pool;      /* list of dataspaces */
 		size_t                         _quota_limit;
 		size_t                         _quota_used;

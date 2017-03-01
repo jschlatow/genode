@@ -7,11 +7,11 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  * Copyright (C) 2012 Intel Corporation
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _SESSION_COMPONENT_
@@ -57,7 +57,12 @@ class Timer::Session_component : public Genode::Rpc_object<Session>,
 		void trigger_periodic(unsigned us) override {
 			_timeout.schedule_periodic(Microseconds(us), *this); }
 
-		void sigh(Signal_context_capability sigh) override { _sigh = sigh; }
+		void sigh(Signal_context_capability sigh) override
+		{
+			_sigh = sigh;
+			if (!sigh.valid())
+				_timeout.discard();
+		}
 
 		unsigned long elapsed_ms() const override {
 			return (_timeout_scheduler.curr_time().value - _init_time_us) / 1000; }

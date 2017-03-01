@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__GEMS__NITPICKER_BUFFER_H_
@@ -17,8 +17,8 @@
 /* Genode includes */
 #include <ram_session/ram_session.h>
 #include <nitpicker_session/connection.h>
-#include <os/attached_dataspace.h>
-#include <os/attached_ram_dataspace.h>
+#include <base/attached_dataspace.h>
+#include <base/attached_ram_dataspace.h>
 #include <os/surface.h>
 #include <os/pixel_rgb565.h>
 #include <os/pixel_alpha8.h>
@@ -44,6 +44,7 @@ struct Nitpicker_buffer
 	typedef Genode::Attached_ram_dataspace Ram_ds;
 
 	Genode::Ram_session &ram;
+	Genode::Region_map  &rm;
 
 	Nitpicker::Connection &nitpicker;
 
@@ -65,7 +66,7 @@ struct Nitpicker_buffer
 		return nitpicker.framebuffer()->dataspace();
 	}
 
-	Genode::Attached_dataspace fb_ds { _ds_cap(nitpicker) };
+	Genode::Attached_dataspace fb_ds { rm, _ds_cap(nitpicker) };
 
 	Genode::size_t pixel_surface_num_bytes() const
 	{
@@ -77,16 +78,30 @@ struct Nitpicker_buffer
 		return size().count();
 	}
 
-	Ram_ds pixel_surface_ds { &ram, pixel_surface_num_bytes() };
-	Ram_ds alpha_surface_ds { &ram, alpha_surface_num_bytes() };
+	Ram_ds pixel_surface_ds { ram, rm, pixel_surface_num_bytes() };
+	Ram_ds alpha_surface_ds { ram, rm, alpha_surface_num_bytes() };
 
 	/**
 	 * Constructor
 	 */
 	Nitpicker_buffer(Nitpicker::Connection &nitpicker, Area size,
-	                 Genode::Ram_session &ram)
+	                 Genode::Ram_session &ram, Genode::Region_map &rm)
 	:
-		ram(ram), nitpicker(nitpicker),
+		ram(ram), rm(rm), nitpicker(nitpicker),
+		mode(Genode::max(1UL, size.w()), Genode::max(1UL, size.h()),
+		     nitpicker.mode().format())
+	{ }
+
+	/**
+	 * Constructor
+	 *
+	 * \deprecated
+	 * \noapi
+	 */
+	Nitpicker_buffer(Nitpicker::Connection &nitpicker, Area size,
+	                 Genode::Ram_session &ram) __attribute__((deprecated))
+	:
+		ram(ram), rm(*Genode::env_deprecated()->rm_session()), nitpicker(nitpicker),
 		mode(Genode::max(1UL, size.w()), Genode::max(1UL, size.h()),
 		     nitpicker.mode().format())
 	{ }

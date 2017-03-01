@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2007-2015 Genode Labs GmbH
+ * Copyright (C) 2007-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__IRQ_ROOT_H_
@@ -47,15 +47,15 @@ class Genode::Irq_root : public Root_component<Irq_session_component>
 		/**
 		 * Constructor
 		 *
-		 * \param cap_session  capability allocator
+		 * \param pd_session   capability allocator
 		 * \param irq_alloc    IRQ range that can be assigned to clients
 		 * \param md_alloc     meta-data allocator to be used by root component
 		 */
-		Irq_root(Cap_session *cap_session,
+		Irq_root(Pd_session *pd_session,
 		         Range_allocator *irq_alloc, Allocator *md_alloc)
 		:
 			Root_component<Irq_session_component>(&_session_ep, md_alloc),
-			_session_ep(cap_session, STACK_SIZE, "irq"),
+			_session_ep(pd_session, STACK_SIZE, "irq"),
 			_irq_alloc(irq_alloc)
 		{ }
 };

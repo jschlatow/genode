@@ -8,10 +8,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__SPEC__X86_64__MUEN__SINFO_H_
@@ -20,6 +20,7 @@
 #include <base/stdint.h>
 
 struct subject_info_type;
+struct scheduling_info_type;
 
 namespace Genode
 {
@@ -35,19 +36,29 @@ class Genode::Sinfo
 
 		enum Config {
 			PHYSICAL_BASE_ADDR = 0xe00000000,
-			SIZE               = 0x7000,
+			SIZE               = 0x9000,
 			MAX_NAME_LENGTH    = 63,
+			HASH_LENGTH        = 32,
 		};
 
 		Sinfo(const addr_t base_addr);
 
+		enum Content {
+			CONTENT_UNINITIALIZED,
+			CONTENT_FILL,
+			CONTENT_FILE,
+		};
+
 		/* Structure holding information about a memory region */
 		struct Memregion_info {
+			enum Content content;
 			char name[MAX_NAME_LENGTH + 1];
 			uint64_t address;
 			uint64_t size;
 			bool writable;
 			bool executable;
+			uint8_t hash[HASH_LENGTH];
+			uint16_t pattern;
 		};
 
 		/* Structure holding information about a Muen channel */
@@ -75,6 +86,13 @@ class Genode::Sinfo
 		 * Check Muen sinfo Magic.
 		 */
 		bool check_magic(void);
+
+		/*
+		 * Return subject name.
+		 *
+		 * The function returns NULL if the subject name cannot be retrieved.
+		 */
+		const char * const get_subject_name(void);
 
 		/*
 		 * Return information for a channel given by name.
@@ -163,6 +181,9 @@ class Genode::Sinfo
 	private:
 
 		subject_info_type * sinfo;
+		scheduling_info_type * sched_info;
+		char subject_name[MAX_NAME_LENGTH + 1];
+		bool subject_name_set = false;
 
 		/*
 		 * Fill memregion struct with memory region info from resource given by

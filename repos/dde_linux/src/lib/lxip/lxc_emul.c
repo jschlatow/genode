@@ -1,4 +1,4 @@
-/**
+/*
  * \brief  Linux emulation code
  * \author Sebastian Sumpf
  * \author Josef Soentgen
@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2013-2016 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 /* Linux includes */
@@ -91,7 +91,7 @@ unsigned long get_zeroed_page(gfp_t gfp_mask)
 
 void *__alloc_percpu(size_t size, size_t align)
 {
-	return kmalloc(size, 0);
+	return kzalloc(size, 0);
 }
 
 
@@ -151,6 +151,15 @@ int rt_genid(struct net *net)
 	return -1;
 }
 
+int rt_genid_ipv4(struct net *net)
+{
+    return atomic_read(&net->ipv4.rt_genid);
+}
+
+void rt_genid_bump_ipv4(struct net *net)
+{
+    atomic_inc(&net->ipv4.rt_genid);
+}
 
 /**********************
  ** linx/rtnetlink.h **
@@ -159,6 +168,12 @@ int rt_genid(struct net *net)
 struct netdev_queue *dev_ingress_queue(struct net_device *dev)
 {
 	return dev->ingress_queue; 
+}
+
+void rtnl_notify(struct sk_buff *skb, struct net *net, u32 pid, u32 group,
+                 struct nlmsghdr *nlh, gfp_t flags)
+{
+	nlmsg_free(skb);
 }
 
 
@@ -474,13 +489,10 @@ void late_tcp_congestion_default(void);
 /**
  * Initialize sub-systems
  */
-int lxip_init(char const *address_config)
+void lxip_init()
 {
 	/* init data */
 	INIT_LIST_HEAD(&init_net.dev_base_head);
-
-	/* call __setup stuff */
-	__ip_auto_config_setup((char *)address_config);
 
 	core_sock_init();
 	core_netlink_proto_init();
@@ -500,11 +512,49 @@ int lxip_init(char const *address_config)
 
 	/* late  */
 	late_tcp_congestion_default();
+}
 
-	/* dhcp or static configuration */
+
+/*
+ * Network configuration
+ */
+static void lxip_configure(char const *address_config)
+{
+	__ip_auto_config_setup((char *)address_config);
 	late_ip_auto_config();
+}
 
-	return 0;
+
+static bool dhcp_configured = false;
+static bool dhcp_pending    = false;
+
+void lxip_configure_static(char const *addr, char const *netmask,
+                           char const *gateway, char const *nameserver)
+{
+	char address_config[128];
+
+	dhcp_configured = false;
+
+	snprintf(address_config, sizeof(address_config),
+	         "%s::%s:%s:::off:%s",
+	         addr, gateway, netmask, nameserver);
+	lxip_configure(address_config);
+}
+
+
+void lxip_configure_dhcp()
+{
+	dhcp_configured = true;
+	dhcp_pending    = true;
+
+	lxip_configure("dhcp");
+	dhcp_pending = false;
+}
+
+
+bool lxip_do_dhcp()
+{
+	return dhcp_configured && !dhcp_pending;
 }
 
 

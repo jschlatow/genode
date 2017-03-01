@@ -12,10 +12,10 @@
  */
 
 /*
- * Copyright (C) 2010-2013 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__SIGNAL_SOURCE__CLIENT_H_
@@ -54,7 +54,7 @@ namespace Genode {
 			{
 				/* request mapping of semaphore capability selector */
 				Thread * myself = Thread::myself();
-				request_signal_sm_cap(Capability_space::import(myself->native_thread().ec_sel + 1),
+				request_signal_sm_cap(myself->native_thread().exc_pt_sel + Nova::PT_SEL_PAGE_FAULT,
 				                      myself->native_thread().exc_pt_sel + Nova::PT_SEL_STARTUP);
 				_sem = Capability_space::import(myself->native_thread().exc_pt_sel + Nova::PT_SEL_STARTUP);
 				call<Rpc_register_semaphore>(_sem);

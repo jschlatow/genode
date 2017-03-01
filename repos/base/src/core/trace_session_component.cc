@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* core-internal includes */
@@ -151,7 +151,7 @@ Session_component::Session_component(Allocator &md_alloc, size_t ram_quota,
                                      char const *label, Source_registry &sources,
                                      Policy_registry &policies)
 :
-	_ram(*env()->ram_session()),
+	_ram(*env_deprecated()->ram_session()),
 	_md_alloc(&md_alloc, ram_quota),
 	_subjects_slab(&_md_alloc),
 	_policies_slab(&_md_alloc),

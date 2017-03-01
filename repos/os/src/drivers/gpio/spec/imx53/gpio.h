@@ -7,24 +7,25 @@
 
 /*
  * Copyright (C) 2012 Ksys Labs LLC
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _DRIVERS__GPIO__SPEC__IMX53__GPIO_H_
 #define _DRIVERS__GPIO__SPEC__IMX53__GPIO_H_
 
 /* Genode includes */
-#include <os/attached_io_mem_dataspace.h>
+#include <base/attached_io_mem_dataspace.h>
 #include <util/mmio.h>
 
 struct Gpio_reg : Genode::Attached_io_mem_dataspace, Genode::Mmio
 {
-	Gpio_reg(Genode::addr_t const mmio_base,
+	Gpio_reg(Genode::Env &env,
+	         Genode::addr_t const mmio_base,
 	         Genode::size_t const mmio_size)
-	: Genode::Attached_io_mem_dataspace(mmio_base, mmio_size),
+	: Genode::Attached_io_mem_dataspace(env, mmio_base, mmio_size),
 	  Genode::Mmio((Genode::addr_t)local_addr<void>()) { }
 
 	struct Data     : Register_array<0x0, 32, 32, 1> {};

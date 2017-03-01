@@ -16,10 +16,11 @@
 /* Genode includes */
 #include <base/env.h>
 #include <base/allocator_avl.h>
-#include <base/printf.h>
+#include <base/sleep.h>
 
 /* local includes */
 #include "libc_mem_alloc.h"
+#include "libc_init.h"
 
 using namespace Genode;
 
@@ -66,7 +67,7 @@ int Libc::Mem_alloc_impl::Dataspace_pool::expand(size_t size, Range_allocator *a
 
 	/* now that we have new backing store, allocate Dataspace structure */
 	if (alloc->alloc_aligned(sizeof(Dataspace), &ds_addr, 2).error()) {
-		PWRN("could not allocate meta data - this should never happen");
+		Genode::warning("libc: could not allocate meta data - this should never happen");
 		return -1;
 	}
 
@@ -107,7 +108,7 @@ void *Libc::Mem_alloc_impl::alloc(size_t size, size_t align_log2)
 	}
 
 	if (_ds_pool.expand(align_addr(request_size, 12), &_alloc) < 0) {
-		PWRN("could not expand dataspace pool");
+		Genode::warning("libc: could not expand dataspace pool");
 		return 0;
 	}
 
@@ -136,10 +137,31 @@ Genode::size_t Libc::Mem_alloc_impl::size_at(void const *addr) const
 }
 
 
-Libc::Mem_alloc *Libc::mem_alloc()
+static Libc::Mem_alloc *_libc_mem_alloc;
+
+
+static void _init_mem_alloc(Genode::Region_map &rm, Genode::Ram_session &ram)
 {
-	static Libc::Mem_alloc_impl inst;
-	return &inst;
+	static Libc::Mem_alloc_impl inst(rm, ram);
+	_libc_mem_alloc = &inst;
 }
 
+
+namespace Libc {
+
+	void init_mem_alloc(Genode::Env &env)
+	{
+		_init_mem_alloc(env.rm(), env.ram());
+	}
+}
+
+
+Libc::Mem_alloc *Libc::mem_alloc()
+{
+	if (!_libc_mem_alloc) {
+		error("attempt to use 'Libc::mem_alloc' before call of 'init_mem_alloc'");
+		_init_mem_alloc(*env_deprecated()->rm_session(), *env_deprecated()->ram_session());
+	}
+	return _libc_mem_alloc;
+}
 

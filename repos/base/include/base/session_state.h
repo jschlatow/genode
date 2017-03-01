@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BASE__SESSION_STATE_H_
@@ -16,11 +16,13 @@
 
 #include <util/xml_generator.h>
 #include <util/list.h>
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 #include <session/capability.h>
+#include <base/slab.h>
 #include <base/id_space.h>
 #include <base/env.h>
 #include <base/log.h>
+#include <base/session_label.h>
 
 namespace Genode {
 
@@ -60,22 +62,24 @@ class Genode::Session_state : public Parent::Client, public Parent::Server,
 
 		Factory *_factory = nullptr;
 
-		Volatile_object<Id_space<Parent::Client>::Element> _id_at_client;
+		Reconstructible<Id_space<Parent::Client>::Element> _id_at_client;
 
-		Args     _args;
-		Affinity _affinity;
+		Session_label const _label;
+		Args                _args;
+		Affinity            _affinity;
 
 	public:
 
-		Lazy_volatile_object<Id_space<Parent::Server>::Element> id_at_server;
+		Constructible<Id_space<Parent::Server>::Element> id_at_server;
 
 		/* ID for session requests towards the parent */
-		Lazy_volatile_object<Id_space<Parent::Client>::Element> id_at_parent;
+		Constructible<Id_space<Parent::Client>::Element> id_at_parent;
 
 		Parent::Client parent_client;
 
 		enum Phase { CREATE_REQUESTED,
 		             INVALID_ARGS,
+		             QUOTA_EXCEEDED,
 		             AVAILABLE,
 		             CAP_HANDED_OUT,
 		             UPGRADE_REQUESTED,
@@ -110,15 +114,22 @@ class Genode::Session_state : public Parent::Client, public Parent::Server,
 		 * Constructor
 		 *
 		 * \param service          interface that was used to create the session
+		 * \param label            session label to be presented to the server
 		 * \param client_id_space  ID space for client-side session IDs
 		 * \param client_id        session ID picked by the client
 		 * \param args             session arguments
 		 *
 		 * \throw Id_space<Parent::Client>::Conflicting_id
+		 *
+		 * The client-provided (and child-name-prefixed) session label is
+		 * contained in 'args'. In contrast, the 'label' argument is the label
+		 * presented to the server along with the session request, which
+		 * depends on the policy of 'Child_policy::resolve_session_request'.
 		 */
 		Session_state(Service                  &service,
 		              Id_space<Parent::Client> &client_id_space,
 		              Parent::Client::Id        client_id,
+		              Session_label      const &label,
 		              Args               const &args,
 		              Affinity           const &affinity);
 
@@ -128,7 +139,8 @@ class Genode::Session_state : public Parent::Client, public Parent::Server,
 				error("dangling session in parent-side ID space: ", *this);
 		}
 
-		Service &service() { return _service; }
+		Service       &service()       { return _service; }
+		Service const &service() const { return _service; }
 
 		/**
 		 * Extend amount of ram attached to the session
@@ -158,7 +170,12 @@ class Genode::Session_state : public Parent::Client, public Parent::Server,
 
 		Affinity const &affinity() const { return _affinity; }
 
-		void generate_session_request(Xml_generator &xml) const;
+		void generate_session_request(Xml_generator &) const;
+
+		struct Detail { enum Args { NO_ARGS, ARGS } args; };
+
+		void generate_client_side_info(Xml_generator &, Detail detail) const;
+		void generate_server_side_info(Xml_generator &, Detail detail) const;
 
 		size_t donated_ram_quota() const { return _donated_ram_quota; }
 
@@ -168,6 +185,7 @@ class Genode::Session_state : public Parent::Client, public Parent::Server,
 
 			case CREATE_REQUESTED:
 			case INVALID_ARGS:
+			case QUOTA_EXCEEDED:
 			case CLOSED:
 				return false;
 
@@ -179,6 +197,16 @@ class Genode::Session_state : public Parent::Client, public Parent::Server,
 			}
 			return false;
 		}
+
+		/**
+		 * Return client-side label of the session request
+		 */
+		Session_label client_label() const { return label_from_args(_args.string()); }
+
+		/**
+		 * Return label presented to the server along with the session request
+		 */
+		Session_label label() const { return _label; }
 
 		/**
 		 * Assign owner
@@ -195,6 +223,24 @@ class Genode::Session_state : public Parent::Client, public Parent::Server,
 		 * This function has no effect for sessions not created via a 'Factory'.
 		 */
 		void destroy();
+
+		/**
+		 * Utility to override the client-provided label by the label assigned
+		 * by 'Child_policy::resolve_session_request'.
+		 */
+		struct Server_args
+		{
+			char _buf[Args::capacity()];
+
+			Server_args(Session_state const &session)
+			{
+				Genode::strncpy(_buf, session._args.string(), sizeof(_buf));
+				Arg_string::set_arg_string(_buf, sizeof(_buf),
+				                           "label", session._label.string());
+			}
+
+			char const *string() const { return _buf; }
+		};
 };
 
 
@@ -202,17 +248,34 @@ class Genode::Session_state::Factory : Noncopyable
 {
 	private:
 
-		Allocator &_md_alloc;
+		size_t const _batch_size;
+
+		Slab _slab;
 
 	public:
+
+		struct Batch_size { size_t value; };
 
 		/**
 		 * Constructor
 		 *
 		 * \param md_alloc  meta-data allocator used for allocating
 		 *                  'Session_state' objects
+		 *
+		 * \param batch     granularity of allocating blocks at 'md_alloc',
+		 *                  must be greater than 0
 		 */
-		Factory(Allocator &md_alloc) : _md_alloc(md_alloc) { }
+		Factory(Allocator &md_alloc, Batch_size batch)
+		:
+			_batch_size(batch.value),
+			/*
+			 * The calculation of 'block_size' is just an approximation as
+			 * a slab block contains a few bytes of meta data in addition
+			 * to the actual slab entries.
+			 */
+			_slab(sizeof(Session_state), sizeof(Session_state)*_batch_size,
+			      nullptr, &md_alloc)
+		{ }
 
 		/**
 		 * Create a new session-state object
@@ -224,10 +287,15 @@ class Genode::Session_state::Factory : Noncopyable
 		template <typename... ARGS>
 		Session_state &create(ARGS &&... args)
 		{
-			Session_state &session = *new (_md_alloc) Session_state(args...);
+			Session_state &session = *new (_slab) Session_state(args...);
 			session.owner(*this);
 			return session;
 		}
+
+		/**
+		 * Return number of bytes consumed per session
+		 */
+		size_t session_costs() const { return _slab.overhead(sizeof(Session_state)); }
 
 	private:
 
@@ -238,7 +306,7 @@ class Genode::Session_state::Factory : Noncopyable
 		 */
 		friend class Session_state;
 
-		void _destroy(Session_state &session) { Genode::destroy(_md_alloc, &session); }
+		void _destroy(Session_state &session) { Genode::destroy(_slab, &session); }
 };
 
 

@@ -8,15 +8,15 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 /* Genode */
 #include <drivers/board_base.h>
-#include <os/attached_io_mem_dataspace.h>
+#include <base/attached_io_mem_dataspace.h>
 #include <io_mem_session/connection.h>
 #include <regulator/consts.h>
 #include <regulator_session/connection.h>

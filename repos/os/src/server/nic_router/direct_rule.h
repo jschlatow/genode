@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _DIRECT_RULE_H_
@@ -17,6 +17,7 @@
 /* Genode includes */
 #include <net/ipv4.h>
 #include <util/list.h>
+#include <util/xml_node.h>
 
 /* local includes */
 #include <rule.h>
@@ -39,7 +40,7 @@ class Net::Direct_rule_base : public Rule
 
 	public:
 
-		Direct_rule_base(Genode::Xml_node const &node);
+		Direct_rule_base(Genode::Xml_node const node);
 
 
 		/*********
@@ -61,7 +62,7 @@ template <typename T>
 struct Net::Direct_rule : Direct_rule_base,
                           Direct_rule_list<T>::Element
 {
-	Direct_rule(Genode::Xml_node const &node) : Direct_rule_base(node) { }
+	Direct_rule(Genode::Xml_node const node) : Direct_rule_base(node) { }
 };
 
 

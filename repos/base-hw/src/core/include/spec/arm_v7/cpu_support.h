@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2011-2013 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__SPEC__ARM_V7__CPU_SUPPORT_H_
@@ -118,20 +118,6 @@ class Genode::Arm_v7 : public Arm
 			static void write(access_t v) {
 				asm volatile ("mcr p15, 0, %[v], c10, c2, 0" :: [v]"r"(v) : ); }
 		};
-
-		/**
-		 * Invalidate all branch predictions
-		 */
-		static void invalidate_branch_predicts() {
-			asm volatile ("mcr p15, 0, r0, c7, c5, 6" ::: "r0"); };
-
-		/**
-		 * Switch on MMU and caches
-		 *
-		 * \param pd  kernel's pd object
-		 */
-		void enable_mmu_and_caches(Kernel::Pd& pd);
-
 
 		/**
 		 * Finish all previous data transfers

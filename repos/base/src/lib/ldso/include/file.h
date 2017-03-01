@@ -5,17 +5,17 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__FILE_H_
 #define _INCLUDE__FILE_H_
 
 /* Genode includes */
-#include <os/attached_rom_dataspace.h>
+#include <base/attached_rom_dataspace.h>
 
 /* local includes */
 #include <util.h>
@@ -75,11 +75,11 @@ struct Linker::File
  */
 struct Linker::Elf_file : File
 {
-	Env                                 &env;
-	Lazy_volatile_object<Rom_connection> rom_connection;
-	Rom_session_client                   rom;
-	Ram_dataspace_capability             ram_cap[Phdr::MAX_PHDR];
-	bool                           const loaded;
+	Env                          &env;
+	Constructible<Rom_connection> rom_connection;
+	Rom_session_client            rom;
+	Ram_dataspace_capability      ram_cap[Phdr::MAX_PHDR];
+	bool                    const loaded;
 
 	typedef String<64> Name;
 

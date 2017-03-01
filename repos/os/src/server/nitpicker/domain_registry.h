@@ -5,15 +5,17 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _DOMAIN_REGISTRY_
 #define _DOMAIN_REGISTRY_
 
+#include <base/allocator.h>
+#include <base/log.h>
 #include <util/xml_node.h>
 #include <util/color.h>
 

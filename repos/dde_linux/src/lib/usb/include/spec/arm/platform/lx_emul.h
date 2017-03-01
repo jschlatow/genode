@@ -5,11 +5,12 @@
  */
 
 /*
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
+
 #ifndef _ARM__PLATFORM__LX_EMUL_H_
 #define _ARM__PLATFORM__LX_EMUL_H_
 
@@ -345,5 +346,12 @@ struct usb_xhci_pdata {
  ******************/
 
 #define __bus_to_virt phys_to_virt
+
+
+/********************************************************
+ ** drivers/usb/host/dwc_otg/dwc_otg/dwc_otg_fiq_fsm.h **
+ ********************************************************/
+
+extern bool fiq_enable, fiq_fsm_enable;
 
 #endif /* _ARM__PLATFORM__LX_EMUL_H_ */

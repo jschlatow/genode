@@ -5,17 +5,17 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__PLATFORM_SESSION__CLIENT_H_
 #define _INCLUDE__PLATFORM_SESSION__CLIENT_H_
 
 #include <base/capability.h>
-#include <base/rpc.h>
+#include <base/rpc_client.h>
 #include <platform_session/platform_session.h>
 
 namespace Platform { struct Client; }

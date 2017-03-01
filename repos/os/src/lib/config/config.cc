@@ -2,16 +2,20 @@
  * \brief  Access to process configuration
  * \author Norman Feske
  * \date   2010-05-04
+ *
+ * \deprecated
  */
 
 /*
- * Copyright (C) 2010-2013 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
+#define INCLUDED_BY_OS_CONFIG_CC
 #include <os/config.h>
+#undef INCLUDED_BY_OS_CONFIG_CC
 
 using namespace Genode;
 
@@ -20,7 +24,7 @@ Xml_node _config_xml_node(Dataspace_capability config_ds)
 	if (!config_ds.valid())
 		throw Exception();
 
-	return Xml_node(env()->rm_session()->attach(config_ds),
+	return Xml_node(env_deprecated()->rm_session()->attach(config_ds),
 	                Genode::Dataspace_client(config_ds).size());
 }
 
@@ -42,7 +46,7 @@ void Config::reload()
 	try {
 		/* re-acquire dataspace from ROM session */
 		if (_config_ds.valid())
-			env()->rm_session()->detach(_config_xml.addr());
+			env_deprecated()->rm_session()->detach(_config_xml.addr());
 
 		_config_ds = _config_rom.dataspace();
 
@@ -74,18 +78,18 @@ void Config::sigh(Signal_context_capability cap)
 
 Config::Config()
 :
-	_config_rom("config"),
+	_config_rom(false, "config"),
 	_config_ds(_config_rom.dataspace()),
 	_config_xml(_config_xml_node(_config_ds))
 { }
 
 
-Volatile_object<Config> &Genode::config()
+Reconstructible<Config> &Genode::config()
 {
 	static bool config_failed = false;
 	if (!config_failed) {
 		try {
-			static Volatile_object<Config> config_inst;
+			static Reconstructible<Config> config_inst;
 			return config_inst;
 		} catch (Genode::Rom_connection::Rom_connection_failed) {
 			Genode::error("Could not obtain config file");

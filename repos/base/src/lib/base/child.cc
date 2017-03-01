@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/child.h>
@@ -142,9 +142,15 @@ void Child::session_sigh(Signal_context_capability sigh)
 	 * needs asynchronous handling.
 	 */
 	_id_space.for_each<Session_state const>([&] (Session_state const &session) {
-		if (session.phase == Session_state::AVAILABLE
-		 && sigh.valid() && session.async_client_notify)
-			Signal_transmitter(sigh).submit(); });
+
+		if (session.phase == Session_state::AVAILABLE ||
+		    session.phase == Session_state::QUOTA_EXCEEDED ||
+		    session.phase == Session_state::INVALID_ARGS) {
+
+			if (sigh.valid() && session.async_client_notify)
+				Signal_transmitter(sigh).submit();
+		}
+	});
 }
 
 
@@ -156,12 +162,17 @@ void Child::session_sigh(Signal_context_capability sigh)
  */
 Session_state &
 create_session(Child_policy::Name const &child_name, Service &service,
+               Session_label const &label,
                Session_state::Factory &factory, Id_space<Parent::Client> &id_space,
                Parent::Client::Id id, Session_state::Args const &args,
                Affinity const &affinity)
 {
 	try {
-		return service.create_session(factory, id_space, id, args, affinity);
+		return service.create_session(factory, id_space, id, label, args, affinity);
+	}
+	catch (Service::Quota_exceeded) {
+		error(child_name, " requested session with insufficient session quota");
+		throw Parent::Quota_exceeded();
 	}
 	catch (Allocator::Out_of_memory) {
 		error("could not allocate session meta data for child ", child_name);
@@ -176,6 +187,34 @@ create_session(Child_policy::Name const &child_name, Service &service,
 			error("existing session: ", session); });
 	}
 	throw Parent::Service_denied();
+}
+
+
+/*
+ * \deprecated  Temporary wrapper around 'Child_policy::resolve_session_request'
+ *              that tries both overloads.
+ *
+ * \throw Parent::Service_denied
+ */
+Child_policy::Route Child::_resolve_session_request(Child_policy &policy,
+                                                    Service::Name const &name,
+                                                    char const *argbuf)
+{
+	Session_label const label = label_from_args(argbuf);
+
+	/*
+	 * \deprecated  Try old interface, remove once all 'Child_policy'
+	 *              implementations are updated.
+	 */
+	try {
+
+		Session_state::Args args(argbuf);
+		return Child_policy::Route {
+			policy.resolve_session_request(name, args), label };
+	}
+	catch (Parent::Service_denied) { }
+
+	return policy.resolve_session_request(name, label);
 }
 
 
@@ -201,24 +240,40 @@ Session_capability Child::session(Parent::Client::Id id,
 	/* filter session affinity */
 	Affinity const filtered_affinity = _policy.filter_session_affinity(affinity);
 
+	size_t const ram_quota = Arg_string::find_arg(argbuf, "ram_quota").ulong_value(0);
+
+	/* portion of quota to keep for ourself to maintain the session meta data */
+	size_t const keep_ram_quota = _session_factory.session_costs();
+
+	if (ram_quota < keep_ram_quota)
+		throw Parent::Quota_exceeded();
+
+	/* ram quota to be forwarded to the server */
+	size_t const forward_ram_quota = ram_quota - keep_ram_quota;
+
+	/* adjust the session information as presented to the server */
+	Arg_string::set_arg(argbuf, sizeof(argbuf), "ram_quota",
+	                    forward_ram_quota);
+
 	/* may throw a 'Parent::Service_denied' exception */
-	Service &service = _policy.resolve_session_request(name.string(), argbuf);
+	Child_policy::Route route = _resolve_session_request(_policy, name.string(), argbuf);
+	Service &service = route.service;
 
 	Session_state &session =
-		create_session(_policy.name(), service, _session_factory,
+		create_session(_policy.name(), service, route.label, _session_factory,
 		               _id_space, id, argbuf, filtered_affinity);
+
+	_policy.session_state_changed();
 
 	session.ready_callback = this;
 	session.closed_callback = this;
 
-	/* transfer the quota donation from the child's account to ourself */
-	size_t ram_quota = Arg_string::find_arg(argbuf, "ram_quota").ulong_value(0);
-
 	try {
+		/* transfer the quota donation from the child's account to ourself */
 		Transfer donation_from_child(ram_quota, _ram.cap(), _policy.ref_ram_cap());
 
 		/* transfer session quota from ourself to the service provider */
-		Transfer donation_to_service(ram_quota, _policy.ref_ram_cap(),
+		Transfer donation_to_service(forward_ram_quota, _policy.ref_ram_cap(),
 		                             service.ram());
 
 		/* try to dispatch session request synchronously */
@@ -227,6 +282,11 @@ Session_capability Child::session(Parent::Client::Id id,
 		if (session.phase == Session_state::INVALID_ARGS) {
 			_revert_quota_and_destroy(session);
 			throw Service_denied();
+		}
+
+		if (session.phase == Session_state::QUOTA_EXCEEDED) {
+			_revert_quota_and_destroy(session);
+			throw Parent::Quota_exceeded();
 		}
 
 		/* finish transaction */
@@ -266,7 +326,10 @@ Session_capability Child::session_cap(Client::Id id)
 
 	auto lamda = [&] (Session_state &session) {
 
-		if (session.phase == Session_state::INVALID_ARGS) {
+		if (session.phase == Session_state::INVALID_ARGS
+		 || session.phase == Session_state::QUOTA_EXCEEDED) {
+
+			Session_state::Phase const phase = session.phase;
 
 			/*
 			 * Implicity discard the session request when delivering an
@@ -274,7 +337,11 @@ Session_capability Child::session_cap(Client::Id id)
 			 * of the session ID at the child anyway.
 			 */
 			_revert_quota_and_destroy(session);
-			throw Parent::Service_denied();
+
+			if (phase == Session_state::INVALID_ARGS)
+				throw Parent::Service_denied();
+			else
+				throw Parent::Quota_exceeded();
 		}
 
 		if (!session.alive())
@@ -292,6 +359,7 @@ Session_capability Child::session_cap(Client::Id id)
 	catch (Id_space<Parent::Client>::Unknown_id) {
 		warning(_policy.name(), " requested session cap for unknown ID"); }
 
+	_policy.session_state_changed();
 	return cap;
 }
 
@@ -339,11 +407,13 @@ Parent::Upgrade_result Child::upgrade(Client::Id id, Parent::Upgrade_args const 
 
 		if (session.phase == Session_state::CAP_HANDED_OUT) {
 			result = UPGRADE_DONE;
+			_policy.session_state_changed();
 			return;
 		}
 
 		session.service().wakeup();
 	});
+	_policy.session_state_changed();
 	return result;
 }
 
@@ -355,8 +425,14 @@ void Child::_revert_quota_and_destroy(Session_state &session)
 		Transfer donation_from_service(session.donated_ram_quota(),
 		                               session.service().ram(), _policy.ref_ram_cap());
 
-		/* transfer session quota from ourself to the client (our child) */
-		Transfer donation_to_client(session.donated_ram_quota(),
+		/*
+		 * Transfer session quota from ourself to the client (our child). In
+		 * addition to the quota returned from the server, we also return the
+		 * quota that we preserved for locally storing the session meta data
+		 * ('session_costs').
+		 */
+		Transfer donation_to_client(session.donated_ram_quota() +
+		                            _session_factory.session_costs(),
 		                            _policy.ref_ram_cap(), ram_session_cap());
 		/* finish transaction */
 		donation_from_service.acknowledge();
@@ -366,6 +442,7 @@ void Child::_revert_quota_and_destroy(Session_state &session)
 		warning(_policy.name(), ": could not revert session quota (", session, ")"); }
 
 	session.destroy();
+	_policy.session_state_changed();
 }
 
 
@@ -375,7 +452,8 @@ Child::Close_result Child::_close(Session_state &session)
 	 * If session could not be established, destruct session immediately
 	 * without involving the server
 	 */
-	if (session.phase == Session_state::INVALID_ARGS) {
+	if (session.phase == Session_state::INVALID_ARGS
+	 || session.phase == Session_state::QUOTA_EXCEEDED) {
 		_revert_quota_and_destroy(session);
 		return CLOSE_DONE;
 	}
@@ -396,6 +474,8 @@ Child::Close_result Child::_close(Session_state &session)
 		_revert_quota_and_destroy(session);
 		return CLOSE_DONE;
 	}
+
+	_policy.session_state_changed();
 
 	session.discard_id_at_client();
 	session.service().wakeup();
@@ -463,6 +543,12 @@ void Child::session_response(Server::Id id, Session_response response)
 					session.ready_callback->session_ready(session);
 				break;
 
+			case Parent::QUOTA_EXCEEDED:
+				session.phase = Session_state::QUOTA_EXCEEDED;
+				if (session.ready_callback)
+					session.ready_callback->session_ready(session);
+				break;
+
 			case Parent::SESSION_OK:
 				if (session.phase == Session_state::UPGRADE_REQUESTED) {
 					session.phase = Session_state::CAP_HANDED_OUT;
@@ -482,7 +568,7 @@ void Child::deliver_session_cap(Server::Id id, Session_capability cap)
 		_policy.server_id_space().apply<Session_state>(id, [&] (Session_state &session) {
 
 			if (session.cap.valid()) {
-				error("attempt to assign session cap twice");
+				_error("attempt to assign session cap twice");
 				return;
 			}
 
@@ -512,7 +598,12 @@ void Child::exit(int exit_value)
 
 Thread_capability Child::main_thread_cap() const
 {
-	return _process.initial_thread.cap();
+	/*
+	 * The '_initial_thread' is always constructed when this function is
+	 * called because the RPC call originates from the active child.
+	 */
+	return _initial_thread.constructed() ? _initial_thread->cap()
+	                                     : Thread_capability();
 }
 
 
@@ -566,24 +657,98 @@ namespace {
 }
 
 
-Child::Child(Region_map             &local_rm,
-             Rpc_entrypoint         &entrypoint,
-             Child_policy           &policy)
-try :
-	_policy(policy),
-	_heap(&_ram.session(), &local_rm),
-	_entrypoint(entrypoint),
-	_parent_cap(_entrypoint.manage(this)),
-	_process(_binary.session().dataspace(), _linker_dataspace(),
-	         _pd.cap(), _pd.session(), _ram.session(), _initial_thread, local_rm,
-	         Child_address_space(_pd.session(), _policy).region_map(),
-	         _parent_cap)
-{ }
-catch (Cpu_session::Thread_creation_failed) { throw Process_startup_failed(); }
-catch (Cpu_session::Out_of_metadata)        { throw Process_startup_failed(); }
-catch (Process::Missing_dynamic_linker)     { throw Process_startup_failed(); }
-catch (Process::Invalid_executable)         { throw Process_startup_failed(); }
-catch (Region_map::Attach_failed)           { throw Process_startup_failed(); }
+void Child::_try_construct_env_dependent_members()
+{
+	/* check if the environment sessions are complete */
+	if (!_ram.cap().valid() || !_pd .cap().valid() ||
+	    !_cpu.cap().valid() || !_log.cap().valid() || !_binary.cap().valid())
+		return;
+
+	/*
+	 * If the ROM-session request for the dynamic linker was granted but the
+	 * response to the session request is still outstanding, we have to wait.
+	 * Note that we proceed if the session request was denied by the policy,
+	 * which may be the case when using a statically linked executable.
+	 */
+	if (_linker.constructed() && !_linker->cap().valid())
+		return;
+
+	/*
+	 * Mark all environment sessions as handed out to prevent the triggering
+	 * of signals by 'Child::session_sigh' for these sessions.
+	 */
+	_id_space.for_each<Session_state>([&] (Session_state &session) {
+		if (session.phase == Session_state::AVAILABLE)
+			session.phase =  Session_state::CAP_HANDED_OUT; });
+
+	/* call 'Child_policy::init' methods for the environment sessions */
+	_policy.init(_ram.session(), _ram.cap());
+	_policy.init(_cpu.session(), _cpu.cap());
+	_policy.init(_pd.session(),  _pd.cap());
+
+	try {
+		_initial_thread.construct(_cpu.session(), _pd.cap(), "initial");
+		_process.construct(_binary.session().dataspace(), _linker_dataspace(),
+		                   _pd.cap(), _pd.session(), _ram.session(),
+		                   *_initial_thread, _local_rm,
+		                   Child_address_space(_pd.session(), _policy).region_map(),
+		                   _parent_cap);
+	}
+	catch (Ram_session::Alloc_failed)           { _error("RAM allocation failed during ELF loading"); }
+	catch (Cpu_session::Thread_creation_failed) { _error("unable to create initial thread"); }
+	catch (Cpu_session::Out_of_metadata)        { _error("CPU session quota exhausted"); }
+	catch (Process::Missing_dynamic_linker)     { _error("dynamic linker unavailable"); }
+	catch (Process::Invalid_executable)         { _error("invalid ELF executable"); }
+	catch (Region_map::Attach_failed)           { _error("ELF loading failed"); }
+}
+
+
+void Child::_discard_env_session(Id_space<Parent::Client>::Id id)
+{
+	auto discard_id_fn = [&] (Session_state &s) { s.discard_id_at_client(); };
+
+	try { _id_space.apply<Session_state>(id, discard_id_fn); }
+	catch (Id_space<Parent::Client>::Unknown_id) { }
+}
+
+
+void Child::initiate_env_ram_session() { _ram.initiate(); }
+
+
+void Child::initiate_env_sessions()
+{
+	_pd    .initiate();
+	_cpu   .initiate();
+	_log   .initiate();
+	_binary.initiate();
+
+	/*
+	 * Issue environment-session request for obtaining the linker binary. We
+	 * accept this request to fail. In this case, the child creation may still
+	 * succeed if the binary is statically linked.
+	 */
+	try {
+		_linker.construct(*this, Parent::Env::linker(), _policy.linker_name());
+		_linker->initiate();
+	}
+	catch (Parent::Service_denied) { }
+
+	_try_construct_env_dependent_members();
+}
+
+
+Child::Child(Region_map      &local_rm,
+             Rpc_entrypoint  &entrypoint,
+             Child_policy    &policy)
+:
+	_policy(policy), _local_rm(local_rm), _entrypoint(entrypoint),
+	_parent_cap(_entrypoint.manage(this))
+{
+	if (_policy.initiate_env_sessions()) {
+		initiate_env_ram_session();
+		initiate_env_sessions();
+	}
+}
 
 
 Child::~Child()
@@ -615,12 +780,10 @@ Child::~Child()
 	/*
 	 * Remove statically created env sessions from the child's ID space.
 	 */
-	auto discard_id_fn = [&] (Session_state &s) { s.discard_id_at_client(); };
-
-	_id_space.apply<Session_state>(Env::ram(), discard_id_fn);
-	_id_space.apply<Session_state>(Env::cpu(), discard_id_fn);
-	_id_space.apply<Session_state>(Env::pd(),  discard_id_fn);
-	_id_space.apply<Session_state>(Env::log(), discard_id_fn);
+	_discard_env_session(Env::ram());
+	_discard_env_session(Env::cpu());
+	_discard_env_session(Env::pd());
+	_discard_env_session(Env::log());
 
 	/*
 	 * Remove dynamically created sessions from the child's ID space.
@@ -632,5 +795,12 @@ Child::~Child()
 	};
 
 	while (_id_space.apply_any<Session_state>(close_fn));
+
+	/*
+	 * Make sure to destroy the users of the child's environment sessions
+	 * before destructing those sessions.
+	 */
+	_process.destruct();
+	_initial_thread.destruct();
 }
 

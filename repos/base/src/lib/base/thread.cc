@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2010-2015 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -223,7 +223,7 @@ Thread::Thread(size_t weight, const char *name, size_t stack_size,
 	if (_cpu_session) {
 		Dataspace_capability ds = _cpu_session->trace_control();
 		if (ds.valid())
-			_trace_control = env()->rm_session()->attach(ds);
+			_trace_control = env_deprecated()->rm_session()->attach(ds);
 	}
 }
 
@@ -262,5 +262,5 @@ Thread::~Thread()
 	 * detached trace control dataspace.
 	 */
 	if (_trace_control)
-		env()->rm_session()->detach(_trace_control);
+		env_deprecated()->rm_session()->detach(_trace_control);
 }

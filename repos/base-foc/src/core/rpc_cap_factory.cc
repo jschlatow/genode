@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2011-2016 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -233,11 +233,4 @@ void Genode::Capability_map::remove(Genode::Cap_index* i)
 		}
 		cap_idx_alloc()->free(i, 1);
 	}
-}
-
-
-Genode::Cap_index_allocator* cap_idx_alloc()
-{
-	static Genode::Cap_index_allocator_tpl<Core_cap_index, 20*1024> _alloc;
-	return &_alloc;
 }

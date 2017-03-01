@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -20,6 +20,7 @@
 /* base-internal includes */
 #include <base/internal/unmanaged_singleton.h>
 #include <base/internal/native_utcb.h>
+#include <base/internal/crt0.h>
 
 /* core includes */
 #include <assert.h>
@@ -110,35 +111,6 @@ void Thread::_await_request_failed()
 }
 
 
-bool Thread::_resume()
-{
-	switch (_state) {
-	case AWAITS_RESUME:
-		_become_active();
-		return true;
-	case AWAITS_IPC:
-		Ipc_node::cancel_waiting();
-		return true;
-	case AWAITS_SIGNAL:
-		Signal_handler::cancel_waiting();
-		user_arg_0(-1);
-		_become_active();
-		return true;
-	case AWAITS_SIGNAL_CONTEXT_KILL:
-		Signal_context_killer::cancel_waiting();
-		return true;
-	default:
-		return false;
-	}
-}
-
-
-void Thread::_pause()
-{
-	assert(_state == AWAITS_RESUME || _state == ACTIVE);
-	_become_inactive(AWAITS_RESUME);
-}
-
 void Thread::_deactivate_used_shares()
 {
 	Cpu_job::_deactivate_own_share();
@@ -155,30 +127,23 @@ void Thread::_activate_used_shares()
 
 void Thread::_become_active()
 {
-	if (_state != ACTIVE) { _activate_used_shares(); }
+	if (_state != ACTIVE && !_paused) { _activate_used_shares(); }
 	_state = ACTIVE;
 }
 
 
 void Thread::_become_inactive(State const s)
 {
-	if (_state == ACTIVE) { _deactivate_used_shares(); }
+	if (_state == ACTIVE && !_paused) { _deactivate_used_shares(); }
 	_state = s;
 }
 
 
-void Thread::_stop() { _become_inactive(STOPPED); }
+void Thread::_die() { _become_inactive(DEAD); }
 
 
 Cpu_job * Thread::helping_sink() {
 	return static_cast<Thread *>(Ipc_node::helping_sink()); }
-
-
-void Thread::_receive_yielded_cpu()
-{
-	if (_state == AWAITS_RESUME) { _become_active(); }
-	else { Genode::warning("failed to receive yielded CPU"); }
-}
 
 
 void Thread::proceed(unsigned const cpu) { mtc()->switch_to_user(this, cpu); }
@@ -236,31 +201,90 @@ void Thread::_call_start_thread()
 }
 
 
-void Thread::_call_pause_current_thread() { _pause(); }
-
-
-void Thread::_call_pause_thread() {
-	reinterpret_cast<Thread*>(user_arg_1())->_pause(); }
-
-
-void Thread::_call_resume_thread() {
-	user_arg_0(reinterpret_cast<Thread*>(user_arg_1())->_resume()); }
-
-
-void Thread::_call_resume_local_thread()
+void Thread::_call_pause_thread()
 {
-	if (!pd()) return;
+	Thread &thread = *reinterpret_cast<Thread*>(user_arg_1());
+	if (thread._state == ACTIVE && !thread._paused) {
+		thread._deactivate_used_shares(); }
 
-	/* lookup thread */
+	thread._paused = true;
+}
+
+
+void Thread::_call_resume_thread()
+{
+	Thread &thread = *reinterpret_cast<Thread*>(user_arg_1());
+	if (thread._state == ACTIVE && thread._paused) {
+		thread._activate_used_shares(); }
+
+	thread._paused = false;
+}
+
+
+void Thread::_call_stop_thread()
+{
+	assert(_state == ACTIVE);
+	_become_inactive(AWAITS_RESTART);
+}
+
+
+void Thread::_call_restart_thread()
+{
+	if (!pd()) {
+		return; }
+
 	Thread * const thread = pd()->cap_tree().find<Thread>(user_arg_1());
 	if (!thread || pd() != thread->pd()) {
 		warning(*this, ": failed to lookup thread ", (unsigned)user_arg_1(),
-		        " to resume it");
-		_stop();
+		        " to restart it");
+		_die();
 		return;
 	}
-	/* resume thread */
-	user_arg_0(thread->_resume());
+	user_arg_0(thread->_restart());
+}
+
+
+bool Thread::_restart()
+{
+	assert(_state == ACTIVE || _state == AWAITS_RESTART);
+	if (_state != AWAITS_RESTART) { return false; }
+	_become_active();
+	return true;
+}
+
+
+void Thread::_call_cancel_thread_blocking()
+{
+	reinterpret_cast<Thread*>(user_arg_1())->_cancel_blocking();
+}
+
+
+void Thread::_cancel_blocking()
+{
+	switch (_state) {
+	case AWAITS_RESTART:
+		_become_active();
+		return;
+	case AWAITS_IPC:
+		Ipc_node::cancel_waiting();
+		return;
+	case AWAITS_SIGNAL:
+		Signal_handler::cancel_waiting();
+		user_arg_0(-1);
+		_become_active();
+		return;
+	case AWAITS_SIGNAL_CONTEXT_KILL:
+		Signal_context_killer::cancel_waiting();
+		return;
+	case ACTIVE:
+		return;
+	case DEAD:
+		Genode::error("can't cancel blocking of dead thread");
+		return;
+	case AWAITS_START:
+		Genode::error("can't cancel blocking of not yet started thread");
+		return;
+	}
 }
 
 
@@ -273,8 +297,6 @@ void Thread_event::submit() { if (_signal_context) _signal_context->submit(1); }
 
 void Thread::_call_yield_thread()
 {
-	Thread * const t = pd()->cap_tree().find<Thread>(user_arg_1());
-	if (t) { t->_receive_yielded_cpu(); }
 	Cpu_job::_yield();
 }
 
@@ -382,6 +404,12 @@ void Thread::_call_print_char() { Kernel::log((char)user_arg_1()); }
 
 void Thread::_call_await_signal()
 {
+	/* cancel if another thread set our "cancel next await signal" bit */
+	if (_cancel_next_await_signal) {
+		user_arg_0(-1);
+		_cancel_next_await_signal = false;
+		return;
+	}
 	/* lookup receiver */
 	Signal_receiver * const r = pd()->cap_tree().find<Signal_receiver>(user_arg_1());
 	if (!r) {
@@ -397,6 +425,31 @@ void Thread::_call_await_signal()
 		return;
 	}
 	user_arg_0(0);
+}
+
+
+void Thread::_call_cancel_next_await_signal()
+{
+	/* kill the caller if he has no protection domain */
+	if (!pd()) {
+		error(*this, ": PD not set");
+		_die();
+		return;
+	}
+	/* kill the caller if the capability of the target thread is invalid */
+	Thread * const thread = pd()->cap_tree().find<Thread>(user_arg_1());
+	if (!thread || pd() != thread->pd()) {
+		error(*this, ": failed to lookup thread ", (unsigned)user_arg_1());
+		_die();
+		return;
+	}
+	/* resume the target thread directly if it blocks for signals */
+	if (thread->_state == AWAITS_SIGNAL) {
+		thread->_cancel_blocking();
+		return;
+	}
+	/* if not, keep in mind to cancel its next signal blocking */
+	thread->_cancel_next_await_signal = true;
 }
 
 
@@ -523,29 +576,30 @@ void Thread::_call()
 	/* switch over unrestricted kernel calls */
 	unsigned const call_id = user_arg_0();
 	switch (call_id) {
-	case call_id_update_data_region():   _call_update_data_region(); return;
-	case call_id_update_instr_region():  _call_update_instr_region(); return;
-	case call_id_pause_current_thread(): _call_pause_current_thread(); return;
-	case call_id_resume_local_thread():  _call_resume_local_thread(); return;
-	case call_id_yield_thread():         _call_yield_thread(); return;
-	case call_id_send_request_msg():     _call_send_request_msg(); return;
-	case call_id_send_reply_msg():       _call_send_reply_msg(); return;
-	case call_id_await_request_msg():    _call_await_request_msg(); return;
-	case call_id_kill_signal_context():  _call_kill_signal_context(); return;
-	case call_id_submit_signal():        _call_submit_signal(); return;
-	case call_id_await_signal():         _call_await_signal(); return;
-	case call_id_ack_signal():           _call_ack_signal(); return;
-	case call_id_print_char():           _call_print_char(); return;
-	case call_id_ack_cap():              _call_ack_cap(); return;
-	case call_id_delete_cap():           _call_delete_cap(); return;
-	case call_id_timeout():              _call_timeout(); return;
-	case call_id_timeout_age_us():       _call_timeout_age_us(); return;
-	case call_id_timeout_max_us():       _call_timeout_max_us(); return;
+	case call_id_update_data_region():       _call_update_data_region(); return;
+	case call_id_update_instr_region():      _call_update_instr_region(); return;
+	case call_id_stop_thread():              _call_stop_thread(); return;
+	case call_id_restart_thread():           _call_restart_thread(); return;
+	case call_id_yield_thread():             _call_yield_thread(); return;
+	case call_id_send_request_msg():         _call_send_request_msg(); return;
+	case call_id_send_reply_msg():           _call_send_reply_msg(); return;
+	case call_id_await_request_msg():        _call_await_request_msg(); return;
+	case call_id_kill_signal_context():      _call_kill_signal_context(); return;
+	case call_id_submit_signal():            _call_submit_signal(); return;
+	case call_id_await_signal():             _call_await_signal(); return;
+	case call_id_cancel_next_await_signal(): _call_cancel_next_await_signal(); return;
+	case call_id_ack_signal():               _call_ack_signal(); return;
+	case call_id_print_char():               _call_print_char(); return;
+	case call_id_ack_cap():                  _call_ack_cap(); return;
+	case call_id_delete_cap():               _call_delete_cap(); return;
+	case call_id_timeout():                  _call_timeout(); return;
+	case call_id_timeout_age_us():           _call_timeout_age_us(); return;
+	case call_id_timeout_max_us():           _call_timeout_max_us(); return;
 	default:
 		/* check wether this is a core thread */
 		if (!_core()) {
 			Genode::warning(*this, ": not entitled to do kernel call");
-			_stop();
+			_die();
 			return;
 		}
 	}
@@ -556,6 +610,7 @@ void Thread::_call()
 	case call_id_delete_thread():          _call_delete<Thread>(); return;
 	case call_id_start_thread():           _call_start_thread(); return;
 	case call_id_resume_thread():          _call_resume_thread(); return;
+	case call_id_cancel_thread_blocking(): _call_cancel_thread_blocking(); return;
 	case call_id_route_thread_event():     _call_route_thread_event(); return;
 	case call_id_update_pd():              _call_update_pd(); return;
 	case call_id_new_pd():
@@ -582,7 +637,7 @@ void Thread::_call()
 	case call_id_delete_obj():             _call_delete_obj(); return;
 	default:
 		Genode::warning(*this, ": unknown kernel call");
-		_stop();
+		_die();
 		return;
 	}
 	} catch (Genode::Allocator::Out_of_memory &e) { user_arg_0(-2); }
@@ -615,6 +670,9 @@ void Thread::print(Genode::Output &out) const
 }
 
 
+Genode::uint8_t __initial_stack_base[DEFAULT_STACK_SIZE];
+
+
 /*****************
  ** Core_thread **
  *****************/
@@ -622,22 +680,22 @@ void Thread::print(Genode::Output &out) const
 Core_thread::Core_thread()
 : Core_object<Thread>(Cpu_priority::MAX, 0, "core")
 {
-	using Genode::Native_utcb;
+	using namespace Genode;
 
-	static Genode::uint8_t stack[DEFAULT_STACK_SIZE];
 	static Native_utcb * const utcb =
-		unmanaged_singleton<Native_utcb, Genode::get_page_size()>();
+		unmanaged_singleton<Native_utcb, get_page_size()>();
+	static addr_t const utcb_phys = Platform::core_phys_addr((addr_t)utcb);
 
 	/* map UTCB */
-	Genode::map_local((addr_t)utcb, (addr_t)Genode::utcb_main_thread(),
-	                  sizeof(Native_utcb) / Genode::get_page_size());
+	Genode::map_local(utcb_phys, (addr_t)utcb_main_thread(),
+	                  sizeof(Native_utcb) / get_page_size());
 
 	utcb->cap_add(core_capid());
 	utcb->cap_add(cap_id_invalid());
 	utcb->cap_add(cap_id_invalid());
 
 	/* start thread with stack pointer at the top of stack */
-	sp = (addr_t)&stack + DEFAULT_STACK_SIZE;
+	sp = (addr_t)&__initial_stack_base[0] + DEFAULT_STACK_SIZE;
 	ip = (addr_t)&_core_start;
 
 	affinity(cpu_pool()->primary_cpu());

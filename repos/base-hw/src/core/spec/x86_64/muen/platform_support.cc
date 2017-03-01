@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -19,6 +19,8 @@
 #include <board.h>
 #include <platform.h>
 #include <sinfo_instance.h>
+
+#include <base/internal/unmanaged_singleton.h>
 
 using namespace Genode;
 
@@ -57,21 +59,6 @@ struct Msi_address : Register<32>
 };
 
 
-Native_region * Platform::_core_only_mmio_regions(unsigned const i)
-{
-	static Native_region _regions[] =
-	{
-		/* Sinfo pages */
-		{ Sinfo::PHYSICAL_BASE_ADDR, Sinfo::SIZE },
-		/* Timer page */
-		{ Board::TIMER_BASE_ADDR, Board::TIMER_SIZE },
-		/* Optional guest timed event page for preemption */
-		{ Board::TIMER_PREEMPT_BASE_ADDR, Board::TIMER_PREEMPT_SIZE },
-	};
-	return i < sizeof(_regions)/sizeof(_regions[0]) ? &_regions[i] : 0;
-}
-
-
 void Platform::setup_irq_mode(unsigned, unsigned, unsigned) { }
 
 
@@ -97,26 +84,6 @@ bool Platform::get_msi_params(const addr_t mmconf, addr_t &address,
 	log("enabling MSI for device with SID ", Hex(sid), ": "
 	    "IRTE ", dev_info.irte_start, ", IRQ ", irq_number);
 	return true;
-}
-
-
-Native_region * Platform::_ram_regions(unsigned const i)
-{
-	if (i)
-		return 0;
-
-	static Native_region result = { .base = 0, .size = 0 };
-
-	if (!result.size) {
-		struct Sinfo::Memregion_info region;
-		if (!sinfo()->get_memregion_info("ram", &region)) {
-			error("Unable to retrieve base-hw ram region");
-			return 0;
-		}
-
-		result = { .base = region.address, .size = region.size };
-	}
-	return &result;
 }
 
 

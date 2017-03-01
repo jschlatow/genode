@@ -7,10 +7,10 @@
  */
 
 /*
- * Copyright (C) 2010-2013 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -24,8 +24,8 @@
 #include <nova/syscalls.h>
 
 /* core includes */
-#include <nova_util.h>
 #include <platform.h>
+#include <nova_util.h>
 
 using namespace Genode;
 

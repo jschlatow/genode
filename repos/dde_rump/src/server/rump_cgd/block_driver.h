@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _BLOCK_DRIVER_H_
@@ -37,8 +37,9 @@ class Driver : public Block::Driver
 
 	public:
 
-		Driver(Server::Entrypoint &ep)
+		Driver(Server::Entrypoint &ep, Genode::Ram_session &ram)
 		:
+			Block::Driver(ram),
 			_blk_sz(0), _blk_cnt(0), _cgd_device(0)
 		{
 			try {

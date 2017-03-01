@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 class Battery : Acpica::Callback<Battery> {
@@ -33,9 +33,10 @@ class Battery : Acpica::Callback<Battery> {
 				_report->battery_event();
 		}
 
-		static ACPI_STATUS detect(ACPI_HANDLE sb, UINT32, void *report, void **)
+		static ACPI_STATUS detect(ACPI_HANDLE sb, UINT32, void *m, void **)
 		{
-			Battery * dev_obj = new (Genode::env()->heap()) Battery(report, sb);
+			Acpica::Main * main = reinterpret_cast<Acpica::Main *>(m);
+			Battery * dev_obj = new (main->heap) Battery(main->report, sb);
 
 			ACPI_STATUS res = AcpiInstallNotifyHandler (sb, ACPI_DEVICE_NOTIFY,
 			                                            handler, dev_obj);

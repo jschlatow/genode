@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__TRACE_SESSION__CLIENT_H_
@@ -31,18 +31,20 @@ struct Genode::Trace::Session_client : Genode::Rpc_client<Genode::Trace::Session
 		 */
 		struct Argument_buffer
 		{
-			char   *base;
-			size_t  size;
+			Region_map &rm;
+			char       *base;
+			size_t      size;
 
-			Argument_buffer(Dataspace_capability ds)
+			Argument_buffer(Region_map &rm, Dataspace_capability ds)
 			:
-				base(env()->rm_session()->attach(ds)),
+				rm(rm),
+				base(rm.attach(ds)),
 				size(ds.call<Dataspace::Rpc_size>())
 			{ }
 
 			~Argument_buffer()
 			{
-				env()->rm_session()->detach(base);
+				rm.detach(base);
 			}
 		};
 
@@ -53,10 +55,10 @@ struct Genode::Trace::Session_client : Genode::Rpc_client<Genode::Trace::Session
 		/**
 		 * Constructor
 		 */
-		explicit Session_client(Capability<Trace::Session> session)
+		explicit Session_client(Region_map &rm, Capability<Trace::Session> session)
 		:
 			Rpc_client<Trace::Session>(session),
-			_argument_buffer(call<Rpc_dataspace>())
+			_argument_buffer(rm, call<Rpc_dataspace>())
 		{ }
 
 		/**

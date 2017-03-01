@@ -6,7 +6,10 @@ install_config {
 	<config>
 		<parent-provides>
 			<service name="LOG"/>
-			<service name="RM"/>
+			<service name="PD"/>
+			<service name="CPU"/>
+			<service name="ROM"/>
+			<service name="RAM"/>
 		</parent-provides>
 		<default-route>
 			<any-service> <parent/> </any-service>
@@ -17,7 +20,7 @@ install_config {
 	</config>
 }
 
-build_boot_image "core init test-log"
+build_boot_image "core ld.lib.so init test-log"
 
 append qemu_args "-nographic -m 64"
 
@@ -33,5 +36,6 @@ compare_output_to {
 [init -> test-log] negative hex char:  0xfe
 [init -> test-log] positive hex char:  0x02
 [init -> test-log] multiarg string:    "parent -> child.7"
+[init -> test-log] String(Hex(3)):     0x3
 [init -> test-log] Test done.
 }

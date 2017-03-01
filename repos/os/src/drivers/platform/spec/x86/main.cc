@@ -5,18 +5,17 @@
  */
 
 /*
- * Copyright (C) 2008-2013 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
+#include <base/attached_rom_dataspace.h>
 #include <base/component.h>
 #include <base/env.h>
 
-#include <util/volatile_object.h>
-
-#include <os/attached_rom_dataspace.h>
+#include <util/reconstructible.h>
 
 #include "pci_session_component.h"
 #include "pci_device_config.h"
@@ -35,11 +34,13 @@ struct Platform::Main
 	Genode::Env &_env;
 	Genode::Sliced_heap sliced_heap { _env.ram(), _env.rm() };
 
-	Genode::Lazy_volatile_object<Genode::Attached_rom_dataspace> acpi_rom;
-	Genode::Lazy_volatile_object<Platform::Root> root;
+	Genode::Attached_rom_dataspace _config { _env, "config" };
 
-	Genode::Lazy_volatile_object<Genode::Attached_rom_dataspace> system_state;
-	Genode::Lazy_volatile_object<Genode::Attached_rom_dataspace> acpi_ready;
+	Genode::Constructible<Genode::Attached_rom_dataspace> acpi_rom;
+	Genode::Constructible<Platform::Root> root;
+
+	Genode::Constructible<Genode::Attached_rom_dataspace> system_state;
+	Genode::Constructible<Genode::Attached_rom_dataspace> acpi_ready;
 
 	Genode::Signal_handler<Platform::Main> _acpi_report;
 	Genode::Signal_handler<Platform::Main> _system_report;
@@ -57,7 +58,7 @@ struct Platform::Main
 
 		const char * report_addr = acpi_rom->local_addr<const char>();
 
-		root.construct(_env, sliced_heap, report_addr);
+		root.construct(_env, sliced_heap, _config, report_addr);
 
 		root_cap = _env.ep().manage(*root);
 
@@ -110,7 +111,7 @@ struct Platform::Main
 		_acpi_report(_env.ep(), *this, &Main::acpi_update),
 		_system_report(_env.ep(), *this, &Main::system_update)
 	{
-		const Genode::Xml_node &config = Genode::config()->xml_node();
+		const Genode::Xml_node config = _config.xml();
 
 		_system_rom = config.attribute_value("system", false);
 
@@ -119,15 +120,15 @@ struct Platform::Main
 
 		if (_system_rom) {
 			/* wait for system state changes, e.g. reset and acpi_ready */
-			system_state.construct("system");
+			system_state.construct(env, "system");
 			system_state->sigh(_system_report);
-			acpi_ready.construct("acpi_ready");
+			acpi_ready.construct(env, "acpi_ready");
 			acpi_ready->sigh(_system_report);
 		}
 
 		if (wait_for_acpi == "yes") {
 			/* for ACPI support, wait for the first valid acpi report */
-			acpi_rom.construct("acpi");
+			acpi_rom.construct(env, "acpi");
 			acpi_rom->sigh(_acpi_report);
 			/* check if already valid */
 			acpi_update();
@@ -136,7 +137,7 @@ struct Platform::Main
 		}
 
 		/* non ACPI platform case */
-		root.construct(_env, sliced_heap, nullptr);
+		root.construct(_env, sliced_heap, _config, nullptr);
 		_env.parent().announce(_env.ep().manage(*root));
 	}
 };

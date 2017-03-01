@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__SPEC__EXYNOS5__SERIAL_H_
@@ -17,6 +17,7 @@
 
 /* core includes */
 #include <board.h>
+#include <platform.h>
 
 /* Genode includes */
 #include <drivers/uart_base.h>
@@ -37,7 +38,7 @@ namespace Genode
 			 */
 			Serial(unsigned const baud_rate)
 			:
-				Exynos_uart_base(Board::UART_2_MMIO_BASE,
+				Exynos_uart_base(Platform::mmio_to_virt(Board::UART_2_MMIO_BASE),
 				                 Board::UART_2_CLOCK, baud_rate)
 			{ }
 	};

@@ -7,10 +7,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -32,13 +32,19 @@ namespace Genode { extern Region_map * env_stack_area_region_map; }
 
 void prepare_init_main_thread();
 
-enum { MAIN_THREAD_STACK_SIZE = 16UL * 1024 * sizeof(Genode::addr_t) };
+enum { MAIN_THREAD_STACK_SIZE = 1024*sizeof(Genode::addr_t) };
 
 /**
  * Satisfy crt0.s in static programs, LDSO overrides this symbol
  */
 extern "C" void init_rtld() __attribute__((weak));
 void init_rtld() { }
+
+/**
+ * Lower bound of the stack, solely used for sanity checking
+ */
+extern unsigned char __initial_stack_base[];
+
 
 /**
  * The first thread in a program
@@ -91,7 +97,7 @@ extern "C" void init_main_thread()
 	 * Explicitly setup program environment at this point to ensure that its
 	 * destructor won't be registered for the atexit routine.
 	 */
-	(void*)env();
+	(void*)env_deprecated();
 	init_log();
 
 	/* create a thread object for the main thread */
@@ -101,8 +107,24 @@ extern "C" void init_main_thread()
 	 * The new stack pointer enables the caller to switch from its current
 	 * environment to the those that the thread object provides.
 	 */
-	addr_t sp = reinterpret_cast<addr_t>(main_thread()->stack_top());
+	addr_t const sp = reinterpret_cast<addr_t>(main_thread()->stack_top());
 	init_main_thread_result = sp;
+
+	/*
+	 * Sanity check for the usage of the initial stack
+	 *
+	 * Because the initial stack is located in the BSS, it is zero-initialized.
+	 * We check that the stack still contains zeros at its lower boundary after
+	 * executing all the initialization code.
+	 */
+	enum { STACK_PAD = 256U };
+	for (unsigned i = 0; i < STACK_PAD; i++) {
+		if (__initial_stack_base[i] == 0)
+			continue;
+
+		error("initial stack overflow detected");
+		for (;;);
+	}
 }
 
 

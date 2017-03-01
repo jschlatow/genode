@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/env.h>
@@ -113,7 +113,7 @@ extern "C" void *abort(void)
 
 	/* Notify the parent of failure */
 	if (name != "main")
-		env()->parent()->exit(1);
+		env_deprecated()->parent()->exit(1);
 
 	sleep_forever();
 	return 0;

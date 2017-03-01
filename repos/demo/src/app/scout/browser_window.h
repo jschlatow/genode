@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2005-2013 Genode Labs GmbH
+ * Copyright (C) 2005-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _BROWSER_WINDOW_H_
@@ -61,7 +61,9 @@ class Scout::Browser_window : public Scrollbar_listener,
 		/**
 		 * General properties
 		 */
-		int  _attr;   /* attribute mask */
+		Config const &_config;
+
+		int _attr = _config.browser_attr;   /* attribute mask */
 
 		/**
 		 * Remember graphics backend used as texture allocator
@@ -72,7 +74,7 @@ class Scout::Browser_window : public Scrollbar_listener,
 		 * Widgets
 		 */
 		Titlebar<PT>               _titlebar;
-		Sky_texture<PT, 512, 512>  _texture;
+		Sky_texture<PT, 512, 512>  _texture { _config.background_detail };
 		PT                         _icon_fg        [_NUM_ICONS][_IH][_IW];
 		unsigned char              _icon_fg_alpha  [_NUM_ICONS][_IH][_IW];
 		Refracted_icon<PT, short>  _icon           [_NUM_ICONS];
@@ -112,7 +114,7 @@ class Scout::Browser_window : public Scrollbar_listener,
 		 */
 		Browser_window(Document *content, Graphics_backend &gfx_backend,
 		               Point position, Area size, Area max_size,
-		               int attr = ATTR_SIZER | ATTR_TITLEBAR);
+		               Config const &config);
 
 		/**
 		 * Return visible document offset

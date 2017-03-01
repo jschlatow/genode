@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2010-2013 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _LIBC_PLUGIN__PLUGIN_REGISTRY_H_
@@ -46,6 +46,15 @@ struct Libc::Plugin_registry : List<Plugin>
 	Plugin *get_plugin_for_stat(const char *path, struct stat *);
 	Plugin *get_plugin_for_symlink(const char *oldpath, const char *newpath);
 	Plugin *get_plugin_for_unlink(const char *path);
+
+	template <typename FUNC>
+	void for_each_plugin(FUNC const &fn) const
+	{
+		for (Plugin *plugin = plugin_registry()->first(); plugin;
+		     plugin = plugin->next()) {
+			fn(*plugin);
+		}
+	}
 };
 
 #endif /* _LIBC_PLUGIN__PLUGIN_REGISTRY_H_ */

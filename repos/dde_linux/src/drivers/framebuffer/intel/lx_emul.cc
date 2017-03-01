@@ -6,16 +6,16 @@
  */
 
 /*
- * Copyright (C) 2015-2016 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 /* Genode includes */
 #include <util/bit_allocator.h>
 #include <base/log.h>
-#include <os/attached_io_mem_dataspace.h>
+#include <base/attached_io_mem_dataspace.h>
 #include <os/reporter.h>
 
 /* local includes */
@@ -216,18 +216,17 @@ void Framebuffer::Driver::generate_report()
 	}
 
 	/* check for report configuration option */
-	static Genode::Reporter reporter("connectors");
 	try {
-		reporter.enabled(_session.config().sub_node("report")
-		                 .attribute_value(reporter.name().string(), false));
+		_reporter.enabled(_session.config().sub_node("report")
+		                 .attribute_value(_reporter.name().string(), false));
 	} catch (...) {
-		reporter.enabled(false);
+		_reporter.enabled(false);
 	}
-	if (!reporter.is_enabled()) return;
+	if (!_reporter.is_enabled()) return;
 
 	/* write new report */
 	try {
-		Genode::Reporter::Xml_generator xml(reporter, [&] ()
+		Genode::Reporter::Xml_generator xml(_reporter, [&] ()
 		{
 			struct drm_connector *c;
 			list_for_each_entry(c, &lx_drm_device->mode_config.connector_list,
@@ -491,6 +490,12 @@ struct pci_dev *pci_get_bus_and_slot(unsigned int bus, unsigned int devfn)
 	Lx::for_each_pci_device(lamda);
 
 	return pci_dev;
+}
+
+
+void pci_dev_put(struct pci_dev *pci_dev)
+{
+	Genode::destroy(Lx::Malloc::mem(), pci_dev);
 }
 
 
@@ -1016,7 +1021,8 @@ void __iomem __must_check *pci_map_rom(struct pci_dev *pdev, size_t *size)
 {
 	enum { VIDEO_ROM_BASE = 0xC0000, VIDEO_ROM_SIZE = 0x20000 };
 
-	static Genode::Attached_io_mem_dataspace vrom(VIDEO_ROM_BASE, VIDEO_ROM_SIZE);
+	static Genode::Attached_io_mem_dataspace vrom(Lx_kit::env().env(),
+	                                              VIDEO_ROM_BASE, VIDEO_ROM_SIZE);
 	*size = VIDEO_ROM_SIZE;
 	return vrom.local_addr<void*>();
 }

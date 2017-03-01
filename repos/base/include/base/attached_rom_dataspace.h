@@ -5,16 +5,16 @@
  */
 
 /*
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BASE__ATTACHED_ROM_DATASPACE_H_
 #define _INCLUDE__BASE__ATTACHED_ROM_DATASPACE_H_
 
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 #include <util/xml_node.h>
 #include <base/attached_dataspace.h>
 #include <rom_session/connection.h>
@@ -35,7 +35,7 @@ class Genode::Attached_rom_dataspace
 		 * always be valid once constructed, a 'Attached_rom_dataspace' has
 		 * to handle the validity of the dataspace.
 		 */
-		Lazy_volatile_object<Attached_dataspace> _ds;
+		Constructible<Attached_dataspace> _ds;
 
 		/**
 		 * Try to attach the ROM module, ignore invalid dataspaces
@@ -78,8 +78,9 @@ class Genode::Attached_rom_dataspace
 		 * \deprecated  Use the constructor with 'Env &' as first
 		 *              argument instead
 		 */
-		Attached_rom_dataspace(char const *name)
-		: _rm(*env()->rm_session()), _rom(name) { _try_attach(); }
+		Attached_rom_dataspace(char const *name) __attribute__((deprecated))
+		: _rm(*env_deprecated()->rm_session()), _rom(false /* deprecated */, name)
+		{ _try_attach(); }
 
 		/**
 		 * Return capability of the used dataspace

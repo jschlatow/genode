@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__CPU_THREAD_COMPONENT_H_
@@ -154,8 +154,19 @@ class Genode::Cpu_thread_component : public Rpc_object<Cpu_thread>,
 		{
 			_address_space_region_map.add_client(_rm_client);
 
-			/* acquaint thread with its pager object */
-			_pager_ep.manage(&_rm_client);
+			/*
+			 * Acquaint thread with its pager object, caution on some base platforms
+			 * this may raise an 'Out_of_meta_data' exception, which causes the
+			 * destructor of this object to not being called. Catch it and remove this
+			 * object from the object pool
+			 */
+			try {
+					_pager_ep.manage(&_rm_client);
+			} catch (...) {
+				_ep.dissolve(this);
+				throw;
+			}
+
 			_platform_thread.pager(&_rm_client);
 			_trace_sources.insert(&_trace_source);
 		}

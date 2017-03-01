@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015-2016 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__RISCV_64__RELOCATION_H_
@@ -75,7 +75,7 @@ class Linker::Reloc_non_plt : public Reloc_non_plt_generic
 
 	public:
 
-		Reloc_non_plt(Dependency const &dep, Elf::Rela const *rel, unsigned long size)
+		Reloc_non_plt(Dependency const &dep, Elf::Rela const *rel, unsigned long size, bool)
 		: Reloc_non_plt_generic(dep)
 		{
 			Elf::Rela const *end = rel + (size / sizeof(Elf::Rela));

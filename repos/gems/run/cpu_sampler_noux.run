@@ -4,11 +4,6 @@ if { ![have_spec foc] && ![have_spec nova] &&
 	exit 0
 }
 
-#
-# On OMAP4 where no PS/2 is available, we rely on USB HID
-#
-proc use_usb_input { } { return [expr ![have_spec ps2] && [have_spec usb]] }
-
 set build_components {
 	core init drivers/timer noux/minimal lib/libc_noux
 	drivers/framebuffer drivers/input
@@ -20,7 +15,15 @@ set build_components {
 	test/cpu_sampler
 }
 
-lappend_if [use_usb_input]  build_components drivers/usb
+if {[have_spec foc]} {
+	lappend build_components lib/cpu_sampler_platform-foc
+} else {
+	lappend build_components lib/cpu_sampler_platform-generic
+}
+
+source ${genode_dir}/repos/base/run/platform_drv.inc
+
+lappend_if [need_usb_hid]   build_components drivers/usb
 lappend_if [have_spec gpio] build_components drivers/gpio
 
 #
@@ -29,7 +32,6 @@ lappend_if [have_spec gpio] build_components drivers/gpio
 foreach pkg {bash coreutils vim diffutils} {
 	lappend_if [expr ![file exists bin/$pkg]] build_components noux-pkg/$pkg }
 
-source ${genode_dir}/repos/base/run/platform_drv.inc
 append_platform_drv_build_components
 
 build $build_components
@@ -54,6 +56,10 @@ exec tar cfv bin/vim.tar       -h -C bin/vim .
 exec tar cfv bin/diffutils.tar -h -C bin/diffutils .
 
 create_boot_directory
+
+proc gpio_drv { } { if {[have_spec rpi] && [have_spec hw]}  { return hw_gpio_drv }
+                    if {[have_spec rpi] && [have_spec foc]} { return foc_gpio_drv }
+                    return gpio_drv }
 
 append config {
 	<config verbose="yes">
@@ -90,14 +96,14 @@ append_if [have_spec ps2] config {
 		<provides><service name="Input"/></provides>
 	</start> }
 
-append_if [have_spec gpio] config {
-	<start name="gpio_drv">
-		<resource name="RAM" quantum="4M"/>
-		<provides><service name="Gpio"/></provides>
+append_if [have_spec gpio] config "
+	<start name=\"[gpio_drv]\">
+		<resource name=\"RAM\" quantum=\"4M\"/>
+		<provides><service name=\"Gpio\"/></provides>
 		<config/>
-	</start>}
+	</start>"
 
-append_if [use_usb_input] config {
+append_if [need_usb_hid] config {
 	<start name="usb_drv">
 		<resource name="RAM" quantum="12M"/>
 		<provides><service name="Input"/></provides>
@@ -130,7 +136,7 @@ append config {
 				<dir name="home">
 					<inline name=".bashrc"> }
 append_if [get_cmd_switch --autopilot] config {
-						FILE=/samples/cpu_sampler/samples/init/test-cpu_sampler/ep.*.log
+						FILE=/samples/cpu_sampler/samples/test-cpu_sampler/ep.*.log
 						while true; do if [ -e $FILE ]; then cat $FILE; fi; done }
 append_if [expr ![get_cmd_switch --autopilot]] config {
 						echo "The sample data will appear in the /samples directory" }
@@ -157,12 +163,12 @@ append config {
 	</start>
 
 	<start name="cpu_sampler">
-		<resource name="RAM" quantum="32M"/>
+		<resource name="RAM" quantum="4M"/>
 		<provides>
 			<service name="CPU"/>
 		</provides>
 		<config sample_interval_ms="1000" sample_duration_s="10">
-			<policy label_prefix="init -> test-cpu_sampler ->" />
+			<policy label_prefix="test-cpu_sampler ->" />
 		</config>
 		<route>
 			<service name="LOG" label_prefix="samples"> <child name="fs_log"/> </service>
@@ -170,23 +176,9 @@ append config {
 		</route>
 	</start>
 
-	<start name="init">
-		<resource name="RAM" quantum="16M"/>
-		<config>
-			<parent-provides>
-				<service name="CAP"/>
-				<service name="LOG"/>
-				<service name="RM"/>
-				<service name="SIGNAL"/>
-			</parent-provides>
-			<default-route>
-				<any-service> <parent/> </any-service>
-			</default-route>
-			<start name="test-cpu_sampler">
-				<resource name="RAM" quantum="4M"/>
-				<config ld_verbose="yes"/>
-			</start>
-		</config>
+	<start name="test-cpu_sampler">
+		<resource name="RAM" quantum="1M"/>
+		<config ld_verbose="yes"/>
 		<route>
 			<service name="CPU"> <child name="cpu_sampler"/> </service>
 			<any-service> <parent/> </any-service>
@@ -194,7 +186,7 @@ append config {
 	</start>
 
 	<start name="noux">
-		<resource name="RAM" quantum="1G" />
+		<resource name="RAM" quantum="16M" />
 		<config>
 			<fstab>
 				<tar name="coreutils.tar" />
@@ -228,19 +220,28 @@ install_config $config
 # Boot modules
 #
 
+# evaluated by the run tool
+proc binary_name_cpu_sampler_platform_lib_so { } {
+	if {[have_spec foc]} {
+		return "cpu_sampler_platform-foc.lib.so"
+	} else {
+		return "cpu_sampler_platform-generic.lib.so"
+	}
+}
+
 # generic modules
 set boot_modules {
-	core init timer ld.lib.so noux terminal ram_fs log_terminal
+	core ld.lib.so init timer noux terminal ram_fs log_terminal
 	libc.lib.so libm.lib.so libc_noux.lib.so ncurses.lib.so
 	bash.tar coreutils.tar diffutils.tar vim.tar
-	fs_log cpu_sampler test-cpu_sampler
+	fs_log cpu_sampler cpu_sampler_platform.lib.so test-cpu_sampler
 }
 
 # platform-specific modules
 lappend_if [have_spec         ps2] boot_modules ps2_drv
 lappend_if [have_spec framebuffer] boot_modules fb_drv
-lappend_if [use_usb_input]         boot_modules usb_drv
-lappend_if [have_spec gpio]        boot_modules gpio_drv
+lappend_if [need_usb_hid]          boot_modules usb_drv
+lappend_if [have_spec gpio]        boot_modules [gpio_drv]
 
 append_platform_drv_boot_modules
 

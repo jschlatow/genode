@@ -5,10 +5,10 @@
 */
 
 /*
-* Copyright (C) 2016 Genode Labs GmbH
+* Copyright (C) 2016-2017 Genode Labs GmbH
 *
 * This file is part of the Genode OS framework, which is distributed
-* under the terms of the GNU General Public License version 2.
+* under the terms of the GNU Affero General Public License version 3.
 */
 
 #ifndef _ARP_CACHE_H_
@@ -18,13 +18,13 @@
 #include <net/ipv4.h>
 #include <net/ethernet.h>
 #include <util/avl_tree.h>
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 
 namespace Net {
 
 	class Arp_cache;
 	class Arp_cache_entry;
-	using Arp_cache_entry_slot = Genode::Lazy_volatile_object<Arp_cache_entry>;
+	using Arp_cache_entry_slot = Genode::Constructible<Arp_cache_entry>;
 }
 
 

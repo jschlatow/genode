@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /*
@@ -108,6 +108,8 @@ inline void assert_read(Vfs::File_io_service::Read_result r)
 	typedef Vfs::File_io_service::Read_result Result;
 	switch (r) {
 	case Result::READ_OK: return;
+	case Result::READ_QUEUED:
+		error("READ_QUEUED"); break;
 	case Result::READ_ERR_AGAIN:
 		error("READ_ERR_AGAIN"); break;
 	case Result::READ_ERR_WOULD_BLOCK:
@@ -470,14 +472,25 @@ void Component::construct(Genode::Env &env)
 	Attached_rom_dataspace config_rom(env, "config");
 	Xml_node const config_xml = config_rom.xml();
 
+	struct Io_response_handler : Vfs::Io_response_handler
+	{
+		void handle_io_response(Vfs::Vfs_handle::Context *) override
+		{
+			Genode::log(__func__, " called");
+		}
+	} io_response_handler;
+
+	Vfs::Global_file_system_factory global_file_system_factory(heap);
+
 	Vfs::Dir_file_system vfs_root(env, heap, config_xml.sub_node("vfs"),
-	                              Vfs::global_file_system_factory());
+	                              io_response_handler,
+	                              global_file_system_factory);
 	char path[Vfs::MAX_PATH_LEN];
 
 	MAX_DEPTH = config_xml.attribute_value("depth", 16U);
 
 	unsigned long elapsed_ms;
-	Timer::Connection timer;
+	Timer::Connection timer(env);
 
 	/* populate the directory file system at / */
 	vfs_root.num_dirent("/");

@@ -6,16 +6,15 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <cpu.h>
 #include <kernel/kernel.h>
 #include <kernel/cpu.h>
-#include <kernel/pd.h>
 
 void Genode::Cpu::translation_table_insertions()
 {
@@ -41,16 +40,4 @@ void Genode::Cpu::translation_added(Genode::addr_t const addr,
 		Cpu * const cpu  = cpu_pool()->cpu(Cpu::executing_id());
 		cpu->clean_invalidate_data_cache();
 	}
-}
-
-
-void Genode::Arm_v7::enable_mmu_and_caches(Kernel::Pd & pd)
-{
-	invalidate_tlb();
-	Cpu::Cidr::write(pd.asid);
-	Cpu::Dacr::write(Dacr::init_virt_kernel());
-	Cpu::Ttbr0::write(Ttbr0::init((Genode::addr_t)pd.translation_table()));
-	Cpu::Ttbcr::write(0);
-	Cpu::Sctlr::enable_mmu_and_caches();
-	invalidate_branch_predicts();
 }

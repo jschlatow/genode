@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/log.h>
@@ -151,7 +151,7 @@ ACPI_STATUS AcpiOsReadPort (ACPI_IO_ADDRESS port, UINT32 *value, UINT32 width)
 	/* the I/O port may be owned by drivers, which will cause exceptions */
 	try {
 		unsigned const bytes = width / 8;
-		Genode::Io_port_connection io_port(port, bytes);
+		Genode::Io_port_connection io_port(Acpica::env(), port, bytes);
 
 		switch (bytes) {
 		case 1 :
@@ -181,7 +181,7 @@ ACPI_STATUS AcpiOsWritePort (ACPI_IO_ADDRESS port, UINT32 value, UINT32 width)
 	/* the I/O port may be owned by drivers, which will cause exceptions */
 	try {
 		unsigned const bytes = width / 8;
-		Genode::Io_port_connection io_port(port, bytes);
+		Genode::Io_port_connection io_port(Acpica::env(), port, bytes);
 
 		switch (bytes) {
 		case 1 :
@@ -251,7 +251,7 @@ void AcpiOsSleep (UINT64 sleep_ms)
 {
 	Genode::log(__func__, " ", sleep_ms, " ms");
 
-	static Timer::Connection conn;
+	static Timer::Connection conn(Acpica::env());
 	conn.msleep(sleep_ms);
 	return;
 }

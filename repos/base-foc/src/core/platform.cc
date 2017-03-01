@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -436,8 +436,6 @@ Platform::Platform() :
 	static bool initialized = 0;
 	if (initialized) panic("Platform constructed twice!");
 	initialized = true;
-
-	init_log();
 
 	_setup_basics();
 	_setup_mem_alloc();

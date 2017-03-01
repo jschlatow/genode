@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__DRIVERS__NIC__GEM__TX_BUFFER_DESCRIPTOR_H_
@@ -37,9 +37,11 @@ class Tx_buffer_descriptor : public Buffer_descriptor
 
 		class Package_send_timeout : public Genode::Exception {};
 
+		Timer::Connection &_timer;
 
 	public:
-		Tx_buffer_descriptor() : Buffer_descriptor(BUFFER_COUNT)
+		Tx_buffer_descriptor(Genode::Env &env, Timer::Connection &timer)
+		: Buffer_descriptor(env, BUFFER_COUNT), _timer(timer)
 		{
 			for (unsigned int i=0; i<BUFFER_COUNT; i++) {
 				_descriptors[i].status = Status::Used::bits(1) | Status::Last_buffer::bits(1);
@@ -63,8 +65,7 @@ class Tx_buffer_descriptor : public Buffer_descriptor
 				}
 				timeout--;
 
-				static Timer::Connection timer;
-				timer.msleep(1);
+				_timer.msleep(1);
 			}
 
 

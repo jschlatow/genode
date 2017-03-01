@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -192,7 +192,6 @@ Child::Process::Process(Dataspace_capability  elf_ds,
                         Region_map           &remote_rm,
                         Parent_capability     parent_cap)
 :
-	initial_thread(initial_thread),
 	loaded_executable(elf_ds, ldso_ds, ram, local_rm, remote_rm, parent_cap)
 {
 	/* register parent interface for new protection domain */

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013-2015 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/component.h>
@@ -30,7 +30,7 @@
 /**
  * Custom handling of PD-session depletion during attach operations
  *
- * The default implementation of 'env().rm()' automatically issues a resource
+ * The default implementation of 'env.rm()' automatically issues a resource
  * request if the PD session quota gets exhausted. For the device PD, we don't
  * want to issue resource requests but let the platform driver reflect this
  * condition to its client.
@@ -59,7 +59,7 @@ struct Expanding_region_map_client : Genode::Region_map_client
 			[&] () {
 				enum { UPGRADE_QUOTA = 4096 };
 
-				if (Genode::env()->ram_session()->avail() < UPGRADE_QUOTA)
+				if (_env.ram().avail() < UPGRADE_QUOTA)
 					throw;
 
 				Genode::String<32> arg("ram_quota=", (unsigned)UPGRADE_QUOTA);
@@ -114,8 +114,13 @@ void Platform::Device_pd_component::attach_dma_mem(Genode::Dataspace_capability 
 	} catch (Rm_session::Out_of_metadata) {
 		throw;
 	} catch (Rm_session::Region_conflict) {
-		/* memory already attached before - done */
-		return;
+		/*
+		 * DMA memory already attached before or collision with normal
+		 * device_pd memory (text, data, etc).
+		 * Currently we can't distinguish it easily - show error
+		 * message as a precaution.
+		 */
+		Genode::error("region conflict");
 	} catch (...) { }
 
 	/* sanity check */
@@ -166,13 +171,13 @@ void Platform::Device_pd_component::assign_pci(Genode::Io_mem_dataspace_capabili
 			using Genode::print;
 			using Genode::Hex;
 			print(out, Hex(v >> 8, Hex::Prefix::OMIT_PREFIX), ":",
-			      Hex((v >> 3) & 3, Hex::Prefix::OMIT_PREFIX), ".",
+			      Hex((v >> 3) & 0x1f, Hex::Prefix::OMIT_PREFIX), ".",
 			      Hex(v & 0x7, Hex::Prefix::OMIT_PREFIX));
 		}
 	};
 
 	/* try to assign pci device to this protection domain */
-	if (!env()->pd_session()->assign_pci(page, rid))
+	if (!_env.pd().assign_pci(page, rid))
 		Genode::error("assignment of PCI device ", Rid(rid), " failed ",
 		              "phys=", Genode::Hex(ds_client.phys_addr()), " "
 		              "virt=", Genode::Hex(page));
@@ -190,7 +195,7 @@ struct Main
 
 	Expanding_region_map_client rm { env };
 
-	Platform::Device_pd_component pd_component { rm };
+	Platform::Device_pd_component pd_component { rm, env };
 
 	Genode::Static_root<Platform::Device_pd> root { env.ep().manage(pd_component) };
 

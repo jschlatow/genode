@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__DYNAMIC_H_
@@ -144,7 +144,7 @@ class Linker::Dynamic
 			_d->un.ptr   = (Elf::Addr)Debug::d();
 		}
 
-		void _init()
+		void _init() SELF_RELOC
 		{
 			for (Elf::Dyn const *d = &_dynamic; d->tag != DT_NULL; d++) {
 				switch (d->tag) {
@@ -308,7 +308,7 @@ class Linker::Dynamic
 				fn(n->path(_strtab));
 		}
 
-		void relocate(Bind bind)
+		void relocate(Bind bind) SELF_RELOC
 		{
 			plt_setup();
 
@@ -336,7 +336,7 @@ class Linker::Dynamic
 		void relocate_non_plt(Bind bind, Pass pass)
 		{
 			if (_reloca)
-				Reloc_non_plt r(*_dep, _reloca, _reloca_size);
+				Reloc_non_plt r(*_dep, _reloca, _reloca_size, pass == SECOND_PASS);
 
 			if (_rel)
 				Reloc_non_plt r(*_dep, _rel, _rel_size, pass == SECOND_PASS);

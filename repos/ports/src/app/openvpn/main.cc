@@ -1,24 +1,23 @@
-/**
+/*
  * \brief  TUN/TAP to Nic_session interface
  * \author Josef Soentgen
  * \date   2014-06-05
  */
 
 /*
- * Copyright (C) 2014-2015 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 /* Genode includes */
 #include <base/log.h>
-#include <os/server.h>
-#include <os/config.h>
+#include <base/heap.h>
 #include <os/static_root.h>
-#include <cap_session/connection.h>
 #include <nic/component.h>
 #include <root/component.h>
+#include <libc/component.h>
 
 /* libc includes */
 #include <unistd.h>
@@ -39,7 +38,7 @@ extern int    genode_argc;
 extern "C" int openvpn_main(int, char*[]);
 
 
-class Openvpn_thread : public Genode::Thread_deprecated<16UL * 1024 * sizeof (long)>
+class Openvpn_thread : public Genode::Thread
 {
 	private:
 
@@ -49,9 +48,9 @@ class Openvpn_thread : public Genode::Thread_deprecated<16UL * 1024 * sizeof (lo
 
 	public:
 
-		Openvpn_thread(int argc, char *argv[])
+		Openvpn_thread(Genode::Env &env, int argc, char *argv[])
 		:
-			Thread_deprecated("openvpn_main"),
+			Thread(env, "openvpn_main", 16UL * 1024 * sizeof (long)),
 			_argc(argc), _argv(argv),
 			_exitcode(-1)
 		{ }
@@ -134,9 +133,8 @@ class Openvpn_component : public Tuntap_device,
 		Openvpn_component(Genode::size_t const tx_buf_size,
 		                  Genode::size_t const rx_buf_size,
 		                  Genode::Allocator   &rx_block_md_alloc,
-		                  Genode::Ram_session &ram_session,
-		                  Server::Entrypoint  &ep)
-		: Session_component(tx_buf_size, rx_buf_size, rx_block_md_alloc, ram_session, ep)
+		                  Genode::Env         &env)
+		: Session_component(tx_buf_size, rx_buf_size, rx_block_md_alloc, env)
 		{
 			char buf[] = { 0x02, 0x00, 0x00, 0x00, 0x00, 0x01 };
 			_mac_addr = Nic::Mac_address((void*)buf);
@@ -203,7 +201,8 @@ class Root : public Genode::Root_component<Openvpn_component, Genode::Single_cli
 {
 	private:
 
-		Server::Entrypoint &_ep;
+		Libc::Env          &_env;
+		Genode::Heap        _heap { _env.ram(), _env.rm() };
 		Openvpn_thread     *_thread = nullptr;
 
 	protected:
@@ -234,10 +233,9 @@ class Root : public Genode::Root_component<Openvpn_component, Genode::Single_cli
 			}
 
 			Openvpn_component *component = new (Root::md_alloc())
-			                               Openvpn_component(tx_buf_size, rx_buf_size,
-			                                                *env()->heap(),
-			                                                *env()->ram_session(),
-			                                                _ep);
+			                               Openvpn_component(tx_buf_size,
+			                                                 rx_buf_size,
+			                                                 _heap, _env);
 			/**
 			 * Setting the pointer in this manner is quite hackish but it has
 			 * to be valid before OpenVPN calls open_tun(), which unfortunatly
@@ -245,7 +243,7 @@ class Root : public Genode::Root_component<Openvpn_component, Genode::Single_cli
 			 */
 			_tuntap_dev = component;
 
-			_thread = new (Genode::env()->heap()) Openvpn_thread(genode_argc, genode_argv);
+			_thread = new (_heap) Openvpn_thread(_env, genode_argc, genode_argv);
 			_thread->start();
 
 			/* wait until OpenVPN configured the TUN/TAP device for the first time */
@@ -263,31 +261,19 @@ class Root : public Genode::Root_component<Openvpn_component, Genode::Single_cli
 
 	public:
 
-		Root(Server::Entrypoint &ep, Genode::Allocator &md_alloc)
-		: Genode::Root_component<Openvpn_component, Genode::Single_client>(&ep.rpc_ep(), &md_alloc),
-			_ep(ep)
+		Root(Libc::Env &env)
+		: Genode::Root_component<Openvpn_component, Genode::Single_client>(env.ep(), _heap),
+			_env(env)
 		{ }
 };
 
 
-struct Main
+/***************
+ ** Component **
+ ***************/
+
+void Libc::Component::construct(Libc::Env &env)
 {
-	Server::Entrypoint &ep;
-	::Root              nic_root { ep, *Genode::env()->heap() };
-
-	Main(Server::Entrypoint &ep) : ep(ep)
-	{
-		Genode::env()->parent()->announce(ep.manage(nic_root));
-	}
-};
-
-
-/**********************
- ** Server framework **
- **********************/
-
-namespace Server {
-	char const *name()             { return "openvpn_ep"; }
-	Genode::size_t stack_size()    { return 16*1024*sizeof(addr_t); }
-	void construct(Entrypoint &ep) { static Main server(ep); }
+	static ::Root nic_root(env);
+	env.parent().announce(env.ep().manage(nic_root));
 }

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2011-2013 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BASE__INTERNAL__LOCK_HELPER_H_
@@ -26,8 +26,7 @@ namespace Hw { extern Genode::Untyped_capability _main_thread_cap; }
 /**
  * Yield execution time-slice of current thread
  */
-static inline void thread_yield() {
-	Kernel::yield_thread(Kernel::cap_id_invalid()); }
+static inline void thread_yield() { Kernel::yield_thread(); }
 
 
 /**
@@ -46,7 +45,7 @@ native_thread_id(Genode::Thread * const t)
  */
 static inline void thread_switch_to(Genode::Thread * const t)
 {
-	Kernel::yield_thread(native_thread_id(t));
+	Kernel::yield_thread();
 }
 
 
@@ -56,14 +55,14 @@ static inline void thread_switch_to(Genode::Thread * const t)
 static inline bool
 thread_check_stopped_and_restart(Genode::Thread * const t)
 {
-	return Kernel::resume_local_thread(native_thread_id(t));
+	return Kernel::restart_thread(native_thread_id(t));
 }
 
 
 /**
  * Pause execution of current thread
  */
-static inline void thread_stop_myself() { Kernel::pause_current_thread(); }
+static inline void thread_stop_myself() { Kernel::stop_thread(); }
 
 
 #endif /* _INCLUDE__BASE__INTERNAL__LOCK_HELPER_H_ */

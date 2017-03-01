@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #pragma once
@@ -34,16 +34,17 @@ class Platform::Irq_session_component : public Genode::Rpc_object<Genode::Irq_se
 	private:
 
 		unsigned                  _gsi;
-		Genode::Irq_sigh          _irq_sigh;
+		Platform::Irq_sigh        _irq_sigh;
 		Genode::Irq_session::Info _msi_info;
 
-		Genode::Lazy_volatile_object<Genode::Irq_connection> _irq_conn;
+		Genode::Constructible<Genode::Irq_connection> _irq_conn;
 
 	public:
 
 		enum { INVALID_IRQ = 0xffU };
 
-		Irq_session_component(unsigned, Genode::addr_t);
+		Irq_session_component(unsigned, Genode::addr_t, Genode::Env &,
+		                      Genode::Allocator &heap);
 		~Irq_session_component();
 
 		bool msi()

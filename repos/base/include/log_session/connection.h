@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2008-2013 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__LOG_SESSION__CONNECTION_H_
@@ -43,7 +43,7 @@ struct Genode::Log_connection : Connection<Log_session>, Log_session_client
 	 * \deprecated  Use the constructor with 'Env &' as first
 	 *              argument instead
 	 */
-	Log_connection(Session_label label = Session_label())
+	Log_connection(Session_label label = Session_label()) __attribute__((deprecated))
 	:
 		Connection<Log_session>(session("ram_quota=%ld, label=\"%s\"",
 		                                RAM_QUOTA, label.string())),

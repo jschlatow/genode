@@ -7,10 +7,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _DRIVERS__PLATFORM__SPEC__ODROID_X2__PMU_H_
@@ -112,8 +112,9 @@ class Pmu : public Regulator::Driver,
 		/**
 		 * Constructor
 		 */
-		Pmu() : Genode::Attached_mmio(Genode::Board_base::PMU_MMIO_BASE,
-		                              Genode::Board_base::PMU_MMIO_SIZE)
+		Pmu(Genode::Env &env)
+		: Genode::Attached_mmio(env, Genode::Board_base::PMU_MMIO_BASE,
+		                             Genode::Board_base::PMU_MMIO_SIZE)
 		{
 			write<Usbdrd_phy_control::Enable>(0);
 			write<Usbhost_phy1_control::Enable>(0);

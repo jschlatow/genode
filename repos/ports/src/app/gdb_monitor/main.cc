@@ -5,13 +5,13 @@
  */
 
 /*
- * Copyright (C) 2010-2016 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
-#include <base/component.h>
+#include <libc/component.h>
 
 /*
  * Suppress messages of libc dummy functions
@@ -33,12 +33,14 @@ extern "C" int gdbserver_main(int argc, const char *argv[]);
 
 extern Genode::Env *genode_env;
 
-void Component::construct(Genode::Env &env)
+void Libc::Component::construct(Libc::Env &env)
 {
 	genode_env = &env;
 
 	int argc = 3;
 	const char *argv[] = { "gdbserver", "/dev/terminal", "target", 0 };
 
-	gdbserver_main(argc, argv);
+	Libc::with_libc([&] () {
+		gdbserver_main(argc, argv);
+	});
 }

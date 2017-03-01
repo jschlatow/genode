@@ -7,25 +7,28 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/log.h>
-#include <base/sleep.h>
-#include <cap_session/connection.h>
+#include <base/heap.h>
+#include <base/component.h>
 #include <regulator/component.h>
 #include <regulator/consts.h>
 
 #include <cmu.h>
 #include <pmu.h>
 
-struct Driver_factory: Regulator::Driver_factory
+
+struct Driver_factory : Regulator::Driver_factory
 {
 	Cmu _cmu;
 	Pmu _pmu;
+
+	Driver_factory(Genode::Env &env) : _cmu(env), _pmu(env) { }
 
 	Regulator::Driver &create(Regulator::Regulator_id id)
 	{
@@ -45,23 +48,25 @@ struct Driver_factory: Regulator::Driver_factory
 		};
 	}
 
-	void destroy(Regulator::Driver &driver) {
-	}
+	void destroy(Regulator::Driver &driver) { }
 };
 
-int main(int, char **)
+
+struct Main
 {
-	using namespace Genode;
+	Genode::Env &    env;
+	Genode::Heap     heap { env.ram(), env.rm() };
+	::Driver_factory factory { env };
+	Regulator::Root  root { env, heap, factory };
 
-	log("--- Odroid-x2 platform driver ---");
+	Main(Genode::Env & env) : env(env) {
+		env.parent().announce(env.ep().manage(root)); }
+};
 
-	static Cap_connection cap;
-	static Rpc_entrypoint ep(&cap, 4096, "odroid_x2_plat_ep");
-	static ::Driver_factory driver_factory;
-	static Regulator::Root reg_root(&ep, env()->heap(), driver_factory);
-	env()->parent()->announce(ep.manage(&reg_root));
 
-	log("--- Odroid-x2 platform driver. Done ---");
-	sleep_forever();
-	return 0;
+void Component::construct(Genode::Env &env)
+{
+	Genode::log("--- Odroid X2 platform driver ---");
+
+	static Main main(env);
 }

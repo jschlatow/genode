@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BASE__INTERNAL__UPGRADEABLE_CLIENT_H_
@@ -38,7 +38,7 @@ struct Genode::Upgradeable_client : CLIENT
 		char buf[128];
 		snprintf(buf, sizeof(buf), "ram_quota=%lu", quota);
 
-		env()->parent()->upgrade(_id, buf);
+		env_deprecated()->parent()->upgrade(_id, buf);
 	}
 };
 

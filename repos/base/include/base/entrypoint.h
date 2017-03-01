@@ -5,16 +5,16 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BASE__ENTRYPOINT_H_
 #define _INCLUDE__BASE__ENTRYPOINT_H_
 
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 #include <util/noncopyable.h>
 #include <base/rpc_server.h>
 #include <base/signal.h>
@@ -30,6 +30,13 @@ namespace Genode {
 
 class Genode::Entrypoint : Genode::Noncopyable
 {
+	public:
+
+		/**
+		 * Functor for post signal-handler hook
+		 */
+		struct Post_signal_hook { virtual void function() = 0; };
+
 	private:
 
 		struct Signal_proxy
@@ -46,10 +53,13 @@ class Genode::Entrypoint : Genode::Noncopyable
 
 			void signal()
 			{
+				/* XXX introduce while-pending loop */
 				try {
 					Signal sig = ep._sig_rec->pending_signal();
 					ep._dispatch_signal(sig);
 				} catch (Signal_receiver::Signal_not_pending) { }
+
+				ep._execute_post_signal_hook();
 			}
 		};
 
@@ -68,15 +78,33 @@ class Genode::Entrypoint : Genode::Noncopyable
 
 		Env &_env;
 
-		Volatile_object<Rpc_entrypoint> _rpc_ep;
+		Reconstructible<Rpc_entrypoint> _rpc_ep;
 
 		Signal_proxy_component   _signal_proxy {*this};
 		Capability<Signal_proxy> _signal_proxy_cap = _rpc_ep->manage(&_signal_proxy);
 
-		Volatile_object<Signal_receiver> _sig_rec;
+		Reconstructible<Signal_receiver> _sig_rec;
 
+		bool _suspended                = false;
 		void (*_suspended_callback) () = nullptr;
 		void (*_resumed_callback)   () = nullptr;
+
+		enum Signal_recipient {
+			NONE = 0, ENTRYPOINT = 1, SIGNAL_PROXY = 2
+		};
+
+		int               _signal_recipient { NONE };
+		Genode::Lock      _signal_pending_lock;
+		Genode::Lock      _signal_pending_ack_lock;
+		Post_signal_hook *_post_signal_hook = nullptr;
+
+		void _execute_post_signal_hook()
+		{
+			if (_post_signal_hook != nullptr)
+				_post_signal_hook->function();
+
+			_post_signal_hook = nullptr;
+		}
 
 		/*
 		 * This signal handler is solely used to force an iteration of the
@@ -84,14 +112,14 @@ class Genode::Entrypoint : Genode::Noncopyable
 		 * let the signal-dispatching thread execute the actual suspend-
 		 * resume mechanism.
 		 */
-		void _handle_suspend() { }
-		Lazy_volatile_object<Genode::Signal_handler<Entrypoint>> _suspend_dispatcher;
+		void _handle_suspend() { _suspended = true; }
+		Constructible<Genode::Signal_handler<Entrypoint>> _suspend_dispatcher;
 
 		void _dispatch_signal(Signal &sig);
 
 		void _process_incoming_signals();
 
-		Lazy_volatile_object<Signal_proxy_thread> _signal_proxy_thread;
+		Constructible<Signal_proxy_thread> _signal_proxy_thread;
 
 		friend class Startup;
 
@@ -104,6 +132,11 @@ class Genode::Entrypoint : Genode::Noncopyable
 	public:
 
 		Entrypoint(Env &env, size_t stack_size, char const *name);
+
+		~Entrypoint()
+		{
+			_rpc_ep->dissolve(&_signal_proxy);
+		}
 
 		/**
 		 * Associate RPC object with the entry point
@@ -143,11 +176,7 @@ class Genode::Entrypoint : Genode::Noncopyable
 		 *     receiver belongs to the calling entrypoint. Alternatively,
 		 *     remove it.
 		 */
-		void wait_and_dispatch_one_signal()
-		{
-			Signal sig = _sig_rec->wait_for_signal();
-			_dispatch_signal(sig);
-		}
+		void wait_and_dispatch_one_signal();
 
 		/**
 		 * Return RPC entrypoint
@@ -161,6 +190,14 @@ class Genode::Entrypoint : Genode::Noncopyable
 		 * state, while 'resumed is called when the entrypoint is fully functional again.
 		 */
 		void schedule_suspend(void (*suspended)(), void (*resumed)());
+
+		/**
+		 * Register hook functor to be called after signal was handled
+		 */
+		void schedule_post_signal_hook(Post_signal_hook *hook)
+		{
+			_post_signal_hook = hook;
+		}
 };
 
 #endif /* _INCLUDE__BASE__ENTRYPOINT_H_ */

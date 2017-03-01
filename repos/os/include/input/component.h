@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2016 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__INPUT__COMPONENT_H_
@@ -16,7 +16,7 @@
 
 #include <base/env.h>
 #include <base/rpc_server.h>
-#include <os/attached_ram_dataspace.h>
+#include <base/attached_ram_dataspace.h>
 #include <os/ring_buffer.h>
 #include <root/component.h>
 #include <input_session/input_session.h>
@@ -51,9 +51,9 @@ class Input::Session_component : public Genode::Rpc_object<Input::Session>
 		 * \noapi
 		 * \deprecated
 		 */
-		Session_component()
-		: _ds(*Genode::env()->ram_session(),
-		      *Genode::env()->rm_session(),
+		Session_component() __attribute__((deprecated))
+		: _ds(*Genode::env_deprecated()->ram_session(),
+		      *Genode::env_deprecated()->rm_session(),
 		      Event_queue::QUEUE_SIZE*sizeof(Input::Event))
 		{ }
 

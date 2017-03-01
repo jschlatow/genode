@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2008-2013 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -180,7 +180,7 @@ namespace Genode {
 
 	Socket_pair server_socket_pair()
 	{
-		Linux_native_cpu_client native_cpu(env()->cpu_session()->native_cpu());
+		Linux_native_cpu_client native_cpu(env_deprecated()->cpu_session()->native_cpu());
 
 		Socket_pair socket_pair;
 

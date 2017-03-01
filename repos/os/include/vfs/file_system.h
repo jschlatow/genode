@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2011-2014 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__VFS__FILE_SYSTEM_H_
@@ -35,6 +35,16 @@ struct Vfs::File_system : Directory_service, File_io_service
 	 * This method flushes any delayed operations from the file system.
 	 */
 	virtual void sync(char const *path) { }
+
+	/**
+	 * Adjust to configuration changes
+	 */
+	virtual void apply_config(Genode::Xml_node const &node) { }
+
+	/**
+	 * Return the file-system type
+	 */
+	virtual char const *type() = 0;
 };
 
 #endif /* _INCLUDE__VFS__FILE_SYSTEM_H_ */

@@ -5,16 +5,16 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <irq_session/connection.h>
 #include <platform_session/connection.h>
 #include <platform_device/client.h>
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 
 #include <ahci.h>
 
@@ -34,12 +34,12 @@ struct X86_hba : Platform::Hba
 
 	Genode::Env &env;
 
-	Platform::Connection                          pci { env };
-	Platform::Device_capability                   pci_device_cap;
-	Lazy_volatile_object<Platform::Device_client> pci_device;
-	Lazy_volatile_object<Irq_session_client>      irq;
-	addr_t                                        res_base;
-	size_t                                        res_size;
+	Platform::Connection                   pci { env };
+	Platform::Device_capability            pci_device_cap;
+	Constructible<Platform::Device_client> pci_device;
+	Constructible<Irq_session_client>      irq;
+	addr_t                                 res_base;
+	size_t                                 res_size;
 
 	X86_hba(Genode::Env &env) : env(env)
 	{

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__NITPICKER_SESSION__CLIENT_H_
@@ -16,7 +16,7 @@
 
 #include <nitpicker_session/capability.h>
 #include <base/rpc_client.h>
-#include <os/attached_dataspace.h>
+#include <base/attached_dataspace.h>
 
 namespace Nitpicker { struct Session_client; }
 
@@ -31,10 +31,26 @@ class Nitpicker::Session_client : public Genode::Rpc_client<Session>
 
 	public:
 
-		explicit Session_client(Session_capability session)
+		/**
+		 * Constructor
+		 */
+		Session_client(Genode::Region_map &rm, Session_capability session)
 		:
 			Rpc_client<Session>(session),
-			_command_ds(command_dataspace()),
+			_command_ds(rm, command_dataspace()),
+			_command_buffer(*_command_ds.local_addr<Command_buffer>())
+		{ }
+
+		/**
+		 * Constructor
+		 *
+		 * \deprecated
+		 * \noapi
+		 */
+		explicit Session_client(Session_capability session) __attribute__((deprecated))
+		:
+			Rpc_client<Session>(session),
+			_command_ds(*Genode::env_deprecated()->rm_session(), command_dataspace()),
 			_command_buffer(*_command_ds.local_addr<Command_buffer>())
 		{ }
 

@@ -5,17 +5,17 @@
  */
 
 /*
- * Copyright (C) 2009-2013 Genode Labs GmbH
+ * Copyright (C) 2009-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/printf.h>
 #include <rom_session/connection.h>
 #include <base/env.h>
 #include <base/heap.h>
-#include <base/component.h>
+#include <libc/component.h>
 #include <base/shared_object.h>
 
 using namespace Genode;
@@ -185,7 +185,7 @@ static void test_shared_object_api(Env &env, Allocator &alloc)
 /**
  * Main function of LDSO test
  */
-void Component::construct(Genode::Env &env)
+void Libc::Component::construct(Libc::Env &env)
 {
 	static Heap heap(env.ram(), env.rm());
 

@@ -6,16 +6,22 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
 #include <base/entrypoint.h>
 #include <base/component.h>
+
+#include <cpu/atomic.h>
+
+#define INCLUDED_BY_ENTRYPOINT_CC  /* prevent "deprecated" warning */
 #include <cap_session/connection.h>
+#undef INCLUDED_BY_ENTRYPOINT_CC
+
 #include <util/retry.h>
 
 /* base-internal includes */
@@ -31,8 +37,6 @@ namespace Genode {
 	extern bool inhibit_tracing;
 	void call_global_static_constructors();
 	void destroy_signal_thread();
-
-	extern void (*call_component_construct)(Genode::Env &);
 }
 
 
@@ -61,18 +65,38 @@ void Entrypoint::_process_incoming_signals()
 		do {
 			_sig_rec->block_for_signal();
 
-			/*
-			 * It might happen that we try to forward a signal to the
-			 * entrypoint, while the context of that signal is already
-			 * destroyed. In that case we will get an ipc error exception
-			 * as result, which has to be caught.
-			 */
-			retry<Genode::Blocking_canceled>(
-				[&] () { _signal_proxy_cap.call<Signal_proxy::Rpc_signal>(); },
-				[]  () { warning("blocking canceled during signal processing"); }
-			);
+			int success;
+			{
+				Lock::Guard guard(_signal_pending_lock);
+				success = cmpxchg(&_signal_recipient, NONE, SIGNAL_PROXY);
+			}
 
-		} while (!_suspended_callback);
+			/* common case, entrypoint is not in 'wait_and_dispatch_one_signal' */
+			if (success) {
+				/*
+				 * It might happen that we try to forward a signal to the
+				 * entrypoint, while the context of that signal is already
+				 * destroyed. In that case we will get an ipc error exception
+				 * as result, which has to be caught.
+				 */
+				retry<Blocking_canceled>(
+					[&] () { _signal_proxy_cap.call<Signal_proxy::Rpc_signal>(); },
+					[]  () { warning("blocking canceled during signal processing"); });
+
+				cmpxchg(&_signal_recipient, SIGNAL_PROXY, NONE);
+			} else {
+				/*
+				 * Entrypoint is in 'wait_and_dispatch_one_signal', wakup it up and
+				 * block for next signal
+				 */
+				_sig_rec->unblock_signal_waiter(*_rpc_ep);
+
+				/*
+				 * wait for the acknowledgment by the entrypoint
+				 */
+				_signal_pending_ack_lock.lock();
+			}
+		} while (!_suspended);
 
 		_suspend_dispatcher.destruct();
 		_sig_rec.destruct();
@@ -98,9 +122,38 @@ void Entrypoint::_process_incoming_signals()
 		void (*resumed_callback)() = _resumed_callback;
 		_suspended_callback        = nullptr;
 		_resumed_callback          = nullptr;
+		_suspended                 = false;
 
 		resumed_callback();
 	}
+}
+
+
+void Entrypoint::wait_and_dispatch_one_signal()
+{
+	for (;;) {
+
+		try {
+			_signal_pending_lock.lock();
+
+			cmpxchg(&_signal_recipient, NONE, ENTRYPOINT);
+			Signal sig =_sig_rec->pending_signal();
+			cmpxchg(&_signal_recipient, ENTRYPOINT, NONE);
+
+			_signal_pending_lock.unlock();
+
+			_signal_pending_ack_lock.unlock();
+
+			_dispatch_signal(sig);
+			break;
+
+		} catch (Signal_receiver::Signal_not_pending) {
+			_signal_pending_lock.unlock();
+			_sig_rec->block_for_signal();
+		}
+	}
+
+	_execute_post_signal_hook();
 }
 
 
@@ -116,19 +169,23 @@ void Entrypoint::schedule_suspend(void (*suspended)(), void (*resumed)())
 	_suspend_dispatcher.construct(*this, *this, &Entrypoint::_handle_suspend);
 
 	/* trigger wakeup of the signal-dispatch loop for suspend */
-	Genode::Signal_transmitter(*_suspend_dispatcher).submit();
+	Signal_transmitter(*_suspend_dispatcher).submit();
 }
 
 
 Signal_context_capability Entrypoint::manage(Signal_dispatcher_base &dispatcher)
 {
-	return _sig_rec->manage(&dispatcher);
+	/* _sig_rec is invalid for a small window in _process_incoming_signals */
+	return _sig_rec.constructed() ? _sig_rec->manage(&dispatcher)
+	                              : Signal_context_capability();
 }
 
 
 void Genode::Entrypoint::dissolve(Signal_dispatcher_base &dispatcher)
 {
-	_sig_rec->dissolve(&dispatcher);
+	/* _sig_rec is invalid for a small window in _process_incoming_signals */
+	if (_sig_rec.constructed())
+		_sig_rec->dissolve(&dispatcher);
 }
 
 
@@ -152,7 +209,7 @@ namespace {
 
 			Genode::call_global_static_constructors();
 
-			Genode::call_component_construct(env);
+			Component::construct(env);
 		}
 	};
 }
@@ -179,7 +236,7 @@ Entrypoint::Entrypoint(Env &env)
 
 	try {
 		constructor_cap.call<Constructor::Rpc_construct>();
-	} catch (Genode::Blocking_canceled) {
+	} catch (Blocking_canceled) {
 		warning("blocking canceled in entrypoint constructor");
 	}
 

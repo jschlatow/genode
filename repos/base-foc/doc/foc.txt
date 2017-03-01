@@ -83,54 +83,6 @@ instead of building everything:
 ! make run/demo
 
 
-Running L4Linux on top of Genode
-################################
-
-To get the L4Linux running on top of Genode, you have to change prepare its
-sources:
-
-! ./tool/ports/prepare_port l4linux
-
-This will fetch the currently supported version from the L4Linux subversion
-repository, and apply a patch to it, that is needed to execute it on top of
-Genode.
-
-Before compiling L4Linux for Genode/Fiasco.OC you have to integrate the 'ports-foc'
-repository into your build environment. Therefore edit the 'etc/build.conf' file
-in your build directory, and uncomment the following line:
-
-! REPOSITORIES += $(GENODE_DIR)/repos/ports-foc
-
-After that you can build and run L4Linux by issuing:
-
-! make run/l4linux
-
-in your build directory. This run-script boots a single L4Linux instance into
-a minimal console environment. After booting completes, the run-scripts tries
-to download the Genode project webpage via the 'wget' tool within the L4Linux
-environment. If all wents fine the run-script completes successfully.
-
-
-Integration of Fiasco.OC with Genode
-####################################
-
-If you don't want the Genode build system to build the Fiasco.OC kernel for
-you, but you want to provide your own version, you have to state in the
-'etc/foc.conf' file within your build directory, where to find it:
-
-! L4_BUILD_DIR = <l4re-build-dir>
-! KERNEL       = <fiasco.oc-kernel-binary>
-
-The first variable states where to find the kernel bindings (the L4RE build
-directory), the second one states where your kernel binary can be found.
-After adding these variable to the file, you have to do a full cleanup
-in your build directory to ensure, that the right bindings are used:
-
-! make cleanall
-
-From now on, run-scripts will use your provided kernel.
-
-
 Further Information
 ###################
 

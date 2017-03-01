@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2008-2013 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__IRQ_SESSION__CONNECTION_H_
@@ -32,7 +32,7 @@ struct Genode::Irq_connection : Connection<Irq_session>, Irq_session_client
 	                                 Irq_session::Polarity polarity,
 	                                 Genode::addr_t        device_config_phys)
 	{
-		return session("ram_quota=4K, irq_number=%u, irq_trigger=%u, "
+		return session("ram_quota=6K, irq_number=%u, irq_trigger=%u, "
 		               " irq_polarity=%u, device_config_phys=0x%lx",
 		               irq, trigger, polarity, device_config_phys);
 	}
@@ -65,9 +65,9 @@ struct Genode::Irq_connection : Connection<Irq_session>, Irq_session_client
 	Irq_connection(unsigned irq,
 	               Irq_session::Trigger  trigger  = Irq_session::TRIGGER_UNCHANGED,
 	               Irq_session::Polarity polarity = Irq_session::POLARITY_UNCHANGED,
-	               Genode::addr_t device_config_phys = 0)
+	               Genode::addr_t device_config_phys = 0) __attribute__((deprecated))
 	:
-		Connection<Irq_session>(_session(*Genode::env()->parent(), irq,
+		Connection<Irq_session>(_session(*Genode::env_deprecated()->parent(), irq,
 		                                 trigger, polarity, device_config_phys)),
 		Irq_session_client(cap())
 	{ }

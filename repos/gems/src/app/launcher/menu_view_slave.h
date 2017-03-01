@@ -5,16 +5,17 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _MENU_VIEW_SLAVE_H_
 #define _MENU_VIEW_SLAVE_H_
 
 /* Genode includes */
+#include <os/static_parent_services.h>
 #include <os/slave.h>
 #include <nitpicker_session/nitpicker_session.h>
 
@@ -35,7 +36,15 @@ class Launcher::Menu_view_slave
 
 	private:
 
-		class Policy : public Genode::Slave::Policy
+		class Policy
+		:
+			private Genode::Static_parent_services<Genode::Cpu_session,
+			                                       Genode::Pd_session,
+			                                       Genode::Ram_session,
+			                                       Genode::Rom_session,
+			                                       Genode::Log_session,
+			                                       Timer::Session>,
+			public Genode::Slave::Policy
 		{
 			private:
 
@@ -44,16 +53,6 @@ class Launcher::Menu_view_slave
 				Genode::Single_session_service<Report::Session>     _hover_report;
 
 				Position _position;
-
-			protected:
-
-				char const **_permitted_services() const
-				{
-					static char const *permitted_services[] = {
-						"CPU", "PD", "RAM", "ROM", "LOG", "Timer", 0 };
-
-					return permitted_services;
-				};
 
 			private:
 
@@ -64,11 +63,10 @@ class Launcher::Menu_view_slave
 					snprintf(config, sizeof(config),
 					         "<config xpos=\"%d\" ypos=\"%d\">\n"
 					         "  <report hover=\"yes\"/>\n"
-					         "  <libc>\n"
-					         "    <vfs>\n"
-					         "      <tar name=\"menu_view_styles.tar\" />\n"
-					         "    </vfs>\n"
-					         "  </libc>\n"
+					         "  <libc stderr=\"/dev/log\"/>\n"
+					         "  <vfs>\n"
+					         "    <tar name=\"menu_view_styles.tar\" />\n"
+					         "  </vfs>\n"
 					         "</config>",
 					         pos.x(), pos.y());
 
@@ -88,8 +86,8 @@ class Launcher::Menu_view_slave
 				       Capability<Report::Session>    hover_report_session,
 				       Position                       position)
 				:
-					Genode::Slave::Policy(_name(), _name(), ep, rm, ram, _quota()),
-					_nitpicker(nitpicker_session),
+					Genode::Slave::Policy(_name(), _name(), *this, ep, rm, ram, _quota()),
+					_nitpicker(rm, nitpicker_session),
 					_dialog_rom(dialog_rom_session),
 					_hover_report(hover_report_session),
 					_position(position)

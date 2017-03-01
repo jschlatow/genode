@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <log_session/connection.h>
@@ -30,7 +30,7 @@ class Log_console : public Console
 		struct Log : Log_session_client
 		{
 			Session_capability _cap() {
-				return env()->parent()->session_cap(Parent::Env::log()); }
+				return env_deprecated()->parent()->session_cap(Parent::Env::log()); }
 
 			Log() : Log_session_client(reinterpret_cap_cast<Log_session>(_cap()))
 			{ }
@@ -96,7 +96,7 @@ class Log_console : public Console
 		void reconnect()
 		{
 			/*
-			 * We cannot use a 'Volatile_object' because we have to skip
+			 * We cannot use a 'Reconstructible' because we have to skip
 			 * the object destruction inside a freshly forked process.
 			 * Otherwise, the attempt to destruct the capability contained
 			 * in the 'Log' object would result in an inconsistent ref counter

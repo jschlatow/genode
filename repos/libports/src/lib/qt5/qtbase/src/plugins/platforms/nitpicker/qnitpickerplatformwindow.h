@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 
@@ -70,8 +70,8 @@ class QNitpickerPlatformWindow : public QObject, public QPlatformWindow
 		QTouchDevice                                *_touch_device;
 		QTouchDevice * _init_touch_device();
 
-		void _process_mouse_event(Input::Event *ev);
-		void _process_key_event(Input::Event *ev);
+		void _process_mouse_event(Input::Event const &ev);
+		void _process_key_event(Input::Event const &ev);
 		void _process_touch_events(QList<Input::Event> const &events);
 
 		Nitpicker::Session::View_handle _create_view();

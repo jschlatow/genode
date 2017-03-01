@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _LEAF_RULE_H_
@@ -33,11 +33,11 @@ class Net::Leaf_rule : public Rule
 		Domain &_domain;
 
 		static Domain &_find_domain(Domain_tree            &domains,
-		                            Genode::Xml_node const &node);
+		                            Genode::Xml_node const  node);
 
 	public:
 
-		Leaf_rule(Domain_tree &domains, Genode::Xml_node const &node);
+		Leaf_rule(Domain_tree &domains, Genode::Xml_node const node);
 
 
 		/***************

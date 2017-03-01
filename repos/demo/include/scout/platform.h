@@ -7,10 +7,10 @@
  */
 
 /*
- * Copyright (C) 2005-2013 Genode Labs GmbH
+ * Copyright (C) 2005-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__SCOUT__PLATFORM_H_
@@ -32,19 +32,6 @@ namespace Scout {
 	typedef Genode::Rect<>  Rect;
 
 	class Platform;
-}
-
-
-inline void *operator new(__SIZE_TYPE__ size)
-{
-	using Genode::env;
-	void *addr = env()->heap()->alloc(size);
-	if (!addr) {
-		Genode::error("env()->heap() has consumed ", env()->heap()->consumed());
-		Genode::error("env()->ram_session()->quota = ", env()->ram_session()->quota());
-		throw Genode::Allocator::Out_of_memory();
-	}
-	return addr;
 }
 
 

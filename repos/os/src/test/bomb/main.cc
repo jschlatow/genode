@@ -2,27 +2,25 @@
  * \brief  Fork bomb to stress Genode
  * \author Christian Helmuth
  * \author Norman Feske
+ * \author Alexander Böttcher
  * \date   2007-08-16
- *
- * The better part of this code is derived from the original init
- * implementation by Norman.
  */
 
 /*
- * Copyright (C) 2007-2016 Genode Labs GmbH
+ * Copyright (C) 2007-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/component.h>
 #include <base/child.h>
-#include <base/sleep.h>
 #include <base/service.h>
 #include <base/attached_rom_dataspace.h>
 #include <init/child_policy.h>
 #include <timer_session/connection.h>
 #include <os/child_policy_dynamic_rom.h>
+#include <os/static_parent_services.h>
 
 using namespace Genode;
 
@@ -44,7 +42,7 @@ class Bomb_child : public Child_policy
 
 		Registry<Registered<Parent_service> > &_parent_services;
 
-		Child_policy_dynamic_rom_file _config_policy { "config", _ep, &_env.ram() };
+		Child_policy_dynamic_rom_file _config_policy { _env.rm(), "config", _ep, &_env.ram() };
 
 		Child _child { _env.rm(), _ep, *this };
 
@@ -151,84 +149,110 @@ unique_child_name(Children const &children, Bomb_child::Name const &binary_name,
 }
 
 
-void Component::construct(Genode::Env &env)
+struct Bomb
 {
-	static Attached_rom_dataspace config(env, "config");
-	Xml_node node = config.xml();
+	Genode::Env &env;
 
-	unsigned const rounds      = node.attribute_value("rounds", 1U);
-	unsigned const generation  = node.attribute_value("generations", 1U);
-	unsigned const children    = node.attribute_value("children", 2U);
-	unsigned const sleeptime   = node.attribute_value("sleep", 2000U);
-	unsigned long const demand = node.attribute_value("demand", 1024UL * 1024);
+	Constructible<Timer::Connection> timer;
 
-	log("--- bomb started ---");
+	Genode::Signal_handler<Bomb> signal_timeout  { env.ep(), *this, &Bomb::destruct_children };
+	Genode::Signal_handler<Bomb> signal_resource { env.ep(), *this, &Bomb::resource_request };
 
-	/* try to create timer session, if it fails, bomb is our parent */
-	static Lazy_volatile_object<Timer::Connection> timer;
-	try { timer.construct(env); } catch (Parent::Service_denied) { }
+	Attached_rom_dataspace config { env, "config" };
 
-	if (timer.constructed())
-		log("rounds=", rounds, " generations=", generation, " children=",
-		    children, " sleep=", sleeptime, " demand=", demand/1024, "K");
+	unsigned round = 0;
+	unsigned const rounds      = config.xml().attribute_value("rounds", 1U);
+	unsigned const generation  = config.xml().attribute_value("generations", 1U);
+	unsigned const children    = config.xml().attribute_value("children", 2U);
+	unsigned const sleeptime   = config.xml().attribute_value("sleep", 2000U);
+	unsigned long const demand = config.xml().attribute_value("demand", 1024UL * 1024);
 
-	/* names of services provided by the parent */
-	static const char *names[] = {
-		"RAM", "PD", "CPU", "ROM", "LOG", 0 };
+	Heap heap { env.ram(), env.rm() };
 
-	static Heap heap(env.ram(), env.rm());
+	Children child_registry;
 
-	static Registry<Registered<Parent_service> > parent_services;
-	for (unsigned i = 0; names[i]; i++)
-		new (heap) Registered<Parent_service>(parent_services, names[i]);
+	Static_parent_services<Ram_session, Pd_session, Cpu_session,
+	                       Rom_session, Log_session> parent_services;
 
-	unsigned long avail = env.ram().avail();
-	unsigned long amount = (avail - demand) / children;
-	if (amount < (demand * children)) {
-		log("I'm a leaf node - generation ", generation, " - not enough memory.");
-		sleep_forever();
-	}
-	if (generation == 0) {
-		log("I'm a leaf node - generation 0");
-		sleep_forever();
-	}
+	void construct_children()
+	{
+		unsigned long avail = env.ram().avail();
+		unsigned long amount = (avail - demand) / children;
+		if (amount < (demand * children)) {
+			log("I'm a leaf node - generation ", generation,
+			    " - not enough memory.");
+			return;
+		}
+		if (generation == 0) {
+			log("I'm a leaf node - generation 0");
+			return;
+		}
 
-	static Children child_registry;
+		log("[", round, "] It's time to start all my children...");
 
-	Bomb_child::Name const binary_name("bomb");
+		Bomb_child::Name const binary_name("bomb");
 
-	for (unsigned round = 0; round < rounds ; ++round) {
 		for (unsigned i = children; i; --i) {
 			new (heap)
 				Registered<Bomb_child>(child_registry, env, binary_name,
-				                       unique_child_name(child_registry, binary_name,
+				                       unique_child_name(child_registry,
+				                                         binary_name,
 				                                         generation - 1),
 				                       amount, parent_services, generation - 1);
 		}
 
-		/* is init our parent? */
-		if (!timer.constructed()) sleep_forever();
+		/* master if we have a timer connection */
+		if (timer.constructed())
+			timer->trigger_once(sleeptime * 1000);
+	}
 
-		/* don't ask parent for further resources if we ran out of memory */
-		static Signal_receiver sig_rec;
-		static Signal_context  sig_ctx_res_avail;
-		if (round == 0) {
-			/* prevent to block for resource upgrades caused by clients */
-			env.parent().resource_avail_sigh(sig_rec.manage(&sig_ctx_res_avail));
-		}
-
-		timer->msleep(sleeptime);
+	void destruct_children()
+	{
 		log("[", round, "] It's time to kill all my children...");
 
 		child_registry.for_each([&] (Registered<Bomb_child> &child) {
 			destroy(heap, &child); });
 
 		log("[", round, "] Done.");
+
+		++round;
+
+		/* master if we have a timer connection */
+		if (round == rounds && timer.constructed()) {
+			log("Done. Going to sleep");
+			return;
+		}
+
+		construct_children();
 	}
 
-	/* master if we have a timer connection */
-	if (timer.constructed())
-		log("Done. Going to sleep");
+	void resource_request()
+	{
+		Genode::error("resource request");
+	}
 
-	sleep_forever();
-}
+	Bomb(Genode::Env &env) : env(env)
+	{
+		/*
+		 * Don't ask parent for further resources if we ran out of memory.
+		 * Prevent us to block for resource upgrades caused by clients
+		 */
+		env.parent().resource_avail_sigh(signal_resource);
+
+		log("--- bomb started ---");
+
+		/* try to create timer session, if it fails, bomb is our parent */
+		try { timer.construct(env); } catch (Parent::Service_denied) { }
+
+		if (timer.constructed()) {
+			timer->sigh(signal_timeout);
+
+			log("rounds=", rounds, " generations=", generation, " children=",
+			    children, " sleep=", sleeptime, " demand=", demand/1024, "K");
+		}
+
+		construct_children();
+	}
+};
+
+void Component::construct(Genode::Env &env) { static Bomb bomb(env); }

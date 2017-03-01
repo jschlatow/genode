@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2008-2013 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__RM_SESSION__CONNECTION_H_
@@ -40,7 +40,7 @@ struct Genode::Rm_connection : Connection<Rm_session>, Rm_session_client
 	 * \deprecated  Use the constructor with 'Env &' as first
 	 *              argument instead
 	 */
-	Rm_connection()
+	Rm_connection() __attribute__((deprecated))
 	:
 		Connection<Rm_session>(session("ram_quota=%u", RAM_QUOTA)),
 		Rm_session_client(cap())

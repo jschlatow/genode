@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* base includes */
@@ -21,7 +21,7 @@
 /* os includes */
 #include <input/component.h>
 #include <input/root.h>
-#include <os/attached_rom_dataspace.h>
+#include <base/attached_rom_dataspace.h>
 
 namespace Transform {
 	using Genode::Xml_node;

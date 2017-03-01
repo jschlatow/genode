@@ -5,19 +5,20 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is distributed under the terms of the GNU General Public License
  * version 2.
  */
 
 /* Genode includes */
-#include <os/attached_rom_dataspace.h>
+#include <base/attached_rom_dataspace.h>
 
 /* VirtualBox includes */
 #include <VBoxDD.h>
 #include <VBoxDD2.h>
 
+#include "vmm.h"
 
 #define REGISTER(device)                                       \
 	do {                                                       \
@@ -79,7 +80,7 @@ extern "C" int VBoxDevicesRegister(PPDMDEVREGCB pCallbacks, uint32_t u32Version)
 static bool read_force_ioapic_from_config()
 {
 	try {
-		Genode::Attached_rom_dataspace config("config");
+		Genode::Attached_rom_dataspace config(genode_env(), "config");
 		return config.xml().attribute_value("force_ioapic", false);
 	} catch (Genode::Rom_connection::Rom_connection_failed) {
 		return false;

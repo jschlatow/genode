@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__SPEC__X86_64__MUEN__TIMER_H_
@@ -74,7 +74,7 @@ class Genode::Timer
 				throw Invalid_region();
 			}
 
-			_event_page = (Subject_timed_event *)region.address;
+			_event_page = (Subject_timed_event *)Platform::mmio_to_virt(region.address);
 			_event_page->event_nr = Board::TIMER_EVENT_KERNEL;
 			log("muen-timer: Page @", Hex(region.address), ", "
 			    "frequency ", _tics_per_ms, " kHz, "
@@ -83,7 +83,7 @@ class Genode::Timer
 			if (sinfo()->get_memregion_info("monitor_timed_event", &region)) {
 				log("muen-timer: Found guest timed event page @", Hex(region.address),
 				    " -> enabling preemption");
-				_guest_event_page = (Subject_timed_event *)region.address;
+				_guest_event_page = (Subject_timed_event *)Platform::mmio_to_virt(region.address);
 				_guest_event_page->event_nr = Board::TIMER_EVENT_PREEMPT;
 			}
 		}

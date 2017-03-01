@@ -6,17 +6,17 @@
  */
 
 /*
- * Copyright (C) 2014-2016 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 #ifndef _LX_KIT__INTERNAL__IO_PORT_H_
 #define _LX_KIT__INTERNAL__IO_PORT_H_
 
 /* Genode includes */
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 #include <io_port_session/client.h>
 
 namespace Lx { class Io_port; }
@@ -25,10 +25,10 @@ class Lx::Io_port
 {
 	private:
 
-		unsigned                                                     _base = 0;
-		unsigned                                                     _size = 0;
-		Genode::Io_port_session_capability                           _cap;
-		Genode::Lazy_volatile_object<Genode::Io_port_session_client> _port;
+		unsigned                                              _base = 0;
+		unsigned                                              _size = 0;
+		Genode::Io_port_session_capability                    _cap;
+		Genode::Constructible<Genode::Io_port_session_client> _port;
 
 		bool _valid(unsigned port) {
 			return _cap.valid() && port >= _base && port < _base + _size; }

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2008-2013 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__TIMER_SESSION__CONNECTION_H_
@@ -38,9 +38,9 @@ class Timer::Connection : public Genode::Connection<Session>, public Session_cli
 		/**
 		 * Constructor
 		 */
-		Connection(Genode::Env &env)
+		Connection(Genode::Env &env, char const *label = "")
 		:
-			Genode::Connection<Session>(env, session(env.parent(), "ram_quota=8K")),
+			Genode::Connection<Session>(env, session(env.parent(), "ram_quota=10K, label=\"%s\"", label)),
 			Session_client(cap())
 		{
 			/* register default signal handler */
@@ -54,9 +54,9 @@ class Timer::Connection : public Genode::Connection<Session>, public Session_cli
 		 * \deprecated  Use the constructor with 'Env &' as first
 		 *              argument instead
 		 */
-		Connection()
+		Connection() __attribute__((deprecated))
 		:
-			Genode::Connection<Session>(session("ram_quota=8K")),
+			Genode::Connection<Session>(session("ram_quota=10K")),
 			Session_client(cap())
 		{
 			/* register default signal handler */

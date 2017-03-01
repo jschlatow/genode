@@ -5,13 +5,15 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/component.h>
+#include <base/attached_rom_dataspace.h>
+#include <base/heap.h>
 
 #include <scout/platform.h>
 #include <scout/tick.h>
@@ -23,20 +25,14 @@
 #include "elements.h"
 #include "launchpad_window.h"
 
-#include <base/env.h>
-#include <init/child_config.h>
-#include <os/config.h>
+
+static Genode::Allocator *_alloc_ptr;
+
+void *operator new (__SIZE_TYPE__ n) { return _alloc_ptr->alloc(n); }
 
 
-/**
- * Runtime configuration
- */
-namespace Scout { namespace Config {
-	int iconbar_detail    = 1;
-	int background_detail = 1;
-	int mouse_cursor      = 1;
-	int browser_attr      = 0;
-} }
+using namespace Scout;
+using namespace Genode;
 
 
 /**
@@ -46,28 +42,32 @@ class Avail_quota_update : public Scout::Tick
 {
 	private:
 
-		Launchpad      *_launchpad;
-		Genode::size_t  _avail;
+		Ram_session &_ram;
+		Launchpad   &_launchpad;
+		size_t       _avail = 0;
 
 	public:
 
 		/**
 		 * Constructor
 		 */
-		Avail_quota_update(Launchpad *launchpad):
-			_launchpad(launchpad), _avail(0) {
-			schedule(200); }
+		Avail_quota_update(Ram_session &ram, Launchpad &launchpad)
+		:
+			_ram(ram), _launchpad(launchpad)
+		{
+			schedule(200);
+		}
 
 		/**
 		 * Tick interface
 		 */
 		int on_tick()
 		{
-			Genode::size_t new_avail = Genode::env()->ram_session()->avail();
+			size_t new_avail = _ram.avail();
 
 			/* update launchpad window if needed */
 			if (new_avail != _avail)
-				_launchpad->quota(new_avail);
+				_launchpad.quota(new_avail);
 
 			_avail = new_avail;
 
@@ -77,26 +77,61 @@ class Avail_quota_update : public Scout::Tick
 };
 
 
-static long read_int_attr_from_config(const char *attr, long default_value)
-{
-	long result = default_value;
-	try {
-		Genode::config()->xml_node().attribute(attr).value(&result);
-	} catch (...) { }
-	return result;
-}
-
-
 struct Main : Scout::Event_handler
 {
-	Scout::Platform   &_pf;
-	Scout::Window     &_launchpad;
-	Scout::User_state &_user_state;
+	Env &_env;
 
-	unsigned long _old_time = _pf.timer_ticks();
+	Heap _heap { _env.ram(), _env.rm() };
 
-	Main(Scout::Platform &pf, Scout::Window &launchpad, Scout::User_state &user_state)
-	: _pf(pf), _launchpad(launchpad), _user_state(user_state) { }
+	bool const _global_new_initialized = (_alloc_ptr = &_heap, true);
+
+	Nitpicker::Connection _nitpicker { _env };
+
+	Platform _platform { _env, *_nitpicker.input() };
+
+	bool const _event_handler_registered = (_platform.event_handler(*this), true);
+
+	Attached_rom_dataspace _config { _env, "config" };
+
+	int      const _initial_x = _config.xml().attribute_value("xpos",   550U);
+	int      const _initial_y = _config.xml().attribute_value("ypos",   150U);
+	unsigned const _initial_w = _config.xml().attribute_value("width",  400U);
+	unsigned const _initial_h = _config.xml().attribute_value("height", 400U);
+
+	Scout::Area  const _max_size         { 530, 620 };
+	Scout::Point const _initial_position { _initial_x, _initial_y };
+	Scout::Area  const _initial_size     { _initial_w, _initial_h };
+
+	Nitpicker_graphics_backend
+		_graphics_backend { _env.rm(), _nitpicker, _heap, _max_size,
+		                    _initial_position, _initial_size };
+
+	Launchpad_window<Pixel_rgb565>
+		_launchpad { _env, _graphics_backend, _initial_position, _initial_size,
+		             _max_size, _env.ram().avail() };
+
+	void _process_config()
+	{
+		try { _launchpad.process_config(_config.xml()); } catch (...) { }
+	}
+
+	bool const _config_processed = (_process_config(), true);
+
+	Avail_quota_update _avail_quota_update { _env.ram(), _launchpad };
+
+	User_state _user_state { &_launchpad, &_launchpad,
+	                         _initial_position.x(), _initial_position.y() };
+
+	void _init_launchpad()
+	{
+		_launchpad.parent(&_user_state);
+		_launchpad.format(_initial_size);
+		_launchpad.ypos(0);
+	}
+
+	bool const _launchpad_initialized = (_init_launchpad(), true);
+
+	unsigned long _old_time = _platform.timer_ticks();
 
 	void handle_event(Scout::Event const &event) override
 	{
@@ -110,60 +145,19 @@ struct Main : Scout::Event_handler
 		_user_state.handle_event(ev);
 
 		if (ev.type == Event::TIMER)
-			Tick::handle(_pf.timer_ticks());
+			Tick::handle(_platform.timer_ticks());
 
 		/* perform periodic redraw */
-		unsigned long const curr_time = _pf.timer_ticks();
-		if (!_pf.event_pending() && ((curr_time - _old_time > 20)
-		                          || (curr_time < _old_time))) {
+		unsigned long const curr_time = _platform.timer_ticks();
+		if (!_platform.event_pending() && ((curr_time - _old_time > 20)
+		                               || (curr_time < _old_time))) {
 			_old_time = curr_time;
 			_launchpad.process_redraw();
 		}
 	}
+
+	Main(Env &env) : _env(env) { }
 };
 
 
-/***************
- ** Component **
- ***************/
-
-void Component::construct(Genode::Env &env)
-{
-	using namespace Scout;
-
-	static Nitpicker::Connection nitpicker(env);
-	static Platform pf(env, *nitpicker.input());
-
-	long initial_x = read_int_attr_from_config("xpos",   550);
-	long initial_y = read_int_attr_from_config("ypos",   150);
-	long initial_w = read_int_attr_from_config("width",  400);
-	long initial_h = read_int_attr_from_config("height", 400);
-
-	Area  const max_size        (530, 620);
-	Point const initial_position(initial_x, initial_y);
-	Area  const initial_size    (initial_w, initial_h);
-
-	static Nitpicker_graphics_backend
-		graphics_backend(nitpicker, max_size, initial_position, initial_size);
-
-	/* create instance of launchpad window */
-	static Launchpad_window<Pixel_rgb565>
-		launchpad(env, graphics_backend, initial_position, initial_size,
-		          max_size, env.ram().avail());
-
-	/* request config file from ROM service */
-	try { launchpad.process_config(); } catch (...) { }
-
-	static Avail_quota_update avail_quota_update(&launchpad);
-
-	/* create user state manager */
-	static User_state user_state(&launchpad, &launchpad,
-	                             initial_position.x(), initial_position.y());
-
-	launchpad.parent(&user_state);
-	launchpad.format(initial_size);
-	launchpad.ypos(0);
-
-	static Main main(pf, launchpad, user_state);
-	pf.event_handler(main);
-}
+void Component::construct(Genode::Env &env) { static Main main(env); }

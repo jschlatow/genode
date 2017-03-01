@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__SPEC__EXYNOS5__TIMER_H_
@@ -19,6 +19,7 @@
 
 /* core include */
 #include <board.h>
+#include <platform.h>
 
 /* Genode includes */
 #include <util/mmio.h>
@@ -207,7 +208,7 @@ class Genode::Timer : public Mmio
 		 */
 		Timer()
 		:
-			Mmio(Board::MCT_MMIO_BASE),
+			Mmio(Platform::mmio_to_virt(Board::MCT_MMIO_BASE)),
 			_tics_per_ms(_calc_tics_per_ms(Board::MCT_CLOCK))
 		{
 			Mct_cfg::access_t mct_cfg = 0;

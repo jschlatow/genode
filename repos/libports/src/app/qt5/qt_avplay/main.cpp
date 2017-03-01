@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Qt includes */
@@ -18,8 +18,7 @@
 #include "main_window.h"
 
 /* Genode includes */
-#include <base/component.h>
-#include <base/printf.h>
+#include <libc/component.h>
 
 
 static inline void load_stylesheet()
@@ -38,15 +37,17 @@ static inline void load_stylesheet()
 extern int genode_argc;
 extern char **genode_argv;
 
-void Component::construct(Genode::Env &env)
+void Libc::Component::construct(Libc::Env &env)
 {
-	QApplication app(genode_argc, genode_argv);
+	Libc::with_libc([&] {
+		QApplication app(genode_argc, genode_argv);
 
-	load_stylesheet();
+		load_stylesheet();
 
-	QMember<Main_window> main_window(env);
+		QMember<Main_window> main_window(env);
 
-	main_window->show();
+		main_window->show();
 
-	app.exec();
+		app.exec();
+	});
 }

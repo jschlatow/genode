@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -16,7 +16,7 @@
 #include <util/misc_math.h>
 
 /* core includes */
-#include <cap_session/cap_session.h>
+#include <pd_session/pd_session.h>
 #include <rpc_cap_factory.h>
 #include <platform.h>
 
@@ -40,7 +40,7 @@ Native_capability Rpc_cap_factory::_alloc(Rpc_cap_factory *owner,
 	Rpc_obj_key const rpc_obj_key(++unique_id_cnt);
 
 	// XXX remove cast
-	return Capability_space::create_rpc_obj_cap(ep, (Cap_session*)owner, rpc_obj_key);
+	return Capability_space::create_rpc_obj_cap(ep, (Pd_session*)owner, rpc_obj_key);
 }
 
 

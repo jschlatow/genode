@@ -5,16 +5,19 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _HELP_COMMAND_H_
 #define _HELP_COMMAND_H_
 
-struct Help_command : Command
+namespace Cli_monitor { struct Help_command; }
+
+
+struct Cli_monitor::Help_command : Command
 {
 	Help_command() : Command("help", "brief help information") { }
 

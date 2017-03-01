@@ -10,10 +10,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__LAUNCHPAD__LAUNCHPAD_H_
@@ -21,9 +21,7 @@
 
 #include <base/allocator.h>
 #include <base/service.h>
-#include <base/printf.h>
 #include <base/lock.h>
-#include <cap_session/connection.h>
 #include <timer_session/timer_session.h>
 #include <pd_session/client.h>
 #include <init/child.h>
@@ -49,7 +47,11 @@ class Launchpad_child : public Genode::Child_policy,
 
 		Name const _name;
 
+		Binary_name const _elf_name;
+
 		Genode::Env &_env;
+
+		Genode::Allocator &_alloc;
 
 		Genode::Ram_session_capability _ref_ram_cap;
 		Genode::Ram_session_client     _ref_ram { _ref_ram_cap };
@@ -88,15 +90,17 @@ class Launchpad_child : public Genode::Child_policy,
 	public:
 
 		Launchpad_child(Genode::Env                 &env,
+		                Genode::Allocator           &alloc,
 		                Genode::Session_label const &label,
-		                Name                  const &elf_name,
+		                Binary_name           const &elf_name,
 		                Genode::size_t               ram_quota,
 		                Parent_services             &parent_services,
 		                Child_services              &child_services,
 		                Genode::Dataspace_capability config_ds)
 		:
-			_name(label),
-			_env(env), _ref_ram_cap(env.ram_session_cap()), _ram_quota(ram_quota),
+			_name(label), _elf_name(elf_name),
+			_env(env), _alloc(alloc),
+			_ref_ram_cap(env.ram_session_cap()), _ram_quota(ram_quota),
 			_parent_services(parent_services),
 			_child_services(child_services),
 			_session_requester(env.ep().rpc_ep(), _env.ram(), _env.rm()),
@@ -112,10 +116,8 @@ class Launchpad_child : public Genode::Child_policy,
 			_child_services.for_each(
 				[&] (Child_service &service) {
 					if (service.has_id_space(_session_requester.id_space()))
-						Genode::destroy(_child.heap(), &service); });
+						Genode::destroy(_alloc, &service); });
 		}
-
-		Genode::Allocator &heap() { return _child.heap(); }
 
 
 		/****************************
@@ -123,6 +125,8 @@ class Launchpad_child : public Genode::Child_policy,
 		 ****************************/
 
 		Name name() const override { return _name; }
+
+		Binary_name binary_name() const override { return _elf_name; }
 
 		Genode::Ram_session &ref_ram() override { return _ref_ram; }
 
@@ -188,7 +192,7 @@ class Launchpad_child : public Genode::Child_policy,
 				return;
 			}
 
-			new (_child.heap())
+			new (_alloc)
 				Child_service(_child_services, _session_requester.id_space(),
 				              _child.session_factory(), service_name,
 				              _child.ram_session_cap(), *this);
@@ -233,7 +237,7 @@ class Launchpad
 		/**
 		 * Process launchpad XML configuration
 		 */
-		void process_config();
+		void process_config(Genode::Xml_node);
 
 
 		/*************************

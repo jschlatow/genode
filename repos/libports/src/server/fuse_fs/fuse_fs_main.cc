@@ -5,22 +5,22 @@
  */
 
 /*
- * Copyright (C) 2013-2016 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
 #include <base/heap.h>
 #include <file_system/node_handle_registry.h>
 #include <file_system_session/rpc_object.h>
-#include <os/attached_rom_dataspace.h>
+#include <base/attached_rom_dataspace.h>
 #include <os/config.h>
-#include <os/server.h>
 #include <os/session_policy.h>
 #include <root/component.h>
 #include <util/xml_node.h>
+#include <libc/component.h>
 
 /* libc includes */
 #include <errno.h>
@@ -41,13 +41,13 @@ class File_system::Session_component : public Session_rpc_object
 {
 	private:
 
-		Server::Entrypoint   &_ep;
+		Genode::Entrypoint   &_ep;
 		Allocator            &_md_alloc;
 		Directory            &_root;
 		Node_handle_registry  _handle_registry;
 		bool                  _writeable;
 
-		Signal_rpc_member<Session_component> _process_packet_dispatcher;
+		Signal_handler<Session_component> _process_packet_handler;
 
 
 		/******************************
@@ -86,6 +86,10 @@ class File_system::Session_component : public Session_rpc_object
 
 				res_length = node.write((char const *)content, length, offset);
 				break;
+
+			case Packet_descriptor::READ_READY:
+				/* not supported */
+				break;
 			}
 
 			packet.length(res_length);
@@ -115,10 +119,10 @@ class File_system::Session_component : public Session_rpc_object
 		}
 
 		/**
-		 * Called by signal dispatcher, executed in the context of the main
+		 * Called by signal handler, executed in the context of the main
 		 * thread (not serialized with the RPC functions)
 		 */
-		void _process_packets(unsigned)
+		void _process_packets()
 		{
 			while (tx_sink()->packet_avail()) {
 
@@ -158,20 +162,21 @@ class File_system::Session_component : public Session_rpc_object
 		 * Constructor
 		 */
 		Session_component(size_t              tx_buf_size,
-		                  Server::Entrypoint &ep,
+		                  Genode::Entrypoint &ep,
+		                  Genode::Region_map &rm,
 		                  char const         *root_dir,
 		                  bool                writeable,
 		                  Allocator          &md_alloc)
 		:
-			Session_rpc_object(env()->ram_session()->alloc(tx_buf_size), ep.rpc_ep()),
+			Session_rpc_object(env()->ram_session()->alloc(tx_buf_size), rm, ep.rpc_ep()),
 			_ep(ep),
 			_md_alloc(md_alloc),
 			_root(*new (&_md_alloc) Directory(_md_alloc, root_dir, false)),
 			_writeable(writeable),
-			_process_packet_dispatcher(_ep, *this, &Session_component::_process_packets)
+			_process_packet_handler(_ep, *this, &Session_component::_process_packets)
 		{
-			_tx.sigh_packet_avail(_process_packet_dispatcher);
-			_tx.sigh_ready_to_ack(_process_packet_dispatcher);
+			_tx.sigh_packet_avail(_process_packet_handler);
+			_tx.sigh_ready_to_ack(_process_packet_handler);
 		}
 
 		/**
@@ -408,7 +413,8 @@ class File_system::Root : public Root_component<Session_component>
 {
 	private:
 
-		Server::Entrypoint &_ep;
+		Genode::Entrypoint &_ep;
+		Genode::Region_map &_rm;
 
 	protected:
 
@@ -488,7 +494,7 @@ class File_system::Root : public Root_component<Session_component>
 				throw Root::Quota_exceeded();
 			}
 			return new (md_alloc())
-				Session_component(tx_buf_size, _ep, root_dir, writeable, *md_alloc());
+				Session_component(tx_buf_size, _ep, _rm, root_dir, writeable, *md_alloc());
 		}
 
 	public:
@@ -501,26 +507,27 @@ class File_system::Root : public Root_component<Session_component>
 		 *                    data-flow signals of packet streams
 		 * \param md_alloc    meta-data allocator
 		 */
-		Root(Server::Entrypoint &ep, Allocator &md_alloc)
+		Root(Genode::Entrypoint &ep, Allocator &md_alloc, Genode::Region_map &rm)
 		:
 			Root_component<Session_component>(&ep.rpc_ep(), &md_alloc),
-			_ep(ep)
+			_ep(ep), _rm(rm)
 		{ }
 };
 
 
 struct File_system::Main
 {
-	Server::Entrypoint &ep;
+	Genode::Entrypoint &ep;
+	Genode::Region_map &rm;
 
 	/*
 	 * Initialize root interface
 	 */
 	Sliced_heap sliced_heap = { env()->ram_session(), env()->rm_session() };
 
-	Root fs_root = { ep, sliced_heap };
+	Root fs_root = { ep, sliced_heap, rm };
 
-	Main(Server::Entrypoint &ep) : ep(ep)
+	Main(Genode::Entrypoint &ep, Genode::Region_map &rm) : ep(ep), rm(rm)
 	{
 		if (!Fuse::init_fs()) {
 			Genode::error("FUSE fs initialization failed");
@@ -539,10 +546,12 @@ struct File_system::Main
 };
 
 
-/**********************
- ** Server framework **
- **********************/
+/***************
+ ** Component **
+ ***************/
 
-char const *   Server::name()                            { return "fuse_fs_ep"; }
-Genode::size_t Server::stack_size()                      { return 16*1024*sizeof(long); }
-void           Server::construct(Server::Entrypoint &ep) { static File_system::Main inst(ep); }
+void Libc::Component::construct(Libc::Env &env)
+{
+	static File_system::Main inst(env.ep(), env.rm());
+}
+

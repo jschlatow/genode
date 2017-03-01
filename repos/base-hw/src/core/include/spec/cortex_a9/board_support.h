@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__SPEC__CORTEX_A9__BOARD_SUPPORT_H_
@@ -18,23 +18,15 @@
 #include <drivers/board_base.h>
 #include <spec/arm/pl310.h>
 
-namespace Cortex_a9
-{
-	/**
-	 * Board driver
-	 */
-	class Board;
-}
+namespace Cortex_a9 { class Board; }
 
 class Cortex_a9::Board : public Genode::Board_base
 {
-	protected:
+	public:
 
 		using L2_cache = Arm::Pl310;
 
-		L2_cache _l2_cache;
-
-	public:
+		static constexpr bool SMP = true;
 
 		enum Errata {
 			ARM_754322,
@@ -61,14 +53,17 @@ class Cortex_a9::Board : public Genode::Board_base
 			PRIVATE_TIMER_IRQ         = 29,
 		};
 
-		Board() : _l2_cache(Genode::Board_base::PL310_MMIO_BASE) {}
+		Board();
 
 		L2_cache & l2_cache() { return _l2_cache; }
 
 		void init() { }
 		void wake_up_all_cpus(void * const ip);
-		bool is_smp() { return true; }
 		bool errata(Errata);
+
+	protected:
+
+		L2_cache _l2_cache;
 };
 
 #endif /* _CORE__INCLUDE__SPEC__CORTEX_A9__BOARD_SUPPORT_H_ */

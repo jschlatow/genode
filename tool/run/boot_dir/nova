@@ -1,3 +1,8 @@
+proc binary_name_ld_lib_so { } { return "ld-nova.lib.so" }
+proc binary_name_core_o    { } { return "nova/core.o" }
+proc binary_name_timer     { } { return "nova_timer_drv" }
+
+
 ##
 # Read the location of the NOVA kernel directory from 'etc/nova.conf'
 #
@@ -8,7 +13,7 @@ proc nova_kernel { } {
 		if {[file exists etc/nova.conf]} {
 			set _nova_kernel [exec sed -n "/^NOVA_KERNEL/s/^.*=\\s*//p" etc/nova.conf]
 		} else {
-		        set _nova_kernel "[pwd]/kernel/hypervisor"
+		        set _nova_kernel "[pwd]/kernel/nova/hypervisor"
 		}
 	}
 	return $_nova_kernel
@@ -19,7 +24,7 @@ proc nova_kernel { } {
 # Return whether nova is provided from the outside
 #
 proc nova_external { } {
-	if {[nova_kernel] == "[pwd]/kernel/hypervisor"} { return 0 }
+	if {[nova_kernel] == "[pwd]/kernel/nova/hypervisor"} { return 0 }
 	return 1
 }
 
@@ -43,12 +48,16 @@ proc core_ld_opts { } {
 #
 proc run_boot_dir {binaries} {
 
+	if {![nova_external]} {
+		build { lib/ld/nova kernel }
+	} else {
+		build { lib/ld/nova }
+	}
+
 	#
 	# Collect contents of the ISO image
 	#
 	build_core_image $binaries
-
-	if {![nova_external]} { build { kernel } }
 
 	puts "using NOVA kernel at [nova_kernel]"
 	exec [cross_dev_prefix]objcopy -O elf32-i386 [nova_kernel] [run_dir]/hypervisor

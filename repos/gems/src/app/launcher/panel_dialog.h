@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _PANEL_DIALOG_H_
@@ -81,7 +81,7 @@ class Launcher::Panel_dialog : Input_event_handler, Dialog_generator,
 			Xml_node xml() const { return _xml; }
 		};
 
-		Lazy_volatile_object<Buffered_xml> _config;
+		Constructible<Buffered_xml> _config;
 
 		List<Element> _elements;
 
@@ -294,13 +294,14 @@ class Launcher::Panel_dialog : Input_event_handler, Dialog_generator,
 		             Nitpicker::Session &nitpicker)
 		:
 			_alloc(alloc),
+			_timer(env),
 			_subsystem_manager(subsystem_manager),
 			_nitpicker(nitpicker),
 			_dialog(env, report_rom_slave, "panel_dialog", "panel_hover",
 			        *this, *this, *this, *this, _position),
 			_timer_handler(env.ep(), *this, &Panel_dialog::_handle_timer),
 			_context_dialog(env, report_rom_slave, *this),
-			_menu_dialog(env, report_rom_slave, *this)
+			_menu_dialog(env, alloc, report_rom_slave, *this)
 		{
 			_elements.insert(&_menu_button);
 			_timer.sigh(_timer_handler);

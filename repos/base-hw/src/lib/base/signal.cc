@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -19,6 +19,8 @@
 #include <base/trace/events.h>
 
 /* base-internal includes */
+#include <base/internal/native_thread.h>
+#include <base/internal/lock_helper.h>
 #include <base/internal/native_utcb.h>
 #include <base/internal/native_env.h>
 #include <base/internal/capability_space.h>
@@ -77,7 +79,7 @@ Signal_receiver::Signal_receiver()
 void Signal_receiver::_platform_destructor()
 {
 	/* release server resources of receiver */
-	env()->pd_session()->free_signal_source(_cap);
+	env_deprecated()->pd_session()->free_signal_source(_cap);
 }
 
 
@@ -99,7 +101,7 @@ Signal_context_capability Signal_receiver::manage(Signal_context * const c)
 	retry<Pd_session::Out_of_metadata>(
 		[&] () {
 			/* use signal context as imprint */
-			c->_cap = env()->pd_session()->alloc_context(_cap, (unsigned long)c);
+			c->_cap = env_deprecated()->pd_session()->alloc_context(_cap, (unsigned long)c);
 			c->_receiver = this;
 			_contexts.insert(&c->_receiver_le);
 			return c->_cap;
@@ -114,7 +116,7 @@ void Signal_receiver::block_for_signal()
 {
 	/* wait for a signal */
 	if (Kernel::await_signal(Capability_space::capid(_cap))) {
-		Genode::error("failed to receive signal");
+		/* canceled */
 		return;
 	}
 	/* read signal data */
@@ -130,6 +132,12 @@ void Signal_receiver::block_for_signal()
 	}
 	/* end kernel-aided life-time management */
 	Kernel::ack_signal(Capability_space::capid(data->context->_cap));
+}
+
+
+void Signal_receiver::unblock_signal_waiter(Rpc_entrypoint &rpc_ep)
+{
+	Kernel::cancel_next_await_signal(native_thread_id(&rpc_ep));
 }
 
 

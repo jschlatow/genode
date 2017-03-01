@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2008-2013 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__CPU_SESSION__CONNECTION_H_
@@ -59,9 +59,9 @@ struct Genode::Cpu_connection : Connection<Cpu_session>, Cpu_session_client
 	 *              argument instead
 	 */
 	Cpu_connection(const char *label = "", long priority = DEFAULT_PRIORITY,
-	               Affinity const &affinity = Affinity())
+	               Affinity const &affinity = Affinity()) __attribute__((deprecated))
 	:
-		Connection<Cpu_session>(_session(*env()->parent(), label, priority, affinity)),
+		Connection<Cpu_session>(_session(*env_deprecated()->parent(), label, priority, affinity)),
 		Cpu_session_client(cap())
 	{ }
 };

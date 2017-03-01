@@ -7,10 +7,10 @@
  */
 
 /*
- * Copyright (C) 2006-2016 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -285,11 +285,14 @@ void Rm_faulter::dissolve_from_faulting_region_map(Region_map_component * caller
 	/* serialize access */
 	Lock::Guard lock_guard(_lock);
 
-	{
+	enum { DO_LOCK = true };
+	if (caller == static_cast<Region_map_component *>(_faulting_region_map.obj())) {
+		caller->discard_faulter(this, !DO_LOCK);
+	} else {
 		Locked_ptr<Region_map_component> locked_ptr(_faulting_region_map);
 
 		if (locked_ptr.valid())
-			locked_ptr->discard_faulter(this, &*locked_ptr != caller);
+			locked_ptr->discard_faulter(this, DO_LOCK);
 	}
 
 	_faulting_region_map = Genode::Weak_ptr<Genode::Region_map_component>();
@@ -450,6 +453,10 @@ void Region_map_component::detach(Local_addr local_addr)
 		return;
 	}
 
+	if (region_ptr->base() != static_cast<addr_t>(local_addr))
+		warning("detach: ", static_cast<void *>(local_addr), " is not "
+		        "the beginning of the region ", Hex(region_ptr->base()));
+
 	Dataspace_component *dsc = region_ptr->dataspace();
 	if (!dsc)
 		warning("detach: region of ", this, " may be inconsistent!");
@@ -475,7 +482,7 @@ void Region_map_component::detach(Local_addr local_addr)
 	 * refer to an empty region not to the dataspace, which we just removed.
 	 */
 	if (platform()->supports_unmap())
-		_map.free(local_addr);
+		_map.free(reinterpret_cast<void *>(region.base()));
 
 	/*
 	 * This function gets called from the destructor of 'Dataspace_component',

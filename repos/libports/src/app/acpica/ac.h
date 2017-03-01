@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 class Ac : Acpica::Callback<Ac> {
@@ -50,9 +50,10 @@ class Ac : Acpica::Callback<Ac> {
 				_report->ac_event();
 		}
 
-		static ACPI_STATUS detect(ACPI_HANDLE ac, UINT32, void * report, void **)
+		static ACPI_STATUS detect(ACPI_HANDLE ac, UINT32, void * m, void **)
 		{
-			Ac * obj = new (Genode::env()->heap()) Ac(report);
+			Acpica::Main * main = reinterpret_cast<Acpica::Main *>(m);
+			Ac * obj = new (main->heap) Ac(main->report);
 
 			ACPI_STATUS res = AcpiInstallNotifyHandler (ac, ACPI_DEVICE_NOTIFY,
 			                                            handler, obj);

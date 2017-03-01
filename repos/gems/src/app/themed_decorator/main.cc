@@ -5,15 +5,15 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
 #include <base/log.h>
-#include <base/component.h>
+#include <libc/component.h>
 #include <base/heap.h>
 #include <base/attached_rom_dataspace.h>
 #include <os/reporter.h>
@@ -56,11 +56,11 @@ struct Decorator::Main : Window_factory_base
 	Signal_handler<Main> _pointer_handler = {
 		_env.ep(), *this, &Main::_handle_pointer_update };
 
-	Lazy_volatile_object<Attached_rom_dataspace> _pointer;
+	Constructible<Attached_rom_dataspace> _pointer;
 
 	Window_base::Hover _hover;
 
-	Reporter _hover_reporter = { "hover" };
+	Reporter _hover_reporter = { _env, "hover" };
 
 	/**
 	 * Nitpicker connection used to sync animations
@@ -73,9 +73,9 @@ struct Decorator::Main : Window_factory_base
 
 	Heap _heap { _env.ram(), _env.rm() };
 
-	Theme _theme { _heap };
+	Theme _theme { _env.ram(), _env.rm(), _heap };
 
-	Reporter _decorator_margins_reporter = { "decorator_margins" };
+	Reporter _decorator_margins_reporter = { _env, "decorator_margins" };
 
 	/**
 	 * Process the update every 'frame_period' nitpicker sync signals. The
@@ -166,8 +166,8 @@ struct Decorator::Main : Window_factory_base
 	Window_base *create(Xml_node window_node) override
 	{
 		return new (_heap)
-			Window(attribute(window_node, "id", 0UL), _nitpicker, _animator,
-			       _env.ram(), _theme, _decorator_config);
+			Window(_env, attribute(window_node, "id", 0UL), _nitpicker, _animator,
+			       _theme, _decorator_config);
 	}
 
 	/**
@@ -317,4 +317,4 @@ void Decorator::Main::_handle_pointer_update()
 }
 
 
-void Component::construct(Genode::Env &env) { static Decorator::Main main(env); }
+void Libc::Component::construct(Libc::Env &env) { static Decorator::Main main(env); }

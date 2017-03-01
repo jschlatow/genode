@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2016 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__INPUT_SESSION__CLIENT_H_
@@ -33,17 +33,22 @@ class Input::Session_client : public Genode::Rpc_client<Session>
 
 	public:
 
-		explicit Session_client(Genode::Env &env,
-		                        Session_capability session)
+		Session_client(Genode::Region_map &local_rm, Session_capability session)
 		:
 			Genode::Rpc_client<Session>(session),
-			_event_ds(env.rm(), call<Rpc_dataspace>())
+			_event_ds(local_rm, call<Rpc_dataspace>())
 		{ }
 
-		explicit Session_client(Session_capability session)
+		/**
+		 * Constructor
+		 *
+		 * \deprecated
+		 * \noapi
+		 */
+		explicit Session_client(Session_capability session) __attribute__((deprecated))
 		:
 			Genode::Rpc_client<Session>(session),
-			_event_ds(*Genode::env()->rm_session(), call<Rpc_dataspace>())
+			_event_ds(*Genode::env_deprecated()->rm_session(), call<Rpc_dataspace>())
 		{ }
 
 		Genode::Dataspace_capability dataspace() override {

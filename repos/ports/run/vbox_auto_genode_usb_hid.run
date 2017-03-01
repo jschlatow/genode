@@ -162,6 +162,7 @@ append config {
 	</start>
 
 	<start name="virtualbox" priority="-2">
+		<binary name="virtualbox-nova"/>
 		<resource name="RAM" quantum="448M"/>
 		<config vbox_file="vm_genode_usb_hid.vbox" vm_name="TestVM" xhci="yes" force_ioapic="yes">
 			<libc stdout="/dev/log" stderr="/dev/log">
@@ -175,9 +176,7 @@ append config {
 		</config>
 		<route>
 			<service name="Report"><child name="report_rom" /></service>
-			<service name="ROM">
-				<if-arg key="label" value="usb_devices"/> <child name="report_rom"/>
-			</service>
+			<service name="ROM" label="usb_devices"> <child name="report_rom"/> </service>
 			<any-service> <parent/> <any-child /> </any-service>
 		</route>
 	</start>
@@ -217,7 +216,7 @@ set boot_modules {
 	fs_rom
 	ram_fs
 	report_rom
-	virtualbox
+	virtualbox-nova
 	usb_hid.iso
 	vm_genode_usb_hid.vbox
 	ld.lib.so libc.lib.so libm.lib.so pthread.lib.so libc_pipe.lib.so

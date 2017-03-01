@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -92,8 +92,7 @@ static void _update_checksum(uint8_t       const prot,
 }
 
 
-static uint16_t _dst_port(uint8_t  const prot,
-                          void    *const prot_base)
+static Port _dst_port(uint8_t const prot, void *const prot_base)
 {
 	switch (prot) {
 	case Tcp_packet::IP_ID: return (*(Tcp_packet *)prot_base).dst_port();
@@ -102,9 +101,9 @@ static uint16_t _dst_port(uint8_t  const prot,
 }
 
 
-static void _dst_port(uint8_t   const prot,
-                      void     *const prot_base,
-                      uint16_t  const port)
+static void _dst_port(uint8_t  const prot,
+                      void    *const prot_base,
+                      Port     const port)
 {
 	switch (prot) {
 	case Tcp_packet::IP_ID: (*(Tcp_packet *)prot_base).dst_port(port); return;
@@ -113,8 +112,7 @@ static void _dst_port(uint8_t   const prot,
 }
 
 
-static uint16_t _src_port(uint8_t  const prot,
-                          void    *const prot_base)
+static Port _src_port(uint8_t const prot, void *const prot_base)
 {
 	switch (prot) {
 	case Tcp_packet::IP_ID: return (*(Tcp_packet *)prot_base).src_port();
@@ -123,9 +121,9 @@ static uint16_t _src_port(uint8_t  const prot,
 }
 
 
-static void _src_port(uint8_t   const prot,
-                      void     *const prot_base,
-                      uint16_t  const port)
+static void _src_port(uint8_t  const prot,
+                      void    *const prot_base,
+                      Port     const port)
 {
 	switch (prot) {
 	case Tcp_packet::IP_ID: ((Tcp_packet *)prot_base)->src_port(port); return;
@@ -350,7 +348,6 @@ void Interface::_handle_ip(Ethernet_frame          &eth,
 			return;
 		}
 		catch (Forward_rule_tree::No_match) { }
-		catch (Pointer<Interface>::Invalid) { }
 	}
 	/* try to route via transport and permit rules */
 	try {
@@ -372,7 +369,6 @@ void Interface::_handle_ip(Ethernet_frame          &eth,
 	}
 	catch (Transport_rule_list::No_match) { }
 	catch (Permit_single_rule_tree::No_match) { }
-	catch (Pointer<Interface>::Invalid) { }
 
 	/* try to route via IP rules */
 	try {
@@ -388,7 +384,6 @@ void Interface::_handle_ip(Ethernet_frame          &eth,
 		return;
 	}
 	catch (Ip_rule_list::No_match) { }
-	catch (Pointer<Interface>::Invalid) { }
 
 	/* give up and drop packet */
 	if (_config().verbose()) {
@@ -550,6 +545,9 @@ void Interface::_handle_eth(void              *const  eth_base,
 
 	catch (Domain::No_next_hop) {
 		error("can not find next hop"); }
+
+	catch (Pointer<Interface>::Invalid) {
+		error("no interface connected to domain"); }
 }
 
 

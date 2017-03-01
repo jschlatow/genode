@@ -1,5 +1,5 @@
 set use_usb_driver [expr [have_spec omap4] || [have_spec arndale] || [have_spec rpi]]
-set use_nic_driver [expr [have_spec linux] || [expr !$use_usb_driver && ![have_spec imx53] && ![have_spec hw_odroid_xu] && ![have_spec linux] && ![have_spec hw_wand_quad]]]
+set use_nic_driver [expr [have_spec linux] || [expr !$use_usb_driver && ![have_spec imx53] && ![have_spec odroid_xu] && ![have_spec linux] && ![have_spec wand_quad]]]
 
 #
 # Build
@@ -10,6 +10,10 @@ set build_components {
 	drivers/timer drivers/nic
 	test/lxip/udp_echo
 }
+
+proc gpio_drv { } { if {[have_spec rpi] && [have_spec hw]}  { return hw_gpio_drv }
+                    if {[have_spec rpi] && [have_spec foc]} { return foc_gpio_drv }
+                    return gpio_drv }
 
 lappend_if $use_usb_driver              build_components drivers/usb
 lappend_if [have_spec gpio]             build_components drivers/gpio
@@ -49,20 +53,20 @@ set config {
 	</start>
 	<start name="test-lxip_udp_echo">
 		<resource name="RAM" quantum="2M"/>
-		<config ld_verbose="yes">
+		<config port="1337">
 			<libc stdout="/dev/log" stderr="/dev/log" ip_addr="10.0.2.55"
-			      gateway="10.0.2.1" netmask="255.255.255.0" port="1337">
+			      gateway="10.0.2.1" netmask="255.255.255.0">
 				<vfs> <dir name="dev"> <log/> </dir> </vfs>
 			</libc>
 		</config>
 	</start>}
 
-append_if [have_spec gpio] config {
-	<start name="gpio_drv">
-		<resource name="RAM" quantum="4M"/>
-		<provides><service name="Gpio"/></provides>
+append_if [have_spec gpio] config "
+	<start name=\"[gpio_drv]\">
+		<resource name=\"RAM\" quantum=\"4M\"/>
+		<provides><service name=\"Gpio\"/></provides>
 		<config/>
-	</start>}
+	</start>"
 
 append_if $use_usb_driver config {
 	<start name="usb_drv">
@@ -95,15 +99,15 @@ install_config $config
 
 # generic modules
 set boot_modules {
-	core init timer
-	ld.lib.so libc.lib.so lxip.lib.so test-lxip_udp_echo
+	core ld.lib.so init timer
+	libc.lib.so libm.lib.so lxip.lib.so test-lxip_udp_echo
 	libc_resolv.lib.so
 }
 
 # platform-specific modules
 lappend_if $use_usb_driver              boot_modules usb_drv
 lappend_if $use_nic_driver              boot_modules nic_drv
-lappend_if [have_spec gpio]             boot_modules gpio_drv
+lappend_if [have_spec gpio]             boot_modules [gpio_drv]
 
 append_platform_drv_boot_modules
 

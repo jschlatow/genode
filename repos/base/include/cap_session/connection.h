@@ -9,10 +9,10 @@
  */
 
 /*
- * Copyright (C) 2008-2013 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__CAP_SESSION__CONNECTION_H_
@@ -23,6 +23,10 @@
 #include <base/env.h>
 
 namespace Genode { struct Cap_connection; }
+
+#ifndef INCLUDED_BY_ENTRYPOINT_CC
+#warning cap_session.h is deprecated
+#endif
 
 
 /*
@@ -37,7 +41,7 @@ namespace Genode { struct Cap_connection; }
  */
 struct Genode::Cap_connection : Pd_session_client
 {
-	Cap_connection() : Pd_session_client(env()->pd_session_cap()) { }
-};
+	Cap_connection() : Pd_session_client(env_deprecated()->pd_session_cap()) { }
+} __attribute__((deprecated));
 
 #endif /* _INCLUDE__CAP_SESSION__CONNECTION_H_ */

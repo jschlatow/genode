@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2011-2013 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__TERMINAL_SESSION__CLIENT_H_
@@ -19,7 +19,7 @@
 #include <util/string.h>
 #include <base/lock.h>
 #include <base/rpc_client.h>
-#include <os/attached_dataspace.h>
+#include <base/attached_dataspace.h>
 
 #include <terminal_session/terminal_session.h>
 
@@ -40,10 +40,16 @@ class Terminal::Session_client : public Genode::Rpc_client<Session>
 
 	public:
 
-		Session_client(Genode::Capability<Session> cap)
+		Session_client(Genode::Region_map &local_rm, Genode::Capability<Session> cap)
 		:
 			Genode::Rpc_client<Session>(cap),
-			_io_buffer(call<Rpc_dataspace>())
+			_io_buffer(local_rm, call<Rpc_dataspace>())
+		{ }
+
+		Session_client(Genode::Capability<Session> cap) __attribute__((deprecated))
+		:
+			Genode::Rpc_client<Session>(cap),
+			_io_buffer(*Genode::env_deprecated()->rm_session(), call<Rpc_dataspace>())
 		{ }
 
 		Size size() { return call<Rpc_size>(); }
@@ -74,17 +80,21 @@ class Terminal::Session_client : public Genode::Rpc_client<Session>
 			while (written_bytes < num_bytes) {
 
 				/* copy payload to I/O buffer */
-				Genode::size_t n = Genode::min(num_bytes - written_bytes,
-				                               _io_buffer.size());
+				Genode::size_t payload_bytes = Genode::min(num_bytes - written_bytes,
+				                                           _io_buffer.size());
 				Genode::memcpy(_io_buffer.local_addr<char>(),
-				               src + written_bytes, n);
+				               src + written_bytes, payload_bytes);
 
 				/* tell server to pick up new I/O buffer content */
-				call<Rpc_write>(n);
+				Genode::size_t written_payload_bytes = call<Rpc_write>(payload_bytes);
 
-				written_bytes += n;
+				written_bytes += written_payload_bytes;
+
+				if (written_payload_bytes != payload_bytes)
+					return written_bytes;
+
 			}
-			return num_bytes;
+			return written_bytes;
 		}
 
 		void connected_sigh(Genode::Signal_context_capability cap)

@@ -5,16 +5,16 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
 #include <base/log.h>
 #include <mixer/channel.h>
-#include <os/attached_rom_dataspace.h>
+#include <base/attached_rom_dataspace.h>
 #include <os/config.h>
 #include <os/reporter.h>
 #include <rom_session/connection.h>

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2010-2016 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode */
@@ -32,7 +32,7 @@ struct Main
 	Genode::Heap                    heap   { env.ram(), env.rm() };
 	Genode::Attached_rom_dataspace  config { env, "config" };
 	Net::Vlan                       vlan;
-	Net::Nic                        nic    { ep, heap, vlan };
+	Net::Nic                        nic    { env, heap, vlan };
 	Net::Root                       root   { env, nic, heap, config.xml() };
 
 	void handle_config()

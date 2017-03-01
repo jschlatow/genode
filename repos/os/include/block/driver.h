@@ -7,10 +7,10 @@
  */
 
 /*
- * Copyright (C) 2011-2013 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BLOCK__DRIVER_H_
@@ -24,37 +24,55 @@
 #include <block_session/rpc_object.h>
 
 namespace Block {
+	class Driver_session_base;
 	class Driver_session;
 	class Driver;
 	struct Driver_factory;
 };
 
 
-class Block::Driver_session : public Block::Session_rpc_object
+struct Block::Driver_session_base
+{
+	/**
+	 * Acknowledges a packet processed by the driver to the client
+	 *
+	 * \param packet   the packet to acknowledge
+	 * \param success  indicated whether the processing was successful
+	 *
+	 * \throw Ack_congestion
+	 */
+	virtual void ack_packet(Packet_descriptor &packet,
+	                        bool success) = 0;
+};
+
+
+class Block::Driver_session : public Driver_session_base,
+                              public Block::Session_rpc_object
 {
 	public:
 
 		/**
 		 * Constructor
 		 *
+		 * \param rm     region map of local address space, used to attach
+		 *               the packet-stream buffer to the local address space
 		 * \param tx_ds  dataspace used as communication buffer
 		 *               for the tx packet stream
 		 * \param ep     entry point used for packet-stream channel
 		 */
-		Driver_session(Genode::Dataspace_capability tx_ds,
-		               Genode::Rpc_entrypoint &ep)
-		: Session_rpc_object(tx_ds, ep) { }
+		Driver_session(Genode::Region_map           &rm,
+		               Genode::Dataspace_capability  tx_ds,
+		               Genode::Rpc_entrypoint       &ep)
+		: Session_rpc_object(rm, tx_ds, ep) { }
 
 		/**
-		 * Acknowledges a packet processed by the driver to the client
+		 * Constructor
 		 *
-		 * \param packet   the packet to acknowledge
-		 * \param success  indicated whether the processing was successful
-		 *
-		 * \throw Ack_congestion
+		 * \deprecated
 		 */
-		virtual void ack_packet(Packet_descriptor &packet,
-		                        bool success) = 0;
+		Driver_session(Genode::Dataspace_capability tx_ds,
+		               Genode::Rpc_entrypoint &ep) __attribute__((deprecated))
+		: Session_rpc_object(*Genode::env_deprecated()->rm_session(), tx_ds, ep) { }
 };
 
 
@@ -65,7 +83,9 @@ class Block::Driver
 {
 	private:
 
-		Driver_session *_session = nullptr;
+		Genode::Ram_session &_ram_session;
+
+		Driver_session_base *_session = nullptr;
 
 	public:
 
@@ -74,6 +94,12 @@ class Block::Driver
 		 */
 		class Io_error           : public ::Genode::Exception { };
 		class Request_congestion : public ::Genode::Exception { };
+
+		/**
+		 * Constructor
+		 */
+		Driver(Genode::Ram_session &ram_session)
+		: _ram_session(ram_session) { }
 
 		/**
 		 * Destructor
@@ -183,7 +209,7 @@ class Block::Driver
 		 */
 		virtual Genode::Ram_dataspace_capability
 		alloc_dma_buffer(Genode::size_t size) {
-			return Genode::env()->ram_session()->alloc(size); }
+			return _ram_session.alloc(size); }
 
 		/**
 		 * Free buffer which is suitable for DMA.
@@ -191,7 +217,7 @@ class Block::Driver
 		 * Note: has to be overriden by DMA-capable devices
 		 */
 		virtual void free_dma_buffer(Genode::Ram_dataspace_capability c) {
-			return Genode::env()->ram_session()->free(c); }
+			return _ram_session.free(c); }
 
 		/**
 		 * Synchronize with device.
@@ -214,7 +240,7 @@ class Block::Driver
 		 *
 		 * Session might get used to acknowledge requests.
 		 */
-		void session(Driver_session *session) {
+		void session(Driver_session_base *session) {
 			if (!(_session = session)) session_invalidated(); }
 
 		/**

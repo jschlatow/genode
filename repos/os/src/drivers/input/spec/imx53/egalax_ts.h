@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013-2015 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _DRIVERS__INPUT__SPEC__IMX53__EGALAX_TS_H_
@@ -16,7 +16,7 @@
 
 /* Genode includes */
 #include <drivers/board_base.h>
-#include <os/attached_io_mem_dataspace.h>
+#include <base/attached_io_mem_dataspace.h>
 #include <input/event_queue.h>
 #include <input/event.h>
 #include <input/keycodes.h>
@@ -44,12 +44,14 @@ class Input::Touchscreen {
 
 	public:
 
-		Touchscreen(Server::Entrypoint &ep)
+		Touchscreen(Genode::Env &env, Timer::Connection &timer)
 		:
-			_irq_handler(ep, Genode::Board_base::I2C_3_IRQ),
-			_i2c_ds(Genode::Board_base::I2C_3_BASE,
+			_irq_handler(env, Genode::Board_base::I2C_3_IRQ),
+			_i2c_ds(env,
+			        Genode::Board_base::I2C_3_BASE,
 			        Genode::Board_base::I2C_3_SIZE),
-			_i2c((Genode::addr_t)_i2c_ds.local_addr<void>(),
+			_i2c(timer,
+			     (Genode::addr_t)_i2c_ds.local_addr<void>(),
 			     _irq_handler),
 			     _state(RELEASED)
 		{

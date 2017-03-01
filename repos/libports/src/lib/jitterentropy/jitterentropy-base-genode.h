@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _JITTERENTROPY_BASE_GENODE_H_
@@ -17,7 +17,7 @@
 /* needed type definitions */
 #include <base/fixed_stdint.h>
 
-typedef __SIZE_TYPE__     size_t;
+typedef unsigned long     size_t;
 typedef signed long      ssize_t;
 typedef genode_uint32_t uint32_t;
 typedef genode_uint64_t uint64_t;
@@ -30,6 +30,12 @@ typedef genode_int64_t  __s64;
 #endif
 
 #ifdef __cplusplus
+
+#include <base/allocator.h>
+
+/* Genode specific function to set the backend allocator */
+void jitterentropy_init(Genode::Allocator &alloc);
+
 extern "C" {
 #endif
 

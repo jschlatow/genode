@@ -5,14 +5,14 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is distributed under the terms of the GNU General Public License
  * version 2.
  */
 
 /* Genode includes */
-#include <os/attached_ram_dataspace.h>
+#include <base/attached_ram_dataspace.h>
 #include <trace/timestamp.h>
 
 /* Genode/Virtualbox includes */
@@ -24,9 +24,7 @@
 #include <iprt/uint128.h>
 #include <VBox/err.h>
 
-/* libc memory allocator */
-#include <libc_mem_alloc.h>
-
+#include "vmm.h"
 
 enum {
 	UPDATE_HZ  = 1000,
@@ -38,9 +36,9 @@ enum {
 PSUPGLOBALINFOPAGE g_pSUPGlobalInfoPage;
 
 
-struct Periodic_gip : public Genode::Thread_deprecated<4096>
+struct Periodic_gip : public Genode::Thread
 {
-	Periodic_gip() : Thread_deprecated("periodic_gip") { start(); }
+	Periodic_gip(Genode::Env &env) : Thread(env, "periodic_gip", 8192) { start(); }
 
 	static void update()
 	{
@@ -98,7 +96,7 @@ struct Periodic_gip : public Genode::Thread_deprecated<4096>
 struct Attached_gip : Genode::Attached_ram_dataspace
 {
 	Attached_gip()
-	: Attached_ram_dataspace(Genode::env()->ram_session(), PAGE_SIZE)
+	: Attached_ram_dataspace(genode_env().ram(), genode_env().rm(), PAGE_SIZE)
 	{
 		g_pSUPGlobalInfoPage = local_addr<SUPGLOBALINFOPAGE>();
 
@@ -134,13 +132,15 @@ struct Attached_gip : Genode::Attached_ram_dataspace
 		cpu->idApic                  = 0;
 
 		/* schedule periodic call of GIP update function */
-		static Periodic_gip periodic_gip;
+		static Periodic_gip periodic_gip(genode_env());
 	}
-} static gip;
+};
 
 
 int SUPR3Init(PSUPDRVSESSION *ppSession)
 {
+	static Attached_gip gip;
+
 	return VINF_SUCCESS;
 }
 
@@ -283,7 +283,13 @@ void genode_VMMR0_DO_GVMM_CREATE_VM(PSUPVMMR0REQHDR pReqHdr)
 	 * PDMR3CritSectGetNop().
 	 */
 	size_t const cbVM = RT_UOFFSETOF(VM, aCpus[cCpus]);
-	VM *pVM = (VM *)Libc::mem_alloc()->alloc(cbVM, Genode::log2(PAGE_SIZE));
+
+	static Genode::Attached_ram_dataspace vm(genode_env().ram(),
+	                                         genode_env().rm(),
+	                                         cbVM);
+	Assert (vm.size() >= cbVM);
+
+	VM *pVM = vm.local_addr<VM>();
 	Genode::memset(pVM, 0, cbVM);
 
 	/*

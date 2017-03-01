@@ -6,18 +6,17 @@
  */
 
 /*
- * Copyright (C) 2006-2016 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  * Copyright (C) 2012 Intel Corporation
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/env.h>
 #include <base/service.h>
 #include <base/snprintf.h>
 #include <base/attached_dataspace.h>
-#include <os/config.h>
 #include <launchpad/launchpad.h>
 
 using namespace Genode;
@@ -91,11 +90,9 @@ Launchpad::_get_unique_child_name(Launchpad_child::Name const &binary_name)
 /**
  * Process launchpad XML configuration
  */
-void Launchpad::process_config()
+void Launchpad::process_config(Genode::Xml_node config_node)
 {
 	using namespace Genode;
-
-	Xml_node config_node = config()->xml_node();
 
 	/*
 	 * Iterate through all entries of the config file and create
@@ -121,7 +118,7 @@ void Launchpad::process_config()
 			Rom_name const name =
 				node.sub_node("configfile").attribute_value("name", Rom_name());
 
-			Rom_connection &config_rom = *new (_heap) Rom_connection(name.string());
+			Rom_connection &config_rom = *new (_heap) Rom_connection(_env, name.string());
 
 			config_ds = config_rom.dataspace();
 		}
@@ -132,10 +129,10 @@ void Launchpad::process_config()
 
 			/* allocate dataspace for config */
 			size_t const size = config_node.size();
-			config_ds = env()->ram_session()->alloc(size);
+			config_ds = _env.ram().alloc(size);
 
 			/* copy configuration into new dataspace */
-			Attached_dataspace attached(config_ds);
+			Attached_dataspace attached(_env.rm(), config_ds);
 			memcpy(attached.local_addr<char>(), config_node.addr(), size);
 		}
 
@@ -155,9 +152,17 @@ Launchpad_child *Launchpad::start_child(Launchpad_child::Name const &binary_name
 	Launchpad_child::Name const unique_name = _get_unique_child_name(binary_name);
 	log("using unique child name \"", unique_name, "\"");
 
-	if (ram_quota > env()->ram_session()->avail()) {
+	if (ram_quota > _env.ram().avail()) {
 		error("child's ram quota is higher than our available quota, using available quota");
-		ram_quota = env()->ram_session()->avail() - 256*1000;
+
+		size_t const avail     = _env.ram().avail();
+		size_t const preserved = 256*1024;
+
+		if (avail < preserved) {
+			error("giving up, our own quota is too low (", avail, ")");
+			return 0;
+		}
+		ram_quota = avail - preserved;
 	}
 
 	size_t metadata_size = 4096*16 + sizeof(Launchpad_child);
@@ -171,13 +176,13 @@ Launchpad_child *Launchpad::start_child(Launchpad_child::Name const &binary_name
 
 	try {
 		Launchpad_child *c = new (&_sliced_heap)
-			Launchpad_child(_env, unique_name, binary_name, ram_quota,
+			Launchpad_child(_env, _heap, unique_name, binary_name, ram_quota,
 			                _parent_services, _child_services, config_ds);
 
 		Lock::Guard lock_guard(_children_lock);
 		_children.insert(c);
 
-		add_child(unique_name, ram_quota, *c, c->heap());
+		add_child(unique_name, ram_quota, *c, _heap);
 		return c;
 
 	} catch (...) {
@@ -189,7 +194,7 @@ Launchpad_child *Launchpad::start_child(Launchpad_child::Name const &binary_name
 
 void Launchpad::exit_child(Launchpad_child &child)
 {
-	remove_child(child.name(), child.heap());
+	remove_child(child.name(), _heap);
 
 	Lock::Guard lock_guard(_children_lock);
 	_children.remove(&child);

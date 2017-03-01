@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__UTIL__STRING_H_
@@ -51,6 +51,18 @@ class Genode::Number_of_bytes
 		 * Convert number of bytes to 'size_t' value
 		 */
 		operator size_t() const { return _n; }
+
+		void print(Output &output) const
+		{
+			using Genode::print;
+
+			enum { KB = 1024UL, MB = KB*1024UL, GB = MB*1024UL };
+
+			if      (_n % GB == 0) print(output, _n/GB, "G");
+			else if (_n % MB == 0) print(output, _n/MB, "M");
+			else if (_n % KB == 0) print(output, _n/KB, "K");
+			else                   print(output, _n);
+		}
 };
 
 
@@ -592,7 +604,7 @@ class Genode::String
 
 			void out_string(char const *str, size_t n) override
 			{
-				while (n-- > 0 && _capacity_left())
+				while (n-- > 0 && _capacity_left() && *str)
 					_append(*str++);
 			}
 		};

@@ -5,21 +5,21 @@
  */
 
 /*
- * Copyright (C) 2014-2016 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 #include <util/arg_string.h>
 #include <base/heap.h>
 #include <base/component.h>
 #include <base/session_label.h>
 #include <base/log.h>
-#include <os/attached_rom_dataspace.h>
-#include <os/attached_ram_dataspace.h>
+#include <base/attached_rom_dataspace.h>
+#include <base/attached_ram_dataspace.h>
 #include <rom_session/rom_session.h>
 #include <timer_session/connection.h>
 #include <root/component.h>
@@ -30,7 +30,7 @@ namespace Dynamic_rom {
 	using Genode::Rpc_object;
 	using Genode::Sliced_heap;
 	using Genode::Env;
-	using Genode::Lazy_volatile_object;
+	using Genode::Constructible;
 	using Genode::Signal_context_capability;
 	using Genode::Signal_handler;
 	using Genode::Xml_node;
@@ -46,6 +46,7 @@ class Dynamic_rom::Session_component : public Rpc_object<Genode::Rom_session>
 {
 	private:
 
+		Env                      &_env;
 		bool                     &_verbose;
 		Xml_node                  _rom_node;
 		Timer::Connection         _timer;
@@ -54,7 +55,7 @@ class Dynamic_rom::Session_component : public Rpc_object<Genode::Rom_session>
 		unsigned                  _last_content_idx = ~0;
 		Signal_context_capability _sigh;
 
-		Lazy_volatile_object<Genode::Attached_ram_dataspace> _ram_ds;
+		Constructible<Genode::Attached_ram_dataspace> _ram_ds;
 
 		void _notify_client()
 		{
@@ -151,9 +152,9 @@ class Dynamic_rom::Session_component : public Rpc_object<Genode::Rom_session>
 
 	public:
 
-		Session_component(Entrypoint &ep, Xml_node rom_node, bool &verbose)
+		Session_component(Env &env, Xml_node rom_node, bool &verbose)
 		:
-			_verbose(verbose), _rom_node(rom_node), _ep(ep)
+			_env(env), _verbose(verbose), _rom_node(rom_node), _timer(env), _ep(env.ep())
 		{
 			/* init timer signal handler */
 			_timer.sigh(_timer_handler);
@@ -170,7 +171,7 @@ class Dynamic_rom::Session_component : public Rpc_object<Genode::Rom_session>
 				return Rom_dataspace_capability();
 
 			/* replace dataspace by new one */
-			_ram_ds.construct(env()->ram_session(), _rom_node.size());
+			_ram_ds.construct(_env.ram(), _env.rm(), _rom_node.size());
 
 			/* fill with content of current step */
 			Xml_node step_node = _rom_node.sub_node(_last_content_idx);
@@ -194,7 +195,7 @@ class Dynamic_rom::Root : public Genode::Root_component<Session_component>
 {
 	private:
 
-		Entrypoint &_ep;
+		Env        &_env;
 		Xml_node    _config_node;
 		bool       &_verbose;
 
@@ -224,7 +225,7 @@ class Dynamic_rom::Root : public Genode::Root_component<Session_component>
 
 			try {
 				return new (md_alloc())
-					Session_component(_ep,
+					Session_component(_env,
 					                  _lookup_rom_node_in_config(module_name),
 					                  _verbose);
 
@@ -236,11 +237,11 @@ class Dynamic_rom::Root : public Genode::Root_component<Session_component>
 
 	public:
 
-		Root(Entrypoint &ep, Genode::Allocator &md_alloc,
+		Root(Env &env, Genode::Allocator &md_alloc,
 		     Xml_node config_node, bool &verbose)
 		:
-			Genode::Root_component<Session_component>(&ep.rpc_ep(), &md_alloc),
-			_ep(ep), _config_node(config_node), _verbose(verbose)
+			Genode::Root_component<Session_component>(&env.ep().rpc_ep(), &md_alloc),
+			_env(env), _config_node(config_node), _verbose(verbose)
 		{ }
 };
 
@@ -255,7 +256,7 @@ struct Dynamic_rom::Main
 
 	Sliced_heap sliced_heap { env.ram(), env.rm() };
 
-	Root root { env.ep(), sliced_heap, config.xml(), verbose };
+	Root root { env, sliced_heap, config.xml(), verbose };
 
 	Main(Env &env) : env(env)
 	{

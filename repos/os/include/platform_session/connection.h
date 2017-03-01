@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__PLATFORM_SESSION__CONNECTION_H_
@@ -27,7 +27,7 @@ struct Platform::Connection : Genode::Connection<Session>, Client
 	 * Constructor
 	 */
 	Connection(Genode::Env &env)
-	: Genode::Connection<Session>(env, session(env.parent(), "ram_quota=4K")),
+	: Genode::Connection<Session>(env, session(env.parent(), "ram_quota=6K")),
 	  Client(cap()) { }
 
 	/**
@@ -37,8 +37,8 @@ struct Platform::Connection : Genode::Connection<Session>, Client
 	 * \deprecated  Use the constructor with 'Env &' as first
 	 *              argument instead
 	 */
-	Connection()
-	: Genode::Connection<Session>(session("ram_quota=4K")),
+	Connection() __attribute__((deprecated))
+	: Genode::Connection<Session>(session("ram_quota=6K")),
 	  Client(cap()) { }
 };
 

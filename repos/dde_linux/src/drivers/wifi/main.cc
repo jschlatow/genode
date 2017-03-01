@@ -5,18 +5,18 @@
  */
 
 /*
- * Copyright (C) 2014-2016 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 /* Genode includes */
-#include <base/component.h>
+#include <libc/component.h>
 #include <base/heap.h>
 #include <base/log.h>
 #include <base/sleep.h>
-#include <os/attached_rom_dataspace.h>
+#include <base/attached_rom_dataspace.h>
 #include <util/xml_node.h>
 #include <util/string.h>
 
@@ -105,7 +105,7 @@ static int generatewpa_supplicant_conf(char const **p, Genode::size_t *len, char
 
 struct Wlan_configration
 {
-	Genode::Attached_rom_dataspace            config_rom { "wlan_configuration" };
+	Genode::Attached_rom_dataspace            config_rom;
 	Genode::Signal_handler<Wlan_configration> dispatcher;
 	Genode::Lock                              update_lock;
 
@@ -171,7 +171,7 @@ struct Wlan_configration
 		enum { MAX_SSID_LENGTH = 32 + 1,
 		       BSSID_LENGTH    = 12 + 5 + 1,
 		       PROT_LENGTH     = 7 + 1,
-		       MIN_PSK_LENGTH  = 8,
+		       MIN_PSK_LENGTH  = 8 + 1,
 		       MAX_PSK_LENGTH  = 63 + 1};
 
 		String<MAX_SSID_LENGTH> ssid;
@@ -208,9 +208,10 @@ struct Wlan_configration
 
 	void _handle_update() { _update_configuration(); }
 
-	Wlan_configration(Genode::Entrypoint &ep)
+	Wlan_configration(Genode::Env &env)
 	:
-		dispatcher(ep, *this, &Wlan_configration::_handle_update)
+		config_rom(env, "wlan_configuration"),
+		dispatcher(env.ep(), *this, &Wlan_configration::_handle_update)
 	{
 		config_rom.sigh(dispatcher);
 		_update_configuration();
@@ -244,7 +245,7 @@ struct Main
 		wpa->start();
 
 		try {
-			wlan_config = new (&heap) Wlan_configration(env.ep());
+			wlan_config = new (&heap) Wlan_configration(env);
 		} catch (...) {
 			Genode::warning("could not create Wlan_configration handler");
 		}
@@ -254,4 +255,4 @@ struct Main
 };
 
 
-void Component::construct(Genode::Env &env) { static Main server(env); }
+void Libc::Component::construct(Libc::Env &env) { static Main server(env); }

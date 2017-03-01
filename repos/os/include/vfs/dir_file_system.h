@@ -1,14 +1,16 @@
 /*
  * \brief  Directory file system
  * \author Norman Feske
+ * \author Emery Hemingway
+ * \author Christian Helmuth
  * \date   2012-04-23
  */
 
 /*
- * Copyright (C) 2011-2016 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__VFS__DIR_FILE_SYSTEM_H_
@@ -209,6 +211,7 @@ class Vfs::Dir_file_system : public File_system
 		Dir_file_system(Genode::Env         &env,
 		                Genode::Allocator   &alloc,
 		                Genode::Xml_node     node,
+		                Io_response_handler &io_handler,
 		                File_system_factory &fs_factory)
 		:
 			_first_file_system(0)
@@ -228,11 +231,11 @@ class Vfs::Dir_file_system : public File_system
 				/* traverse into <dir> nodes */
 				if (sub_node.has_type("dir")) {
 					_append_file_system(new (alloc)
-						Dir_file_system(env, alloc, sub_node, fs_factory));
+						Dir_file_system(env, alloc, sub_node, io_handler, fs_factory));
 					continue;
 				}
 
-				File_system *fs = fs_factory.create(env, alloc, sub_node);
+				File_system *fs = fs_factory.create(env, alloc, sub_node, io_handler);
 				if (fs) {
 					_append_file_system(fs);
 					continue;
@@ -421,9 +424,9 @@ class Vfs::Dir_file_system : public File_system
 		}
 
 		Open_result open(char const  *path,
-	                     unsigned     mode,
-	                     Vfs_handle **out_handle,
-	                     Allocator   &alloc) override
+		                 unsigned     mode,
+		                 Vfs_handle **out_handle,
+		                 Allocator   &alloc) override
 		{
 			/*
 			 * If 'path' is a directory, we create a 'Vfs_handle'
@@ -559,7 +562,8 @@ class Vfs::Dir_file_system : public File_system
 		 ** File_system interface **
 		 ***************************/
 
-		char const *name() const { return "dir"; }
+		char const *name() const    { return "dir"; }
+		char const *type() override { return "dir"; }
 
 		/**
 		 * Synchronize all file systems
@@ -578,6 +582,25 @@ class Vfs::Dir_file_system : public File_system
 
 			for (File_system *fs = _first_file_system; fs; fs = fs->next)
 				fs->sync(path);
+		}
+
+		void apply_config(Genode::Xml_node const &node) override
+		{
+			using namespace Genode;
+
+			File_system *curr = _first_file_system;
+			for (unsigned i = 0; i < node.num_sub_nodes(); i++, curr = curr->next) {
+				Xml_node const &sub_node = node.sub_node(i);
+
+				/* check if type of XML node matches current file-system type */
+				if (sub_node.has_type(curr->type()) == false) {
+					Genode::error("VFS config update failed (node type '",
+					               sub_node.type(), "' != fs type '", curr->type(),"')");
+					return;
+				}
+
+				curr->apply_config(node.sub_node(i));
+			}
 		}
 
 
@@ -599,6 +622,22 @@ class Vfs::Dir_file_system : public File_system
 		Ftruncate_result ftruncate(Vfs_handle *, file_size) override
 		{
 			return FTRUNCATE_ERR_NO_PERM;
+		}
+
+		bool read_ready(Vfs_handle *handle) override
+		{
+			if (&handle->fs() == this)
+				return true;
+
+			return handle->fs().read_ready(handle);
+		}
+
+		bool notify_read_ready(Vfs_handle *handle) override
+		{
+			if (&handle->fs() == this)
+				return true;
+
+			return handle->fs().notify_read_ready(handle);
 		}
 };
 

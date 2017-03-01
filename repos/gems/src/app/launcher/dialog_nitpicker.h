@@ -9,10 +9,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _DIALOG_NITPICKER_H_
@@ -21,7 +21,7 @@
 /* Genode includes */
 #include <util/string.h>
 #include <base/entrypoint.h>
-#include <os/attached_dataspace.h>
+#include <base/attached_dataspace.h>
 #include <nitpicker_session/nitpicker_session.h>
 #include <input_session/client.h>
 #include <input/event.h>
@@ -53,19 +53,21 @@ struct Launcher::Dialog_nitpicker_session : Wrapped_nitpicker_session
 		virtual bool handle_input_event(Input::Event const &ev) = 0;
 	};
 
+	Env &_env;
+
 	Input_event_handler &_input_event_handler;
 
 	Rpc_entrypoint &_session_ep;
 
 	Nitpicker::Session &_nitpicker_session;
 
-	Input::Session_client _nitpicker_input { _nitpicker_session.input_session() };
+	Input::Session_client _nitpicker_input { _env.rm(), _nitpicker_session.input_session() };
 
-	Attached_dataspace _nitpicker_input_ds { _nitpicker_input.dataspace() };
+	Attached_dataspace _nitpicker_input_ds { _env.rm(), _nitpicker_input.dataspace() };
 
 	Signal_handler<Dialog_nitpicker_session> _input_handler;
 
-	Input::Session_component _input_session;
+	Input::Session_component _input_session { _env, _env.ram() };
 
 	/**
 	 * Constructor
@@ -75,12 +77,13 @@ struct Launcher::Dialog_nitpicker_session : Wrapped_nitpicker_session
 	 * \param service_ep     entrypoint providing the nitpicker session
 	 *                       (slave-specific ep)
 	 */
-	Dialog_nitpicker_session(Nitpicker::Session &nitpicker_session,
+	Dialog_nitpicker_session(Env &env, Nitpicker::Session &nitpicker_session,
 	                         Entrypoint &input_sigh_ep,
 	                         Rpc_entrypoint &session_ep,
 	                         Input_event_handler &input_event_handler)
 	:
 		Wrapped_nitpicker_session(nitpicker_session),
+		_env(env),
 		_input_event_handler(input_event_handler),
 		_session_ep(session_ep),
 		_nitpicker_session(nitpicker_session),

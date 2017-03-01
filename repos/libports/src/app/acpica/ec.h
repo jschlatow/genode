@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 
@@ -25,6 +25,8 @@ class Ec : Acpica::Callback<Ec> {
 
 		ACPI_HANDLE gpe_block;
 
+		Genode::Env          &_env;
+		Genode::Allocator    &_heap;
 		Acpica::Reportstate * _report;
 
 		/* 12.2.1 Embedded Controller Status, EC_SC (R) */
@@ -49,9 +51,12 @@ class Ec : Acpica::Callback<Ec> {
 
 	public:
 
-		Ec(void * report)
+		Ec(Genode::Env &env, Genode::Allocator &heap,
+		   Acpica::Reportstate *report)
 		:
-			_report(reinterpret_cast<Acpica::Reportstate *>(report))
+			_env(env),
+			_heap(heap),
+			_report(report)
 		{ }
 
 		static UINT32 handler_gpe(ACPI_HANDLE dev, UINT32 gpe, void *context)
@@ -104,7 +109,7 @@ class Ec : Acpica::Callback<Ec> {
 				}
 
 				if (!data_obj) {
-					data_obj = new (Genode::env()->heap()) Data(data);
+					data_obj = new (ec->_heap) Data(data);
 					ec->_list_data.insert(data_obj);
 				}
 				data_obj->count ++;
@@ -136,11 +141,11 @@ class Ec : Acpica::Callback<Ec> {
 
 			if (!ec->ec_data) {
 				ec->ec_port_data = resource->Data.Io.Minimum;
-				ec->ec_data = new (Genode::env()->heap()) Genode::Io_port_connection(ec->ec_port_data, 1);
+				ec->ec_data = new (ec->_heap) Genode::Io_port_connection(ec->_env, ec->ec_port_data, 1);
 			} else
 			if (!ec->ec_cmdsta) {
 				ec->ec_port_cmdsta = resource->Data.Io.Minimum;
-				ec->ec_cmdsta = new (Genode::env()->heap()) Genode::Io_port_connection(ec->ec_port_cmdsta, 1);
+				ec->ec_cmdsta = new (ec->_heap) Genode::Io_port_connection(ec->_env, ec->ec_port_cmdsta, 1);
 			} else
 				Genode::error("unknown io_port");
 
@@ -212,9 +217,11 @@ class Ec : Acpica::Callback<Ec> {
 			return AE_BAD_PARAMETER;
 		}
 
-		static ACPI_STATUS detect(ACPI_HANDLE ec, UINT32, void *report, void **)
+		static ACPI_STATUS detect(ACPI_HANDLE ec, UINT32, void *m, void **)
 		{
-			Ec *ec_obj = new (Genode::env()->heap()) Ec(report);
+			Acpica::Main * main = reinterpret_cast<Acpica::Main *>(m);
+			Ec *ec_obj = new (main->heap) Ec(main->env, main->heap,
+			                                 main->report);
 
 			ACPI_STATUS res = AcpiWalkResources(ec, ACPI_STRING("_CRS"),
 			                                    Ec::detect_io_ports, ec_obj);

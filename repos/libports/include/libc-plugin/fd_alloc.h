@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2010-2013 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _LIBC_PLUGIN__FD_ALLOC_H_
@@ -49,6 +49,7 @@ namespace Libc {
 
 		void path(char const *newpath)
 		{
+			if (fd_path) { Genode::warning("may leak former FD path memory"); }
 			if (newpath) {
 				Genode::size_t const path_size = ::strlen(newpath) + 1;
 				char *buf = (char*)malloc(path_size);
@@ -72,7 +73,7 @@ namespace Libc {
 			/**
 			 * Constructor
 			 */
-			File_descriptor_allocator();
+			File_descriptor_allocator(Genode::Allocator &md_alloc);
 
 			/**
 			 * Allocate file descriptor

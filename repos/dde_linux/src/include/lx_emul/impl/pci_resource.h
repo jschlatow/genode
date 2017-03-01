@@ -5,21 +5,15 @@
  */
 
 /*
- * Copyright (C) 2015-2016 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 /* Linux kit includes */
 #include <lx_kit/pci_dev_registry.h>
 #include <lx_kit/mapped_io_mem_range.h>
-
-
-extern void pci_dev_put(struct pci_dev *pci_dev)
-{
-	Genode::destroy(Genode::env()->heap(), pci_dev);
-}
 
 
 extern "C" size_t pci_resource_start(struct pci_dev *dev, unsigned bar)

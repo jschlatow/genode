@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 #ifndef __COMPONENT_H__
@@ -21,10 +21,11 @@
 #include <dataspace/capability.h>
 #include <framebuffer_session/framebuffer_session.h>
 #include <timer_session/connection.h>
-#include <util/volatile_object.h>
-#include <os/attached_dataspace.h>
-#include <os/attached_ram_dataspace.h>
-#include <os/attached_rom_dataspace.h>
+#include <util/reconstructible.h>
+#include <base/attached_dataspace.h>
+#include <base/attached_ram_dataspace.h>
+#include <base/attached_rom_dataspace.h>
+#include <os/reporter.h>
 #include <blit/blit.h>
 
 #include <lx_emul_c.h>
@@ -48,6 +49,7 @@ class Framebuffer::Driver
 
 		Session_component             &_session;
 		Timer::Connection              _timer;
+		Genode::Reporter               _reporter;
 		Genode::Signal_handler<Driver> _poll_handler;
 		unsigned long                  _poll_ms = 0;
 
@@ -59,6 +61,7 @@ class Framebuffer::Driver
 
 		Driver(Genode::Env & env, Session_component &session)
 		: _session(session), _timer(env),
+		  _reporter(env, "connectors"),
 		  _poll_handler(env.ep(), *this, &Driver::_poll) {}
 
 		int      width()   const { return _config._lx.width;  }
@@ -78,7 +81,7 @@ class Framebuffer::Session_component : public Genode::Rpc_object<Session>
 {
 	private:
 
-		template <typename T> using Lazy = Genode::Lazy_volatile_object<T>;
+		template <typename T> using Lazy = Genode::Constructible<T>;
 
 		Driver                               _driver;
 		Genode::Attached_rom_dataspace      &_config;

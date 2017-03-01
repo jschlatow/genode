@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <input/event.h>
@@ -76,6 +76,8 @@ void User_state::handle_event(Input::Event ev)
 		ay = ev.ay();
 		ev = Input::Event::create_touch_event(ax, ay, ev.code(),
 		                                      ev.touch_release());
+	} else if (type == Event::CHARACTER) {
+		ev = Input::Event(type, ev.code(), ax, ay, rx, ry);
 	} else
 		ev = Input::Event(type, keycode, ax, ay, rx, ry);
 
@@ -219,6 +221,12 @@ void User_state::handle_event(Input::Event ev)
 	}
 
 	if ((type == Event::RELEASE) && _input_receiver)
+		_input_receiver->submit_input_event(ev);
+
+	/*
+	 * Forward character events
+	 */
+	if (type == Event::CHARACTER && _input_receiver)
 		_input_receiver->submit_input_event(ev);
 
 	/*

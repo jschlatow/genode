@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2011-2013 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__FOC_NATIVE_CPU__CLIENT_H_
@@ -26,14 +26,17 @@ struct Genode::Foc_native_cpu_client : Rpc_client<Foc_native_cpu>
 	explicit Foc_native_cpu_client(Capability<Native_cpu> cap)
 	: Rpc_client<Foc_native_cpu>(static_cap_cast<Foc_native_cpu>(cap)) { }
 
-	void enable_vcpu(Thread_capability cap, addr_t vcpu_state) {
+	void enable_vcpu(Thread_capability cap, addr_t vcpu_state) override {
 		call<Rpc_enable_vcpu>(cap, vcpu_state); }
 
-	Native_capability native_cap(Thread_capability cap) {
+	Native_capability native_cap(Thread_capability cap) override {
 		return call<Rpc_native_cap>(cap); }
 
-	Native_capability alloc_irq() {
+	Native_capability alloc_irq() override {
 		return call<Rpc_alloc_irq>(); }
+
+	Foc_thread_state thread_state(Thread_capability cap) override {
+		return call<Rpc_thread_state>(cap); }
 };
 
 #endif /* _INCLUDE__FOC_NATIVE_CPU__CLIENT_H_ */

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _SRC__SERVER__VMM__INCLUDE__MMU_H_
@@ -22,10 +22,10 @@ class Mmu
 {
 	private:
 
-		Genode::Vm_state *_state;
-		Ram              *_ram;
+		Genode::Vm_state &_state;
+		Ram const        &_ram;
 
-		unsigned _n_bits() { return _state->ttbrc & 0x7; }
+		unsigned _n_bits() { return _state.ttbrc & 0x7; }
 
 		bool _ttbr0(Genode::addr_t mva) {
 			return (!_n_bits() || !(mva >> (32 - _n_bits()))); }
@@ -33,10 +33,10 @@ class Mmu
 		Genode::addr_t _first_level(Genode::addr_t va)
 		{
 			if (!_ttbr0(va))
-				return ((_state->ttbr[1] & 0xffffc000) |
+				return ((_state.ttbr[1] & 0xffffc000) |
 				        ((va >> 18) & 0xffffc));
 			unsigned shift = 14 - _n_bits();
-			return (((_state->ttbr[0] >> shift) << shift) |
+			return (((_state.ttbr[0] >> shift) << shift) |
 			        (((va << _n_bits()) >> (18 + _n_bits())) & 0x3ffc));
 		}
 
@@ -44,7 +44,7 @@ class Mmu
 		{
 			enum Type { FAULT, LARGE, SMALL };
 
-			Genode::addr_t se = *((Genode::addr_t*)_ram->va(((fe & (~0UL << 10)) |
+			Genode::addr_t se = *((Genode::addr_t*)_ram.va(((fe & (~0UL << 10)) |
 			                                                ((va >> 10) & 0x3fc))));
 			switch (se & 0x3) {
 			case FAULT:
@@ -68,7 +68,7 @@ class Mmu
 
 	public:
 
-		Mmu(Genode::Vm_state *state, Ram *ram)
+		Mmu(Genode::Vm_state &state, Ram const &ram)
 		: _state(state), _ram(ram) {}
 
 
@@ -76,7 +76,7 @@ class Mmu
 		{
 			enum Type { FAULT, PAGETABLE, SECTION };
 
-			Genode::addr_t fe = *((Genode::addr_t*)_ram->va(_first_level(va)));
+			Genode::addr_t fe = *((Genode::addr_t*)_ram.va(_first_level(va)));
 			switch (fe & 0x3) {
 			case PAGETABLE:
 				return _page(fe, va);

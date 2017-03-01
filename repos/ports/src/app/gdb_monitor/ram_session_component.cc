@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2011-2016 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -20,7 +20,7 @@
 using namespace Genode;
 using namespace Gdb_monitor;
 
-Ram_session_component::Ram_session_component(Genode::Env &env, const char *args,
+Ram_session_component::Ram_session_component(Env &env, const char *args,
                                              Affinity const &affinity)
 : _env(env),
   _parent_ram_session(_env.session<Ram_session>(_id_space_element.id(), args, affinity))

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _STYLE_DATABASE_H_
@@ -42,11 +42,12 @@ class Menu_view::Style_database
 			 *
 			 * \throw Reading_failed
 			 */
-			Texture_entry(char const *path, Allocator &alloc)
+			Texture_entry(Ram_session &ram, Region_map &rm,
+			              Allocator &alloc, char const *path)
 			:
 				path(path),
 				png_file(path, alloc),
-				png_image(png_file.data<void>()),
+				png_image(ram, rm, alloc, png_file.data<void>()),
 				texture(*png_image.texture<Pixel_rgb888>())
 			{ }
 		};
@@ -70,6 +71,10 @@ class Menu_view::Style_database
 			{ }
 		};
 
+		Ram_session &_ram;
+		Region_map  &_rm;
+		Allocator   &_alloc;
+
 		/*
 		 * The list is mutable because it is populated as a side effect of
 		 * calling the const lookup function.
@@ -92,34 +97,21 @@ class Menu_view::Style_database
 		/*
 		 * Assemble path name 'styles/<widget>/<style>/<name>.<extension>'
 		 */
-		static Path _construct_path(Xml_node node,
-		                            char const *name, char const *extension)
+		static Path _construct_path(Xml_node node, char const *name,
+		                            char const *extension)
 		{
-			char widget[64];
-			node.type_name(widget, sizeof(widget));
+			typedef String<64> Style;
+			Style const style = node.attribute_value("style", Style("default"));
 
-			char style[PATH_MAX_LEN];
-			style[0] = 0;
-
-			try {
-				node.attribute("style").value(style, sizeof(style));
-			}
-			catch (Xml_node::Nonexistent_attribute) {
-
-				/* no style defined */
-				Genode::strncpy(style, "default", sizeof(style));
-			}
-
-			char path[PATH_MAX_LEN];
-			path[0] = 0;
-
-			Genode::snprintf(path, sizeof(path), "/styles/%s/%s/%s.%s",
-			                 widget, style, name, extension);
-
-			return Path(path);
+			return Path("/styles/", node.type(), "/", style, "/", name, ".", extension);
 		}
 
 	public:
+
+		Style_database(Ram_session &ram, Region_map &rm, Allocator &alloc)
+		:
+			_ram(ram), _rm(rm), _alloc(alloc)
+		{ }
 
 		Texture<Pixel_rgb888> const *texture(Xml_node node, char const *png_name) const
 		{
@@ -132,19 +124,19 @@ class Menu_view::Style_database
 			 * Load and remember PNG image
 			 */
 			try {
-				Texture_entry *e = new (env()->heap())
-					Texture_entry(path.string(), *env()->heap());
+				Texture_entry *e = new (_alloc)
+					Texture_entry(_ram, _rm, _alloc, path.string());
 
 				_textures.insert(e);
 				return &e->texture;
 
 			} catch (File::Reading_failed) {
 
-				PWRN("could not read texture data from file \"%s\"", path.string());
-				return 0;
+				warning("could not read texture data from file \"", path.string(), "\"");
+				return nullptr;
 			}
 
-			return 0;
+			return nullptr;
 		}
 
 		Text_painter::Font const *font(Xml_node node, char const *tff_name) const
@@ -158,19 +150,19 @@ class Menu_view::Style_database
 			 * Load and remember font
 			 */
 			try {
-				Font_entry *e = new (env()->heap())
-					Font_entry(path.string(), *env()->heap());
+				Font_entry *e = new (_alloc)
+					Font_entry(path.string(), _alloc);
 
 				_fonts.insert(e);
 				return &e->font;
 
 			} catch (File::Reading_failed) {
 
-				PWRN("could not read font from file \"%s\"", path.string());
-				return 0;
+				warning("could not read font from file \"", path.string(), "\"");
+				return nullptr;
 			}
 
-			return 0;
+			return nullptr;
 		}
 };
 

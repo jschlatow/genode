@@ -3,6 +3,10 @@ set use_ps2 [have_spec ps2]
 set use_usb 0
 set use_serial 0
 
+set virtualbox_binary "virtualbox-rem"
+if {[have_spec muen]} { set virtualbox_binary "virtualbox-muen" }
+if {[have_spec nova]} { set virtualbox_binary "virtualbox-nova" }
+
 set build_components {
 	core init virtualbox
 	drivers/framebuffer
@@ -65,10 +69,10 @@ append_if [expr $use_usb] config {
 		<resource name="RAM" quantum="7M"/>
 		<provides><service name="Input"/></provides>}
 
-append_if [expr $use_usb && ![have_spec hw_x86_64_muen]] config {
+append_if [expr $use_usb && ![have_spec muen]] config {
 		<config uhci="yes" ehci="yes" xhci="yes">}
 
-append_if [expr $use_usb && [have_spec hw_x86_64_muen]] config {
+append_if [expr $use_usb && [have_spec muen]] config {
 		<config uhci="no" ehci="no" xhci="yes">}
 
 append_if [expr $use_usb] config {
@@ -116,21 +120,23 @@ append_if [expr $use_serial] config {
 }
 
 append config {
-	<start name="virtualbox" priority="-2">
+	<start name="virtualbox" priority="-2">}
+append config "
+		<binary name=\"$virtualbox_binary\"/>"
+append config {
 		<resource name="RAM" quantum="448M"/>
 		<config vbox_file="test.vbox" vm_name="TestVM">
-			<libc stdout="/dev/log" stderr="/dev/log" rtc="/dev/rtc">
-				<vfs>
-					<dir name="dev"> <log/> <rtc/> </dir>}
+			<libc stdout="/dev/log" stderr="/dev/log" rtc="/dev/rtc"/>
+			<vfs>
+				<dir name="dev"> <log/> <rtc/> </dir>}
 
 append_if [expr $use_serial] config {
-					<dir name="dev"> <terminal/> </dir>}
+				<dir name="dev"> <terminal/> </dir>}
 
 append config {
-					<rom name="test.vbox" />
-					<rom name="test.iso" />
-				</vfs>
-			</libc>
+				<rom name="test.vbox" />
+				<rom name="test.iso" />
+			</vfs>
 		</config>
 	</start>
 </config>
@@ -140,7 +146,9 @@ install_config $config
 
 exec cp ${genode_dir}/repos/ports/run/test.vbox bin/.
 
-set boot_modules { core init timer virtualbox test.iso test.vbox }
+set boot_modules { core ld.lib.so init timer test.iso test.vbox }
+
+append boot_modules $virtualbox_binary
 
 # platform-specific modules
 lappend_if [expr         $use_usb] boot_modules usb_drv

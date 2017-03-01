@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -26,8 +26,8 @@ Native_capability Rpc_entrypoint::_alloc_rpc_cap(Pd_session &pd,
 	Untyped_capability new_obj_cap =
 		retry<Genode::Pd_session::Out_of_metadata>(
 			[&] () { return pd.alloc_rpc_cap(_cap); },
-			[&] () { env()->parent()->upgrade(Parent::Env::pd(),
-			                                  "ram_quota=16K"); });
+			[&] () { env_deprecated()->parent()->upgrade(Parent::Env::pd(),
+			                                             "ram_quota=16K"); });
 
 	return new_obj_cap;
 }

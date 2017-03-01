@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* local includes */
@@ -20,18 +20,17 @@ using namespace Genode;
 
 
 Domain &Leaf_rule::_find_domain(Domain_tree    &domains,
-                                Xml_node const &node)
+                                Xml_node const  node)
 {
 	try {
 		return domains.find_by_name(
-			Cstring(node.attribute("domain").value_base(),
-			        node.attribute("domain").value_size()));
+			node.attribute_value("domain", Domain_name()));
 	}
 	catch (Domain_tree::No_match) { throw Invalid(); }
 }
 
 
-Leaf_rule::Leaf_rule(Domain_tree &domains, Xml_node const &node)
+Leaf_rule::Leaf_rule(Domain_tree &domains, Xml_node const node)
 :
 	_domain(_find_domain(domains, node))
 { }

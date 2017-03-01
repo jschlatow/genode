@@ -7,10 +7,10 @@
  */
 
 /*
- * Copyright (C) 2012-2014 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -18,15 +18,15 @@
 #include <base/log.h>
 #include <dataspace/client.h>
 #include <framebuffer_session/connection.h>
-#include <os/attached_dataspace.h>
-#include <util/volatile_object.h>
+#include <base/attached_dataspace.h>
+#include <util/reconstructible.h>
 
 
 class Test_environment
 {
 	private:
 
-		using Ds = Genode::Lazy_volatile_object<Genode::Attached_dataspace>;
+		using Ds = Genode::Constructible<Genode::Attached_dataspace>;
 
 		enum Color {
 			BLACK = 0x0,

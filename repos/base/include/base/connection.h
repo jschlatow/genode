@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2008-2013 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BASE__CONNECTION_H_
@@ -175,7 +175,7 @@ class Genode::Connection : public Connection_base
 			va_list list;
 			va_start(list, format_args);
 
-			_session(*env()->parent(), Affinity(), format_args, list);
+			_session(*env_deprecated()->parent(), Affinity(), format_args, list);
 			return Capability<SESSION_TYPE>();
 		}
 

@@ -8,8 +8,6 @@ LIBS += lxip_include
 LX_CONTRIB_DIR := $(call select_from_ports,dde_linux)/src/lib/lxip
 NET_DIR        := $(LX_CONTRIB_DIR)/net
 
-CC_OLEVEL = -O2
-
 SETUP_SUFFIX =
 CC_OPT += -DSETUP_SUFFIX=$(SETUP_SUFFIX)
 
@@ -29,7 +27,7 @@ CC_CXX_OPT = -fpermissive
 SRC_CC = dummies.cc lxcc_emul.cc nic_handler.cc socket_handler.cc \
          timer_handler.cc random.cc
 
-SRC_CC += malloc.cc printf.cc
+SRC_CC += malloc.cc printf.cc env.cc
 
 SRC_C += driver.c dummies_c.c lxc_emul.c
 

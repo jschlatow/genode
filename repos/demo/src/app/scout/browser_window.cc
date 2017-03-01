@@ -7,10 +7,10 @@
  */
 
 /*
- * Copyright (C) 2005-2013 Genode Labs GmbH
+ * Copyright (C) 2005-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <scout_gfx/random.h>
@@ -232,15 +232,15 @@ template <typename PT>
 Browser_window<PT>::Browser_window(Document *initial_content,
                                    Graphics_backend &gfx_backend,
                                    Point position, Area size,
-                                   Area max_size, int attr)
+                                   Area max_size, Config const &config)
 :
 	Browser(_IH + _TH), Window(gfx_backend, position, size, max_size, true),
+	_config(config),
 	_gfx_backend(gfx_backend)
 {
 	/* init attributes */
 	_ypos     = 0;
 	_document = initial_content;
-	_attr     = attr;
 
 	/* init docview and history with initial document */
 	_docview.texture(&_texture);

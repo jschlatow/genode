@@ -1,4 +1,4 @@
-/**
+/*
  * \brief  Platform_device implementation for ARM
  * \author Sebastian Sumpf
  * \date   2016-04-25
@@ -8,10 +8,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 #ifndef _ARM__PLATFORM_DEVICE__PLATFORM_DEVICE_H_
@@ -27,24 +27,26 @@
 
 #include <irq_session/connection.h>
 #include <util/list.h>
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 
 
 namespace Platform { struct Device; }
 
 struct Platform::Device : Platform::Abstract_device, Genode::List<Device>::Element
 {
-	unsigned                                             irq_num;
-	Genode::Lazy_volatile_object<Genode::Irq_connection> irq_connection;
+	Genode::Env &env;
 
-	Device(unsigned irq) : irq_num(irq) { }
+	unsigned                                      irq_num;
+	Genode::Constructible<Genode::Irq_connection> irq_connection;
+
+	Device(Genode::Env &env, unsigned irq) : env(env), irq_num(irq) { }
 
 	unsigned vendor_id() { return ~0U; }
 	unsigned device_id() { return ~0U; }
 
 	Genode::Irq_session_capability irq(Genode::uint8_t) override
 	{
-		irq_connection.construct(irq_num);
+		irq_connection.construct(env, irq_num);
 		return irq_connection->cap();
 	}
 
@@ -62,14 +64,14 @@ struct Platform::Device : Platform::Abstract_device, Genode::List<Device>::Eleme
 		return l;
 	}
 
-	static Device &create(unsigned irq_num)
+	static Device &create(Genode::Env &env, unsigned irq_num)
 	{
 		Device *d;
 		for (d = list().first(); d; d = d->next())
 			if (d->irq_num == irq_num)
 				return *d;
 
-		d = new (Lx::Malloc::mem()) Device(irq_num);
+		d = new (Lx::Malloc::mem()) Device(env, irq_num);
 		list().insert(d);
 
 		return *d;

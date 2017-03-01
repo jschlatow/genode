@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2016 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -937,16 +937,12 @@ class Nitpicker::Session_component : public Genode::Rpc_object<Session>,
 
 		void session_control(Label suffix, Session_control control) override
 		{
-			char selector[Label::size()];
-
-			Genode::snprintf(selector, sizeof(selector), "%s%s%s",
-			                 label().string(),
-			                 suffix.length() ? " -> " : "", suffix.string());
+			Session_label const selector(label(), suffix);
 
 			switch (control) {
-			case SESSION_CONTROL_HIDE:     _view_stack.visible(selector, false); break;
-			case SESSION_CONTROL_SHOW:     _view_stack.visible(selector, true);  break;
-			case SESSION_CONTROL_TO_FRONT: _view_stack.to_front(selector);       break;
+			case SESSION_CONTROL_HIDE:     _view_stack.visible(selector.string(), false); break;
+			case SESSION_CONTROL_SHOW:     _view_stack.visible(selector.string(), true);  break;
+			case SESSION_CONTROL_TO_FRONT: _view_stack.to_front(selector.string());       break;
 			}
 		}
 
@@ -1103,8 +1099,8 @@ struct Nitpicker::Main
 	/*
 	 * Sessions to the required external services
 	 */
-	Framebuffer::Connection framebuffer;
-	Input::Connection       input;
+	Framebuffer::Connection framebuffer { env, Framebuffer::Mode() };
+	Input::Connection       input { env };
 
 	Input::Event * const ev_buf = env.rm().attach(input.dataspace());
 
@@ -1122,17 +1118,18 @@ struct Nitpicker::Main
 
 		Framebuffer::Mode const mode = framebuffer.mode();
 
-		Attached_dataspace fb_ds = { framebuffer.dataspace() };
+		Attached_dataspace fb_ds;
 
 		Screen<PT> screen = { fb_ds.local_addr<PT>(), Area(mode.width(), mode.height()) };
 
 		/**
 		 * Constructor
 		 */
-		Framebuffer_screen(Framebuffer::Session &fb) : framebuffer(fb) { }
+		Framebuffer_screen(Genode::Region_map &rm, Framebuffer::Session &fb)
+		: framebuffer(fb), fb_ds(rm, framebuffer.dataspace()) { }
 	};
 
-	Genode::Volatile_object<Framebuffer_screen> fb_screen = { framebuffer };
+	Genode::Reconstructible<Framebuffer_screen> fb_screen = { env.rm(), framebuffer };
 
 	void handle_fb_mode();
 
@@ -1150,7 +1147,7 @@ struct Nitpicker::Main
 	 * on the first call of 'handle_config'.
 	 */
 	Genode::Heap domain_registry_heap { env.ram(), env.rm() };
-	Genode::Volatile_object<Domain_registry> domain_registry {
+	Genode::Reconstructible<Domain_registry> domain_registry {
 		domain_registry_heap, Genode::Xml_node("<config/>") };
 
 	User_state user_state = { global_keys, fb_screen->screen.size() };
@@ -1167,9 +1164,9 @@ struct Nitpicker::Main
 	 */
 	Genode::Sliced_heap sliced_heap { env.ram(), env.rm() };
 
-	Genode::Reporter pointer_reporter = { "pointer" };
-	Genode::Reporter hover_reporter   = { "hover" };
-	Genode::Reporter focus_reporter   = { "focus" };
+	Genode::Reporter pointer_reporter = { env, "pointer" };
+	Genode::Reporter hover_reporter   = { env, "hover" };
+	Genode::Reporter focus_reporter   = { env, "focus" };
 
 	Genode::Attached_rom_dataspace config { env, "config" };
 
@@ -1198,7 +1195,7 @@ struct Nitpicker::Main
 	/*
 	 * Dispatch input and redraw periodically
 	 */
-	Timer::Connection timer;
+	Timer::Connection timer { env };
 
 	/**
 	 * Counter that is incremented periodically
@@ -1380,7 +1377,7 @@ void Nitpicker::Main::handle_config()
 void Nitpicker::Main::handle_fb_mode()
 {
 	/* reconstruct framebuffer screen and menu bar */
-	fb_screen.construct(framebuffer);
+	fb_screen.construct(env.rm(), framebuffer);
 
 	/* let the view stack use the new size */
 	user_state.size(Area(fb_screen->mode.width(), fb_screen->mode.height()));

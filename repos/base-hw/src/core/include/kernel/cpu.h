@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__KERNEL__CPU_H_
@@ -61,7 +61,7 @@ namespace Kernel
 	Cpu_pool * cpu_pool();
 }
 
-class Kernel::Cpu_context : Genode::Cpu::Context
+class Kernel::Cpu_context : public Genode::Cpu::Context
 {
 	private:
 
@@ -292,7 +292,7 @@ class Kernel::Cpu : public Genode::Cpu, public Irq::Pool, private Timeout
 		 * \param core_pd  core's pd object
 		 * \param board    object encapsulating board specifics
 		 */
-		void init(Pic &pic, Kernel::Pd &core_pd, Genode::Board & board);
+		void init(Pic &pic/*, Kernel::Pd &core_pd, Genode::Board & board*/);
 
 		/**
 		 * Raise the IPI of the CPU

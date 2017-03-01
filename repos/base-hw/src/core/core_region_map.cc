@@ -8,10 +8,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* core includes */
@@ -59,9 +59,9 @@ Core_region_map::attach(Dataspace_capability ds_cap, size_t size,
 
 		/* map the dataspace's physical pages to corresponding virtual addresses */
 		unsigned num_pages = page_rounded_size >> get_page_size_log2();
-		Page_flags const flags = Page_flags::apply_mapping(ds->writable(),
-		                                                   ds->cacheability(),
-		                                                   ds->io_mem());
+		Page_flags const flags { ds->writable() ? RW : RO, NO_EXEC, USER,
+		                         NO_GLOBAL, ds->io_mem() ? DEVICE : RAM,
+		                         ds->cacheability() };
 		if (!map_local(ds->phys_addr(), (addr_t)virt_addr, num_pages, flags))
 			return nullptr;
 

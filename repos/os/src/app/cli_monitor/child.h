@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CHILD_H_
@@ -20,11 +20,15 @@
 /* local includes */
 #include <line_editor.h>
 
-struct Child : Child_base, List<Child>::Element
+namespace Cli_monitor { struct Child; }
+
+
+struct Cli_monitor::Child : Child_base, List<Child>::Element
 {
 	Argument argument;
 
 	Child(Ram                              &ram,
+	      Genode::Allocator                &alloc,
 	      Name                       const &label,
 	      Binary_name                const &binary,
 	      Genode::Pd_session               &pd_session,
@@ -37,6 +41,7 @@ struct Child : Child_base, List<Child>::Element
 	      Genode::Signal_context_capability exit_sig_cap)
 	:
 		Child_base(ram,
+		           alloc,
 		           label,
 		           binary,
 		           pd_session,

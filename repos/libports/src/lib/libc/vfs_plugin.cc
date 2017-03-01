@@ -1,21 +1,22 @@
 /*
- * \brief   Libc plugin for using a process-local virtual file system
- * \author  Norman Feske
- * \date    2014-04-09
+ * \brief  Libc plugin for using a process-local virtual file system
+ * \author Norman Feske
+ * \author Christian Helmuth
+ * \author Emery Hemingway
+ * \date   2014-04-09
  */
 
 /*
- * Copyright (C) 2014-2016 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
 #include <base/env.h>
 #include <base/log.h>
 #include <vfs/dir_file_system.h>
-#include <os/config.h>
 
 /* libc includes */
 #include <errno.h>
@@ -36,8 +37,9 @@
 #include <vfs_plugin.h>
 
 /* libc-internal includes */
-#include <libc_mem_alloc.h>
+#include "libc_mem_alloc.h"
 #include "libc_errno.h"
+#include "task.h"
 
 
 static Vfs::Vfs_handle *vfs_handle(Libc::File_descriptor *fd)
@@ -75,21 +77,22 @@ static void vfs_stat_to_libc_stat_struct(Vfs::Directory_service::Stat const &src
 }
 
 
+static Genode::Xml_node *_config_node;
+
+
 namespace Libc {
+
+	void libc_config_init(Genode::Xml_node node)
+	{
+		static Genode::Xml_node config = node;
+		_config_node = &config;
+	}
 
 	Genode::Xml_node config() __attribute__((weak));
 	Genode::Xml_node config()
 	{
-		return Genode::config()->xml_node().sub_node("libc");
+		return _config_node->sub_node("libc");
 	}
-
-
-	Genode::Xml_node vfs_config() __attribute__((weak));
-	Genode::Xml_node vfs_config()
-	{
-		return Libc::config().sub_node("vfs");
-	}
-
 
 	class Config_attr
 	{
@@ -110,43 +113,18 @@ namespace Libc {
 			char const *string() const { return _buf; }
 	};
 
-
-	char const *initial_cwd() __attribute__((weak));
-	char const *initial_cwd()
-	{
-		static Config_attr initial_cwd("cwd", "/");
-		return initial_cwd.string();
-	}
-
-
-	char const *config_stdin() __attribute__((weak));
-	char const *config_stdin()
-	{
-		static Config_attr stdin("stdin", "");
-		return stdin.string();
-	}
-
-
-	char const *config_stdout() __attribute__((weak));
-	char const *config_stdout()
-	{
-		static Config_attr stdout("stdout", "");
-		return stdout.string();
-	}
-
-
-	char const *config_stderr() __attribute__((weak));
-	char const *config_stderr()
-	{
-		static Config_attr stderr("stderr", "");
-		return stderr.string();
-	}
-
 	char const *config_rtc() __attribute__((weak));
 	char const *config_rtc()
 	{
 		static Config_attr rtc("rtc", "");
 		return rtc.string();
+	}
+
+	char const *config_socket() __attribute__((weak));
+	char const *config_socket()
+	{
+		static Config_attr socket("socket", "");
+		return socket.string();
 	}
 }
 
@@ -320,22 +298,72 @@ ssize_t Libc::Vfs_plugin::write(Libc::File_descriptor *fd, const void *buf,
 }
 
 
+typedef Vfs::File_io_service::Read_result Result;
+
+struct Read_check : Libc::Suspend_functor {
+	Vfs::Vfs_handle * handle;
+	void            * buf;
+	::size_t        * count;
+	Vfs::file_size  * out_count;
+	Result          * out_result;
+
+	Read_check(Vfs::Vfs_handle * handle, void * buf, ::size_t * count,
+	           Vfs::file_size  * out_count, Result * out_result)
+	: handle(handle), buf(buf), count(count), out_count(out_count),
+	  out_result(out_result)
+	{ }
+};
+
 ssize_t Libc::Vfs_plugin::read(Libc::File_descriptor *fd, void *buf,
                                ::size_t count)
 {
-	typedef Vfs::File_io_service::Read_result Result;
-
 	Vfs::Vfs_handle *handle = vfs_handle(fd);
 
-	Vfs::file_size out_count = 0;
+	Vfs::file_size out_count  = 0;
+	Result         out_result = Result::READ_OK;
 
-	switch (handle->fs().read(handle, (char *)buf, count, out_count)) {
-	case Result::READ_ERR_AGAIN:       errno = EAGAIN;      return -1;
-	case Result::READ_ERR_WOULD_BLOCK: errno = EWOULDBLOCK; return -1;
-	case Result::READ_ERR_INVALID:     errno = EINVAL;      return -1;
-	case Result::READ_ERR_IO:          errno = EIO;         return -1;
-	case Result::READ_ERR_INTERRUPT:   errno = EINTR;       return -1;
-	case Result::READ_OK:                                   break;
+	while (!handle->fs().queue_read(handle, (char *)buf, count,
+	                                out_result, out_count)) {
+		struct Check : Read_check {
+			Check(Vfs::Vfs_handle * handle, void * buf, ::size_t * count,
+			      Vfs::file_size * out_count, Result * out_result)
+			: Read_check (handle, buf, count, out_count, out_result) { }
+
+			bool suspend() override {
+				return !handle->fs().queue_read(handle, (char *)buf, *count,
+				                                *out_result, *out_count); }
+		} check ( handle, buf, &count, &out_count, &out_result);
+
+		Libc::suspend(check);
+	}
+
+	while (out_result == Result::READ_QUEUED) {
+
+		struct Check : Read_check {
+			Check(Vfs::Vfs_handle * handle, void * buf, ::size_t * count,
+			      Vfs::file_size * out_count, Result * out_result)
+			: Read_check (handle, buf, count, out_count, out_result) { }
+
+			bool suspend() override {
+				*out_result = handle->fs().complete_read(handle, (char *)buf,
+				                                         *count, *out_count);
+				/* suspend me if read is still queued */
+				return *out_result == Result::READ_QUEUED;
+			}
+		} check ( handle, buf, &count, &out_count, &out_result);
+
+		Libc::suspend(check);
+	}
+
+	switch (out_result) {
+	case Result::READ_ERR_AGAIN:       return Errno(EAGAIN);
+	case Result::READ_ERR_WOULD_BLOCK: return Errno(EWOULDBLOCK);
+	case Result::READ_ERR_INVALID:     return Errno(EINVAL);
+	case Result::READ_ERR_IO:          return Errno(EIO);
+	case Result::READ_ERR_INTERRUPT:   return Errno(EINTR);
+	case Result::READ_OK:              break;
+
+	case Result::READ_QUEUED: /* handled above, so never reached */ break;
 	}
 
 	handle->advance_seek(out_count);
@@ -750,4 +778,95 @@ int Libc::Vfs_plugin::munmap(void *addr, ::size_t)
 {
 	Libc::mem_alloc()->free(addr);
 	return 0;
+}
+
+
+bool Libc::Vfs_plugin::supports_select(int nfds,
+                                       fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
+                                       struct timeval *timeout)
+{
+	/* return true if any file descriptor (which is set) belongs to the VFS */
+	for (int fd = 0; fd < nfds; ++fd) {
+
+		if (FD_ISSET(fd, readfds) || FD_ISSET(fd, writefds) || FD_ISSET(fd, exceptfds)) {
+
+			Libc::File_descriptor *fdo =
+				Libc::file_descriptor_allocator()->find_by_libc_fd(fd);
+
+			if (fdo && (fdo->plugin == this))
+				return true;
+		}
+	}
+	return false;
+}
+
+
+int Libc::Vfs_plugin::select(int nfds,
+                             fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
+                             struct timeval *timeout)
+{
+	int nready = 0;
+
+	fd_set const in_readfds  = *readfds;
+	fd_set const in_writefds = *writefds;
+	/* XXX exceptfds not supported */
+
+	/* clear fd sets */
+	FD_ZERO(readfds);
+	FD_ZERO(writefds);
+	FD_ZERO(exceptfds);
+
+	for (int fd = 0; fd < nfds; ++fd) {
+
+		Libc::File_descriptor *fdo =
+			Libc::file_descriptor_allocator()->find_by_libc_fd(fd);
+
+		/* handle only fds that belong to this plugin */
+		if (!fdo || (fdo->plugin != this))
+			continue;
+
+		Vfs::Vfs_handle *handle = vfs_handle(fdo);
+		if (!handle) continue;
+
+		if (FD_ISSET(fd, &in_readfds)) {
+			if (handle->fs().read_ready(handle)) {
+				FD_SET(fd, readfds);
+				++nready;
+			} else {
+				struct Check : Libc::Suspend_functor {
+					Vfs::Vfs_handle * handle;
+					Check(Vfs::Vfs_handle * handle) : handle (handle) { }
+					bool suspend() override {
+						return !handle->fs().notify_read_ready(handle); }
+				} check ( handle );
+
+				while (!handle->fs().notify_read_ready(handle))
+					Libc::suspend(check);
+			}
+		}
+
+		if (FD_ISSET(fd, &in_writefds)) {
+			if (true /* XXX always writeable */) {
+				FD_SET(fd, writefds);
+				++nready;
+			}
+		}
+
+		/* XXX exceptfds not supported */
+	}
+	return nready;
+}
+
+namespace Libc {
+
+	bool read_ready(Libc::File_descriptor *fd)
+	{
+		Vfs::Vfs_handle *handle = vfs_handle(fd);
+		if (!handle) return false;
+
+		handle->fs().notify_read_ready(handle);
+
+		return handle->fs().read_ready(handle);
+	}
+
 }

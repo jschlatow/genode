@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -25,7 +25,7 @@ using namespace Genode;
 
 
 Permit_any_rule *Transport_rule::_read_permit_any(Domain_tree    &domains,
-                                                  Xml_node const &node,
+                                                  Xml_node const  node,
                                                   Allocator      &alloc)
 {
 	try {
@@ -39,7 +39,7 @@ Permit_any_rule *Transport_rule::_read_permit_any(Domain_tree    &domains,
 
 
 Transport_rule::Transport_rule(Domain_tree    &domains,
-                               Xml_node const &node,
+                               Xml_node const  node,
                                Allocator      &alloc,
                                Cstring  const &protocol,
                                Configuration  &config)
@@ -55,14 +55,14 @@ Transport_rule::Transport_rule(Domain_tree    &domains,
 	}
 
 	/* read specific permit rules */
-	node.for_each_sub_node("permit", [&] (Xml_node const &node) {
+	node.for_each_sub_node("permit", [&] (Xml_node const node) {
 		try {
 			Permit_single_rule &rule = *new (alloc)
 				Permit_single_rule(domains, node);
 
 			_permit_single_rules.insert(&rule);
 			if (config.verbose()) {
-				log(protocol, " rule: ", _dst, " ", rule); }
+				log("  ", protocol, " rule: ", _dst, " ", rule); }
 		}
 		catch (Rule::Invalid) { warning("invalid permit rule"); }
 	});
@@ -72,7 +72,7 @@ Transport_rule::Transport_rule(Domain_tree    &domains,
 }
 
 
-Permit_rule const &Transport_rule::permit_rule(uint16_t const port) const
+Permit_rule const &Transport_rule::permit_rule(Port const port) const
 {
 	if (_permit_any) { return *_permit_any; }
 	return _permit_single_rules.find_by_port(port);

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__TRACE__CONTROL_AREA_H_
@@ -36,13 +36,13 @@ class Genode::Trace::Control_area
 
 		static Ram_dataspace_capability _try_alloc(size_t size)
 		{
-			try { return env()->ram_session()->alloc(size); }
+			try { return env_deprecated()->ram_session()->alloc(size); }
 			catch (...) { return Ram_dataspace_capability(); }
 		}
 
 		static Trace::Control *_try_attach(Dataspace_capability ds)
 		{
-			try { return env()->rm_session()->attach(ds); }
+			try { return env_deprecated()->rm_session()->attach(ds); }
 			catch (...) { return 0; }
 		}
 
@@ -61,8 +61,8 @@ class Genode::Trace::Control_area
 
 		~Control_area()
 		{
-			if (_local_base) env()->rm_session()->detach(_local_base);
-			if (_ds.valid()) env()->ram_session()->free(_ds);
+			if (_local_base) env_deprecated()->rm_session()->detach(_local_base);
+			if (_ds.valid()) env_deprecated()->ram_session()->free(_ds);
 		}
 
 		Dataspace_capability dataspace() const { return _ds; }

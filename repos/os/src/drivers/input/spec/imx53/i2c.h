@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013-2015 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _DRIVERS__INPUT__SPEC__IMX53__I2C_H_
@@ -64,8 +64,7 @@ class I2c::I2c : Genode::Mmio
 
 		class No_ack : Genode::Exception {};
 
-
-		Timer::Connection  _timer;
+		Timer::Connection &_timer;
 		Irq_handler       &_irq_handler;
 
 		void _busy() { while (!read<Status::Busy>()); }
@@ -113,8 +112,9 @@ class I2c::I2c : Genode::Mmio
 
 	public:
 
-		I2c(Genode::addr_t const base, Irq_handler &irq_handler)
-		: Mmio(base), _irq_handler(irq_handler)
+		I2c(Timer::Connection &timer,
+		    Genode::addr_t const base, Irq_handler &irq_handler)
+		: Mmio(base), _timer(timer), _irq_handler(irq_handler)
 		{
 			write<Control>(0);
 			write<Status>(0);

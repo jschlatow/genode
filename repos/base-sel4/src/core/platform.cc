@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -74,9 +74,6 @@ bool Mapped_mem_allocator::_unmap_local(addr_t virt_addr, addr_t phys_addr,
 
 void Platform::_init_unused_phys_alloc()
 {
-	/* enable log support early */
-	init_log();
-
 	/* the lower physical ram is kept by the kernel and not usable to us */
 	_unused_phys_alloc.add_range(0x100000, 0UL - 0x100000);
 }

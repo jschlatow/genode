@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2010-2013 Genode Labs GmbH
+ * Copyright (C) 2010-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BLOCK_SESSION__CONNECTION_H_
@@ -31,7 +31,7 @@ struct Block::Connection : Genode::Connection<Session>, Session_client
 	                                    char const *label, Genode::size_t tx_buf_size)
 	{
 		return session(parent, "ram_quota=%ld, tx_buf_size=%ld, label=\"%s\"",
-		               3*4096 + tx_buf_size, tx_buf_size, label);
+		               14*1024 + tx_buf_size, tx_buf_size, label);
 	}
 
 	/**
@@ -47,7 +47,7 @@ struct Block::Connection : Genode::Connection<Session>, Session_client
 	           const char              *label = "")
 	:
 		Genode::Connection<Session>(env, _session(env.parent(), label, tx_buf_size)),
-		Session_client(cap(), tx_block_alloc)
+		Session_client(cap(), *tx_block_alloc, env.rm())
 	{ }
 
 	/**
@@ -59,10 +59,10 @@ struct Block::Connection : Genode::Connection<Session>, Session_client
 	 */
 	Connection(Genode::Range_allocator *tx_block_alloc,
 	           Genode::size_t           tx_buf_size = 128*1024,
-	           const char              *label = "")
+	           const char              *label = "") __attribute__((deprecated))
 	:
-		Genode::Connection<Session>(_session(*Genode::env()->parent(), label, tx_buf_size)),
-		Session_client(cap(), tx_block_alloc)
+		Genode::Connection<Session>(_session(*Genode::env_deprecated()->parent(), label, tx_buf_size)),
+		Session_client(cap(), *tx_block_alloc, *Genode::env_deprecated()->rm_session())
 	{ }
 };
 

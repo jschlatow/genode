@@ -1,9 +1,4 @@
 #
-# On OMAP4 where no PS/2 is available, we rely on USB HID
-#
-proc use_usb_input { } { return [expr ![have_spec ps2] && [have_spec usb]] }
-
-#
 # Uncomment the following line when working on the VIM source code. Otherwise,
 # the package may get recompiled, yet it does not get reinstalled into 'bin/'.
 #
@@ -14,12 +9,17 @@ set build_components {
 	drivers/framebuffer drivers/input
 	server/terminal server/ram_fs
 	test/libports/ncurses
-
-	drivers/rtc
 }
 
-lappend_if [use_usb_input]  build_components drivers/usb
+source ${genode_dir}/repos/base/run/platform_drv.inc
+
+lappend_if [have_spec x86]  build_components drivers/rtc
+lappend_if [need_usb_hid]   build_components drivers/usb
 lappend_if [have_spec gpio] build_components drivers/gpio
+
+proc gpio_drv { } { if {[have_spec rpi] && [have_spec hw]}  { return hw_gpio_drv }
+                    if {[have_spec rpi] && [have_spec foc]} { return foc_gpio_drv }
+                    return gpio_drv }
 
 #
 # Build Noux packages only once
@@ -27,7 +27,6 @@ lappend_if [have_spec gpio] build_components drivers/gpio
 foreach pkg {bash coreutils vim diffutils less} {
 	lappend_if [expr ![file exists bin/$pkg]] build_components noux-pkg/$pkg }
 
-source ${genode_dir}/repos/base/run/platform_drv.inc
 append_platform_drv_build_components
 
 build $build_components
@@ -73,7 +72,9 @@ append config {
 		<start name="timer">
 			<resource name="RAM" quantum="1M"/>
 			<provides><service name="Timer"/></provides>
-		</start>
+		</start>}
+
+append_if [have_spec x86] config {
 		<start name="rtc_drv">
 			<resource name="RAM" quantum="1M"/>
 			<provides><service name="Rtc"/></provides>
@@ -102,14 +103,14 @@ append_if [have_spec ps2] config {
 		<provides><service name="Input"/></provides>
 	</start> }
 
-append_if [have_spec gpio] config {
-	<start name="gpio_drv">
-		<resource name="RAM" quantum="4M"/>
-		<provides><service name="Gpio"/></provides>
+append_if [have_spec gpio] config "
+	<start name=\"[gpio_drv]\">
+		<resource name=\"RAM\" quantum=\"4M\"/>
+		<provides><service name=\"Gpio\"/></provides>
 		<config/>
-	</start>}
+	</start>"
 
-append_if [use_usb_input] config {
+append_if [need_usb_hid] config {
 	<start name="usb_drv">
 		<resource name="RAM" quantum="12M"/>
 		<provides><service name="Input"/></provides>
@@ -175,8 +176,13 @@ Hello world !!
 				<dir name="ram"> <fs label="root" /> </dir>
 				<dir name="tmp"> <fs label="tmp" /> </dir>
 
-				<dir name="dev"> <rtc/> <zero/> <null/> </dir>
+				<dir name="dev">}
 
+append_if [have_spec x86] config {
+					<rtc/>}
+append config {
+					<zero/> <null/>
+				</dir>
 			</fstab>
 			<start name="/bin/bash">
 				<env name="TERM" value="linux" />
@@ -198,15 +204,15 @@ set boot_modules {
 	core init timer ld.lib.so noux terminal ram_fs
 	libc.lib.so libm.lib.so libc_noux.lib.so ncurses.lib.so
 	bash.tar coreutils.tar diffutils.tar less.tar vim.tar
-	rtc_drv
 }
 
 # platform-specific modules
 lappend_if [have_spec       linux] boot_modules fb_sdl
 lappend_if [have_spec         ps2] boot_modules ps2_drv
+lappend_if [have_spec         x86] boot_modules rtc_drv
 lappend_if [have_spec framebuffer] boot_modules fb_drv
-lappend_if [use_usb_input]         boot_modules usb_drv
-lappend_if [have_spec gpio]        boot_modules gpio_drv
+lappend_if [need_usb_hid]          boot_modules usb_drv
+lappend_if [have_spec gpio]        boot_modules [gpio_drv]
 
 append_platform_drv_boot_modules
 

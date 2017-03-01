@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is distributed under the terms of the GNU General Public License
  * version 2.
@@ -17,7 +17,6 @@
 
 /* Genode includes */
 #include <base/stdint.h>
-#include <os/attached_io_mem_dataspace.h>
 
 namespace Genode
 {

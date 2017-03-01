@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/log.h>
@@ -44,7 +44,7 @@ class Acpica::Io_mem
 		Genode::Io_mem_connection *_io_mem = nullptr;
 		unsigned                   _ref;
 
-		static Acpica::Io_mem _ios[16];
+		static Acpica::Io_mem _ios[32];
 
 	public:
 
@@ -139,7 +139,8 @@ class Acpica::Io_mem
 				io_mem._virt = 0;
 
 				io_mem._io_mem = new (Acpica::heap())
-					Genode::Io_mem_connection(io_mem._phys, io_mem._size);
+					Genode::Io_mem_connection(Acpica::env(), io_mem._phys,
+					                          io_mem._size);
 
 				return &io_mem;
 			});
@@ -239,7 +240,7 @@ class Acpica::Io_mem
 		}
 };
 
-Acpica::Io_mem Acpica::Io_mem::_ios[16];
+Acpica::Io_mem Acpica::Io_mem::_ios[32];
 
 
 void * AcpiOsMapMemory (ACPI_PHYSICAL_ADDRESS phys, ACPI_SIZE size)

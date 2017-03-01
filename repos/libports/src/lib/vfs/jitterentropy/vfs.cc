@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -21,9 +21,10 @@
 struct Jitterentropy_factory : Vfs::File_system_factory
 {
 	Vfs::File_system *create(Genode::Env&, Genode::Allocator &alloc,
-	                         Genode::Xml_node  node) override
+	                         Genode::Xml_node node,
+	                         Vfs::Io_response_handler &) override
 	{
-		return new (alloc) Jitterentropy_file_system(node);
+		return new (alloc) Jitterentropy_file_system(alloc, node);
 	}
 };
 

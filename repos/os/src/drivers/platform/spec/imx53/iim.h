@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _DRIVERS__PLATFORM__SPEC__IMX53__IIM_H_
@@ -17,7 +17,7 @@
 /* Genode includes */
 #include <util/mmio.h>
 #include <drivers/board_base.h>
-#include <os/attached_io_mem_dataspace.h>
+#include <base/attached_io_mem_dataspace.h>
 
 class Iim : public Genode::Attached_io_mem_dataspace,
             Genode::Mmio
@@ -28,9 +28,9 @@ class Iim : public Genode::Attached_io_mem_dataspace,
 
 	public:
 
-		Iim()
-		: Genode::Attached_io_mem_dataspace(Genode::Board_base::IIM_BASE,
-		                                    Genode::Board_base::IIM_SIZE),
+		Iim(Genode::Env &env)
+		: Genode::Attached_io_mem_dataspace(env, Genode::Board_base::IIM_BASE,
+		                                         Genode::Board_base::IIM_SIZE),
 		Genode::Mmio((Genode::addr_t)local_addr<void>()) {}
 
 		unsigned long revision() { return read<Fuse_bank0_gp6>() & 0xf; }

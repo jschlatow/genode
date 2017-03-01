@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__UTIL__RANDOM_H_
@@ -16,6 +16,6 @@
 
 #include <base/stdint.h>
 
-int rumpuser_getrandom_backend(void *buf, Genode::size_t buflen, int flags, __SIZE_TYPE__ *retp);
+int rumpuser_getrandom_backend(void *buf, Genode::size_t buflen, int flags, Genode::size_t *retp);
 
 #endif /* _INCLUDE__UTIL__RANDOM_H_ */

@@ -7,10 +7,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 #ifndef _LX_KIT__INTERNAL__PCI_DEV_H_
@@ -21,7 +21,7 @@
 #include <platform_session/connection.h>
 #include <platform_device/client.h>
 #include <io_mem_session/connection.h>
-#include <os/attached_dataspace.h>
+#include <base/attached_dataspace.h>
 #include <util/retry.h>
 
 /* Linux emulation environment includes */

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__PARENT__PARENT_H_
@@ -183,6 +183,8 @@ class Genode::Parent
 		 * Request session capability
 		 *
 		 * \throw Service_denied
+		 * \throw Quota_exceeded   session quota does not suffice for
+		 *                         the creation of the new session
 		 *
 		 * In the exception case, the parent implicitly closes the session.
 		 */
@@ -215,7 +217,7 @@ class Genode::Parent
 		 * Interface for providing services
 		 */
 
-		enum Session_response { SESSION_OK, SESSION_CLOSED, INVALID_ARGS };
+		enum Session_response { SESSION_OK, SESSION_CLOSED, INVALID_ARGS, QUOTA_EXCEEDED };
 
 		/**
 		 * Set state of a session provided by the child service

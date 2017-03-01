@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -89,7 +89,7 @@ class Linker::Elf_object : public Object, public Fifo<Elf_object>::Element
 		/*
 		 * Optional ELF file, skipped for initial 'Ld' initialization
 		 */
-		Lazy_volatile_object<Elf_file> _elf_file;
+		Constructible<Elf_file> _elf_file;
 
 
 		bool _object_init(Object::Name const &name, Elf::Addr reloc_base)
@@ -197,7 +197,7 @@ class Linker::Elf_object : public Object, public Fifo<Elf_object>::Element
 
 		void update_dependency(Dependency const &dep) { _dyn.dep(dep); }
 
-		void relocate(Bind bind) override
+		void relocate(Bind bind) override SELF_RELOC
 		{
 			if (!_relocated)
 				_dyn.relocate(bind);
@@ -317,6 +317,20 @@ Linker::Ld &Linker::Ld::linker()
 }
 
 
+/*
+ * Defined in the startup library, passed to legacy main functions.
+ */
+extern char **genode_argv;
+extern int    genode_argc;
+extern char **genode_envp;
+
+void genode_exit(int status);
+
+static int exit_status;
+
+static void exit_on_suspended() { genode_exit(exit_status); }
+
+
 /**
  * The dynamic binary to load
  */
@@ -348,16 +362,26 @@ struct Linker::Binary : Root_object, Elf_object
 
 	Elf::Addr lookup_symbol(char const *name)
 	{
-		Elf::Sym const *symbol = 0;
-
-		if ((symbol = Elf_object::lookup_symbol(name, Hash_table::hash(name))))
-			return reloc_base() + symbol->st_value;
-
-		return 0;
+		try {
+			Elf::Addr base = 0;
+			Elf::Sym const *sym = Linker::lookup_symbol(name, dynamic().dep(), &base);
+			return base + sym->st_value;
+		}
+		catch (Linker::Not_found) { return 0; }
 	}
 
 	void call_entry_point(Env &env)
 	{
+		/* apply the component-provided stack size */
+		if (Elf::Addr addr = lookup_symbol("_ZN9Component10stack_sizeEv")) {
+
+			/* call 'Component::stack_size()' */
+			size_t const stack_size = ((size_t(*)())addr)();
+
+			/* expand stack according to the component's needs */
+			Thread::myself()->stack_size(stack_size);
+		}
+
 		/* call static construtors and register destructors */
 		Func * const ctors_start = (Func *)lookup_symbol("_ctors_start");
 		Func * const ctors_end   = (Func *)lookup_symbol("_ctors_end");
@@ -367,13 +391,33 @@ struct Linker::Binary : Root_object, Elf_object
 		Func * const dtors_end   = (Func *)lookup_symbol("_dtors_end");
 		for (Func * dtor = dtors_start; dtor != dtors_end; genode_atexit(*dtor++));
 
-		/* call component entry point */
-		/* XXX the function type for call_component_construct() is a candidate
-		 * for a base-internal header */
-		typedef void (*Entry)(Env &);
-		Entry const entry = reinterpret_cast<Entry>(_file->entry);
+		/* call 'Component::construct' function if present */
+		if (Elf::Addr addr = lookup_symbol("_ZN9Component9constructERN6Genode3EnvE")) {
+			((void(*)(Env &))addr)(env);
+			return;
+		}
 
-		entry(env);
+		/*
+		 * The 'Component::construct' function is missing. This may be the
+		 * case for legacy components that still implement a 'main' function.
+		 *
+		 * \deprecated  the handling of legacy 'main' functions will be removed
+		 */
+		if (Elf::Addr addr = lookup_symbol("main")) {
+			warning("using legacy main function, please convert to 'Component::construct'");
+
+			exit_status = ((int (*)(int, char **, char **))addr)(genode_argc,
+			                                                     genode_argv,
+			                                                     genode_envp);
+
+			/* trigger suspend in the entry point */
+			env.ep().schedule_suspend(exit_on_suspended, nullptr);
+
+			/* return to entrypoint and exit via exit_on_suspended() */
+			return;
+		}
+
+		error("dynamic linker: component-entrypoint lookup failed");
 	}
 
 	void relocate(Bind bind) override
@@ -486,7 +530,6 @@ Elf::Sym const *Linker::lookup_symbol(char const *name, Dependency const &dep,
 		if (binary_ptr && &dep != binary_ptr->first_dep()) {
 			return lookup_symbol(name, *binary_ptr->first_dep(), base, undef, other);
 		} else {
-			error("LD: could not lookup symbol \"", name, "\"");
 			throw Not_found();
 		}
 	}
@@ -528,9 +571,6 @@ extern "C" void init_rtld()
 }
 
 
-Genode::size_t Component::stack_size() { return 16*1024*sizeof(long); }
-
-
 class Linker::Config
 {
 	private:
@@ -557,9 +597,9 @@ class Linker::Config
 };
 
 
-static Genode::Lazy_volatile_object<Heap> &heap()
+static Genode::Constructible<Heap> &heap()
 {
-	return *unmanaged_singleton<Lazy_volatile_object<Heap>>();
+	return *unmanaged_singleton<Constructible<Heap>>();
 }
 
 

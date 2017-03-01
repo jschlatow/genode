@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _TRANSPORT_RULE_H_
@@ -37,18 +37,18 @@ class Net::Transport_rule : public Direct_rule<Transport_rule>
 
 		static Permit_any_rule *
 		_read_permit_any(Domain_tree            &domains,
-		                 Genode::Xml_node const &node,
+		                 Genode::Xml_node const  node,
 		                 Genode::Allocator      &alloc);
 
 	public:
 
 		Transport_rule(Domain_tree            &domains,
-		               Genode::Xml_node const &node,
+		               Genode::Xml_node const  node,
 		               Genode::Allocator      &alloc,
 		               Genode::Cstring  const &protocol,
 		               Configuration          &config);
 
-		Permit_rule const &permit_rule(Genode::uint16_t const port) const;
+		Permit_rule const &permit_rule(Port const port) const;
 };
 
 #endif /* _TRANSPORT_RULE_H_ */

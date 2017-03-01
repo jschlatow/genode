@@ -1,14 +1,15 @@
 /*
  * \brief  Lx env
  * \author Josef Soentgen
+ * \author Emery Hemingway
  * \date   2014-10-17
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 #ifndef _LX_H_
@@ -16,15 +17,37 @@
 
 #include <base/signal.h>
 
+namespace Lx_kit { class Env; }
+
 namespace Lx {
 
-	void nic_client_init(Genode::Signal_receiver &);
-	void timer_init(Genode::Signal_receiver &);
-	void event_init(Genode::Signal_receiver &);
+	void nic_client_init(Genode::Env &env,
+	                     Genode::Entrypoint &ep,
+	                     Genode::Allocator &alloc,
+	                     void (*ticker)());
+
+	void timer_init(Genode::Env &env,
+	                Genode::Entrypoint &ep,
+	                Genode::Allocator &alloc,
+	                void (*ticker)());
+
+	void event_init(Genode::Env &env,
+	                Genode::Entrypoint &ep,
+	                void (*ticker)());
 
 	void timer_update_jiffies();
+
+	void lxcc_emul_init(Lx_kit::Env &env);
 }
 
-extern "C" int lxip_init(char const *address_config);
+extern "C" void lxip_init();
+
+extern "C" void lxip_configure_static(char const *addr,
+                                      char const *netmask,
+                                      char const *gateway,
+                                      char const *nameserver);
+extern "C" void lxip_configure_dhcp();
+
+extern "C" bool lxip_do_dhcp();
 
 #endif /* _LX_H_ */

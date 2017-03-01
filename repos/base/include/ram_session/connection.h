@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2008-2013 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__RAM_SESSION__CONNECTION_H_
@@ -57,9 +57,9 @@ struct Genode::Ram_connection : Connection<Ram_session>, Ram_session_client
 	 *              argument instead
 	 */
 	Ram_connection(const char *label = "", unsigned long phys_start = 0UL,
-	               unsigned long phys_size = 0UL)
+	               unsigned long phys_size = 0UL) __attribute__((deprecated))
 	:
-		Connection<Ram_session>(_session(*env()->parent(), label, phys_start, phys_size)),
+		Connection<Ram_session>(_session(*env_deprecated()->parent(), label, phys_start, phys_size)),
 		Ram_session_client(cap())
 	{ }
 };

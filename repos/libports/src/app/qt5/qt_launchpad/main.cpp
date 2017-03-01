@@ -12,8 +12,8 @@
 #include <QApplication>
 
 /* Genode includes */
-#include <base/component.h>
-#include <base/env.h>
+#include <libc/component.h>
+#include <base/attached_rom_dataspace.h>
 
 extern int genode_argc;
 extern char **genode_argv;
@@ -56,22 +56,25 @@ struct Qt_launchpad_namespace::Local_env : Genode::Env
 	void close(Parent::Client::Id id) { return genode_env.close(id); }
 };
 
-void Component::construct(Genode::Env &env)
+
+void Libc::Component::construct(Libc::Env &env)
 {
-	static Qt_launchpad_namespace::Local_env local_env(env);
+	Libc::with_libc([&] {
+		Qt_launchpad_namespace::Local_env local_env(env);
 
-	static QApplication a(genode_argc, genode_argv);
+		QApplication a(genode_argc, genode_argv);
 
-	static Qt_launchpad launchpad(local_env, env.ram().avail());
+		Qt_launchpad launchpad(local_env, env.ram().avail());
 
-	try {
-		launchpad.process_config();
-	} catch (...) { }
+		Genode::Attached_rom_dataspace config(env, "config");
 
-	launchpad.move(300,100);
-	launchpad.show();
+		try { launchpad.process_config(config.xml()); } catch (...) { }
 
-	a.connect(&a, SIGNAL(lastWindowClosed()), &a, SLOT(quit()));
+		launchpad.move(300,100);
+		launchpad.show();
 
-	a.exec();
+		a.connect(&a, SIGNAL(lastWindowClosed()), &a, SLOT(quit()));
+
+		a.exec();
+	});
 }

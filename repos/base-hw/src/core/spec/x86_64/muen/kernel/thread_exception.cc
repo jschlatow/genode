@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* core includes */
@@ -27,11 +27,11 @@ void Thread::exception(unsigned const cpu)
 	case NO_MATH_COPROC:
 		if (_cpu->fpu().fault(*this)) { return; }
 		Genode::warning(*this, ": FPU error");
-		_stop();
+		_die();
 		return;
 	case UNDEFINED_INSTRUCTION:
 		Genode::warning(*this, ": undefined instruction at ip=", (void*)ip);
-		_stop();
+		_die();
 		return;
 	case SUPERVISOR_CALL:
 		_call();
@@ -44,5 +44,5 @@ void Thread::exception(unsigned const cpu)
 	}
 	Genode::warning(*this, ": triggered unknown exception ", trapno,
 	                " with error code ", errcode, " at ip=%p", (void*)ip);
-	_stop();
+	_die();
 }

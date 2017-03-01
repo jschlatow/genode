@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015-2016 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* core includes */
@@ -29,30 +29,8 @@ extern "C" void * _start_secondary_cpus;
 static volatile bool primary_cpu = true;
 
 
-void Kernel::Cpu::init(Kernel::Pic &pic, Kernel::Pd & core_pd, Genode::Board & board)
+void Kernel::Cpu::init(Kernel::Pic &pic/*, Kernel::Pd & core_pd, Genode::Board & board*/)
 {
-	/*
-	 * local interrupt controller interface needs to be initialized that early,
-	 * because it potentially sets the SGI interrupts to be non-secure before
-	 * entering the normal world in Genode::Cpu::init()
-	 */
-	pic.init_cpu_local();
-
-	Genode::Cpu::init();
-
-	Sctlr::init();
-	Psr::write(Psr::init_kernel());
-
-	invalidate_inner_data_cache();
-
-	/* primary cpu wakes up all others */
-	if (primary_cpu && NR_OF_CPUS > 1) {
-		primary_cpu = false;
-		board.wake_up_all_cpus(&_start_secondary_cpus);
-	}
-
-	enable_mmu_and_caches(core_pd);
-
 	{
 		Lock::Guard guard(data_lock());
 

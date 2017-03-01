@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _DRIVERS__PLATFORM__SPEC__IMX53__CCM_H_
@@ -18,7 +18,7 @@
 /* Genode includes */
 #include <util/mmio.h>
 #include <drivers/board_base.h>
-#include <os/attached_io_mem_dataspace.h>
+#include <base/attached_io_mem_dataspace.h>
 
 class Ccm : public Genode::Attached_io_mem_dataspace,
             Genode::Mmio
@@ -65,9 +65,9 @@ class Ccm : public Genode::Attached_io_mem_dataspace,
 
 	public:
 
-		Ccm()
-		: Genode::Attached_io_mem_dataspace(Genode::Board_base::CCM_BASE,
-		                                    Genode::Board_base::CCM_SIZE),
+		Ccm(Genode::Env &env)
+		: Genode::Attached_io_mem_dataspace(env, Genode::Board_base::CCM_BASE,
+		                                         Genode::Board_base::CCM_SIZE),
 		  Genode::Mmio((Genode::addr_t)local_addr<void>()) { }
 
 		void i2c_1_enable(void) { write<Ccgr1::I2c_1>(3); }

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2011-2013 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -88,6 +88,19 @@ Genode::Native_capability Genode::Native_cpu_component::alloc_irq()
 	/* construct cap and hold a reference in the irq container object */
 	Genode::Native_capability cap(*i);
 	return (node->add(cap)) ? cap : Genode::Native_capability();
+}
+
+
+Genode::Foc_thread_state
+Genode::Native_cpu_component::thread_state(Genode::Thread_capability cap)
+{
+	using namespace Genode;
+
+	auto lambda = [&] (Cpu_thread_component *thread) {
+		return (!thread) ? Foc_thread_state()
+		                 : thread->platform_thread().state(); };
+
+	return _thread_ep.apply(cap, lambda);
 }
 
 

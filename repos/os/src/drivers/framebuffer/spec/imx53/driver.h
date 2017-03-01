@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2009-2013 Genode Labs GmbH
+ * Copyright (C) 2009-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _DRIVERS__FRAMEBUFFER__SPEC__IMX53__DRIVER_H_
@@ -16,7 +16,7 @@
 
 /* Genode includes */
 #include <drivers/board_base.h>
-#include <os/attached_io_mem_dataspace.h>
+#include <base/attached_io_mem_dataspace.h>
 #include <io_mem_session/connection.h>
 #include <gpio_session/connection.h>
 #include <platform_session/connection.h>
@@ -36,6 +36,8 @@ namespace Framebuffer {
 class Framebuffer::Driver
 {
 	private:
+
+		Genode::Env &_env;
 
 		Platform::Connection              _platform;
 		Attached_io_mem_dataspace         _ipu_mmio;
@@ -61,10 +63,12 @@ class Framebuffer::Driver
 			LCD_CONT_GPIO    = 1,
 		};
 
-		Driver()
-		: _ipu_mmio(Board_base::IPU_BASE, Board_base::IPU_SIZE),
+		Driver(Genode::Env &env)
+		: _env(env),
+		  _platform(_env),
+		  _ipu_mmio(_env, Board_base::IPU_BASE, Board_base::IPU_SIZE),
 		  _ipu((addr_t)_ipu_mmio.local_addr<void>()),
-		  _pwm_mmio(Board_base::PWM2_BASE, Board_base::PWM2_SIZE),
+		  _pwm_mmio(_env, Board_base::PWM2_BASE, Board_base::PWM2_SIZE),
 		  _pwm((addr_t)_pwm_mmio.local_addr<void>()),
 		  _board(_platform.revision()),
 		  _width(_board == Platform::Session::QSB ? QSB_WIDTH : SMD_WIDTH),
@@ -82,10 +86,10 @@ class Framebuffer::Driver
 				          phys_base, true);
 
 				/* turn display on */
-				Gpio::Connection gpio_bl(LCD_BL_GPIO);
+				Gpio::Connection gpio_bl(_env, LCD_BL_GPIO);
 				gpio_bl.direction(Gpio::Session::OUT);
 				gpio_bl.write(true);
-				Gpio::Connection gpio_ct(LCD_CONT_GPIO);
+				Gpio::Connection gpio_ct(_env, LCD_CONT_GPIO);
 				gpio_ct.direction(Gpio::Session::OUT);
 				gpio_ct.write(true);
 				break;

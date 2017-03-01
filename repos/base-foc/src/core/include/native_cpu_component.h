@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__NATIVE_CPU_COMPONENT_H_
@@ -41,6 +41,7 @@ class Genode::Native_cpu_component : public Rpc_object<Foc_native_cpu,
 		void enable_vcpu(Thread_capability, addr_t) override;
 		Native_capability native_cap(Thread_capability) override;
 		Native_capability alloc_irq() override;
+		Foc_thread_state thread_state(Thread_capability) override;
 };
 
 #endif /* _CORE__INCLUDE__NATIVE_CPU_COMPONENT_H_ */

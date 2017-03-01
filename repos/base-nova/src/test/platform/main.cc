@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2015-2016 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/heap.h>
@@ -23,7 +23,7 @@
 #include <rm_session/connection.h>
 #include <region_map/client.h>
 
-#include <os/attached_rom_dataspace.h>
+#include <base/attached_rom_dataspace.h>
 #include <os/config.h>
 
 #include <trace/timestamp.h>
@@ -227,8 +227,8 @@ void test_revoke(Genode::Env &env)
 	 * as used before by copy_session_cap
 	 */
 	Genode::Thread * myself = Genode::Thread::myself();
-	Genode::Native_capability pager_cap = Capability_space::import(myself->native_thread().ec_sel + 1);
-	request_event_portal(pager_cap, copy_session_cap.local_name(), 0, 0);
+	request_native_ec_cap(myself->native_thread().exc_pt_sel + Nova::PT_SEL_PAGE_FAULT,
+	                      copy_session_cap.local_name());
 
 	/* check whether the requested cap before is valid and placed well */
 	crd_ses = Nova::Obj_crd(copy_session_cap.local_name(), 0);

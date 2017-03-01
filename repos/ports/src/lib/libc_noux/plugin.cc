@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2011-2016 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -117,7 +117,7 @@ class Noux_connection
 
 			/*
 			 * Obtain new noux connection. Note that we cannot reconstruct
-			 * the connection via a 'Volatile_object' because this would
+			 * the connection via a 'Reconstructible' because this would
 			 * result in an inconsistent referernce count when attempting
 			 * to destruct the session capability in the just-cleared
 			 * capability space.
@@ -156,14 +156,22 @@ static bool noux_syscall(Noux::Session::Syscall opcode)
 {
 	/*
 	 * Signal handlers might do syscalls themselves, so the 'sysio' object
-	 * needs to get saved before and restored after calling the signal handler.
+	 * needs to be saved before and restored after calling the signal handler.
+	 * There is only one global 'saved_sysio' buffer as signals are not checked
+	 * in nested calls of 'noux_syscall' from signal handlers.
 	 */
-	Noux::Sysio saved_sysio;
+	static Noux::Sysio saved_sysio;
 
 	bool ret = noux()->syscall(opcode);
 
+	static bool in_sigh = false; /* true if called from signal handler */
+
+	if (in_sigh)
+		return ret;
+
 	/* handle signals */
 	while (!sysio()->pending_signals.empty()) {
+		in_sigh = true;
 		Noux::Sysio::Signal signal = sysio()->pending_signals.get();
 		if (verbose_signals)
 			log(__func__, ": received signal ", (int)signal);
@@ -191,6 +199,7 @@ static bool noux_syscall(Noux::Session::Syscall opcode)
 			}
 		}
 	}
+	in_sigh = false;
 
 	return ret;
 }
@@ -1068,7 +1077,7 @@ namespace {
 		}
 
 		if (!noux_syscall(Noux::Session::SYSCALL_EXECVE)) {
-			warning("exec syscall failed for path \", filename, \"");
+			warning("exec syscall failed for path \"", filename, "\"");
 			switch (sysio()->error.execve) {
 			case Noux::Sysio::EXECVE_NONEXISTENT: errno = ENOENT; break;
 			case Noux::Sysio::EXECVE_NOMEM:       errno = ENOMEM; break;

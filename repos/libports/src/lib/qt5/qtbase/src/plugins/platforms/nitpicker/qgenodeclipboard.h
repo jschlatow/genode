@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _QGENODECLIPBOARD_H_
@@ -19,7 +19,7 @@
 #ifndef QT_NO_CLIPBOARD
 
 /* Genode includes */
-#include <os/attached_rom_dataspace.h>
+#include <base/attached_rom_dataspace.h>
 #include <os/reporter.h>
 #include <qoost/qmember.h>
 

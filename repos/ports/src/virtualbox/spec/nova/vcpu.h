@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2013-2016 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is distributed under the terms of the GNU General Public License
  * version 2.
@@ -18,6 +18,7 @@
 /* Genode includes */
 #include <base/log.h>
 #include <util/flex_iterator.h>
+#include <util/touch.h>
 #include <rom_session/connection.h>
 #include <timer_session/connection.h>
 

@@ -8,17 +8,17 @@
 
 /*
  * Copyright (C) 2012 Ksys Labs LLC
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _GPIO_H_
 #define _GPIO_H_
 
 /* Genode includes */
-#include <os/attached_io_mem_dataspace.h>
+#include <base/attached_io_mem_dataspace.h>
 #include <util/mmio.h>
 
 #include <base/printf.h>
@@ -77,8 +77,8 @@ struct Gpio::Reg : Attached_io_mem_dataspace, Mmio
 		}
 	};
 
-	Reg(addr_t base, size_t size)
-	: Attached_io_mem_dataspace(base, size),
+	Reg(Genode::Env &env, addr_t base, size_t size)
+	: Attached_io_mem_dataspace(env, base, size),
 	  Mmio((addr_t)local_addr<Reg>()) { }
 
 	void set_direction(int gpio, bool input, Genode::off_t offset)

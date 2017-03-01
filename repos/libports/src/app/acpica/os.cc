@@ -4,24 +4,25 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/allocator_avl.h>
 #include <base/component.h>
+#include <libc/component.h>
 #include <base/log.h>
 #include <base/signal.h>
 #include <base/heap.h>
 #include <irq_session/connection.h>
 #include <io_port_session/connection.h>
 
-#include <os/attached_rom_dataspace.h>
+#include <base/attached_rom_dataspace.h>
 #include <os/reporter.h>
 
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 #include <util/xml_node.h>
 
 #include <acpica/acpica.h>
@@ -43,10 +44,6 @@ namespace Acpica {
 #include "util.h"
 #include "reporter.h"
 #include "fixed.h"
-#include "ac.h"
-#include "lid.h"
-#include "sb.h"
-#include "ec.h"
 
 
 struct Acpica::Statechange
@@ -56,10 +53,10 @@ struct Acpica::Statechange
 	bool _enable_reset;
 	bool _enable_poweroff;
 
-	Statechange(Genode::Entrypoint &ep, bool reset, bool poweroff)
+	Statechange(Genode::Env &env, bool reset, bool poweroff)
 	:
-		_dispatcher(ep, *this, &Statechange::state_changed),
-		_system_state("system"),
+		_dispatcher(env.ep(), *this, &Statechange::state_changed),
+		_system_state(env, "system"),
 		_enable_reset(reset), _enable_poweroff(poweroff)
 	{
 		_system_state.sigh(_dispatcher);
@@ -110,8 +107,8 @@ struct Acpica::Main
 
 	Genode::Attached_rom_dataspace config { env, "config" };
 
-	Genode::Signal_handler<Acpica::Main>                 sci_irq;
-	Genode::Lazy_volatile_object<Genode::Irq_connection> sci_conn;
+	Genode::Signal_handler<Acpica::Main>          sci_irq;
+	Genode::Constructible<Genode::Irq_connection> sci_conn;
 
 	Acpica::Reportstate * report = nullptr;
 
@@ -134,7 +131,7 @@ struct Acpica::Main
 		bool const enable_ready    = config.xml().attribute_value("acpi_ready", false);
 
 		if (enable_report)
-			report = new (heap) Acpica::Reportstate();
+			report = new (heap) Acpica::Reportstate(env);
 
 		init_acpica();
 
@@ -142,8 +139,7 @@ struct Acpica::Main
 			report->enable();
 
 		if (enable_reset || enable_poweroff)
-			new (heap) Acpica::Statechange(env.ep(), enable_reset,
-			                                                enable_poweroff);
+			new (heap) Acpica::Statechange(env, enable_reset, enable_poweroff);
 
 		/* setup IRQ */
 		if (!irq_handler.handler) {
@@ -151,7 +147,7 @@ struct Acpica::Main
 			return;
 		}
 
-		sci_conn.construct(irq_handler.irq);
+		sci_conn.construct(env, irq_handler.irq);
 
 		Genode::log("SCI IRQ: ", irq_handler.irq);
 
@@ -162,7 +158,7 @@ struct Acpica::Main
 			return;
 
 		/* we are ready - signal it via changing system state */
-		static Genode::Reporter _system_rom { "system", "acpi_ready" };
+		static Genode::Reporter _system_rom(env, "system", "acpi_ready");
 		_system_rom.enabled(true);
 		Genode::Reporter::Xml_generator xml(_system_rom, [&] () {
 			xml.attribute("state", "acpi_ready");
@@ -188,6 +184,10 @@ struct Acpica::Main
 	}
 };
 
+#include "ac.h"
+#include "lid.h"
+#include "sb.h"
+#include "ec.h"
 
 void Acpica::Main::init_acpica()
 {
@@ -227,7 +227,7 @@ void Acpica::Main::init_acpica()
 	}
 
 	/* Embedded controller */
-	status = AcpiGetDevices(ACPI_STRING("PNP0C09"), Ec::detect, report, nullptr);
+	status = AcpiGetDevices(ACPI_STRING("PNP0C09"), Ec::detect, this, nullptr);
 	if (status != AE_OK) {
 		Genode::error("AcpiGetDevices failed, status=", status);
 		return;
@@ -268,21 +268,21 @@ void Acpica::Main::init_acpica()
 
 
 	/* AC Adapters and Power Source Objects */
-	status = AcpiGetDevices(ACPI_STRING("ACPI0003"), Ac::detect, report, nullptr);
+	status = AcpiGetDevices(ACPI_STRING("ACPI0003"), Ac::detect, this, nullptr);
 	if (status != AE_OK) {
 		Genode::error("AcpiGetDevices (ACPI0003) failed, status=", status);
 		return;
 	}
 
 	/* Smart battery control devices */
-	status = AcpiGetDevices(ACPI_STRING("PNP0C0A"), Battery::detect, report, nullptr);
+	status = AcpiGetDevices(ACPI_STRING("PNP0C0A"), Battery::detect, this, nullptr);
 	if (status != AE_OK) {
 		Genode::error("AcpiGetDevices (PNP0C0A) failed, status=", status);
 		return;
 	}
 
 	/* LID device */
-	status = AcpiGetDevices(ACPI_STRING("PNP0C0D"), Lid::detect, report, nullptr);
+	status = AcpiGetDevices(ACPI_STRING("PNP0C0D"), Lid::detect, this, nullptr);
 	if (status != AE_OK) {
 		Genode::error("AcpiGetDevices (PNP0C0D) failed, status=", status);
 		return;
@@ -303,4 +303,7 @@ ACPI_STATUS AcpiOsInstallInterruptHandler(UINT32 irq, ACPI_OSD_HANDLER handler,
 }
 
 
+/* used by normal (no-printf-debug) target */
 void Component::construct(Genode::Env &env) { static Acpica::Main main(env); }
+/* used by debug target (using printf of libc) */
+void Libc::Component::construct(Libc::Env &env) { static Acpica::Main main(env); }

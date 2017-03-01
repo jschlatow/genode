@@ -5,22 +5,18 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _LAYOUTER_NITPICKER_H_
 #define _LAYOUTER_NITPICKER_H_
 
 /* Genode includes */
-#include <os/server.h>
 #include <input/component.h>
 #include <nitpicker_session/connection.h>
-
-namespace Wm { using Server::Entrypoint; }
-
 
 namespace Wm {
 	struct Layouter_nitpicker_session;
@@ -45,11 +41,11 @@ struct Wm::Layouter_nitpicker_session : Genode::Rpc_object<Nitpicker::Session>
 
 	Attached_ram_dataspace _command_ds;
 
-	Layouter_nitpicker_session(Genode::Ram_session &ram,
+	Layouter_nitpicker_session(Genode::Env &env,
 	                           Input::Session_capability input_session_cap)
 	:
 		_input_session_cap(input_session_cap),
-		_command_ds(&ram, 4096)
+		_mode_sigh_nitpicker(env), _command_ds(env.ram(), env.rm(), 4096)
 	{ }
 
 

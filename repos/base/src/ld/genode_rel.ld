@@ -7,10 +7,10 @@
  */
 
 /*
- * Copyright (C) 2009-2013 Genode Labs GmbH
+ * Copyright (C) 2009-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 PHDRS
@@ -85,6 +85,7 @@ SECTIONS
   .rodata1        : { *(.rodata1) }
 
   .eh_frame_hdr : { *(.eh_frame_hdr) } : eh_frame : ro
+  .gcc_except_table   : { *(.gcc_except_table .gcc_except_table.*) }
 
   /*
    * Adjust the address for the data segment.  We want to adjust up to
@@ -198,7 +199,6 @@ SECTIONS
     KEEP (*(.eh_frame))
     LONG(0)
   }
-  .gcc_except_table   : { *(.gcc_except_table .gcc_except_table.*) }
   _edata = .; PROVIDE (edata = .);
   __bss_start = .;
   .bss            :

@@ -7,6 +7,10 @@ if {[have_spec linux]} {
 	exit 0
 }
 
+proc gpio_drv { } { if {[have_spec rpi] && [have_spec hw]}  { return hw_gpio_drv }
+                    if {[have_spec rpi] && [have_spec foc]} { return foc_gpio_drv }
+                    return gpio_drv }
+
 #
 # On OMAP4 where no PS/2 is available, we rely on USB HID
 #
@@ -106,12 +110,12 @@ append_if [have_spec ps2] config {
 		<provides><service name="Input"/></provides>
 	</start> }
 
-append_if [have_spec gpio] config {
-	<start name="gpio_drv">
-		<resource name="RAM" quantum="4M"/>
-		<provides><service name="Gpio"/></provides>
+append_if [have_spec gpio] config "
+	<start name=\"[gpio_drv]\">
+		<resource name=\"RAM\" quantum=\"4M\"/>
+		<provides><service name=\"Gpio\"/></provides>
 		<config/>
-	</start>}
+	</start>"
 
 append_if [use_usb_input] config {
 	<start name="usb_drv">
@@ -180,17 +184,14 @@ append config {
 			</start>
 		</config>
 		<route>
-			<service name="File_system">
-				<if-arg key="label" value="home"/> <child name="ram_fs" /> </service>
-			<service name="File_system">
-				<if-arg key="label" value="root"/> <child name="ram_fs" />
-			</service>
-			<service name="File_system">
-				<if-arg key="label" value="tmp"/> <child name="ram_fs" />
-			</service>
-			<service name="File_system">
-				<if-arg key="label" value="trace"/> <child name="trace_fs"/>
-			</service>
+			<service name="File_system" label="home">
+				<child name="ram_fs" /> </service>
+			<service name="File_system" label="root">
+				<child name="ram_fs" /> </service>
+			<service name="File_system" label="tmp">
+				<child name="ram_fs" /> </service>
+			<service name="File_system" label="trace">
+				<child name="trace_fs"/> </service>
 			<any-service> <parent /> <any-child /> </any-service>
 		</route>
 	</start>
@@ -221,7 +222,7 @@ lappend_if [have_spec       linux] boot_modules fb_sdl
 lappend_if [have_spec         ps2] boot_modules ps2_drv
 lappend_if [have_spec framebuffer] boot_modules fb_drv
 lappend_if [use_usb_input        ] boot_modules usb_drv
-lappend_if [have_spec        gpio] boot_modules gpio_drv
+lappend_if [have_spec        gpio] boot_modules [gpio_drv]
 
 append_platform_drv_boot_modules
 

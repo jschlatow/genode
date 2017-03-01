@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2015-2016 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__VFS__SYMLINK_FILE_SYSTEM_H_
@@ -33,14 +33,15 @@ class Vfs::Symlink_file_system : public Single_file_system
 
 		Symlink_file_system(Genode::Env&,
 		                    Genode::Allocator&,
-		                    Genode::Xml_node config)
+		                    Genode::Xml_node config,
+		                    Io_response_handler&)
 		:
 			Single_file_system(NODE_TYPE_SYMLINK, "symlink", config),
 			_target(config.attribute_value("target", Target()))
 		{ }
 
-		static char const *name() { return "symlink"; }
-
+		static char const *name()   { return "symlink"; }
+		char const *type() override { return "symlink"; }
 
 		/*********************************
 		 ** Directory-service interface **
@@ -80,6 +81,8 @@ class Vfs::Symlink_file_system : public Single_file_system
 
 		Read_result read(Vfs_handle *, char *, file_size, file_size &) override {
 			return READ_ERR_INVALID; }
+
+		bool read_ready(Vfs_handle *) override { return false; }
 
 		Ftruncate_result ftruncate(Vfs_handle *, file_size) override {
 			return FTRUNCATE_ERR_NO_PERM; }

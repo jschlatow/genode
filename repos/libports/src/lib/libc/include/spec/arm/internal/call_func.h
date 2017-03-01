@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__SPEC__ARM__INTERNAL__CALL_FUNC_H_
@@ -25,6 +25,7 @@
 {
 	asm volatile ("mov r0, %2;"  /* set arg */
 	              "mov sp, %0;"  /* set stack */
+	              "mov fp, #0;"  /* clear frame pointer */
 	              "mov pc, %1;"  /* call func */
 	              ""
 	              : : "r"(sp), "r"(func), "r"(arg) : "r0");

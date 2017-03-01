@@ -14,8 +14,6 @@ set build_components {
 	app/backdrop
 }
 
-lappend_if [have_spec usb] build_components drivers/usb
-
 build $build_components
 
 create_boot_directory
@@ -110,10 +108,8 @@ append config {
 		<resource name="RAM" quantum="8M"/>
 		<configfile name="nano3d.config"/>
 		<route>
-			<service name="ROM">
-				<if-arg key="label" value="nano3d.config" />
-				<child name="dynamic_rom" />
-			</service>
+			<service name="ROM" label="nano3d.config">
+				<child name="dynamic_rom" /> </service>
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
@@ -131,11 +127,11 @@ foreach file { genode_logo.png grid.png } {
 
 # generic modules
 set boot_modules {
-	core init
+	core ld.lib.so init
 	timer
 	nitpicker dynamic_rom nano3d
 	backdrop
-	ld.lib.so libpng.lib.so libc.lib.so libm.lib.so zlib.lib.so
+	libpng.lib.so libc.lib.so libm.lib.so zlib.lib.so
 	genode_logo.png grid.png
 }
 

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/log.h>
@@ -317,7 +317,7 @@ class Driver : public Block::Driver
 		{
 			using namespace Genode;
 
-			Parent::Resource_args const args = env()->parent()->yield_request();
+			Parent::Resource_args const args = _env.parent().yield_request();
 			size_t const requested_ram_quota =
 				Arg_string::find_arg(args.string(), "ram_quota").ulong_value(0);
 
@@ -334,10 +334,11 @@ class Driver : public Block::Driver
 		 * \param ep  server entrypoint
 		 */
 		Driver(Genode::Env &env, Genode::Heap &heap)
-		: _env(env),
+		: Block::Driver(env.ram()),
+		  _env(env),
 		  _r_slab(&heap),
 		  _alloc(&heap, CACHE_BLK_SIZE),
-		  _blk(&_alloc, Block::Session::TX_QUEUE_SIZE*CACHE_BLK_SIZE),
+		  _blk(_env, &_alloc, Block::Session::TX_QUEUE_SIZE*CACHE_BLK_SIZE),
 		  _blk_sz(0),
 		  _blk_cnt(0),
 		  _cache(heap, 0),

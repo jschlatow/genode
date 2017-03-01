@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _PERMIT_RULE_H_
@@ -19,6 +19,7 @@
 
 /* Genode includes */
 #include <util/avl_tree.h>
+#include <net/port.h>
 
 namespace Genode { class Output; }
 
@@ -33,7 +34,7 @@ namespace Net {
 
 struct Net::Permit_rule : Leaf_rule
 {
-	Permit_rule(Domain_tree &domains, Genode::Xml_node const &node);
+	Permit_rule(Domain_tree &domains, Genode::Xml_node const node);
 
 
 	/*********
@@ -46,7 +47,7 @@ struct Net::Permit_rule : Leaf_rule
 
 struct Net::Permit_any_rule : Permit_rule
 {
-	Permit_any_rule(Domain_tree &domains, Genode::Xml_node const &node);
+	Permit_any_rule(Domain_tree &domains, Genode::Xml_node const node);
 
 
 	/*********
@@ -62,15 +63,14 @@ class Net::Permit_single_rule : public Permit_rule,
 {
 	private:
 
-		Genode::uint16_t const _port;
+		Port const _port;
 
 	public:
 
 		Permit_single_rule(Domain_tree            &domains,
-		                   Genode::Xml_node const &node);
+		                   Genode::Xml_node const  node);
 
-		Permit_single_rule const &
-		find_by_port(Genode::uint16_t const port) const;
+		Permit_single_rule const &find_by_port(Port const port) const;
 
 
 		/*********
@@ -91,7 +91,7 @@ class Net::Permit_single_rule : public Permit_rule,
 		 ** Accessors **
 		 ***************/
 
-		Genode::uint16_t port() const { return _port; }
+		Port port() const { return _port; }
 };
 
 
@@ -99,7 +99,7 @@ struct Net::Permit_single_rule_tree : Genode::Avl_tree<Permit_single_rule>
 {
 	struct No_match : Genode::Exception { };
 
-	Permit_single_rule const &find_by_port(Genode::uint16_t const port) const;
+	Permit_single_rule const &find_by_port(Port const port) const;
 };
 
 #endif /* _PERMIT_RULE_H_ */

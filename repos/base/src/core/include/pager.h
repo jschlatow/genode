@@ -7,10 +7,10 @@
  */
 
 /*
- * Copyright (C) 2006-2015 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__PAGER_H_
@@ -20,12 +20,12 @@
 #include <base/session_label.h>
 #include <base/thread.h>
 #include <base/object_pool.h>
-#include <cap_session/cap_session.h>
 #include <pager/capability.h>
 #include <ipc_pager.h>
 
 /* core-local includes */
 #include <rpc_cap_factory.h>
+#include <pager_object_exception_state.h>
 
 namespace Genode {
 
@@ -73,7 +73,7 @@ class Genode::Pager_object : public Object_pool<Pager_object>::Entry
 		/**
 		 * Contains information about exception state of corresponding thread.
 		 */
-		Thread_state state;
+		Pager_object_exception_state state;
 
 		/**
 		 * Constructor

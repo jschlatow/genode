@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2011-2016 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__VFS__TAR_FILE_SYSTEM_H_
@@ -344,7 +344,8 @@ class Vfs::Tar_file_system : public File_system
 
 		Tar_file_system(Genode::Env       &env,
 		                Genode::Allocator &alloc,
-		                Genode::Xml_node   config)
+		                Genode::Xml_node   config,
+		                Io_response_handler &)
 		:
 			_env(env), _alloc(alloc),
 			_rom_name(config.attribute_value("name", Rom_name())),
@@ -356,7 +357,6 @@ class Vfs::Tar_file_system : public File_system
 
 			_for_each_tar_record_do(Add_node_action(_alloc, _root_node));
 		}
-
 
 		/*********************************
 		 ** Directory-service interface **
@@ -573,7 +573,8 @@ class Vfs::Tar_file_system : public File_system
 		 ** File_system interface **
 		 ***************************/
 
-		static char const *name() { return "tar"; }
+		static char const *name()   { return "tar"; }
+		char const *type() override { return "tar"; }
 
 
 		/********************************
@@ -610,6 +611,8 @@ class Vfs::Tar_file_system : public File_system
 		{
 			return FTRUNCATE_ERR_NO_PERM;
 		}
+
+		bool read_ready(Vfs_handle *) override { return true; }
 };
 
 #endif /* _INCLUDE__VFS__TAR_FILE_SYSTEM_H_ */

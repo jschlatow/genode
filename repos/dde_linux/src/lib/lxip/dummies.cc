@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013-2016 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 /* Genode includes */
@@ -92,7 +92,6 @@ DUMMY_RET(0, nla_put)
 DUMMY_RET(1, ns_capable)
 DUMMY_RET(1, num_possible_cpus)
 DUMMY_RET(0, read_seqretry)
-DUMMY_RET(0, poll_does_not_wait)
 DUMMY_RET(0, secpath_exists)
 DUMMY_RET(0, security_inet_conn_request)
 DUMMY_RET(0, security_sk_alloc)
@@ -175,7 +174,6 @@ DUMMY_SKIP(-1, wake_up)
 DUMMY_SKIP(-1, rtmsg_ifinfo)
 DUMMY_RET(0, rtnl_is_locked)
 DUMMY_SKIP(-1, rtnl_lock)
-DUMMY(-1, rtnl_notify)
 DUMMY(-1, rtnl_set_sk_err)
 DUMMY_SKIP(-1, rtnl_unlock)
 DUMMY_RET(0, rtnetlink_put_metrics)
@@ -335,7 +333,6 @@ DUMMY(-1, linkwatch_run_queue)
 DUMMY(-1, local_softirq_pending)
 DUMMY(-1, lockdep_rtnl_is_held)
 DUMMY(-1, min)
-DUMMY_STOP(-1, mod_delayed_work)
 DUMMY(-1, module_put)
 DUMMY(-1, move_addr_to_kernel)
 DUMMY(-1, mq_qdisc_ops)
@@ -402,14 +399,10 @@ DUMMY(-1, release_net)
 DUMMY(-1, remove_proc_entry)
 DUMMY(-1, remove_wait_queue)
 DUMMY(-1, request_module)
-DUMMY(-1, round_jiffies)
-DUMMY(-1, round_jiffies_relative)
-DUMMY(-1, round_jiffies_up)
 DUMMY(-1, rt_genid_bump)
 DUMMY(-1, rtnetlink_init)
 DUMMY(-1, __rtnl_unlock)
 DUMMY_STOP(-1, schedule)
-DUMMY_STOP(-1, schedule_delayed_work)
 DUMMY_STOP(-1, schedule_timeout_interruptible)
 DUMMY_STOP(-1, schedule_work)
 DUMMY(-1, scm_destroy)
@@ -466,6 +459,7 @@ DUMMY(-1, static_key_enabled)
 DUMMY(-1, static_key_slow_dec)
 DUMMY(-1, static_key_slow_inc)
 DUMMY(-1, strcat)
+DUMMY(-1, strsep)
 DUMMY(-1, strncpy_from_user)
 DUMMY(-1, synchronize_rcu_expedited)
 DUMMY(-1, sysctl_igmp_max_msf)
@@ -608,8 +602,6 @@ DUMMY(0, raw_seqcount_begin)
 DUMMY(0, read_seqcount_retry)
 DUMMY(0, reciprocal_scale)
 DUMMY(0, round_down)
-DUMMY(0, rt_genid_bump_ipv4)
-DUMMY(0, rt_genid_ipv4)
 DUMMY(0, rtmsg_ifinfo_build_skb)
 DUMMY(0, rtmsg_ifinfo_send)
 DUMMY_SKIP(0, sched_annotate_sleep)

@@ -5,24 +5,15 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BASE__INTERNAL__RAW_WRITE_STRING_H_
 #define _INCLUDE__BASE__INTERNAL__RAW_WRITE_STRING_H_
 
-#include <kernel/interface.h>
-
-namespace Genode {
-
-	void raw_write_string(char const *str)
-	{
-		while (char c = *str++)
-			Kernel::print_char(c);
-	}
-}
+namespace Genode { void raw_write_string(char const *str); }
 
 #endif /* _INCLUDE__BASE__INTERNAL__RAW_WRITE_STRING_H_ */

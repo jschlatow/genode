@@ -6,15 +6,15 @@
  */
 
 /*
- * Copyright (C) 2012-2013 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
 #include <drivers/board_base.h>
-#include <os/attached_io_mem_dataspace.h>
+#include <base/attached_io_mem_dataspace.h>
 #include <timer_session/connection.h>
 #include <util/mmio.h>
 
@@ -39,12 +39,16 @@ class Framebuffer::Driver
 
 	private:
 
+		Genode::Env &_env;
+
 		bool _init_lcd(addr_t phys_base);
 
 		bool _init_hdmi(addr_t phys_base);
 
 		struct Timer_delayer : Timer::Connection, Mmio::Delayer
 		{
+			Timer_delayer(Genode::Env &env) : Timer::Connection(env) { }
+
 			/**
 			 * Implementation of 'Delayer' interface
 			 */
@@ -52,7 +56,7 @@ class Framebuffer::Driver
 			{
 				Timer::Connection::usleep(us);
 			}
-		} _delayer;
+		} _delayer { _env };
 
 		/* display sub system registers */
 		Attached_io_mem_dataspace _dss_mmio;
@@ -72,7 +76,7 @@ class Framebuffer::Driver
 
 	public:
 
-		Driver();
+		Driver(Genode::Env &env);
 
 		static size_t bytes_per_pixel(Format format)
 		{
@@ -92,15 +96,16 @@ class Framebuffer::Driver
 };
 
 
-Framebuffer::Driver::Driver()
+Framebuffer::Driver::Driver(Genode::Env &env)
 :
-	_dss_mmio(Board_base::DSS_MMIO_BASE, Board_base::DSS_MMIO_SIZE),
+	_env(env),
+	_dss_mmio(_env, Board_base::DSS_MMIO_BASE, Board_base::DSS_MMIO_SIZE),
 	_dss((addr_t)_dss_mmio.local_addr<void>()),
 
-	_dispc_mmio(Board_base::DISPC_MMIO_BASE, Board_base::DISPC_MMIO_SIZE),
+	_dispc_mmio(_env, Board_base::DISPC_MMIO_BASE, Board_base::DISPC_MMIO_SIZE),
 	_dispc((addr_t)_dispc_mmio.local_addr<void>()),
 
-	_hdmi_mmio(Board_base::HDMI_MMIO_BASE, Board_base::HDMI_MMIO_SIZE),
+	_hdmi_mmio(_env, Board_base::HDMI_MMIO_BASE, Board_base::HDMI_MMIO_SIZE),
 	_hdmi((addr_t)_hdmi_mmio.local_addr<void>()),
 
 	_fb_width(0),

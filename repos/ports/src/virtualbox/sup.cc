@@ -5,18 +5,19 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is distributed under the terms of the GNU General Public License
  * version 2.
  */
 
 /* Genode includes */
-#include <os/attached_ram_dataspace.h>
+#include <base/attached_ram_dataspace.h>
 #include <trace/timestamp.h>
 
 /* Genode/Virtualbox includes */
 #include "sup.h"
+#include "vmm.h"
 
 /* VirtualBox includes */
 #include <iprt/semaphore.h>
@@ -24,14 +25,11 @@
 #include <iprt/uint128.h>
 #include <VBox/err.h>
 
-/* libc memory allocator */
-#include <libc_mem_alloc.h>
-
 
 struct Attached_gip : Genode::Attached_ram_dataspace
 {
 	Attached_gip()
-	: Attached_ram_dataspace(Genode::env()->ram_session(), PAGE_SIZE)
+	: Attached_ram_dataspace(genode_env().ram(), genode_env().rm(), PAGE_SIZE)
 	{ }
 };
 
@@ -46,9 +44,9 @@ enum {
 PSUPGLOBALINFOPAGE g_pSUPGlobalInfoPage;
 
 
-struct Periodic_gip : public Genode::Thread_deprecated<2*4096>
+struct Periodic_gip : public Genode::Thread
 {
-	Periodic_gip() : Thread_deprecated("periodic_gip") { start(); }
+	Periodic_gip(Genode::Env &env) : Thread(env, "periodic_gip", 8192) { start(); }
 
 	static void update()
 	{
@@ -147,7 +145,7 @@ int SUPR3Init(PSUPDRVSESSION *ppSession)
 	cpu->idApic                  = 0;
 
 	/* schedule periodic call of GIP update function */
-	static Periodic_gip periodic_gip;
+	static Periodic_gip periodic_gip (genode_env());
 
 	initialized = true;
 
@@ -282,7 +280,13 @@ void genode_VMMR0_DO_GVMM_CREATE_VM(PSUPVMMR0REQHDR pReqHdr)
 	 * PDMR3CritSectGetNop().
 	 */
 	size_t const cbVM = RT_UOFFSETOF(VM, aCpus[cCpus]);
-	VM *pVM = (VM *)Libc::mem_alloc()->alloc(cbVM, Genode::log2(PAGE_SIZE));
+
+	static Genode::Attached_ram_dataspace vm(genode_env().ram(),
+	                                         genode_env().rm(),
+	                                         cbVM);
+	Assert (vm.size() >= cbVM);
+
+	VM *pVM = vm.local_addr<VM>();
 	Genode::memset(pVM, 0, cbVM);
 
 	/*
@@ -331,7 +335,7 @@ HRESULT genode_check_memory_config(ComObjPtr<Machine> machine)
 		return rc;
 
 	/* Request max available memory */
-	size_t memory_genode = Genode::env()->ram_session()->avail() >> 20;
+	size_t memory_genode = genode_env().ram().avail() >> 20;
 	size_t memory_vmm    = 28;
 
 	if (memory_vbox + memory_vmm > memory_genode) {

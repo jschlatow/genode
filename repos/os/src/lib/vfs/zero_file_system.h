@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2012-2016 Genode Labs GmbH
+ * Copyright (C) 2012-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__VFS__ZERO_FILE_SYSTEM_H_
@@ -24,13 +24,14 @@ struct Vfs::Zero_file_system : Single_file_system
 {
 	Zero_file_system(Genode::Env&,
 	                 Genode::Allocator&,
-	                 Genode::Xml_node config)
+	                 Genode::Xml_node config,
+	                 Io_response_handler &)
 	:
 		Single_file_system(NODE_TYPE_CHAR_DEVICE, name(), config)
 	{ }
 
-	static char const *name() { return "zero"; }
-
+	static char const *name()   { return "zero"; }
+	char const *type() override { return "zero"; }
 
 	/********************************
 	 ** File I/O service interface **
@@ -52,6 +53,8 @@ struct Vfs::Zero_file_system : Single_file_system
 
 		return READ_OK;
 	}
+
+	bool read_ready(Vfs_handle *) override { return true; }
 };
 
 #endif /* _INCLUDE__VFS__ZERO_FILE_SYSTEM_H_ */

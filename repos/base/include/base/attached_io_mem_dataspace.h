@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2011-2013 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__BASE__ATTACHED_IO_MEM_DATASPACE_H_
@@ -70,10 +70,10 @@ class Genode::Attached_io_mem_dataspace
 		 *              argument instead
 		 */
 		Attached_io_mem_dataspace(Genode::addr_t base, Genode::size_t size,
-		                          bool write_combined = false)
+		                          bool write_combined = false) __attribute__((deprecated))
 		:
-			_env_rm(*env()->rm_session()),
-			_mmio(base, size, write_combined),
+			_env_rm(*env_deprecated()->rm_session()),
+			_mmio(false, base, size, write_combined),
 			_ds(_mmio.dataspace()),
 			_local_addr(_env_rm.attach(_ds))
 		{

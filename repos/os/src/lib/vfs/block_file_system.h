@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2013-2016 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__VFS__BLOCK_FILE_SYSTEM_H_
@@ -114,7 +114,8 @@ class Vfs::Block_file_system : public Single_file_system
 
 		Block_file_system(Genode::Env &env,
 		                  Genode::Allocator &alloc,
-		                  Genode::Xml_node config)
+		                  Genode::Xml_node config,
+		                  Io_response_handler &)
 		:
 			Single_file_system(NODE_TYPE_BLOCK_DEVICE, name(), config),
 			_alloc(alloc),
@@ -147,8 +148,8 @@ class Vfs::Block_file_system : public Single_file_system
 			destroy(_alloc, _block_buffer);
 		}
 
-		static char const *name() { return "block"; }
-
+		static char const *name()   { return "block"; }
+		char const *type() override { return "block"; }
 
 		/*********************************
 		 ** Directory service interface **
@@ -205,12 +206,12 @@ class Vfs::Block_file_system : public Single_file_system
 					nbytes = _block_io(blk_nr, (void*)(buf + written),
 					                   bytes_left, true, true);
 					if (nbytes == 0) {
-						Genode::error("error while write block:", blk_nr, " from block device");
+						Genode::error("error while write block:", blk_nr, " to block device");
 						return WRITE_ERR_INVALID;
 					}
 
-					written += nbytes;
-					count   -= nbytes;
+					written     += nbytes;
+					count       -= nbytes;
 					seek_offset += nbytes;
 
 					continue;
@@ -223,23 +224,19 @@ class Vfs::Block_file_system : public Single_file_system
 				 * write the whole block back. In addition if length is less
 				 * than block size, we also have to read the block first.
 				 */
-				if (displ > 0 || length < _block_size) {
-
+				if (displ > 0 || length < _block_size)
 					_block_io(blk_nr, _block_buffer, _block_size, false);
-					/* rewind seek offset to account for the block read */
-					seek_offset -= _block_size;
-				}
 
 				Genode::memcpy(_block_buffer + displ, buf + written, length);
 
 				nbytes = _block_io(blk_nr, _block_buffer, _block_size, true);
 				if ((unsigned)nbytes != _block_size) {
-					Genode::error("error while writing block:", blk_nr, " to Block_device");
+					Genode::error("error while writing block:", blk_nr, " to block_device");
 					return WRITE_ERR_INVALID;
 				}
 
-				written += length;
-				count -= length;
+				written     += length;
+				count       -= length;
 				seek_offset += length;
 			}
 
@@ -273,7 +270,7 @@ class Vfs::Block_file_system : public Single_file_system
 					length = count;
 
 				/*
-				 * We take a shortcut and read the blocks all at once if t he
+				 * We take a shortcut and read the blocks all at once if the
 				 * offset is aligned on a block boundary and we the count is a
 				 * multiple of the block size, e.g. 4K reads will be read at
 				 * once.
@@ -314,6 +311,8 @@ class Vfs::Block_file_system : public Single_file_system
 
 			return READ_OK;
 		}
+
+		bool read_ready(Vfs_handle *) override { return true; }
 
 		Ftruncate_result ftruncate(Vfs_handle *vfs_handle, file_size) override
 		{

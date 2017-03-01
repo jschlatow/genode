@@ -2,13 +2,17 @@
 # Build
 #
 
-if {[have_spec hw_odroid_xu]} {
-	puts "Run script not supported for this platform."; exit 0 }
+if {[have_spec odroid_xu] || [have_spec wand_quad] || [have_spec zynq] || [have_spec imx53] && [have_spec foc]} {
+	puts "\n Run script is not supported on this platform. \n";
+	exit 0
+}
 
 set build_components { core init test/fb_bench drivers/framebuffer drivers/timer }
 
 source ${genode_dir}/repos/base/run/platform_drv.inc
 append_platform_drv_build_components
+
+lappend_if [have_spec gpio] build_components drivers/gpio
 
 build $build_components
 
@@ -17,6 +21,10 @@ create_boot_directory
 #
 # Generate config
 #
+
+proc gpio_drv { } { if {[have_spec rpi] && [have_spec hw]}  { return hw_gpio_drv }
+                    if {[have_spec rpi] && [have_spec foc]} { return foc_gpio_drv }
+                    return gpio_drv }
 
 append config {
 <config>
@@ -40,6 +48,13 @@ append config {
 		<provides><service name="Timer"/></provides>
 	</start>}
 
+append_if [have_spec gpio] config "
+	<start name=\"[gpio_drv]\">
+		<resource name=\"RAM\" quantum=\"4M\"/>
+		<provides><service name=\"Gpio\"/></provides>
+		<config/>
+	</start>"
+
 append_if [have_spec sdl] config {
 	<start name="fb_sdl">
 		<resource name="RAM" quantum="4M"/>
@@ -53,13 +68,13 @@ append_platform_drv_config
 
 append_if [have_spec framebuffer] config {
 	<start name="fb_drv">
-		<resource name="RAM" quantum="8M"/>
+		<resource name="RAM" quantum="20M"/>
 		<provides><service name="Framebuffer"/></provides>
 	</start>}
 
 append config {
 	<start name="test-fb_bench">
-		<resource name="RAM" quantum="92M"/>
+		<resource name="RAM" quantum="40M"/>
 	</start>
 </config>}
 
@@ -69,19 +84,17 @@ install_config $config
 # Boot modules
 #
 
-# generic modules
-set boot_modules {
-	core init timer
-	test-fb_bench
-}
+set boot_modules { core ld.lib.so init timer test-fb_bench }
 
-# platform-specific modules
 append_platform_drv_boot_modules
 
-lappend_if [have_spec sdl]              boot_modules fb_sdl
-lappend_if [have_spec framebuffer]      boot_modules fb_drv
+lappend_if [have_spec sdl]         boot_modules fb_sdl
+lappend_if [have_spec framebuffer] boot_modules fb_drv
+lappend_if [have_spec gpio]        boot_modules [gpio_drv]
 
 build_boot_image $boot_modules
 
-run_genode_until forever
+# disable QEMU graphic to enable testing on our machines without SDL and X
+append qemu_args "-nographic -m 128"
 
+run_genode_until {.*--- Framebuffer benchmark finished ---.*\n} 30

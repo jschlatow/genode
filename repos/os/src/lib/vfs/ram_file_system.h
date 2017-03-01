@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015-2016 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__VFS__RAM_FILE_SYSTEM_H_
@@ -422,7 +422,8 @@ class Vfs::Ram_file_system : public Vfs::File_system
 
 		Ram_file_system(Genode::Env       &env,
 		                Genode::Allocator &alloc,
-		                Genode::Xml_node)
+		                Genode::Xml_node,
+		                Io_response_handler &)
 		: _env(env), _alloc(alloc) { }
 
 		~Ram_file_system() { _root.empty(_alloc); }
@@ -763,6 +764,8 @@ class Vfs::Ram_file_system : public Vfs::File_system
 			return READ_OK;
 		}
 
+		bool read_ready(Vfs_handle *) override { return true; }
+
 		Ftruncate_result ftruncate(Vfs_handle *vfs_handle, file_size len) override
 		{
 			if ((vfs_handle->status_flags() & OPEN_MODE_ACCMODE) ==  OPEN_MODE_RDONLY)
@@ -783,7 +786,8 @@ class Vfs::Ram_file_system : public Vfs::File_system
 		 ** File_system interface **
 		 ***************************/
 
-		static char const *name() { return "ram"; }
+		static char const *name()   { return "ram"; }
+		char const *type() override { return "ram"; }
 };
 
 #endif /* _INCLUDE__VFS__RAM_FILE_SYSTEM_H_ */

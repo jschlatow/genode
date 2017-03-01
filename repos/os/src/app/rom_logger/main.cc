@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -16,7 +16,7 @@
 #include <base/attached_rom_dataspace.h>
 #include <util/print_lines.h>
 #include <base/component.h>
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 
 namespace Rom_logger { struct Main; }
 
@@ -27,7 +27,7 @@ struct Rom_logger::Main
 
 	Genode::Attached_rom_dataspace _config_rom { _env, "config" };
 
-	Genode::Lazy_volatile_object<Genode::Attached_rom_dataspace> _rom_ds;
+	Genode::Constructible<Genode::Attached_rom_dataspace> _rom_ds;
 
 	typedef Genode::String<100> Rom_name;
 
@@ -83,7 +83,7 @@ void Rom_logger::Main::_handle_update()
 	 * If ROM name changed, reconstruct '_rom_ds'
 	 */
 	if (rom_name != _rom_name) {
-		_rom_ds.construct(rom_name.string());
+		_rom_ds.construct(_env, rom_name.string());
 		_rom_ds->sigh(_update_handler);
 		_rom_name = rom_name;
 	}

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _ATAPI_DRIVER_H_
@@ -24,8 +24,8 @@ struct Atapi_driver : Port_driver
 	unsigned                 sense_tries = 0;
 	Block::Packet_descriptor pending;
 
-	Atapi_driver(Port &port, Ahci_root &root, unsigned &sem)
-	: Port_driver(port, root, sem)
+	Atapi_driver(Port &port, Genode::Ram_session &ram, Ahci_root &root, unsigned &sem)
+	: Port_driver(port, ram, root, sem)
 	{
 		Port::init();
 		Port::write<Cmd::Atapi>(1);

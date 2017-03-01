@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2006-2013 Genode Labs GmbH
+ * Copyright (C) 2006-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -63,7 +63,7 @@ Core_env * Genode::core_env()
 }
 
 
-Env_deprecated * Genode::env() {
+Env_deprecated * Genode::env_deprecated() {
 	return core_env(); }
 
 
@@ -94,7 +94,8 @@ Session_capability Core_parent::session(Parent::Client::Id          id,
 			return;
 
 		Session_state &session = *new (_alloc)
-			Session_state(service, _id_space, id, args.string(), affinity);
+			Session_state(service, _id_space, id, label_from_args(args.string()),
+			              args.string(), affinity);
 
 		service.initiate_request(session);
 
@@ -120,7 +121,7 @@ class Core_child : public Child_policy
 		 * Entry point used for serving the parent interface
 		 */
 		Rpc_entrypoint _entrypoint;
-		enum { STACK_SIZE = 2 * 1024 * sizeof(Genode::addr_t)};
+		enum { STACK_SIZE = 4 * 1024 * sizeof(Genode::addr_t)};
 
 		Registry<Service> &_services;
 
@@ -148,7 +149,7 @@ class Core_child : public Child_policy
 			_core_ram_cap(core_ram_cap), _core_ram(core_ram),
 			_core_cpu_cap(core_cpu_cap), _core_cpu(core_cpu),
 			_ram_quota(Child::effective_ram_quota(ram_quota)),
-			_child(*env()->rm_session(), _entrypoint, *this)
+			_child(*env_deprecated()->rm_session(), _entrypoint, *this)
 		{
 			_entrypoint.activate();
 		}
@@ -188,6 +189,8 @@ class Core_child : public Child_policy
 
 		Ram_session           &ref_ram()           { return _core_ram; }
 		Ram_session_capability ref_ram_cap() const { return _core_ram_cap; }
+
+		size_t session_alloc_batch_size() const override { return 128; }
 };
 
 
@@ -250,7 +253,7 @@ int main()
 	 * Allocate session meta data on distinct dataspaces to enable independent
 	 * destruction (to enable quota trading) of session component objects.
 	 */
-	static Sliced_heap sliced_heap(env()->ram_session(), env()->rm_session());
+	static Sliced_heap sliced_heap(env_deprecated()->ram_session(), env_deprecated()->rm_session());
 
 	/*
 	 * Factory for creating RPC capabilities within core
@@ -302,8 +305,8 @@ int main()
 	Genode::size_t const ram_quota = platform()->ram_alloc()->avail() - 224*1024;
 	log("", ram_quota / (1024*1024), " MiB RAM assigned to init");
 
-	static Volatile_object<Core_child>
-		init(services, *env()->ram_session(), env()->ram_session_cap(),
+	static Reconstructible<Core_child>
+		init(services, *env_deprecated()->ram_session(), env_deprecated()->ram_session_cap(),
 		     ram_quota, core_cpu, core_cpu_cap);
 
 	platform()->wait_for_exit();

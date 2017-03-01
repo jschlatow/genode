@@ -6,10 +6,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__DRIVERS__NIC__XILINX_EMACPS_BASE_H_
@@ -459,15 +459,16 @@ namespace Genode
 			Cadence_gem(Genode::size_t const tx_buf_size,
 			            Genode::size_t const rx_buf_size,
 			            Genode::Allocator   &rx_block_md_alloc,
-			            Genode::Ram_session &ram_session,
-			            Server::Entrypoint  &ep,
+			            Genode::Env         &env,
 			            addr_t const base, size_t const size, const int irq)
 			:
-				Genode::Attached_mmio(base, size),
-				Session_component(tx_buf_size, rx_buf_size, rx_block_md_alloc, ram_session, ep),
-				_irq(irq),
-				_irq_handler(ep, *this, &Cadence_gem::_handle_irq),
-				_phy(*this)
+				Genode::Attached_mmio(env, base, size),
+				Session_component(tx_buf_size, rx_buf_size, rx_block_md_alloc, env),
+				_timer(env),
+				_sys_ctrl(env, _timer), _tx_buffer(env, _timer), _rx_buffer(env),
+				_irq(env, irq),
+				_irq_handler(env.ep(), *this, &Cadence_gem::_handle_irq),
+				_phy(*this, _timer)
 			{
 				_irq.sigh(_irq_handler);
 				_irq.ack_irq();

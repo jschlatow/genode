@@ -9,10 +9,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
- * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * This file is distributed under the terms of the GNU General Public License
+ * version 2.
  */
 
 /*********************
@@ -110,7 +110,6 @@ static inline size_t min(size_t a, size_t b) {
 #define max(x, y) ({                      \
         typeof(x) _max1 = (x);                  \
         typeof(y) _max2 = (y);                  \
-        (void) (&_max1 == &_max2);              \
         _max1 > _max2 ? _max1 : _max2; })
 
 #define min_t(type, x, y) ({ \

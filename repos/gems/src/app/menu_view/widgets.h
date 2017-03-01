@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2014 Genode Labs GmbH
+ * Copyright (C) 2014-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _WIDGETS_H_
@@ -833,10 +833,7 @@ Menu_view::Widget_factory::create(Xml_node node)
 	if (node.has_type("frame"))  w = new (alloc) Frame_widget      (*this, node, unique_id);
 
 	if (!w) {
-		char type[64];
-		type[0] = 0;
-		node.type_name(type, sizeof(type));
-		Genode::error("unknown widget type '", Cstring(type), "'");
+		Genode::error("unknown widget type '", node.type(), "'");
 		return 0;
 	}
 

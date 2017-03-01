@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2011-2013 Genode Labs GmbH
+ * Copyright (C) 2011-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__TERMINAL_SESSION__CONNECTION_H_
@@ -51,8 +51,8 @@ struct Terminal::Connection : Genode::Connection<Session>, Session_client
 	:
 		Genode::Connection<Session>(env, session(env.parent(),
 		                                         "ram_quota=%ld, label=\"%s\"",
-		                                         2*4096, label)),
-		Session_client(cap())
+		                                         10*1024, label)),
+		Session_client(env.rm(), cap())
 	{
 		wait_for_connection(cap());
 	}
@@ -64,11 +64,11 @@ struct Terminal::Connection : Genode::Connection<Session>, Session_client
 	 * \deprecated  Use the constructor with 'Env &' as first
 	 *              argument instead
 	 */
-	Connection(char const *label = "")
+	Connection(char const *label = "") __attribute__((deprecated))
 	:
 		Genode::Connection<Session>(session("ram_quota=%zd, label=\"%s\"",
 		                                    2*4096, label)),
-		Session_client(cap())
+		Session_client(*Genode::env_deprecated()->rm_session(), cap())
 	{
 		wait_for_connection(cap());
 	}

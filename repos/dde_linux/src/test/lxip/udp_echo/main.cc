@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2016 Genode Labs GmbH
+ * Copyright (C) 2016-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -36,8 +36,8 @@ int main(void)
 	}
 
 	unsigned port = 0;
-	Xml_node libc_node = config()->xml_node().sub_node("libc");
-	try { libc_node.attribute("port").value(&port); }
+	Xml_node config_node = config()->xml_node();
+	try { config_node.attribute("port").value(&port); }
 	catch (...) {
 		error("Missing \"port\" attribute.");
 		throw Xml_node::Nonexistent_attribute();

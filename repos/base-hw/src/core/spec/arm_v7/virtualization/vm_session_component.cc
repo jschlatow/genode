@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 /* Genode includes */
@@ -36,7 +36,7 @@ void Vm_session_component::exception_handler(Signal_context_capability handler)
 
 void Vm_session_component::_attach(addr_t phys_addr, addr_t vm_addr, size_t size)
 {
-	Page_flags pflags = Page_flags::apply_mapping(true, CACHED, false);
+	Page_flags pflags { RW, NO_EXEC, USER, NO_GLOBAL, RAM, CACHED };
 
 	try {
 		_table->insert_translation(vm_addr, phys_addr, size, pflags, _tt_alloc);

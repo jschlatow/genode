@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2013 Genode Labs GmbH
+ * Copyright (C) 2013-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _INCLUDE__SPEC__EXYNOS5__BOARD_BASE_H_
@@ -35,6 +35,7 @@ struct Genode::Exynos5
 		IRQ_CONTROLLER_BASE         = 0x10480000,
 		IRQ_CONTROLLER_SIZE         = 0x00010000,
 		IRQ_CONTROLLER_VT_CTRL_BASE = 0x10484000,
+		IRQ_CONTROLLER_VT_CTRL_SIZE = 0x1000,
 		IRQ_CONTROLLER_VT_CPU_BASE  = 0x10486000,
 		IRQ_CONTROLLER_VT_CPU_SIZE  = 0x1000,
 
@@ -44,6 +45,7 @@ struct Genode::Exynos5
 
 		/* UART */
 		UART_2_MMIO_BASE = 0x12C20000,
+		UART_2_MMIO_SIZE = 0x1000,
 		UART_2_IRQ       = 85,
 
 		/* pulse-width-modulation timer  */

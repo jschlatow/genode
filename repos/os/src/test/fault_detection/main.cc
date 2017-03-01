@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2008-2016 Genode Labs GmbH
+ * Copyright (C) 2008-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #include <base/log.h>
@@ -141,7 +141,7 @@ struct Faulting_child_test
 {
 	static char const *name() { return "failure detection in immediate child"; }
 
-	Lazy_volatile_object<Test_child> _child;
+	Constructible<Test_child> _child;
 
 	void start_iteration(Env &env, Signal_context_capability fault_sigh)
 	{
@@ -158,7 +158,7 @@ struct Faulting_loader_child_test
 {
 	static char const *name() { return "failure detection in loaded child"; }
 
-	Lazy_volatile_object<Loader::Connection> loader;
+	Constructible<Loader::Connection> loader;
 
 	void start_iteration(Env &env, Signal_context_capability fault_sigh)
 	{
@@ -187,7 +187,9 @@ struct Faulting_loader_grand_child_test
 			"<config>\n"
 			"  <parent-provides>\n"
 			"    <service name=\"ROM\"/>\n"
-			"    <service name=\"RM\"/>\n"
+			"    <service name=\"RAM\"/>\n"
+			"    <service name=\"CPU\"/>\n"
+			"    <service name=\"PD\"/>\n"
 			"    <service name=\"LOG\"/>\n"
 			"  </parent-provides>\n"
 			"  <default-route>\n"
@@ -201,7 +203,7 @@ struct Faulting_loader_grand_child_test
 
 	static size_t config_size() { return strlen(config()); }
 
-	Lazy_volatile_object<Loader::Connection> loader;
+	Constructible<Loader::Connection> loader;
 
 	void start_iteration(Env &env, Signal_context_capability fault_sigh)
 	{
@@ -227,9 +229,9 @@ struct Main
 {
 	Env &_env;
 
-	Lazy_volatile_object<Iterative_test<Faulting_child_test> >              _test_1;
-	Lazy_volatile_object<Iterative_test<Faulting_loader_child_test> >       _test_2;
-	Lazy_volatile_object<Iterative_test<Faulting_loader_grand_child_test> > _test_3;
+	Constructible<Iterative_test<Faulting_child_test> >              _test_1;
+	Constructible<Iterative_test<Faulting_loader_child_test> >       _test_2;
+	Constructible<Iterative_test<Faulting_loader_grand_child_test> > _test_3;
 
 	Signal_handler<Main> _test_1_finished_handler {
 		_env.ep(), *this, &Main::_handle_test_1_finished };

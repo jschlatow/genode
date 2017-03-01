@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__PLATFORM_PD_H_
@@ -44,7 +44,7 @@ class Genode::Platform_pd : public Address_space
 
 		Cnode _cspace_cnode_1st;
 
-		Lazy_volatile_object<Cnode> _cspace_cnode_2nd[1UL << CSPACE_SIZE_LOG2_1ST];
+		Constructible<Cnode> _cspace_cnode_2nd[1UL << CSPACE_SIZE_LOG2_1ST];
 
 		Native_capability _parent;
 

@@ -5,10 +5,10 @@
  */
 
 /*
- * Copyright (C) 2015 Genode Labs GmbH
+ * Copyright (C) 2015-2017 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
- * under the terms of the GNU General Public License version 2.
+ * under the terms of the GNU Affero General Public License version 3.
  */
 
 #ifndef _CORE__INCLUDE__VM_SPACE_H_
@@ -16,7 +16,7 @@
 
 /* Genode includes */
 #include <util/bit_allocator.h>
-#include <util/volatile_object.h>
+#include <util/reconstructible.h>
 #include <base/log.h>
 #include <base/thread.h>
 #include <base/session_label.h>
@@ -101,7 +101,7 @@ class Genode::Vm_space
 				 * objects (where we cannot pass any arguments to the
 				 * constructors of the individual objects).
 				 */
-				Lazy_volatile_object<Cnode> _cnode;
+				Constructible<Cnode> _cnode;
 
 			public:
 
