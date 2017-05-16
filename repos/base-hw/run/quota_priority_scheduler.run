@@ -1,0 +1,44 @@
+#
+# \brief  Test quota scheduler with background priorities
+# \author Dustin Frey
+# \date   2014-04-14
+#
+
+# build program images
+build "core init test/quota_priority_scheduler"
+
+# create directory where the boot files are written to
+create_boot_directory
+
+# the init config is not used but the build system needs it
+install_config {
+	<config>
+		<parent-provides>
+			<service name="LOG"/>
+			<service name="RM"/>
+			<service name="RAM"/>
+			<service name="PD"/>
+			<service name="CPU"/>
+			<service name="ROM"/>
+		</parent-provides>
+		<default-route>
+			<any-service> <parent/> </any-service>
+		</default-route>
+		<default caps="100" />
+		<start name="test-quota_priority_scheduler">
+			<resource name="RAM" quantum="10M"/>
+		</start>
+	</config>}
+
+# create single boot image from the compiled program images
+build_boot_image "core ld.lib.so init test-quota_priority_scheduler"
+
+# configure qemu to use 64 MB RAM and avoid GUI mode
+append qemu_args " -m 64 -nographic"
+
+# execute the test in qemu if the targeted platform is supported
+run_genode_until "done.*\n" 10
+
+# check the output
+#grep_output {\[init -> test-quota_priority_scheduler\]}
+#compare_output_to { [init -> test-quota_priority_scheduler] done }

@@ -10,6 +10,7 @@
 
 #include <kernel/double_list.h>
 #include <util.h>
+#include <util/misc_math.h>
 #include <kernel/configuration.h>
 
 namespace Kernel {
@@ -68,10 +69,9 @@ class Kernel::Cpu_priority
 
 class Kernel::Cpu_share : public Cpu_claim, public Cpu_fill
 {
-	friend class Cpu_scheduler;
-	friend class Quota_scheduler;
+	friend class Scheduler_policy;
 
-public:
+    public:
 
 	signed const _prio;
 	unsigned     _quota;
