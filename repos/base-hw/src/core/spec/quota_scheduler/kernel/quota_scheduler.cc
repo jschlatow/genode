@@ -1,7 +1,7 @@
 /*
- * \brief   Schedules CPU shares for the execution time of a CPU
- * \author  Martin Stein
- * \date    2014-10-09
+ * \brief  Schedules CPU shares for the execution time of a CPU
+ * \author Martin Stein
+ * \date   2014-10-09
  */
 
 /*
@@ -13,37 +13,37 @@
 
 #include <base/log.h>
 #include <hw/assert.h>
-#include <kernel/cpu_scheduler.h>
+#include <kernel/quota_scheduler.h>
 
 using namespace Kernel;
 
 
-void Cpu_scheduler::_reset(Claim * const c) {
+void Quota_scheduler::_reset(Claim * const c) {
 	_share(c)->_claim = _share(c)->_quota; }
 
 
-void Cpu_scheduler::_reset_claims(unsigned const p)
+void Quota_scheduler::_reset_claims(unsigned const p)
 {
 	_rcl[p].for_each([&] (Claim * const c) { _reset(c); });
 	_ucl[p].for_each([&] (Claim * const c) { _reset(c); });
 }
 
 
-void Cpu_scheduler::_next_round()
+void Quota_scheduler::_next_round()
 {
 	_residual = _quota;
 	_for_each_prio([&] (unsigned const p) { _reset_claims(p); });
 }
 
 
-void Cpu_scheduler::_consumed(unsigned const q)
+void Quota_scheduler::_consumed(unsigned const q)
 {
 	if (_residual > q) { _residual -= q; }
 	else { _next_round(); }
 }
 
 
-void Cpu_scheduler::_set_head(Share * const s, unsigned const q, bool const c)
+void Quota_scheduler::_set_head(Share * const s, unsigned const q, bool const c)
 {
 	_head_quota = q;
 	_head_claims = c;
@@ -51,14 +51,14 @@ void Cpu_scheduler::_set_head(Share * const s, unsigned const q, bool const c)
 }
 
 
-void Cpu_scheduler::_next_fill()
+void Quota_scheduler::_next_fill()
 {
 	_head->_fill = _fill;
 	_fills.head_to_tail();
 }
 
 
-void Cpu_scheduler::_head_claimed(unsigned const r)
+void Quota_scheduler::_head_claimed(unsigned const r)
 {
 	if (!_head->_quota) { return; }
 	_head->_claim = r > _head->_quota ? _head->_quota : r;
@@ -67,7 +67,7 @@ void Cpu_scheduler::_head_claimed(unsigned const r)
 }
 
 
-void Cpu_scheduler::_head_filled(unsigned const r)
+void Quota_scheduler::_head_filled(unsigned const r)
 {
 	if (_fills.head() != _head) { return; }
 	if (r) { _head->_fill = r; }
@@ -75,7 +75,7 @@ void Cpu_scheduler::_head_filled(unsigned const r)
 }
 
 
-bool Cpu_scheduler::_claim_for_head()
+bool Quota_scheduler::_claim_for_head()
 {
 	for (signed p = Prio::MAX; p > Prio::MIN - 1; p--) {
 		Share * const s = _share(_rcl[p].head());
@@ -88,7 +88,7 @@ bool Cpu_scheduler::_claim_for_head()
 }
 
 
-bool Cpu_scheduler::_fill_for_head()
+bool Quota_scheduler::_fill_for_head()
 {
 	Share * const s = _share(_fills.head());
 	if (!s) { return 0; }
@@ -97,7 +97,7 @@ bool Cpu_scheduler::_fill_for_head()
 }
 
 
-unsigned Cpu_scheduler::_trim_consumption(unsigned & q)
+unsigned Quota_scheduler::_trim_consumption(unsigned & q)
 {
 	q = Genode::min(Genode::min(q, _head_quota), _residual);
 	if (!_head_yields) { return _head_quota - q; }
@@ -106,28 +106,28 @@ unsigned Cpu_scheduler::_trim_consumption(unsigned & q)
 }
 
 
-void Cpu_scheduler::_quota_introduction(Share * const s)
+void Quota_scheduler::_quota_introduction(Share * const s)
 {
 	if (s->_ready) { _rcl[s->_prio].insert_tail(s); }
 	else { _ucl[s->_prio].insert_tail(s); }
 }
 
 
-void Cpu_scheduler::_quota_revokation(Share * const s)
+void Quota_scheduler::_quota_revokation(Share * const s)
 {
 	if (s->_ready) { _rcl[s->_prio].remove(s); }
 	else { _ucl[s->_prio].remove(s); }
 }
 
 
-void Cpu_scheduler::_quota_adaption(Share * const s, unsigned const q)
+void Quota_scheduler::_quota_adaption(Share * const s, unsigned const q)
 {
 	if (q) { if (s->_claim > q) { s->_claim = q; } }
 	else { _quota_revokation(s); }
 }
 
 
-void Cpu_scheduler::update(unsigned q)
+void Quota_scheduler::update(unsigned q)
 {
 	/* do not detract the quota if the head context was removed even now */
 	if (_head) {
@@ -143,7 +143,7 @@ void Cpu_scheduler::update(unsigned q)
 }
 
 
-bool Cpu_scheduler::ready_check(Share * const s1)
+bool Quota_scheduler::ready_check(Share * const s1)
 {
 	assert(_head);
 
@@ -157,7 +157,7 @@ bool Cpu_scheduler::ready_check(Share * const s1)
 }
 
 
-void Cpu_scheduler::ready(Share * const s)
+void Quota_scheduler::ready(Share * const s)
 {
 	assert(!s->_ready && s != _idle);
 	s->_ready = 1;
@@ -170,7 +170,7 @@ void Cpu_scheduler::ready(Share * const s)
 }
 
 
-void Cpu_scheduler::unready(Share * const s)
+void Quota_scheduler::unready(Share * const s)
 {
 	assert(s->_ready && s != _idle);
 	s->_ready = 0;
@@ -181,10 +181,10 @@ void Cpu_scheduler::unready(Share * const s)
 }
 
 
-void Cpu_scheduler::yield() { _head_yields = 1; }
+void Quota_scheduler::yield() { _head_yields = 1; }
 
 
-void Cpu_scheduler::remove(Share * const s)
+void Quota_scheduler::remove(Share * const s)
 {
 	assert(s != _idle);
 
@@ -196,7 +196,7 @@ void Cpu_scheduler::remove(Share * const s)
 }
 
 
-void Cpu_scheduler::insert(Share * const s)
+void Quota_scheduler::insert(Share * const s)
 {
 	assert(!s->_ready);
 	if (!s->_quota) { return; }
@@ -205,7 +205,7 @@ void Cpu_scheduler::insert(Share * const s)
 }
 
 
-void Cpu_scheduler::quota(Share * const s, unsigned const q)
+void Quota_scheduler::quota(Share * const s, unsigned const q)
 {
 	assert(s != _idle);
 	if (s->_quota) { _quota_adaption(s, q); }
@@ -214,7 +214,7 @@ void Cpu_scheduler::quota(Share * const s, unsigned const q)
 }
 
 
-Cpu_scheduler::Cpu_scheduler(Share * const i, unsigned const q,
-                             unsigned const f)
+Quota_scheduler::Quota_scheduler(Share * const i, unsigned const q,
+                                   unsigned const f)
 : _idle(i), _head_yields(0), _quota(q), _residual(q), _fill(f)
 { _set_head(i, f, 0); }

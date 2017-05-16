@@ -48,7 +48,6 @@ SRC_CC += env.cc
 SRC_CC += region_map_support.cc
 SRC_CC += pager.cc
 SRC_CC += _main.cc
-SRC_CC += kernel/cpu_scheduler.cc
 SRC_CC += kernel/double_list.cc
 SRC_CC += kernel/init.cc
 SRC_CC += kernel/thread.cc
@@ -61,6 +60,10 @@ SRC_CC += kernel/timer.cc
 SRC_CC += kernel/object.cc
 SRC_CC += init_main_thread.cc
 SRC_CC += capability.cc
+
+
+# use quota scheduler by default
+include $(BASE_DIR)/../base-hw/lib/mk/spec/quota_scheduler/core-hw.inc
 
 # provide Genode version information
 include $(BASE_DIR)/src/core/version.inc
