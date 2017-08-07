@@ -14,6 +14,7 @@
 #   LIB_PROGRESS_LOG - library build log file
 #   BUILD_LIBS       - list of libraries to build (without .lib.a or .lib.so suffix)
 #   INSTALL_DIR      - destination directory for installing shared libraries
+#   DEBUG_DIR        - destination directory for installing unstripped shared libraries
 #
 
 ACCUMULATE_MISSING_PORTS = 1
@@ -47,10 +48,14 @@ SYMBOLS_DIRS = $(foreach REP,$(REPOSITORIES),$(addprefix $(REP)/lib/symbols/spec
 LIB_MK  = $(firstword $(wildcard $(addsuffix /$(LIB).mk,$(LIB_MK_DIRS))))
 SYMBOLS = $(firstword $(wildcard $(addsuffix /$(LIB),   $(SYMBOLS_DIRS))))
 
+ifneq ($(SYMBOLS),)
+SHARED_LIB := yes
+endif
+
 #
-# Sanity check to detect missing library description file
+# Sanity check to detect missing library-description file
 #
-ifeq ($(LIB_MK),)
+ifeq ($(sort $(LIB_MK) $(SYMBOLS)),)
 all: warn_missing_lib_mk
 else
 all: check_unsatisfied_requirements
@@ -133,7 +138,8 @@ endif
 	  echo "	     SHARED_LIBS=\"\$$(sort \$$(DEP_SO_$(LIB)))\" \\"; \
 	  echo "	     BUILD_BASE_DIR=$(BUILD_BASE_DIR) \\"; \
 	  echo "	     SHELL=$(SHELL) \\"; \
-	  echo "	     INSTALL_DIR=\$$(INSTALL_DIR)"; \
+	  echo "	     INSTALL_DIR=\$$(INSTALL_DIR) \\"; \
+	  echo "	     DEBUG_DIR=\$$(DEBUG_DIR)"; \
 	  echo "") >> $(LIB_DEP_FILE)
 ifdef SHARED_LIB
 	@(echo "SO_NAME($(LIB)) := $(LIB).lib.so"; \

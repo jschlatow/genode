@@ -21,7 +21,6 @@ install_config {
 <config verbose="yes">
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="PD"/>
@@ -33,6 +32,7 @@ install_config {
 	<default-route>
 		<any-service><parent/><any-child/></any-service>
 	</default-route>
+	<default caps="100"/>
 	<start name="platform_drv">
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Regulator"/></provides>

@@ -25,7 +25,6 @@
 
 /* core includes */
 #include <boot_modules.h>
-#include <core_parent.h>
 #include <platform.h>
 #include <platform_thread.h>
 #include <platform_pd.h>
@@ -512,5 +511,3 @@ Affinity::Space Platform::affinity_space() const
 	return Affinity::Space(cpus_online, 1);
 }
 
-
-void Core_parent::exit(int exit_value) { }

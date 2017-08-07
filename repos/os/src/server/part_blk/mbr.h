@@ -38,7 +38,10 @@ struct Mbr_partition_table : public Block::Partition_table
 		 */
 		struct Partition_record
 		{
-			enum { INVALID = 0, EXTENTED = 0x5, PROTECTIVE = 0xee, };
+			enum {
+				INVALID = 0,
+				EXTENTED_CHS = 0x5, EXTENTED_LBA = 0xf, PROTECTIVE = 0xee
+			};
 			Genode::uint8_t  _unused[4];
 			Genode::uint8_t  _type;       /* partition type */
 			Genode::uint8_t  _unused2[3];
@@ -46,7 +49,8 @@ struct Mbr_partition_table : public Block::Partition_table
 			Genode::uint32_t _sectors;    /* number of sectors */
 
 			bool valid()      { return _type != INVALID; }
-			bool extented()   { return _type == EXTENTED; }
+			bool extended()   { return _type == EXTENTED_CHS
+			                        || _type == EXTENTED_LBA; }
 			bool protective() { return _type == PROTECTIVE; }
 		} __attribute__((packed));
 
@@ -74,7 +78,8 @@ struct Mbr_partition_table : public Block::Partition_table
 		Block::Partition *_part_list[MAX_PARTITIONS]; /* contains pointers to valid
 		                                          partitions or 0 */
 
-		void _parse_extented(Partition_record *record)
+		template <typename FUNC>
+		void _parse_extended(Partition_record *record, FUNC const &f)
 		{
 			Partition_record *r = record;
 			unsigned lba = r->_lba;
@@ -92,12 +97,7 @@ struct Mbr_partition_table : public Block::Partition_table
 			 * partition is relative to the lba of the current EBR */
 			Partition_record *logical = &(ebr->_records[0]);
 			if (logical->valid() && nr < MAX_PARTITIONS) {
-				_part_list[nr++] = new (&heap)
-					Block::Partition(logical->_lba + lba, logical->_sectors);
-
-				Genode::log("Partition ", nr - 1, ": LBA ", logical->_lba + lba,
-				            " (", (unsigned int)logical->_sectors, " blocks) type ",
-				            Genode::Hex(logical->_type, Genode::Hex::OMIT_PREFIX));
+				f(nr++, logical, lba);
 			}
 
 			/*
@@ -110,12 +110,9 @@ struct Mbr_partition_table : public Block::Partition_table
 			} while (r->valid());
 		}
 
-		void _parse_mbr(Mbr *mbr)
+		template <typename FUNC>
+		void _parse_mbr(Mbr *mbr, FUNC const &f)
 		{
-			/* no partition table, use whole disc as partition 0 */
-			if (!(mbr->valid()))
-				_part_list[0] = new (&heap)
-					Block::Partition(0, driver.blk_cnt() - 1);
 
 			for (int i = 0; i < 4; i++) {
 				Partition_record *r = &(mbr->_records[i]);
@@ -123,21 +120,14 @@ struct Mbr_partition_table : public Block::Partition_table
 				if (!r->valid())
 					continue;
 
-				Genode::log("Partition ", i + 1, ": LBA ",
-				            (unsigned int) r->_lba, " (",
-				            (unsigned int) r->_sectors, " blocks) type: ",
-				            Genode::Hex(r->_type, Genode::Hex::OMIT_PREFIX));
-
 				if (r->protective())
 					throw Protective_mbr_found();
 
-				if (r->extented()) {
-					_parse_extented(r);
-					continue;
-				}
+				f(i + 1, r, 0);
 
-				_part_list[i + 1] = new (&heap)
-					Block::Partition(r->_lba, r->_sectors);
+				if (r->extended()) {
+					_parse_extended(r, f);
+				}
 			}
 		}
 
@@ -151,7 +141,40 @@ struct Mbr_partition_table : public Block::Partition_table
 		bool parse()
 		{
 			Sector s(driver, 0, 1);
-			_parse_mbr(s.addr<Mbr *>());
+			Mbr *mbr = s.addr<Mbr *>();
+
+			/* no partition table, use whole disc as partition 0 */
+			if (!(mbr->valid()))
+				_part_list[0] = new (&heap)
+					Block::Partition(0, driver.blk_cnt() - 1);
+
+			_parse_mbr(mbr, [&] (int i, Partition_record *r, unsigned offset) {
+				Genode::log("Partition ", i, ": LBA ",
+				            (unsigned int) r->_lba + offset, " (",
+				            (unsigned int) r->_sectors, " blocks) type: ",
+				            Genode::Hex(r->_type, Genode::Hex::OMIT_PREFIX));
+				if (!r->extended())
+					_part_list[i] = new (&heap)
+						Block::Partition(r->_lba + offset, r->_sectors);
+			});
+
+			/* Report the partitions */
+			if (reporter.enabled())
+			{
+				Genode::Reporter::Xml_generator xml(reporter, [&] () {
+					xml.attribute("type", "mbr");
+
+					_parse_mbr(mbr, [&] (int i, Partition_record *r, unsigned offset) {
+						xml.node("partition", [&] {
+							xml.attribute("number", i);
+							xml.attribute("type", r->_type);
+							xml.attribute("start", r->_lba + offset);
+							xml.attribute("length", r->_sectors);
+						});
+					});
+				});
+			}
+
 			for (unsigned num = 0; num < MAX_PARTITIONS; num++)
 				if (_part_list[num])
 					return true;

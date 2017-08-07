@@ -34,26 +34,27 @@
 
 
 namespace Linux {
-		#include <lx_emul.h>
+	#include <lx_emul.h>
+	#include <msghdr.h>
 
-		#include <lx_emul/extern_c_begin.h>
-		#include <linux/socket.h>
-		#include <uapi/linux/in.h>
-		#include <uapi/linux/if.h>
-		extern int sock_setsockopt(socket *sock, int level,
-		                           int op, char __user *optval,
-		                           unsigned int optlen);
-		extern int sock_getsockopt(socket *sock, int level,
-		                           int op, char __user *optval,
-		                           int __user *optlen);
-		socket *sock_alloc(void);
-		#include <lx_emul/extern_c_end.h>
+	#include <lx_emul/extern_c_begin.h>
+	#include <linux/socket.h>
+	#include <uapi/linux/in.h>
+	#include <uapi/linux/if.h>
+	extern int sock_setsockopt(socket *sock, int level,
+	                           int op, char __user *optval,
+	                           unsigned int optlen);
+	extern int sock_getsockopt(socket *sock, int level,
+	                           int op, char __user *optval,
+	                           int __user *optlen);
+	socket *sock_alloc(void);
+	#include <lx_emul/extern_c_end.h>
 
-		enum {
-			POLLIN_SET  = (POLLRDNORM | POLLRDBAND | POLLIN | POLLHUP | POLLERR),
-			POLLOUT_SET = (POLLWRBAND | POLLWRNORM | POLLOUT | POLLERR),
-			POLLEX_SET  = (POLLPRI)
-		};
+	enum {
+		POLLIN_SET  = (POLLRDNORM | POLLRDBAND | POLLIN | POLLHUP | POLLERR),
+		POLLOUT_SET = (POLLWRBAND | POLLWRNORM | POLLOUT | POLLERR),
+		POLLEX_SET  = (POLLPRI)
+	};
 }
 
 
@@ -232,8 +233,7 @@ struct Vfs::File : Vfs::Node
 	/**
 	 * Check for data to read or write
 	 */
-	virtual bool poll(bool trigger_io_response = false,
-	                  Vfs::Vfs_handle::Context *context = nullptr) { return false; }
+	virtual bool poll(bool trigger_io_response, Vfs::Vfs_handle::Context *context) = 0;
 };
 
 
@@ -348,22 +348,10 @@ class Vfs::Lxip_data_file : public Vfs::Lxip_file
 		{
 			using namespace Linux;
 
-			msghdr msg;
-			iovec  iov;
+			iovec iov { const_cast<char *>(src), len };
 
-			msg.msg_name            = &_parent.remote_addr();
-			msg.msg_namelen         = sizeof(sockaddr_in);
-			msg.msg_iter.iov_offset = 0;
-			msg.msg_iter.count      = len;
-			msg.msg_iter.iov        = &iov;
-			msg.msg_iter.nr_segs    = 1;
-			msg.msg_control         = nullptr;
-			msg.msg_controllen      = 0;
-			msg.msg_flags           = 0;
-			msg.msg_iocb            = nullptr;
-
-			iov.iov_base = const_cast<char *>(src);
-			iov.iov_len  = len;
+			msghdr msg = create_msghdr(&_parent.remote_addr(),
+			                           sizeof(sockaddr_in), len, &iov);
 
 			return _sock.ops->sendmsg(&_sock, &msg, len);
 		}
@@ -373,25 +361,14 @@ class Vfs::Lxip_data_file : public Vfs::Lxip_file
 		{
 			using namespace Linux;
 
-			msghdr msg;
-			iovec  iov;
+			iovec iov { dst, len };
 
-			msg.msg_name            = nullptr;
-			msg.msg_namelen         = 0;
-			msg.msg_iter.iov_offset = 0;
-			msg.msg_iter.count      = len;
-			msg.msg_iter.iov        = &iov;
-			msg.msg_iter.nr_segs    = 1;
-			msg.msg_control         = nullptr;
-			msg.msg_controllen      = 0;
-			msg.msg_flags           = 0;
-			msg.msg_iocb            = nullptr;
+			msghdr msg = create_msghdr(nullptr, 0, len, &iov);
 
-			iov.iov_base = dst;
-			iov.iov_len  = len;
-
-			/* FIXME this read does not block */
-			return _sock.ops->recvmsg(&_sock, &msg, len, MSG_DONTWAIT);
+			Lxip::ssize_t ret = _sock.ops->recvmsg(&_sock, &msg, len, MSG_DONTWAIT);
+			if (ret == -EAGAIN)
+				throw Would_block();
+			return ret;
 		}
 };
 
@@ -412,6 +389,8 @@ class Vfs::Lxip_bind_file : public Vfs::Lxip_file
 		/********************
 		 ** File interface **
 		 ********************/
+
+		bool poll(bool, Vfs::Vfs_handle::Context *) { return true; }
 
 		Lxip::ssize_t write(char const *src, Genode::size_t len,
 		                    file_size /* ignored */) override
@@ -476,6 +455,8 @@ class Vfs::Lxip_listen_file : public Vfs::Lxip_file
 		 ** File interface **
 		 ********************/
 
+		bool poll(bool, Vfs::Vfs_handle::Context *) { return true; }
+
 		Lxip::ssize_t write(char const *src, Genode::size_t len,
 		                    file_size /* ignored */) override
 		{
@@ -528,6 +509,8 @@ class Vfs::Lxip_connect_file : public Vfs::Lxip_file
 		/********************
 		 ** File interface **
 		 ********************/
+
+		bool poll(bool, Vfs::Vfs_handle::Context *) { return true; }
 
 		Lxip::ssize_t write(char const *src, Genode::size_t len,
 		                    file_size /* ignored */) override
@@ -599,27 +582,7 @@ class Vfs::Lxip_local_file : public Vfs::Lxip_file
 		 ** File interface **
 		 ********************/
 
-		bool poll(bool trigger_io_response,
-		          Vfs::Vfs_handle::Context *context) override
-		{
-			using namespace Linux;
-
-			file f;
-			f.f_flags = 0;
-
-			switch (_parent.parent().type()) {
-			case Lxip::Protocol_dir::TYPE_DGRAM:
-				if (_sock.ops->poll(&f, &_sock, nullptr) & (POLLIN_SET)) {
-					if (trigger_io_response)
-						_parent.trigger_io_response(context);
-					return true;
-				}
-			case Lxip::Protocol_dir::TYPE_STREAM:
-				return true;
-			}
-
-			return false;
-		}
+		bool poll(bool, Vfs::Vfs_handle::Context *) { return true; }
 
 		Lxip::ssize_t read(char *dst, Genode::size_t len,
 		                   file_size /* ignored */) override
@@ -672,7 +635,11 @@ class Vfs::Lxip_remote_file : public Vfs::Lxip_file
 						_parent.trigger_io_response(context);
 					return true;
 				}
+				return false;
+
 			case Lxip::Protocol_dir::TYPE_STREAM:
+				if (trigger_io_response)
+					_parent.trigger_io_response(context);
 				return true;
 			}
 
@@ -691,25 +658,16 @@ class Vfs::Lxip_remote_file : public Vfs::Lxip_file
 			case Lxip::Protocol_dir::TYPE_DGRAM:
 				{
 					/* peek the sender address of the next packet */
-					msghdr msg;
-					iovec  iov;
-
-					msg.msg_name            = addr;
-					msg.msg_namelen         = sizeof(addr_storage);
-					msg.msg_iter.type       = 0;
-					msg.msg_iter.iov_offset = 0;
-					msg.msg_iter.iov        = &iov;
-					msg.msg_iter.nr_segs    = 1;
-					msg.msg_control         = nullptr;
-					msg.msg_controllen      = 0;
-					msg.msg_iocb            = nullptr;
 
 					/* buffer not used */
-					iov.iov_base = _content_buffer;
-					iov.iov_len  = sizeof(_content_buffer);
+					iovec iov { _content_buffer, sizeof(_content_buffer) };
+
+					msghdr msg = create_msghdr(addr, sizeof(addr_storage),
+					                           sizeof(_content_buffer), &iov);
 
 					int const res = _sock.ops->recvmsg(&_sock, &msg, 0, MSG_DONTWAIT|MSG_PEEK);
-					if (res < 0) return -1;
+					if (res == -EAGAIN) throw Would_block();
+					if (res < 0)        return -1;
 				}
 				break;
 			case Lxip::Protocol_dir::TYPE_STREAM:
@@ -786,18 +744,19 @@ class Vfs::Lxip_accept_file : public Vfs::Lxip_file
 		{
 			using namespace Linux;
 
-			/* FIXME this read does not block */
-			if (!poll(false, nullptr))
-				return -1;
+			if (!poll(false, nullptr)) {
+				throw Would_block();
+			}
 
 			socket *new_sock = sock_alloc();
 
 			if (int res = _sock.ops->accept(&_sock, new_sock, O_NONBLOCK)) {
 				kfree(new_sock);
-				if (res == -EAGAIN)
+				if (res == -EAGAIN) {
 					throw Would_block();
-				else
+				} else {
 					return -1;
+				}
 			}
 			set_sock_wait(new_sock, 0);
 
@@ -1011,6 +970,12 @@ class Vfs::Lxip_new_socket_file : public Vfs::File
 			}
 			set_sock_wait(sock, 0);
 
+			/* XXX always allow UDP broadcast */
+			if (type == SOCK_DGRAM) {
+				int enable = 1;
+				sock_setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char *)&enable, sizeof(enable));
+			}
+
 			try {
 				unsigned const id = _parent.adopt_socket(*sock, false);
 				return Genode::snprintf(dst, len, "%s/%u\n", _parent.top_dir(), id);
@@ -1217,6 +1182,8 @@ class Vfs::Lxip_address_file : public Vfs::File
 		Lxip_address_file(char const *name, unsigned int &numeric_address)
 		: Vfs::File(name), _numeric_address(numeric_address) { }
 
+		bool poll(bool, Vfs::Vfs_handle::Context *) { return true; }
+
 		Lxip::ssize_t read(char *dst, Genode::size_t len,
 		                   file_size /* ignored */) override
 		{
@@ -1300,6 +1267,25 @@ class Vfs::Lxip_file_system : public Vfs::File_system,
 		bool _is_root(const char *path)
 		{
 			return (strcmp(path, "") == 0) || (strcmp(path, "/") == 0);
+		}
+
+		Read_result _read(Vfs::Vfs_handle *vfs_handle, char *dst,
+		                  Vfs::file_size count,
+		                  Vfs::file_size &out_count)
+		{
+			Vfs::File &file =
+				static_cast<Vfs::Lxip_vfs_handle *>(vfs_handle)->file;
+
+			if (!count)
+				Genode::error("zero read of ", file.name());
+
+			if (count) {
+				Lxip::ssize_t res = file.read(dst, count, vfs_handle->seek());
+				if (res < 0) return READ_ERR_IO;
+
+				out_count = res;
+			}
+			return READ_OK;
 		}
 
 	public:
@@ -1564,23 +1550,25 @@ class Vfs::Lxip_file_system : public Vfs::File_system,
 		                 Vfs::file_size count,
 		                 Vfs::file_size &out_count) override
 		{
-			Vfs::File &file =
-				static_cast<Vfs::Lxip_vfs_handle *>(vfs_handle)->file;
-
-			if (!count)
-				Genode::error("zero read of ",file.name());
-
-			if (count) try {
-				Lxip::ssize_t res = file.read(dst, count, vfs_handle->seek());
-				if (res < 0) return READ_ERR_IO;
-
-				out_count = res;
-
-			} catch (File::Would_block) { return READ_ERR_WOULD_BLOCK; }
-			return READ_OK;
+			try { return _read(vfs_handle, dst, count, out_count); }
+			catch (File::Would_block) { return READ_ERR_WOULD_BLOCK; }
 		}
 
-		/* XXX check if queue_read / complete_read semantics fit better */
+		bool queue_read(Vfs_handle *vfs_handle, char *dst, file_size count,
+		                        Read_result &out_result, file_size &out_count)
+		{
+			try { out_result = _read(vfs_handle, dst, count, out_count); }
+			catch (File::Would_block) { out_result = READ_QUEUED; }
+			return true;
+		}
+
+		Read_result complete_read(Vfs_handle *vfs_handle,
+		                                  char *dst, file_size count,
+		                                  file_size &out_count)
+		{
+			try { return _read(vfs_handle, dst, count, out_count); }
+			catch (File::Would_block) { return READ_QUEUED; }
+		}
 
 		Ftruncate_result ftruncate(Vfs_handle *vfs_handle, file_size) override
 		{
@@ -1606,8 +1594,7 @@ class Vfs::Lxip_file_system : public Vfs::File_system,
 			Lxip_vfs_handle *handle =
 				static_cast<Vfs::Lxip_vfs_handle *>(vfs_handle);
 
-			/* TODO when to _polling_handles.remove(handle); ? */
-			return handle->file.poll();
+			return handle->file.poll(false, nullptr);
 		}
 };
 

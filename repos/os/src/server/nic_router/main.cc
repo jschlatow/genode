@@ -14,8 +14,7 @@
 /* Genode */
 #include <base/component.h>
 #include <base/heap.h>
-#include <os/config.h>
-#include <os/timer.h>
+#include <base/attached_rom_dataspace.h>
 #include <nic/xml_node.h>
 #include <timer_session/connection.h>
 
@@ -32,12 +31,12 @@ class Main
 {
 	private:
 
-		Timer::Connection _timer_connection;
-		Genode::Timer     _timer;
-		Genode::Heap      _heap;
-		Configuration     _config;
-		Uplink            _uplink;
-		Net::Root         _root;
+		Timer::Connection              _timer;
+		Genode::Heap                   _heap;
+		Genode::Attached_rom_dataspace _config_rom;
+		Configuration                  _config;
+		Uplink                         _uplink;
+		Net::Root                      _root;
 
 	public:
 
@@ -47,14 +46,19 @@ class Main
 
 Main::Main(Env &env)
 :
-	_timer_connection(env), _timer(_timer_connection, env.ep()),
-	_heap(&env.ram(), &env.rm()), _config(config()->xml_node(), _heap),
-	_uplink(env, _timer, _heap, _config),
-	_root(env.ep(), _timer, _heap, _uplink.router_mac(), _config, env.ram(),
-	      env.rm())
+	_timer(env), _heap(&env.ram(), &env.rm()), _config_rom(env, "config"),
+	_config(_config_rom.xml(), _heap), _uplink(env, _timer, _heap, _config),
+	_root(env.ep(), _timer, _heap, _uplink.router_mac(), _config,
+	      env.ram(), env.rm())
 {
 	env.parent().announce(env.ep().manage(_root));
 }
 
 
-void Component::construct(Env &env) { static Main main(env); }
+void Component::construct(Env &env)
+{
+	/* XXX execute constructors of global statics */
+	env.exec_static_constructors();
+
+	static Main main(env);
+}

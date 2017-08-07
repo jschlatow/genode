@@ -66,7 +66,18 @@ struct Nic::Session : Genode::Session
 	typedef Packet_stream_tx::Channel<Policy> Tx;
 	typedef Packet_stream_rx::Channel<Policy> Rx;
 
+	/**
+	 * \noapi
+	 */
 	static const char *service_name() { return "Nic"; }
+
+	/*
+	 * A NIC session consumes a dataspace capability for the server-side
+	 * session object, a session capability, two packet-stream dataspaces for
+	 * rx and tx, and four signal context capabilities for the data-flow
+	 * signals.
+	 */
+	enum { CAP_QUOTA = 8 };
 
 	virtual ~Session() { }
 

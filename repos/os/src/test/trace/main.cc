@@ -112,23 +112,24 @@ struct Test_out_of_metadata
 
 	struct Test_thread : Genode::Thread
 	{
-		Test_thread(Genode::Env          &env,
-		            Genode::Thread::Name  name)
-		: Thread(env, name, 4096) { start(); }
+		Test_thread(Genode::Env &env, const char * name)
+		: Thread(env, Thread::Name(name), 4096) { start(); }
 
-		void entry() { Genode::sleep_forever(); }
+		~Test_thread() { join(); }
+
+		void entry() { }
 	};
 
 	Test_out_of_metadata(Env &env) : env(env)
 	{
-		log("test Out_of_metadata exception of Trace::Session::subjects call");
+		log("test Out_of_ram exception of Trace::Session::subjects call");
 
 		/*
 		 * The call of 'subjects' will prompt core's TRACE service to import those
 		 * threads as trace subjects into the TRACE session. This step should fail
 		 * because we dimensioned the TRACE session with a very low amount of
 		 * session quota. The allocation failure is propagated to the TRACE client
-		 * by the 'Out_of_metadata' exception. The test validates this
+		 * by the 'Out_of_ram' exception. The test validates this
 		 * error-handling procedure.
 		 */
 
@@ -142,24 +143,21 @@ struct Test_out_of_metadata
 			/* we should never arrive here */
 			struct Unexpectedly_got_no_exception{};
 			throw  Unexpectedly_got_no_exception();
-
-		} catch (Parent::Service_denied) {
-			log("got Parent::Service_denied exception as expected"); }
+		}
+		catch (Service_denied) {
+			log("got Service_denied exception as expected"); }
 
 		try {
 			/*
 			 * Create multiple threads because on some platforms there
-			 * are not enough available subjects to trigger the Out_of_metadata
+			 * are not enough available subjects to trigger the Out_of_ram
 			 * exception.
 			 */
-			Test_thread::Name thread_name1 { "test-thread1" };
-			Test_thread       thread1      { env, thread_name1 };
-			Test_thread::Name thread_name2 { "test-thread2" };
-			Test_thread       thread2      { env, thread_name2 };
-			Test_thread::Name thread_name3 { "test-thread3" };
-			Test_thread       thread3      { env, thread_name3 };
-			Test_thread::Name thread_name4 { "test-thread4" };
-			Test_thread       thread4      { env, thread_name4 };
+			Test_thread thread1 { env, "test-thread1" };
+			Test_thread thread2 { env, "test-thread2" };
+			Test_thread thread3 { env, "test-thread3" };
+			Test_thread thread4 { env, "test-thread4" };
+			Test_thread thread5 { env, "test-thread5" };
 
 			Trace::Connection trace(env, sizeof(subject_ids) + 5*4096,
 			                        sizeof(subject_ids), 0);
@@ -169,10 +167,10 @@ struct Test_out_of_metadata
 			struct Unexpectedly_got_no_exception{};
 			throw  Unexpectedly_got_no_exception();
 
-		} catch (Trace::Out_of_metadata) {
-			log("got Trace::Out_of_metadata exception as expected"); }
+		} catch (Out_of_ram) {
+			log("got Trace::Out_of_ram exception as expected"); }
 
-		log("passed Out_of_metadata test");
+		log("passed Out_of_ram test");
 	}
 };
 
@@ -323,8 +321,8 @@ struct Main
 
 	Main(Env &env)
 	{
-		test_1.construct(env);
-		test_1.destruct();
+//		test_1.construct(env);
+//		test_1.destruct();
 		test_2.construct(env);
 		test_2.destruct();
 

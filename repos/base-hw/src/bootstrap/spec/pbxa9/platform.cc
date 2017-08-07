@@ -14,22 +14,24 @@
 /* bootstrap includes */
 #include <platform.h>
 
-Platform::Board::Board()
+using namespace Board;
+
+Bootstrap::Platform::Board::Board()
 : early_ram_regions(Memory_region { RAM_0_BASE, RAM_0_SIZE },
                     Memory_region { RAM_1_BASE, RAM_1_SIZE }),
-  core_mmio(Memory_region { Board::CORTEX_A9_PRIVATE_MEM_BASE,
-                            Board::CORTEX_A9_PRIVATE_MEM_SIZE },
-            Memory_region { Board::PL011_0_MMIO_BASE,
-                            Board::PL011_0_MMIO_SIZE },
-            Memory_region { Board::PL310_MMIO_BASE,
-                            Board::PL310_MMIO_SIZE }) { }
+  core_mmio(Memory_region { CORTEX_A9_PRIVATE_MEM_BASE,
+                            CORTEX_A9_PRIVATE_MEM_SIZE },
+            Memory_region { PL011_0_MMIO_BASE,
+                            PL011_0_MMIO_SIZE },
+            Memory_region { PL310_MMIO_BASE,
+                            PL310_MMIO_SIZE }) { }
 
 
-bool Cortex_a9::Board::errata(Cortex_a9::Board::Errata err) {
+bool Bootstrap::Cpu::errata(Bootstrap::Cpu::Errata err) {
 	return false; }
 
 
-void Cortex_a9::Board::wake_up_all_cpus(void * const ip)
+void Bootstrap::Cpu::wake_up_all_cpus(void * const ip)
 {
 	/**
 	 * set the entrypoint for the other CPUs via the flags register
@@ -42,8 +44,7 @@ void Cortex_a9::Board::wake_up_all_cpus(void * const ip)
 		struct Flagsset : Register<0x30, 32> { };
 		struct Flagsclr : Register<0x34, 32> { };
 
-		System_control(void * const ip)
-			: Mmio(SYSTEM_CONTROL_MMIO_BASE)
+		System_control(void * const ip) : Mmio(SYSTEM_CONTROL_MMIO_BASE)
 		{
 			write<Flagsclr>(~0UL);
 			write<Flagsset>(reinterpret_cast<Flagsset::access_t>(ip));

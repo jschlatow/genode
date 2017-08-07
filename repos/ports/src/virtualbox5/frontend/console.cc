@@ -95,7 +95,6 @@ void Console::i_onAdditionsStateChange()
 void GenodeConsole::update_video_mode()
 {
 	Display  *d    = i_getDisplay();
-	Guest    *g    = i_getGuest();
 
 	IFramebuffer *pFramebuffer = NULL;
 	HRESULT rc = d->QueryFramebuffer(0, &pFramebuffer);
@@ -103,25 +102,22 @@ void GenodeConsole::update_video_mode()
 
 	Genodefb *fb = dynamic_cast<Genodefb *>(pFramebuffer);
 
-	LONG64 ignored = 0;
+	if (!fb)
+		return;
 
-	if (fb && (fb->w() == 0) && (fb->h() == 0)) {
+	if ((fb->w() == 0) && (fb->h() == 0)) {
 		/* interpret a size of 0x0 as indication to quit VirtualBox */
 		if (PowerButton() != S_OK)
 			Genode::error("ACPI shutdown failed");
 		return;
 	}
 
-	AdditionsFacilityType_T is_graphics;
-	g->GetFacilityStatus(AdditionsFacilityType_Graphics, &ignored, &is_graphics);
-
-	if (fb && is_graphics)
-		d->SetVideoModeHint(0 /*=display*/,
-		                    true /*=enabled*/, false /*=changeOrigin*/,
-		                    0 /*=originX*/, 0 /*=originY*/,
-		                    fb->w(), fb->h(),
-		                    /* Windows 8 only accepts 32-bpp modes */
-		                    32);
+	d->SetVideoModeHint(0 /*=display*/,
+	                    true /*=enabled*/, false /*=changeOrigin*/,
+	                    0 /*=originX*/, 0 /*=originY*/,
+	                    fb->w(), fb->h(),
+	                    /* Windows 8 only accepts 32-bpp modes */
+	                    32);
 }
 
 void GenodeConsole::handle_input()
@@ -131,11 +127,17 @@ void GenodeConsole::handle_input()
 
 	/* read out input capabilities of guest */
 	bool guest_abs = false, guest_rel = false, guest_multi = false;
-	_vbox_mouse->COMGETTER(AbsoluteSupported)(&guest_abs);
-	_vbox_mouse->COMGETTER(RelativeSupported)(&guest_rel);
-	_vbox_mouse->COMGETTER(MultiTouchSupported)(&guest_multi);
+	if (_vbox_mouse) {
+		_vbox_mouse->COMGETTER(AbsoluteSupported)(&guest_abs);
+		_vbox_mouse->COMGETTER(RelativeSupported)(&guest_rel);
+		_vbox_mouse->COMGETTER(MultiTouchSupported)(&guest_multi);
+	}
 
 	_input.for_each_event([&] (Input::Event const &ev) {
+		/* if keyboard/mouse not available, consume input events and drop it */
+		if (!_vbox_keyboard || !_vbox_mouse)
+			return;
+
 		bool const press   = ev.type() == Input::Event::PRESS;
 		bool const release = ev.type() == Input::Event::RELEASE;
 		bool const key     = press || release;
@@ -332,8 +334,9 @@ void GenodeConsole::init_backends(IKeyboard * gKeyboard, IMouse * gMouse)
 	Assert(SUCCEEDED(rc) && pFramebuffer);
 
 	Genodefb *fb = dynamic_cast<Genodefb *>(pFramebuffer);
-
 	fb->mode_sigh(_mode_change_signal_dispatcher);
+
+	handle_mode_change();
 }
 
 void GenodeConsole::i_onMouseCapabilityChange(BOOL supportsAbsolute,

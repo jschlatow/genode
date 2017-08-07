@@ -13,7 +13,6 @@
  */
 
 /* core includes */
-#include <assert.h>
 #include <platform_thread.h>
 #include <platform_pd.h>
 #include <core_env.h>
@@ -70,7 +69,7 @@ Platform_thread::Platform_thread(const char * const label,
 	void *utcb_phys;
 	if (!platform()->ram_alloc()->alloc(sizeof(Native_utcb), &utcb_phys)) {
 		error("failed to allocate UTCB");
-		throw Cpu_session::Out_of_metadata();
+		throw Out_of_ram();
 	}
 	map_local((addr_t)utcb_phys, (addr_t)_utcb_core_addr,
 	          sizeof(Native_utcb) / get_page_size());
@@ -95,7 +94,7 @@ Platform_thread::Platform_thread(size_t const quota,
 		                                         CACHED);
 	} catch (...) {
 		error("failed to allocate UTCB");
-		throw Cpu_session::Out_of_metadata();
+		throw Out_of_ram();
 	}
 	_utcb_core_addr = (Native_utcb *)core_env()->rm_session()->attach(_utcb);
 	affinity(location);
@@ -145,7 +144,7 @@ int Platform_thread::start(void * const ip, void * const sp)
 			_utcb_pd_addr           = utcb_main_thread();
 			Hw::Address_space * as = static_cast<Hw::Address_space*>(&*locked_ptr);
 			if (!as->insert_translation((addr_t)_utcb_pd_addr, dsc->phys_addr(),
-			                            sizeof(Native_utcb), PAGE_FLAGS_UTCB)) {
+			                            sizeof(Native_utcb), Hw::PAGE_FLAGS_UTCB)) {
 				error("failed to attach UTCB");
 				return -1;
 			}
@@ -176,7 +175,7 @@ int Platform_thread::start(void * const ip, void * const sp)
 		utcb->cap_add(Capability_space::capid(_pd->parent()));
 		utcb->cap_add(Capability_space::capid(_utcb));
 	}
-	Kernel::start_thread(kernel_object(), cpu, _pd->kernel_pd(),
+	Kernel::start_thread(kernel_object(), cpu, &_pd->kernel_pd(),
 	                     _utcb_core_addr);
 	return 0;
 }
@@ -186,11 +185,8 @@ void Platform_thread::pager(Pager_object * const pager)
 {
 	using namespace Kernel;
 
-	if (route_thread_event(kernel_object(), Thread_event_id::FAULT,
-	                       pager ? Capability_space::capid(pager->cap())
-	                             : cap_id_invalid()))
-		error("failed to set pager object for thread ", label());
-
+	thread_pager(kernel_object(), pager ? Capability_space::capid(pager->cap())
+	                                    : cap_id_invalid());
 	_pager = pager;
 }
 
@@ -209,4 +205,10 @@ void Platform_thread::state(Thread_state thread_state)
 {
 	Cpu_state * cstate = static_cast<Cpu_state *>(kernel_object());
 	*cstate = static_cast<Cpu_state>(thread_state);
+}
+
+
+void Platform_thread::restart()
+{
+	Kernel::restart_thread(Capability_space::capid(_cap));
 }

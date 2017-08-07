@@ -4,15 +4,12 @@
 # \date   2013-04-18
 #
 
-# setting environment variable FORCE_QEMU permits running netperf in qemu
-set force_qemu [info exists ::env(FORCE_QEMU)]
-
 proc gpio_drv { } { if {[have_spec rpi] && [have_spec hw]}  { return hw_gpio_drv }
                     if {[have_spec rpi] && [have_spec foc]} { return foc_gpio_drv }
                     return gpio_drv }
 
-if {[expr [have_include "power_on/qemu"] && !$force_qemu]} {
-	puts "\nNetperf running on Qemu is not recommended.\n"
+if {[get_cmd_switch --autopilot] && [have_include "power_on/qemu"]} {
+	puts "\nRunning netperf in autopilot on Qemu is not recommended.\n"
 	exit
 }
 
@@ -108,7 +105,6 @@ set config {
 <config verbose="yes">
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -120,6 +116,7 @@ set config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 
 	<start name="timer">
 		<resource name="RAM" quantum="1M"/>
@@ -127,7 +124,7 @@ set config {
 	</start> }
 
 append_if [have_spec gpio] config "
-	<start name=\"[gpio_drv]\">
+	<start name=\"[gpio_drv]\" caps=\"120\">
 		<resource name=\"RAM\" quantum=\"4M\"/>
 		<provides><service name=\"Gpio\"/></provides>
 		<config/>
@@ -152,9 +149,14 @@ append_if $use_nic_bridge config {
 		</route>
 	</start> }
 
+proc usb_drv_ram_quota {} {
+	if {[have_spec x86]} { return 18M }
+	return 14M
+}
+
 append_if $use_usb_driver config {
 	<start name="usb_drv">
-		<resource name="RAM" quantum="12M"/>
+		<resource name="RAM" quantum="} [usb_drv_ram_quota] {"/>
 		<provides>
 			<service name="Nic"/>
 		</provides>}
@@ -166,8 +168,9 @@ append_if $use_usb_driver config {
 	</start>}
 
 append_if $use_nic_driver config {
-	<start name="nic_drv">
-		<resource name="RAM" quantum="4M"/>
+	<start name="nic_drv" caps="120">
+		<binary name="} [nic_drv_binary] {"/>
+		<resource name="RAM" quantum="8M"/>
 		<provides><service name="Nic"/></provides>
 	</start>}
 
@@ -203,7 +206,7 @@ append_if $use_wifi_driver config {
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
-	<start name="wifi_drv">
+	<start name="wifi_drv" caps="200">
 		<resource name="RAM" quantum="32M"/>
 		<provides> <service name="Nic"/> </provides>
 		<config>
@@ -229,7 +232,7 @@ append_if $use_wifi_driver config {
 append_platform_drv_config
 
 append config {
-	<start name="netserver_genode">
+	<start name="netserver_genode" caps="200">
 }
 append config "<binary name=\"$netperf_app\"/>"
 append config {
@@ -264,7 +267,7 @@ install_config $config
 # generic modules
 set boot_modules {
 	core init timer
-	ld.lib.so libc.lib.so libm.lib.so
+	ld.lib.so libc.lib.so libm.lib.so posix.lib.so
 }
 
 append                     boot_modules " $netperf_app "
@@ -274,7 +277,7 @@ lappend_if $use_nic_bridge boot_modules nic_bridge
 # platform-specific modules
 lappend_if [have_spec gpio]          boot_modules [gpio_drv]
 lappend_if $use_usb_driver           boot_modules usb_drv
-lappend_if $use_nic_driver           boot_modules nic_drv
+lappend_if $use_nic_driver           boot_modules [nic_drv_binary]
 
 append_if $use_wifi_driver boot_modules {
 	ram_fs fs_rom report_rom
@@ -301,7 +304,7 @@ build_boot_image $boot_modules
 #
 
 # qemu config
-append qemu_args " -m 128 "
+append qemu_args "  -nographic "
 
 append_if [have_spec x86]     qemu_args " -net nic,model=e1000 "
 append_if [have_spec lan9118] qemu_args " -net nic,model=lan9118 "
@@ -334,7 +337,7 @@ sleep 3
 foreach netperf_test $netperf_tests {
 	puts "\n---------------------------- $netperf_test -----------------------"
 
-	spawn netperf-$version -H $ip_addr -P 1 -v 2 -t $netperf_test -c -C -- -m $packet_size $force_ports
+	spawn netperf-$version -H $ip_addr -P 1 -v 2 -t $netperf_test -c -C -- $packet_size $force_ports
 	set netperf_id $spawn_id
 
 	set spawn_id_list [list $netperf_id $serial_id]

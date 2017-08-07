@@ -152,6 +152,7 @@ struct Transform::Main {
 		_dispatch_acpi_ec(env.ep(), *this, &Main::check_acpi_ec),
 		_dispatch_acpi_fixed(env.ep(), *this, &Main::check_acpi_fixed),
 		_dispatch_acpi_lid(env.ep(), *this, &Main::check_acpi_lid),
+		_session(env, env.ram()),
 		_root(env.ep().rpc_ep(), _session)
 	{
 		Xml_node config(_config.local_addr<char>(), _config.size());
@@ -403,4 +404,10 @@ struct Transform::Main {
 };
 
 
-void Component::construct(Genode::Env &env) { static Transform::Main main(env); }
+void Component::construct(Genode::Env &env)
+{
+	/* XXX execute constructors of global statics */
+	env.exec_static_constructors();
+
+	static Transform::Main main(env);
+}

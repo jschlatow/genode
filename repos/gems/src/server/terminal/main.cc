@@ -24,7 +24,6 @@
 #include <input/event.h>
 #include <util/color.h>
 #include <os/pixel_rgb565.h>
-#include <os/timer.h>
 
 /* terminal includes */
 #include <terminal/decoder.h>
@@ -285,9 +284,7 @@ namespace Terminal {
 
 			Flush_callback_registry       &_flush_callback_registry;
 			Trigger_flush_callback        &_trigger_flush_callback;
-
 			Genode::Attached_ram_dataspace _io_buffer;
-
 			Framebuffer::Mode              _fb_mode;
 			Genode::Dataspace_capability   _fb_ds_cap;
 			unsigned                       _char_width;
@@ -490,15 +487,14 @@ namespace Terminal {
 				 */
 				Genode::size_t io_buffer_size = 4096;
 
-				Session_component *session =
-					new (md_alloc()) Session_component(_env, *md_alloc(),
-					                                   _read_buffer,
-					                                   _framebuffer,
-					                                   io_buffer_size,
-					                                   _flush_callback_registry,
-					                                   _trigger_flush_callback,
-					                                   _font_family);
-				return session;
+				return new (md_alloc())
+					Session_component(_env, *md_alloc(),
+					                  _read_buffer,
+					                  _framebuffer,
+					                  io_buffer_size,
+					                  _flush_callback_registry,
+					                  _trigger_flush_callback,
+					                  _font_family);
 			}
 
 		public:
@@ -531,10 +527,9 @@ struct Terminal::Main
 
 	Framebuffer::Connection _framebuffer { _env, Framebuffer::Mode() };
 	Input::Connection       _input { _env };
-	Timer::Connection       _timer_conection { _env };
-	Genode::Timer           _timer { _timer_conection, _env.ep() };
+	Timer::Connection       _timer { _env };
 
-	Sliced_heap _sliced_heap { _env.ram(), _env.rm() };
+	Heap _heap { _env.ram(), _env.rm() };
 
 	/* input read buffer */
 	Read_buffer _read_buffer;
@@ -556,12 +551,12 @@ struct Terminal::Main
 	Signal_handler<Main> _input_handler {
 		_env.ep(), *this, &Main::_handle_input };
 
-	void _handle_key_repeat(Time_source::Microseconds);
+	void _handle_key_repeat(Duration);
 
-	One_shot_timeout<Main> _key_repeat_timeout {
+	Timer::One_shot_timeout<Main> _key_repeat_timeout {
 		_timer, *this, &Main::_handle_key_repeat };
 
-	void _handle_flush(Time_source::Microseconds);
+	void _handle_flush(Duration);
 
 	/*
 	 * Time in milliseconds between a change of the terminal content and the
@@ -575,7 +570,7 @@ struct Terminal::Main
 	void _trigger_flush()
 	{
 		if (!_flush_scheduled) {
-			_flush_timeout.start(Time_source::Microseconds{1000*_flush_delay});
+			_flush_timeout.schedule(Microseconds{1000*_flush_delay});
 			_flush_scheduled = true;
 		}
 	}
@@ -590,7 +585,7 @@ struct Terminal::Main
 		Trigger_flush(Main &main) : _main(main) { }
 	} _trigger_flush_callback { *this };
 
-	One_shot_timeout<Main> _flush_timeout {
+	Timer::One_shot_timeout<Main> _flush_timeout {
 		_timer, *this, &Main::_handle_flush };
 
 	Main(Genode::Env &env,
@@ -601,7 +596,7 @@ struct Terminal::Main
 	     unsigned char const *control)
 	:
 		_env(env),
-		_root(_env, _sliced_heap,
+		_root(_env, _heap,
 		      _read_buffer, _framebuffer,
 		      _flush_callback_registry,
 		      _trigger_flush_callback,
@@ -657,11 +652,11 @@ void Terminal::Main::_handle_input()
 	});
 
 	if (_repeat_next)
-		_key_repeat_timeout.start(Time_source::Microseconds{1000*_repeat_next});
+		_key_repeat_timeout.schedule(Microseconds{1000*_repeat_next});
 }
 
 
-void Terminal::Main::_handle_key_repeat(Time_source::Microseconds)
+void Terminal::Main::_handle_key_repeat(Duration)
 {
 	if (_repeat_next) {
 
@@ -675,7 +670,7 @@ void Terminal::Main::_handle_key_repeat(Time_source::Microseconds)
 }
 
 
-void Terminal::Main::_handle_flush(Time_source::Microseconds)
+void Terminal::Main::_handle_flush(Duration)
 {
 	_flush_scheduled = false;
 	_flush_callback_registry.flush();
@@ -690,6 +685,9 @@ extern char _binary_terminus_16_tff_start;
 
 void Component::construct(Genode::Env &env)
 {
+	/* XXX execute constructors of global statics */
+	env.exec_static_constructors();
+
 	using namespace Genode;
 
 	Attached_rom_dataspace config(env, "config");

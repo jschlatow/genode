@@ -24,12 +24,18 @@ namespace Genode { namespace Trace { struct Session; } }
 
 struct Genode::Trace::Session : Genode::Session
 {
+	/**
+	 * \noapi
+	 */
 	static const char *service_name() { return "TRACE"; }
+
+	enum { CAP_QUOTA = 4 };
 
 	/**
 	 * Allocate policy-module backing store
 	 *
-	 * \throw Out_of_metadata
+	 * \throw Out_of_ram
+	 * \throw Out_of_caps
 	 */
 	virtual Policy_id alloc_policy(size_t size) = 0;
 
@@ -48,7 +54,8 @@ struct Genode::Trace::Session : Genode::Session
 	/**
 	 * Start tracing of a subject
 	 *
-	 * \throw Out_of_metadata
+	 * \throw Out_of_ram
+	 * \throw Out_of_caps
 	 * \throw Already_traced
 	 * \throw Source_is_dead
 	 * \throw Nonexistent_policy
@@ -110,7 +117,7 @@ struct Genode::Trace::Session : Genode::Session
 
 	GENODE_RPC(Rpc_dataspace, Dataspace_capability, dataspace);
 	GENODE_RPC_THROW(Rpc_alloc_policy, Policy_id, alloc_policy,
-	                 GENODE_TYPE_LIST(Out_of_metadata),
+	                 GENODE_TYPE_LIST(Out_of_ram, Out_of_caps),
 	                 size_t);
 	GENODE_RPC_THROW(Rpc_policy, Dataspace_capability, policy,
 	                 GENODE_TYPE_LIST(Nonexistent_policy),
@@ -118,12 +125,12 @@ struct Genode::Trace::Session : Genode::Session
 	GENODE_RPC_THROW(Rpc_unload_policy, void, unload_policy,
 	                 GENODE_TYPE_LIST(Nonexistent_policy), Policy_id);
 	GENODE_RPC_THROW(Rpc_trace, void, trace,
-	                 GENODE_TYPE_LIST(Out_of_metadata, Already_traced,
+	                 GENODE_TYPE_LIST(Out_of_ram, Out_of_caps, Already_traced,
 	                                  Source_is_dead, Nonexistent_policy,
 	                                  Traced_by_other_session),
 	                 Subject_id, Policy_id, size_t);
 	GENODE_RPC_THROW(Rpc_rule, void, rule,
-	                 GENODE_TYPE_LIST(Out_of_metadata),
+	                 GENODE_TYPE_LIST(Out_of_ram, Out_of_caps),
 	                 Session_label const &, Thread_name const &,
 	                 Policy_id, size_t);
 	GENODE_RPC_THROW(Rpc_pause, void, pause,
@@ -132,7 +139,7 @@ struct Genode::Trace::Session : Genode::Session
 	                 GENODE_TYPE_LIST(Nonexistent_subject, Source_is_dead),
 	                 Subject_id);
 	GENODE_RPC_THROW(Rpc_subjects, size_t, subjects,
-	                 GENODE_TYPE_LIST(Out_of_metadata));
+	                 GENODE_TYPE_LIST(Out_of_ram, Out_of_caps));
 	GENODE_RPC_THROW(Rpc_subject_info, Subject_info, subject_info,
 	                 GENODE_TYPE_LIST(Nonexistent_subject), Subject_id);
 	GENODE_RPC_THROW(Rpc_buffer, Dataspace_capability, buffer,

@@ -44,19 +44,20 @@ are all set to their default values.
 Muen systems are built for a specific hardware platform and by default the
 system is built for the Lenovo T430s. All currently supported platforms have a
 corresponding hardware specification which can be found in the Muen project
-directory under 'policy/platform'. Note that the Muen project directory can be
+directory under 'policy/hardware'. Note that the Muen project directory can be
 found at '<genode_dir>/contrib/muen-*/src/kernel/muen'.
 
-To get a list of all currently supported platforms issue the following command:
+To get a list of all currently supported hardware platforms issue the following
+command:
 
-! ls contrib/muen-*/src/kernel/muen/policy/platform/ | grep -v common
+! ls contrib/muen-*/src/kernel/muen/policy/hardware/ | grep -v common
 
-Set the '--image-muen-hardware' parameter to point to the hardware
-configuration file of your intended hardware platform. Note that the specified
-paths for both '--image-muen-hardware' and '--image-muen-system' must be either
-relative to the Muen policy directory (e.g. 'platform/lenovo-t430s.xml' or
-'xml/genode-base_hw_simple.xml') or absolute paths. Also change the
-other parameters to match your environment.
+Set the '--image-muen-hardware' and '--image-muen-platform' parameters to point
+to the configuration files of your intended hardware platform. Note that the
+specified paths for both '--image-muen-hardware', '--image-muen-platform' and
+'--image-muen-system' must be either relative to the Muen policy directory
+(e.g. 'platform/lenovo-t430s.xml' or 'xml/genode-base_hw_simple.xml') or
+absolute paths. Also change the other parameters to match your environment.
 
 If no hardware configuration for your specific hardware is available, refer to
 the README of the 'mugenhwcfg' tool
@@ -115,15 +116,17 @@ Integration of Muen with Genode
 Instead of letting the Genode build system compile and assemble the complete
 Muen system, you can let it only build a specific Genode base-hw run scenario
 and then do the integration yourself. This will for example allow you to run a
-simple script like run/printf on Muen in the Bochs x86 emulator
+simple script like run/log on Muen in the Bochs x86 emulator
 [http://bochs.sf.net], removing the requirement for having access to supported
 hardware.
 
-As a first step acquire the Muen sources by execute the following commands:
+As a first step acquire the Muen sources by executing the following commands:
 
 ! git clone https://git.codelabs.ch/git/muen.git
 ! cd muen
-! make SYSTEM=xml/genode-base_hw_simple.xml COMPONENTS="libdebuglog libmutime dbgserver sm tau0 time" emulate
+! git submodule update --init tools/mugenschedcfg
+! git submodule update --init components/libxhcidbg
+! make SYSTEM=xml/genode-base_hw_simple.xml COMPONENTS="libdebuglog libmutime libxhcidbg dbgserver sm time" emulate
 
 This will build a Muen SK system and start it using the Bochs emulator. You
 should get the following error:
@@ -135,9 +138,9 @@ This means that the Muen packer tool was unable to find the component binary
 'base_hw', which is expected since it has not yet been compiled.
 
 Now it is time to build the Genode 'base-hw' image for Muen. To tell the Genode
-build system that the Muen system integration is performed externallyby changing
-the --image-muen-external-build parameter in the 'etc/build.conf' file within
-your build Genode directory like so:
+build system that the Muen system integration is performed externally by
+changing the --image-muen-external-build parameter in the 'etc/build.conf' file
+within your build Genode directory like so:
 
 ! RUN_OPT += --image-muen-external-build 1
 
@@ -150,7 +153,7 @@ Change back to the Muen working directory to package the system image and
 restart emulation:
 
 ! cd <muen_workdir>
-! make SYSTEM=xml/genode-base_hw_simple.xml COMPONENTS="libdebuglog libmutime dbgserver sm tau0 time" emulate
+! make SYSTEM=xml/genode-base_hw_simple.xml COMPONENTS="libdebuglog libmutime dbgserver sm time" emulate
 
 The serial output of the system is written to the
 '<muen_workdir>/emulate/serial.out' file. You should see the following line:

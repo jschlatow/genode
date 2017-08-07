@@ -24,7 +24,7 @@ using namespace Sd_card;
 Driver::Driver(Env &env)
 :
 	Driver_base(env.ram()),
-	Attached_mmio(Board_base::SDHCI_BASE, Board_base::SDHCI_SIZE),
+	Attached_mmio(env, Rpi::SDHCI_BASE, Rpi::SDHCI_SIZE),
 	_ram(env.ram())
 {
 	log("SD card detected");

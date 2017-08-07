@@ -36,7 +36,7 @@ Launchpad::Launchpad(Env &env, unsigned long initial_quota)
 	static const char *names[] = {
 
 		/* core services */
-		"RAM", "RM", "PD", "CPU", "IO_MEM", "IO_PORT", "IRQ", "ROM", "LOG",
+		"RM", "PD", "CPU", "IO_MEM", "IO_PORT", "IRQ", "ROM", "LOG",
 
 		/* services expected to got started by init */
 		"Nitpicker", "Init", "Timer", "Block", "Nic", "Rtc",
@@ -106,6 +106,8 @@ void Launchpad::process_config(Genode::Xml_node config_node)
 		Number_of_bytes default_ram_quota =
 			node.attribute_value("ram_quota", Number_of_bytes(0));
 
+		Launchpad::Cap_quota const cap_quota { node.attribute_value("caps", 0UL) };
+
 		/*
 		 * Obtain configuration for the child
 		 */
@@ -137,13 +139,13 @@ void Launchpad::process_config(Genode::Xml_node config_node)
 		}
 
 		/* add launchpad entry */
-		add_launcher(*name, default_ram_quota, config_ds);
+		add_launcher(*name, cap_quota, default_ram_quota, config_ds);
 	});
 }
 
 
 Launchpad_child *Launchpad::start_child(Launchpad_child::Name const &binary_name,
-                                        unsigned long ram_quota,
+                                        Cap_quota cap_quota, Ram_quota ram_quota,
                                         Dataspace_capability config_ds)
 {
 	log("starting ", binary_name, " with quota ", ram_quota);
@@ -152,37 +154,49 @@ Launchpad_child *Launchpad::start_child(Launchpad_child::Name const &binary_name
 	Launchpad_child::Name const unique_name = _get_unique_child_name(binary_name);
 	log("using unique child name \"", unique_name, "\"");
 
-	if (ram_quota > _env.ram().avail()) {
-		error("child's ram quota is higher than our available quota, using available quota");
+	if (ram_quota.value > _env.ram().avail_ram().value) {
+		warning("child's ram quota is higher than our available quota, using available quota");
 
-		size_t const avail     = _env.ram().avail();
+		size_t const avail     = _env.ram().avail_ram().value;
 		size_t const preserved = 256*1024;
 
 		if (avail < preserved) {
 			error("giving up, our own quota is too low (", avail, ")");
 			return 0;
 		}
-		ram_quota = avail - preserved;
+		ram_quota = Ram_quota { avail - preserved };
+	}
+
+	size_t const avail_caps = _env.pd().avail_caps().value;
+
+	if (cap_quota.value > avail_caps) {
+		warning("child's cap quota (", cap_quota.value, ") exceeds the "
+		        "number of available capabilities (", avail_caps, ")");
+
+		size_t const preserved_caps = min(avail_caps, 25UL);
+
+		cap_quota = Cap_quota { avail_caps - preserved_caps };
 	}
 
 	size_t metadata_size = 4096*16 + sizeof(Launchpad_child);
 
-	if (metadata_size > ram_quota) {
+	if (metadata_size > ram_quota.value) {
 		error("too low ram_quota to hold child metadata");
 		return 0;
 	}
 
-	ram_quota -= metadata_size;
+	ram_quota = Ram_quota { ram_quota.value - metadata_size };
 
 	try {
 		Launchpad_child *c = new (&_sliced_heap)
-			Launchpad_child(_env, _heap, unique_name, binary_name, ram_quota,
+			Launchpad_child(_env, _heap, unique_name, binary_name,
+			                cap_quota, ram_quota,
 			                _parent_services, _child_services, config_ds);
 
 		Lock::Guard lock_guard(_children_lock);
 		_children.insert(c);
 
-		add_child(unique_name, ram_quota, *c, _heap);
+		add_child(unique_name, ram_quota.value, *c, _heap);
 		return c;
 
 	} catch (...) {

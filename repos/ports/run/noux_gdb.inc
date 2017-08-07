@@ -16,20 +16,11 @@ proc noux_gdb_pkg_name { } {
 
 
 #
-# Create a tar archive for GDB (stripped)
-#
-proc create_gdb_tar { } {
-	exec sh -c "find bin/[noux_gdb_pkg_name]/ -type f | (xargs [cross_dev_prefix]strip || true) 2>/dev/null"
-	exec tar cfhv bin/gdb.tar -C bin/[noux_gdb_pkg_name] .
-}
-
-
-#
 # Create a tar archive for a Noux application and its shared libraries (unstripped)
 #
 proc create_binary_tar { application_name application_binaries } {
 	foreach application_binary ${application_binaries} { 
-		exec tar ufv bin/${application_name}.tar -h -C bin ${application_binary}
+		exec tar ufv bin/${application_name}.tar -h -C debug ${application_binary}
 	}
 }
 
@@ -43,7 +34,9 @@ proc create_binary_tar { application_name application_binaries } {
 proc create_source_tar { application_name application_binaries } {
 	exec mkdir -p bin/${application_name}-src
 	foreach application_binary $application_binaries {
-		set source_files [ exec [cross_dev_prefix]objdump -dl bin/${application_binary} | grep "^/.*:.*" | sed -e "s/:.*//" | uniq ]
+		set binary debug/[kernel_specific_binary ${application_binary} silent]
+		puts "archive sources of $binary"
+		set source_files [ exec [cross_dev_prefix]objdump -dl $binary | grep "^/.*:.*" | sed -e "s/:.*//" | uniq ]
 		foreach source_file ${source_files} {
 			# resolve '..' to avoid problems with 'tar' with parts like '/a/b/../'
 			# where '/a' exists, but '/a/b' does not

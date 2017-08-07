@@ -25,7 +25,9 @@ FILTERED_OUT_SRC_CC = RTLogDefaultInit-generic.cpp \
                       RTSemMutexRequest-generic.cpp \
                       RTSemMutexRequestDebug-generic.cpp \
                       RTDirExists-generic.cpp \
-                      RTMpOnPair-generic.cpp
+                      RTMpOnPair-generic.cpp \
+                      RTTimerCreate-generic.cpp \
+                      timer-generic.cpp
 
 CC_WARN += -Wno-unused-variable
 
@@ -98,6 +100,7 @@ SRC_CC += Runtime/common/string/strformatrt.cpp
 SRC_CC += Runtime/common/string/strformattype.cpp
 SRC_CC += Runtime/common/string/stringalloc.cpp
 SRC_CC += Runtime/common/string/strprintf.cpp
+SRC_CC += Runtime/common/string/strspace.cpp
 SRC_CC += Runtime/common/string/strstrip.cpp
 SRC_CC += Runtime/common/string/strtonum.cpp
 SRC_CC += Runtime/common/string/unidata-lower.cpp

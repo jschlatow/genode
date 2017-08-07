@@ -30,6 +30,25 @@ proc need_usb_hid { } {
 }
 
 
+##
+# Return name of the NIC driver binary
+#
+proc nic_drv_binary { } {
+	if {[have_spec linux]} { return linux_nic_drv }
+	if {[have_spec omap4] || [have_spec arndale] || [have_spec rpi]} { return usb_drv }
+	if {!([have_spec imx53] || [have_spec riscv] || [have_spec odroid_xu] || [have_spec wand_quad])} { return nic_drv }
+}
+
+
+##
+# Return name of the audio driver binary
+#
+proc audio_drv_binary { } {
+	if {[have_spec linux]} { return linux_audio_drv }
+	if {[have_spec x86]}   { return audio_drv }
+}
+
+
 proc platform_drv_build_components {} {
 	set drv_build_components ""
 	lappend_if [have_platform_drv] drv_build_components drivers/platform
@@ -110,10 +129,8 @@ proc platform_drv_config {} {
 
 	if {[have_spec acpi]} {
 
-		append drv_config "
-	<start name=\"acpi_drv\" [platform_drv_priority]>"
-
 		append drv_config {
+	<start name="acpi_drv" } [platform_drv_priority] { caps="200" >
 		<resource name="RAM" quantum="3M"/>
 		<route>
 			<service name="IO_MEM"> <parent/> </service>
@@ -121,7 +138,6 @@ proc platform_drv_config {} {
 			<service name="PD">     <parent/> </service>
 			<service name="RM">     <parent/> </service>
 			<service name="CPU">    <parent/> </service>
-			<service name="RAM">    <parent/> </service>
 			<service name="ROM">    <parent/> </service>
 			<service name="Report"> <child name="acpi_report_rom"/> </service>
 		</route>
@@ -144,7 +160,6 @@ proc platform_drv_config {} {
 			<service name="LOG"> <parent/> </service>
 			<service name="PD">     <parent/> </service>
 			<service name="CPU">    <parent/> </service>
-			<service name="RAM">    <parent/> </service>
 			<service name="ROM">    <parent/> </service>
 		</route>
 	</start>}
@@ -153,10 +168,8 @@ proc platform_drv_config {} {
 
 	if {[have_platform_drv]} {
 
-		append drv_config "
-	<start name=\"platform_drv\" [platform_drv_priority]>"
-
 		append drv_config {
+	<start name="platform_drv" } [platform_drv_priority] { caps="800">
 		<resource name="RAM" quantum="4M" constrain_phys="yes"/>
 		<provides>
 			<service name="Platform"/>}

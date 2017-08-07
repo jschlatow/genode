@@ -4,8 +4,8 @@
 # \date   2013-01-21
 #
 
-if {![have_spec foc] && ![have_spec fiasco]} {
-	puts "Run script only supports Fiasco/Fiasco.OC."; exit 0 }
+if {![have_spec fiasco]} {
+	puts "Run script only supports Fiasco."; exit 0 }
 
 #
 # Build
@@ -28,7 +28,6 @@ set config {
 <config verbose="yes">
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -82,6 +81,6 @@ build_boot_image $boot_modules
 #
 
 # qemu config
-append qemu_args " -m 128 -nographic "
+append qemu_args "  -nographic "
 
 run_genode_until forever

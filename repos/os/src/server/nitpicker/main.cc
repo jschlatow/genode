@@ -129,8 +129,9 @@ class Buffer
 		/**
 		 * Constructor - allocate and map dataspace for virtual frame buffer
 		 *
-		 * \throw Ram_session::Alloc_failed
-		 * \throw Rm_session::Attach_failed
+		 * \throw Out_of_ram
+		 * \throw Out_of_caps
+		 * \throw Region_map::Region_conflict
 		 */
 		Buffer(Genode::Ram_session &ram, Genode::Region_map &rm,
 		       Area size, Framebuffer::Mode::Format format, Genode::size_t bytes)
@@ -529,49 +530,52 @@ class Nitpicker::Session_component : public Genode::Rpc_object<Session>,
 
 			case Command::OP_GEOMETRY:
 				{
-					Locked_ptr<View> view(_view_handle_registry.lookup(command.geometry.view));
+					Command::Geometry const &cmd = command.geometry;
+					Locked_ptr<View> view(_view_handle_registry.lookup(cmd.view));
 					if (!view.valid())
 						return;
 
-					Point pos = command.geometry.rect.p1();
+					Point pos = cmd.rect.p1();
 
 					/* transpose position of top-level views by vertical session offset */
 					if (view->top_level())
 						pos = ::Session::phys_pos(pos, _view_stack.size());
 
 					if (view.valid())
-						_view_stack.geometry(*view, Rect(pos, command.geometry.rect.area()));
+						_view_stack.geometry(*view, Rect(pos, cmd.rect.area()));
 
 					return;
 				}
 
 			case Command::OP_OFFSET:
 				{
-					Locked_ptr<View> view(_view_handle_registry.lookup(command.geometry.view));
+					Command::Offset const &cmd = command.offset;
+					Locked_ptr<View> view(_view_handle_registry.lookup(cmd.view));
 
 					if (view.valid())
-						_view_stack.buffer_offset(*view, command.offset.offset);
+						_view_stack.buffer_offset(*view, cmd.offset);
 
 					return;
 				}
 
 			case Command::OP_TO_FRONT:
 				{
-					if (_views_are_equal(command.to_front.view, command.to_front.neighbor))
+					Command::To_front const &cmd = command.to_front;
+					if (_views_are_equal(cmd.view, cmd.neighbor))
 						return;
 
-					Locked_ptr<View> view(_view_handle_registry.lookup(command.to_front.view));
+					Locked_ptr<View> view(_view_handle_registry.lookup(cmd.view));
 					if (!view.valid())
 						return;
 
 					/* bring to front if no neighbor is specified */
-					if (!command.to_front.neighbor.valid()) {
+					if (!cmd.neighbor.valid()) {
 						_view_stack.stack(*view, nullptr, true);
 						return;
 					}
 
 					/* stack view relative to neighbor */
-					Locked_ptr<View> neighbor(_view_handle_registry.lookup(command.to_front.neighbor));
+					Locked_ptr<View> neighbor(_view_handle_registry.lookup(cmd.neighbor));
 					if (neighbor.valid())
 						_view_stack.stack(*view, &(*neighbor), false);
 
@@ -580,21 +584,22 @@ class Nitpicker::Session_component : public Genode::Rpc_object<Session>,
 
 			case Command::OP_TO_BACK:
 				{
-					if (_views_are_equal(command.to_front.view, command.to_front.neighbor))
+					Command::To_back const &cmd = command.to_back;
+					if (_views_are_equal(cmd.view, cmd.neighbor))
 						return;
 
-					Locked_ptr<View> view(_view_handle_registry.lookup(command.to_back.view));
+					Locked_ptr<View> view(_view_handle_registry.lookup(cmd.view));
 					if (!view.valid())
 						return;
 
 					/* bring to front if no neighbor is specified */
-					if (!command.to_front.neighbor.valid()) {
+					if (!cmd.neighbor.valid()) {
 						_view_stack.stack(*view, nullptr, false);
 						return;
 					}
 
 					/* stack view relative to neighbor */
-					Locked_ptr<View> neighbor(_view_handle_registry.lookup(command.to_back.neighbor));
+					Locked_ptr<View> neighbor(_view_handle_registry.lookup(cmd.neighbor));
 					if (neighbor.valid())
 						_view_stack.stack(*view, &(*neighbor), true);
 
@@ -603,8 +608,9 @@ class Nitpicker::Session_component : public Genode::Rpc_object<Session>,
 
 			case Command::OP_BACKGROUND:
 				{
+					Command::Background const &cmd = command.background;
 					if (_provides_default_bg) {
-						Locked_ptr<View> view(_view_handle_registry.lookup(command.to_front.view));
+						Locked_ptr<View> view(_view_handle_registry.lookup(cmd.view));
 						if (!view.valid())
 							return;
 
@@ -618,7 +624,7 @@ class Nitpicker::Session_component : public Genode::Rpc_object<Session>,
 						::Session::background()->background(false);
 
 					/* assign session background */
-					Locked_ptr<View> view(_view_handle_registry.lookup(command.to_front.view));
+					Locked_ptr<View> view(_view_handle_registry.lookup(cmd.view));
 					if (!view.valid())
 						return;
 
@@ -633,10 +639,11 @@ class Nitpicker::Session_component : public Genode::Rpc_object<Session>,
 
 			case Command::OP_TITLE:
 				{
-					Locked_ptr<View> view(_view_handle_registry.lookup(command.title.view));
+					Command::Title const &cmd = command.title;
+					Locked_ptr<View> view(_view_handle_registry.lookup(cmd.view));
 
 					if (view.valid())
-						_view_stack.title(*view, command.title.title.string());
+						_view_stack.title(*view, cmd.title.string());
 
 					return;
 				}
@@ -781,9 +788,7 @@ class Nitpicker::Session_component : public Genode::Rpc_object<Session>,
 				catch (View_handle_registry::Lookup_failed) {
 					return View_handle(); }
 				catch (View_handle_registry::Out_of_memory) {
-					throw Nitpicker::Session::Out_of_metadata(); }
-				catch (Genode::Allocator::Out_of_memory) {
-					throw Nitpicker::Session::Out_of_metadata(); }
+					throw Genode::Out_of_ram(); }
 			}
 
 			/*
@@ -797,7 +802,7 @@ class Nitpicker::Session_component : public Genode::Rpc_object<Session>,
 						     nullptr);
 					}
 				catch (Genode::Allocator::Out_of_memory) {
-					throw Nitpicker::Session::Out_of_metadata(); }
+					throw Genode::Out_of_ram(); }
 			}
 
 			view->apply_origin_policy(_pointer_origin);
@@ -807,7 +812,7 @@ class Nitpicker::Session_component : public Genode::Rpc_object<Session>,
 
 			try { return _view_handle_registry.alloc(*view); }
 			catch (View_handle_registry::Out_of_memory) {
-				throw Nitpicker::Session::Out_of_metadata(); }
+				throw Genode::Out_of_ram(); }
 		}
 
 		void destroy_view(View_handle handle) override
@@ -846,7 +851,7 @@ class Nitpicker::Session_component : public Genode::Rpc_object<Session>,
 
 			try { return _env.ep().rpc_ep().apply(view_cap, lambda); }
 			catch (View_handle_registry::Out_of_memory) {
-				throw Nitpicker::Session::Out_of_metadata(); }
+				throw Genode::Out_of_ram(); }
 		}
 
 		View_capability view_capability(View_handle handle) override
@@ -906,7 +911,7 @@ class Nitpicker::Session_component : public Genode::Rpc_object<Session>,
 		{
 			/* check if the session quota suffices for the specified mode */
 			if (_session_alloc.quota() < ram_quota(mode, use_alpha))
-				throw Nitpicker::Session::Out_of_metadata();
+				throw Genode::Out_of_ram();
 
 			_framebuffer_session_component.notify_mode_change(mode, use_alpha);
 		}
@@ -968,7 +973,7 @@ class Nitpicker::Session_component : public Genode::Rpc_object<Session>,
 			if (::Session::texture()) {
 
 				enum { PRESERVED_RAM = 128*1024 };
-				if (_env.ram().avail() > _buffer_size + PRESERVED_RAM) {
+				if (_env.ram().avail_ram().value > _buffer_size + PRESERVED_RAM) {
 					src_texture = static_cast<Texture<PT> const *>(::Session::texture());
 				} else {
 					Genode::warning("not enough RAM to preserve buffer content during resize");
@@ -1033,7 +1038,7 @@ class Nitpicker::Root : public Genode::Root_component<Session_component>
 			if (ram_quota < required_quota) {
 				Genode::warning("Insufficient dontated ram_quota (", ram_quota,
 				                " bytes), require ", required_quota, " bytes");
-				throw Root::Quota_exceeded();
+				throw Genode::Insufficient_ram_quota();
 			}
 
 			size_t const unused_quota = ram_quota - required_quota;
@@ -1394,4 +1399,10 @@ void Nitpicker::Main::handle_fb_mode()
 }
 
 
-void Component::construct(Genode::Env &env) { static Nitpicker::Main nitpicker(env); }
+void Component::construct(Genode::Env &env)
+{
+	/* XXX execute constructors of global statics */
+	env.exec_static_constructors();
+
+	static Nitpicker::Main nitpicker(env);
+}

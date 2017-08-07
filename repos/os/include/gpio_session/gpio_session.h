@@ -26,7 +26,12 @@ namespace Gpio { struct Session; }
 
 struct Gpio::Session : Genode::Session
 {
+	/**
+	 * \noapi
+	 */
 	static const char *service_name() { return "Gpio"; }
+
+	enum { CAP_QUOTA = 2 };
 
 	enum Direction { IN, OUT };
 

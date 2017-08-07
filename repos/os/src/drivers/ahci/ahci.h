@@ -16,6 +16,7 @@
 
 #include <block/component.h>
 #include <os/attached_mmio.h>
+#include <os/reporter.h>
 #include <util/retry.h>
 #include <util/reconstructible.h>
 
@@ -36,13 +37,17 @@ struct Ahci_root
 
 namespace Ahci_driver {
 
-	void init(Genode::Env &env, Genode::Allocator &alloc, Ahci_root &ep, bool support_atapi);
+	void init(Genode::Env &env, Genode::Allocator &alloc, Ahci_root &ep,
+	          bool support_atapi, Genode::Signal_context_capability device_identified);
 
 	bool avail(long device_num);
 	long device_number(char const *model_num, char const *serial_num);
 
 	Block::Driver *claim_port(long device_num);
 	void           free_port(long device_num);
+	void           report_ports(Genode::Reporter &reporter);
+
+	struct Missing_controller { };
 }
 
 
@@ -202,7 +207,7 @@ struct Command_fis : Genode::Mmio
 	}
 
 	static constexpr Genode::size_t size() { return 0x14; }
-	void clear() { Genode::memset((void *)base, 0, size()); }
+	void clear() { Genode::memset((void *)base(), 0, size()); }
 
 
 	/************************
@@ -389,17 +394,34 @@ struct Command_table
 
 
 /**
+ * Minimalistic AHCI port structure to merely detect device signature
+ */
+struct Port_base : Genode::Mmio
+{
+	/**
+	 * Port signature
+	 */
+	struct Sig : Register<0x24, 32> { };
+
+	static constexpr Genode::addr_t offset() { return 0x100; }
+	static constexpr Genode::size_t size()   { return 0x80;  }
+
+	Port_base(unsigned number, Hba &hba)
+	: Mmio(hba.base() + offset() + (number * size())) { }
+};
+
+
+/**
  * AHCI port
  */
-struct Port : Genode::Mmio
+struct Port : Port_base
 {
 	struct Not_ready : Genode::Exception { };
 
 	Genode::Region_map &rm;
-
-	Hba           &hba;
-	Platform::Hba &platform_hba;
-	unsigned       cmd_slots = hba.command_slots();
+	Hba                &hba;
+	Platform::Hba      &platform_hba;
+	unsigned            cmd_slots = hba.command_slots();
 
 	Genode::Ram_dataspace_capability device_ds;
 	Genode::Ram_dataspace_capability cmd_ds;
@@ -423,12 +445,14 @@ struct Port : Genode::Mmio
 	Port(Genode::Region_map &rm, Hba &hba, Platform::Hba &platform_hba,
 	     unsigned number)
 	:
-		Mmio(hba.base + offset() + (number * size())),
-		rm(rm), hba(hba), platform_hba(platform_hba)
+		Port_base(number, hba), rm(rm), hba(hba),
+		platform_hba(platform_hba)
 	{
+		reset();
+		if (!enable())
+			throw 1;
 		stop();
-		if (!wait_for<Cmd::Cr>(0, hba.delayer(), 500, 1000))
-			Genode::error("failed to stop command list processing");
+		wait_for(hba.delayer(), Cmd::Cr::Equal(0));
 	}
 
 	virtual ~Port()
@@ -448,9 +472,6 @@ struct Port : Genode::Mmio
 			platform_hba.free_dma_buffer(device_info_ds);
 		}
 	}
-
-	static constexpr Genode::addr_t offset()  { return 0x100; }
-	static constexpr Genode::size_t size()    { return 0x80;  }
 
 	/**
 	 * Command list base (1K length naturally aligned)
@@ -575,12 +596,16 @@ struct Port : Genode::Mmio
 		if (read<Cmd::St>())
 			return;
 
-		if (!wait_for<Tfd::Sts_bsy>(0, hba.delayer(), 500, 1000)) {
+		try {
+			wait_for(hba.delayer(), Tfd::Sts_bsy::Equal(0));
+		} catch (Polling_timeout) {
 			Genode::error("HBA busy unable to start command processing.");
 			return;
 		}
 
-		if (!wait_for<Tfd::Sts_drq>(0, hba.delayer(), 500, 1000)) {
+		try {
+			wait_for(hba.delayer(), Tfd::Sts_drq::Equal(0));
+		} catch (Polling_timeout) {
 			Genode::error("HBA in DRQ unable to start command processing.");
 			return;
 		}
@@ -611,11 +636,6 @@ struct Port : Genode::Mmio
 		struct Sts_drq : Bitfield<3, 1> { }; /* indicates data transfer request */
 		struct Sts_bsy : Bitfield<7, 1> { }; /* interface is busy */
 	};
-
-	/**
-	 * Port signature
-	 */
-	struct Sig : Register<0x24, 32> { };
 
 	/**
 	 * Serial ATA status
@@ -683,8 +703,11 @@ struct Port : Genode::Mmio
 		hba.delayer().usleep(1000);
 		write<Sctl::Det>(0);
 
-		if (!wait_for<Ssts::Dec>(Ssts::Dec::ESTABLISHED, hba.delayer()))
+		try {
+			wait_for(hba.delayer(), Ssts::Dec::Equal(Ssts::Dec::ESTABLISHED));
+		} catch (Polling_timeout) {
 			Genode::warning("Port reset failed");
+		}
 	}
 
 	/**
@@ -797,10 +820,15 @@ struct Port_driver : Port, Block::Driver
 	Ahci_root &root;
 	unsigned  &sem;
 
-	Port_driver(Port &port, Genode::Ram_session &ram, Ahci_root &root,
-	            unsigned &sem)
-	: Port(port), Block::Driver(ram),
-	  root(root), sem(sem) { sem++; }
+	Port_driver(Genode::Ram_session &ram,
+	            Ahci_root           &root,
+	            unsigned            &sem,
+	            Genode::Region_map  &rm,
+	            Hba                 &hba,
+	            Platform::Hba       &platform_hba,
+	            unsigned             number)
+	: Port(rm, hba, platform_hba, number), Block::Driver(ram), root(root),
+	  sem(sem) { sem++; }
 
 	virtual void handle_irq() = 0;
 

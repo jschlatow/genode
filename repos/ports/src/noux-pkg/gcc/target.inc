@@ -31,7 +31,7 @@ ENV += CFLAGS_FOR_TARGET='-I$(BASE_DIR)/../../tool -DUSE_PT_GNU_EH_FRAME -Dinhib
 # libsupc++
 ENV += CXXFLAGS_FOR_TARGET='-fPIC'
 
-MAKE_ENV += MULTILIB_OPTIONS="m64/m32" MULTILIB_DIRNAMES="64 32"
+MAKE_ENV += GENODE="yes"
 
 #
 # We link libraries to the final binaries using the 'LIBS' variable.  But
@@ -53,7 +53,7 @@ Makefile: dummy_libs
 
 LIBS  += libc libm posix libc_noux stdcxx
 
-include $(REP_DIR)/mk/noux.mk
+include $(call select_from_repositories,mk/noux.mk)
 
 #
 # We have to specify 'LINK_ITEMS' twice to resolve inter-library dependencies.

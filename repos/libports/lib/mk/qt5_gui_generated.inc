@@ -1,20 +1,17 @@
-QT_DEFINES += -DQT_NO_LIBUDEV -DQT_NO_XCB -DQT_NO_XKBCOMMON -DQT_NO_USING_NAMESPACE -DQT_BUILD_GUI_LIB -DQT_BUILDING_QT -DQT_NO_CAST_TO_ASCII -DQT_ASCII_CAST_WARNINGS -DQT_MOC_COMPAT -DQT_USE_QSTRINGBUILDER -DQT_DEPRECATED_WARNINGS -DQT_DISABLE_DEPRECATED_BEFORE=0x050000 -DQT_NO_EXCEPTIONS -DQT_NO_DEBUG -DQT_CORE_LIB
+QT_DEFINES += -DQT_NO_USING_NAMESPACE -DENABLE_PIXMAN_DRAWHELPERS -DQT_BUILD_GUI_LIB -DQT_BUILDING_QT -DQT_NO_CAST_TO_ASCII -DQT_ASCII_CAST_WARNINGS -DQT_MOC_COMPAT -DQT_USE_QSTRINGBUILDER -DQT_DEPRECATED_WARNINGS -DQT_DISABLE_DEPRECATED_BEFORE=0x050000 -DQT_NO_EXCEPTIONS -D_LARGEFILE64_SOURCE -D_LARGEFILE_SOURCE -DQT_NO_DEBUG -DQT_CORE_LIB
 
 QT_INCPATH += \
-  qtbase/include \
-  qtbase/include/QtCore \
-  qtbase/include/QtCore/5.1.0 \
-  qtbase/include/QtCore/5.1.0/QtCore \
-  qtbase/include/QtGui \
-  qtbase/include/QtGui/5.1.0 \
-  qtbase/include/QtGui/5.1.0/QtGui \
-  qtbase/mkspecs/genode-g++ \
   qtbase/src/gui \
-  qtbase/src/gui/image \
+  qtbase/include \
+  qtbase/include/QtGui \
+  qtbase/include/QtGui/5.8.0 \
+  qtbase/include/QtGui/5.8.0/QtGui \
+  qtbase/include/QtCore/5.8.0 \
+  qtbase/include/QtCore/5.8.0/QtCore \
+  qtbase/include/QtCore \
+  qtbase/mkspecs/genode-g++
 
 QT_SOURCES += \
-  qclipboard_qpa.cpp \
-  qcursor_qpa.cpp \
   qgenericpluginfactory.cpp \
   qgenericplugin.cpp \
   qwindowsysteminterface.cpp \
@@ -51,7 +48,6 @@ QT_SOURCES += \
   qinputmethod.cpp \
   qkeysequence.cpp \
   qkeymapper.cpp \
-  qkeymapper_qpa.cpp \
   qpalette.cpp \
   qguivariant.cpp \
   qscreen.cpp \
@@ -61,12 +57,22 @@ QT_SOURCES += \
   qplatformsharedgraphicscache.cpp \
   qplatformdialoghelper.cpp \
   qplatformservices.cpp \
-  qplatformscreenpageflipper.cpp \
-  qplatformsystemtrayicon_qpa.cpp \
+  qplatformsystemtrayicon.cpp \
+  qplatformsessionmanager.cpp \
+  qplatformmenu.cpp \
+  qpixelformat.cpp \
+  qpaintdevicewindow.cpp \
+  qrasterwindow.cpp \
+  qplatformgraphicsbuffer.cpp \
+  qplatformgraphicsbufferhelper.cpp \
+  qinputdevicemanager.cpp \
+  qhighdpiscaling.cpp \
   qplatformopenglcontext.cpp \
   qopenglcontext.cpp \
+  qopenglwindow.cpp \
   qbitmap.cpp \
   qimage.cpp \
+  qimage_conversions.cpp \
   qimageiohandler.cpp \
   qimagereader.cpp \
   qimagewriter.cpp \
@@ -79,7 +85,6 @@ QT_SOURCES += \
   qmovie.cpp \
   qpixmap_raster.cpp \
   qpixmap_blitter.cpp \
-  qnativeimage.cpp \
   qimagepixmapcleanuphooks.cpp \
   qicon.cpp \
   qiconloader.cpp \
@@ -90,10 +95,9 @@ QT_SOURCES += \
   qxbmhandler.cpp \
   qxpmhandler.cpp \
   qpnghandler.cpp \
-  qjpeghandler.cpp \
-  qgifhandler.cpp \
   qfont.cpp \
   qfontengine.cpp \
+  qfontengineglyphcache.cpp \
   qfontsubset.cpp \
   qfontmetrics.cpp \
   qfontdatabase.cpp \
@@ -115,26 +119,23 @@ QT_SOURCES += \
   qtextlist.cpp \
   qtextdocumentwriter.cpp \
   qsyntaxhighlighter.cpp \
-  qcssparser.cpp \
-  qzip.cpp \
-  qtextodfwriter.cpp \
   qstatictext.cpp \
   qrawfont.cpp \
   qglyphrun.cpp \
   qdistancefield.cpp \
-  qfont_qpa.cpp \
-  qfontengine_qpa.cpp \
+  qfontengine_qpf2.cpp \
   qplatformfontdatabase.cpp \
-  qrawfont_qpa.cpp \
+  qtextodfwriter.cpp \
+  qzip.cpp \
+  qcssparser.cpp \
   qbackingstore.cpp \
   qbezier.cpp \
   qblendfunctions.cpp \
   qblittable.cpp \
   qbrush.cpp \
   qcolor.cpp \
-  qcolor_p.cpp \
+  qcompositionfunctions.cpp \
   qcosmeticstroker.cpp \
-  qcssutil.cpp \
   qdrawhelper.cpp \
   qemulationpaintengine.cpp \
   qgammatables.cpp \
@@ -144,6 +145,8 @@ QT_SOURCES += \
   qmemrotate.cpp \
   qoutlinemapper.cpp \
   qpagedpaintdevice.cpp \
+  qpagelayout.cpp \
+  qpagesize.cpp \
   qpaintdevice.cpp \
   qpaintengine.cpp \
   qpaintengineex.cpp \
@@ -161,11 +164,16 @@ QT_SOURCES += \
   qstroker.cpp \
   qtextureglyphcache.cpp \
   qtransform.cpp \
+  qtriangulatingstroker.cpp \
+  qtriangulator.cpp \
   qplatformbackingstore.cpp \
-  qpaintbuffer.cpp \
   qpathsimplifier.cpp \
+  qcssutil.cpp \
   qdesktopservices.cpp \
   qvalidator.cpp \
+  qgridlayoutengine.cpp \
+  qabstractlayoutstyleinfo.cpp \
+  qlayoutpolicy.cpp \
   qgenericmatrix.cpp \
   qmatrix4x4.cpp \
   qquaternion.cpp \
@@ -184,13 +192,15 @@ QT_SOURCES += \
   qopengl2pexvertexarray.cpp \
   qopenglpaintengine.cpp \
   qopenglcustomshaderstage.cpp \
-  qtriangulatingstroker.cpp \
   qopengltextureglyphcache.cpp \
-  qtriangulator.cpp \
   qopenglversionfunctions.cpp \
   qopenglversionfunctionsfactory.cpp \
   qopenglvertexarrayobject.cpp \
   qopengldebug.cpp \
+  qopengltextureblitter.cpp \
+  qopengltexture.cpp \
+  qopengltexturehelper.cpp \
+  qopenglpixeltransferoptions.cpp \
   qopenglfunctions_1_0.cpp \
   qopenglfunctions_1_1.cpp \
   qopenglfunctions_1_2.cpp \
@@ -207,15 +217,22 @@ QT_SOURCES += \
   qopenglfunctions_4_1_core.cpp \
   qopenglfunctions_4_2_core.cpp \
   qopenglfunctions_4_3_core.cpp \
+  qopenglfunctions_4_4_core.cpp \
+  qopenglfunctions_4_5_core.cpp \
   qopenglfunctions_3_2_compatibility.cpp \
   qopenglfunctions_3_3_compatibility.cpp \
   qopenglfunctions_4_0_compatibility.cpp \
   qopenglfunctions_4_1_compatibility.cpp \
   qopenglfunctions_4_2_compatibility.cpp \
   qopenglfunctions_4_3_compatibility.cpp \
+  qopenglfunctions_4_4_compatibility.cpp \
+  qopenglfunctions_4_5_compatibility.cpp \
   qopengltimerquery.cpp \
   qguivariantanimation.cpp \
   qstandarditemmodel.cpp \
+  qimage_compat.cpp \
+  qimage_sse2.cpp \
+  qdrawhelper_sse2.cpp \
   moc_qgenericplugin.cpp \
   moc_qplatforminputcontext.cpp \
   moc_qplatforminputcontextplugin_p.cpp \
@@ -224,25 +241,31 @@ QT_SOURCES += \
   moc_qplatformnativeinterface.cpp \
   moc_qplatformmenu.cpp \
   moc_qshapedpixmapdndwindow_p.cpp \
+  moc_qsurfaceformat.cpp \
   moc_qoffscreensurface.cpp \
   moc_qclipboard.cpp \
   moc_qdrag.cpp \
   moc_qdnd_p.cpp \
+  moc_qevent.cpp \
+  moc_qkeysequence.cpp \
   moc_qkeymapper_p.cpp \
   moc_qpalette.cpp \
   moc_qsessionmanager.cpp \
   moc_qscreen.cpp \
   moc_qstylehints.cpp \
+  moc_qtouchdevice.cpp \
   moc_qplatformsharedgraphicscache.cpp \
   moc_qplatformdialoghelper.cpp \
-  moc_qplatformscreenpageflipper.cpp \
-  moc_qopenglcontext.cpp \
+  moc_qpaintdevicewindow.cpp \
+  moc_qrasterwindow.cpp \
+  moc_qplatformgraphicsbuffer.cpp \
+  moc_qinputdevicemanager_p.cpp \
+  moc_qopenglwindow.cpp \
   moc_qimageiohandler.cpp \
   moc_qpictureformatplugin.cpp \
   moc_qiconengineplugin.cpp \
   moc_qfont.cpp \
   moc_qfontdatabase.cpp \
-  moc_qfontengine_p.cpp \
   moc_qtextformat.cpp \
   moc_qtextobject.cpp \
   moc_qtextdocument.cpp \
@@ -252,9 +275,11 @@ QT_SOURCES += \
   moc_qbrush.cpp \
   moc_qpainter.cpp \
   moc_qpdfwriter.cpp \
+  moc_qplatformbackingstore.cpp \
   moc_qvalidator.cpp \
   moc_qopenglshaderprogram.cpp \
   moc_qopenglengineshadermanager_p.cpp \
+  moc_qopengltexture.cpp \
   moc_qopengltimerquery.cpp
 
 QT_VPATH += \
@@ -283,30 +308,37 @@ COMPILER_MOC_HEADER_MAKE_ALL_FILES = \
   moc_qplatformnativeinterface.cpp \
   moc_qplatformmenu.cpp \
   moc_qshapedpixmapdndwindow_p.cpp \
+  moc_qsurfaceformat.cpp \
   moc_qguiapplication.cpp \
   moc_qwindow.cpp \
   moc_qoffscreensurface.cpp \
   moc_qclipboard.cpp \
   moc_qdrag.cpp \
   moc_qdnd_p.cpp \
+  moc_qevent.cpp \
   moc_qinputmethod.cpp \
+  moc_qkeysequence.cpp \
   moc_qkeymapper_p.cpp \
   moc_qpalette.cpp \
   moc_qsessionmanager.cpp \
   moc_qscreen.cpp \
   moc_qstylehints.cpp \
+  moc_qtouchdevice.cpp \
   moc_qplatformsharedgraphicscache.cpp \
   moc_qplatformdialoghelper.cpp \
-  moc_qplatformscreenpageflipper.cpp \
   moc_qplatformsystemtrayicon.cpp \
+  moc_qpaintdevicewindow.cpp \
+  moc_qrasterwindow.cpp \
+  moc_qplatformgraphicsbuffer.cpp \
+  moc_qinputdevicemanager_p.cpp \
   moc_qopenglcontext.cpp \
+  moc_qopenglwindow.cpp \
   moc_qimageiohandler.cpp \
   moc_qmovie.cpp \
   moc_qpictureformatplugin.cpp \
   moc_qiconengineplugin.cpp \
   moc_qfont.cpp \
   moc_qfontdatabase.cpp \
-  moc_qfontengine_p.cpp \
   moc_qtextformat.cpp \
   moc_qtextobject.cpp \
   moc_qtextdocument.cpp \
@@ -319,11 +351,13 @@ COMPILER_MOC_HEADER_MAKE_ALL_FILES = \
   moc_qbrush.cpp \
   moc_qpainter.cpp \
   moc_qpdfwriter.cpp \
+  moc_qplatformbackingstore.cpp \
   moc_qvalidator.cpp \
   moc_qopenglshaderprogram.cpp \
   moc_qopenglengineshadermanager_p.cpp \
   moc_qopenglvertexarrayobject.cpp \
   moc_qopengldebug.cpp \
+  moc_qopengltexture.cpp \
   moc_qopengltimerquery.cpp \
   moc_qstandarditemmodel.cpp
 

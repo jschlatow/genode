@@ -24,8 +24,11 @@ void name(void) { \
 	while (1) { Assert(!"not implemented"); } \
 }
 
-DUMMY(DBGFR3CoreWrite)
 DUMMY(DBGCRegisterCommands)
+
+DUMMY(DBGFR3AsLineByAddrA)
+DUMMY(DBGFR3AsSymbolByAddrA)
+DUMMY(DBGFR3CoreWrite)
 DUMMY(DBGFR3LogModifyDestinations)
 DUMMY(DBGFR3LogModifyFlags)
 DUMMY(DBGFR3LogModifyGroups)
@@ -38,16 +41,11 @@ DUMMY(DBGFR3StackWalkBegin)
 DUMMY(DBGFR3StackWalkBeginEx)
 DUMMY(DBGFR3StackWalkNext)
 DUMMY(DBGFR3StackWalkEnd)
+DUMMY(DBGFR3PagingDumpEx)
 DUMMY(DBGFR3PlugInUnload)
 DUMMY(DBGFR3PlugInUnloadAll)
 
 DUMMY(HBDMgrDestroy)
-
-DUMMY(HMGetPaePdpes)
-DUMMY(HMInvalidatePage)
-DUMMY(HMInvalidatePageOnAllVCpus)
-DUMMY(HMInvalidatePhysPage)
-DUMMY(HMSetSingleInstruction)
 
 DUMMY(HMR3CheckError)
 DUMMY(HMR3DisablePatching)
@@ -62,7 +60,6 @@ DUMMY(HMR3PatchTprInstr)
 DUMMY(MMHyperR0ToCC)
 DUMMY(MMHyperRCToCC)
 
-DUMMY(MMR3HeapAPrintfV)
 DUMMY(MMR3HyperRealloc)
 DUMMY(MMR3LockCall)
 DUMMY(MMR3PageDummyHCPhys)
@@ -73,22 +70,19 @@ DUMMY(PDMR3LdrGetInterfaceSymbols)
 DUMMY(PDMR3LdrQueryRCModFromPC)
 DUMMY(PDMCritSectBothFF)
 
-DUMMY(pgmMapActivateCR3)
-DUMMY(pgmMapDeactivateCR3)
 DUMMY(pgmMapResolveConflicts)
 DUMMY(pgmR3SyncPTResolveConflict)
 DUMMY(pgmR3SyncPTResolveConflictPAE)
 
 DUMMY(PGMR3HandlerVirtualRegister)
 
-DUMMY(DBGFR3PagingDumpEx)
 DUMMY(MMPagePhys2PageEx)
+DUMMY(PGMR3DbgReadGCPtr)
 DUMMY(PGMR3DbgR3Ptr2GCPhys)
 
 DUMMY(PGMR3MappingsUnfix)
 DUMMY(PGMR3MappingsFix)
 DUMMY(PGMR3MappingsDisable)
-DUMMY(PGMR3MapPT)
 
 DUMMY(PGMR3SharedModuleCheckAll)
 DUMMY(PGMR3SharedModuleUnregister)
@@ -138,10 +132,6 @@ DUMMY(SUPR3PageFree)
 DUMMY(SUPR3PageMapKernel)
 DUMMY(SUPR3ReadTsc)
 DUMMY(SUPGetCpuHzFromGipForAsyncMode)
-
-DUMMY(SUPSemEventMultiSignal)
-DUMMY(SUPSemEventMultiWaitNoResume)
-DUMMY(SUPSemEventMultiReset)
 
 DUMMY(VMMR3GetHostToGuestSwitcher)
 
@@ -217,4 +207,6 @@ DUMMY(GIMExecHypercallInstr)
 DUMMY(GIMReadMsr)
 DUMMY(GIMWriteMsr)
 
+DUMMY(RTDbgLineFree)
+DUMMY(RTDbgSymbolFree)
 } /* extern "C" */

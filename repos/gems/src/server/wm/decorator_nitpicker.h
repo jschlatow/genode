@@ -16,7 +16,6 @@
 
 /* Genode includes */
 #include <util/string.h>
-#include <ram_session/client.h>
 #include <base/attached_dataspace.h>
 #include <os/reporter.h>
 #include <nitpicker_session/connection.h>
@@ -31,8 +30,6 @@
 namespace Wm { class Main;
 	using Genode::size_t;
 	using Genode::Allocator;
-	using Genode::Ram_session_client;
-	using Genode::Ram_session_capability;
 	using Genode::Arg_string;
 	using Genode::Object_pool;
 	using Genode::Attached_dataspace;
@@ -161,7 +158,7 @@ struct Wm::Decorator_nitpicker_session : Genode::Rpc_object<Nitpicker::Session>,
 
 	Genode::Heap _heap { _env.ram(), _env.rm() };
 
-	Ram_session_client _ram;
+	Genode::Ram_session &_ram;
 
 	Nitpicker::Connection _nitpicker_session { _env, "decorator" };
 
@@ -200,7 +197,7 @@ struct Wm::Decorator_nitpicker_session : Genode::Rpc_object<Nitpicker::Session>,
 	 * \param ep  entrypoint used for dispatching signals
 	 */
 	Decorator_nitpicker_session(Genode::Env &env,
-	                            Ram_session_capability ram,
+	                            Genode::Ram_session &ram,
 	                            Allocator &md_alloc,
 	                            Reporter &pointer_reporter,
 	                            Last_motion &last_motion,

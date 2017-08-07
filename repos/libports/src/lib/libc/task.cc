@@ -23,7 +23,6 @@
 #include <vfs/file_system_factory.h>
 #include <vfs/dir_file_system.h>
 #include <timer_session/connection.h>
-#include <os/timer.h>
 
 /* libc includes */
 #include <libc/component.h>
@@ -37,6 +36,7 @@
 #include "libc_init.h"
 #include "task.h"
 
+extern char **environ;
 
 namespace Libc {
 	class Env_implementation;
@@ -48,7 +48,7 @@ namespace Libc {
 	class Timeout_handler;
 	class Io_response_handler;
 
-	using Microseconds = Genode::Time_source::Microseconds;
+	using Genode::Microseconds;
 }
 
 
@@ -158,23 +158,27 @@ class Libc::Env_implementation : public Libc::Env
 
 		void close(Parent::Client::Id id) override {
 			return _env.close(id); }
+
+		/* already done by the libc */
+		void exec_static_constructors() override { }
+
+		void reinit(Native_capability::Raw raw) override {
+			_env.reinit(raw); }
+
+		void reinit_main_thread(Capability<Region_map> &stack_area_rm) override {
+			_env.reinit_main_thread(stack_area_rm); }
 };
 
 
 struct Libc::Timer
 {
-	::Timer::Connection _timer_connection;
-	Genode::Timer       _timer;
+	::Timer::Connection _timer;
 
-	Timer(Genode::Env &env)
-	:
-		_timer_connection(env),
-		_timer(_timer_connection, env.ep())
-	{ }
+	Timer(Genode::Env &env) : _timer(env) { }
 
-	unsigned long curr_time() const
+	unsigned long curr_time()
 	{
-		return _timer.curr_time().value/1000;
+		return _timer.curr_time().trunc_to_plain_us().value/1000;
 	}
 
 	static Microseconds microseconds(unsigned long timeout_ms)
@@ -184,7 +188,7 @@ struct Libc::Timer
 
 	static unsigned long max_timeout()
 	{
-		return Genode::Timer::Microseconds::max().value/1000;
+		return ~0UL/1000;
 	}
 };
 
@@ -213,14 +217,14 @@ struct Libc::Timeout_handler
  */
 struct Libc::Timeout
 {
-	Libc::Timer_accessor              &_timer_accessor;
-	Timeout_handler                   &_handler;
-	Genode::One_shot_timeout<Timeout>  _timeout;
+	Libc::Timer_accessor               &_timer_accessor;
+	Timeout_handler                    &_handler;
+	::Timer::One_shot_timeout<Timeout>  _timeout;
 
 	bool          _expired             = true;
 	unsigned long _absolute_timeout_ms = 0;
 
-	void _handle(Microseconds now)
+	void _handle(Duration now)
 	{
 		_expired             = true;
 		_absolute_timeout_ms = 0;
@@ -241,14 +245,17 @@ struct Libc::Timeout
 		_expired             = false;
 		_absolute_timeout_ms = now + timeout_ms;
 
-		_timeout.start(_timer_accessor.timer().microseconds(timeout_ms));
+		_timeout.schedule(_timer_accessor.timer().microseconds(timeout_ms));
 	}
 
 	unsigned long duration_left() const
 	{
 		unsigned long const now = _timer_accessor.timer().curr_time();
 
-		return _expired ? 0 : _absolute_timeout_ms - now;
+		if (_expired || _absolute_timeout_ms < now)
+			return 0;
+
+		return _absolute_timeout_ms - now;
 	}
 };
 
@@ -357,12 +364,12 @@ struct Libc::Kernel
 	private:
 
 		Genode::Env         &_env;
-		Genode::Heap         _heap { _env.ram(), _env.rm() };
+		Genode::Allocator   &_heap;
 		Io_response_handler  _io_response_handler;
 		Env_implementation   _libc_env { _env, _heap, _io_response_handler };
 		Vfs_plugin           _vfs { _libc_env, _heap };
 
-		Genode::Reconstructible<Genode::Signal_handler<Kernel>> _resume_main_handler {
+		Genode::Reconstructible<Genode::Io_signal_handler<Kernel>> _resume_main_handler {
 			_env.ep(), *this, &Kernel::_resume_main };
 
 		jmp_buf _kernel_context;
@@ -523,6 +530,13 @@ struct Libc::Kernel
 		unsigned long _suspend_main(Suspend_functor &check,
 		                            unsigned long timeout_ms)
 		{
+			/* check if we're running on the user context */
+			if (Thread::myself()->mystack().top != (Genode::addr_t)_user_stack) {
+				error("libc suspend() called from non-user context (",
+				      __builtin_return_address(0), ") - aborting");
+				exit(1);
+			}
+
 			if (!check.suspend())
 				return 0;
 
@@ -560,7 +574,8 @@ struct Libc::Kernel
 
 	public:
 
-		Kernel(Genode::Env &env) : _env(env) { }
+		Kernel(Genode::Env &env, Genode::Allocator &heap)
+		: _env(env), _heap(heap) { }
 
 		~Kernel() { Genode::error(__PRETTY_FUNCTION__, " should not be executed!"); }
 
@@ -594,7 +609,7 @@ struct Libc::Kernel
 			/* _setjmp() returned after _longjmp() - user context suspended */
 
 			while ((!_app_returned) && (!_suspend_scheduled)) {
-				_env.ep().wait_and_dispatch_one_signal();
+				_env.ep().wait_and_dispatch_one_io_signal();
 
 				if (_resume_main_once && !_setjmp(_kernel_context))
 					_switch_to_user();
@@ -612,7 +627,7 @@ struct Libc::Kernel
 				_switch_to_user();
 
 			while ((!_app_returned) && (!_suspend_scheduled)) {
-				_env.ep().wait_and_dispatch_one_signal();
+				_env.ep().wait_and_dispatch_one_io_signal();
 				if (_resume_main_once && !_setjmp(_kernel_context))
 					_switch_to_user();
 			}
@@ -773,9 +788,12 @@ static void resumed_callback() { kernel->entrypoint_resumed(); }
 void Libc::resume_all() { kernel->resume_all(); }
 
 
-unsigned long Libc::suspend(Suspend_functor &s,
-                             unsigned long timeout_ms)
+unsigned long Libc::suspend(Suspend_functor &s, unsigned long timeout_ms)
 {
+	if (!kernel) {
+		error("libc kernel not initialized, needed for suspend()");
+		exit(1);
+	}
 	return kernel->suspend(s, timeout_ms);
 }
 
@@ -788,8 +806,8 @@ unsigned long Libc::current_time()
 void Libc::schedule_suspend(void (*suspended) ())
 {
 	if (!kernel) {
-		error("libc kernel not initialized, needed for suspend()");
-		return;
+		error("libc kernel not initialized, needed for fork()");
+		exit(1);
 	}
 	kernel->schedule_suspend(suspended);
 }
@@ -799,7 +817,7 @@ void Libc::schedule_select(Libc::Select_handler_base *h)
 {
 	if (!kernel) {
 		error("libc kernel not initialized, needed for select()");
-		return;
+		exit(1);
 	}
 	kernel->schedule_select(h);
 }
@@ -812,6 +830,11 @@ void Libc::execute_in_application_context(Libc::Application_code &app_code)
 	 *     don't use this code.
 	 */
 
+	if (!kernel) {
+		error("libc kernel not initialized, needed for with_libc()");
+		exit(1);
+	}
+
 	static bool nested = false;
 
 	if (nested) {
@@ -821,11 +844,6 @@ void Libc::execute_in_application_context(Libc::Application_code &app_code)
 		} else {
 			app_code.execute();
 		}
-		return;
-	}
-
-	if (!kernel) {
-		error("libc kernel not initialized, needed for with_libc()");
 		return;
 	}
 
@@ -844,20 +862,42 @@ Genode::size_t Component::stack_size() { return Libc::Component::stack_size(); }
 
 void Component::construct(Genode::Env &env)
 {
+	/* initialize the global pointer to environment variables */
+	static char *null_env = nullptr;
+	if (!environ) environ = &null_env;
+
+	Genode::Allocator &heap =
+		*unmanaged_singleton<Genode::Heap>(env.ram(), env.rm());
+
 	/* pass Genode::Env to libc subsystems that depend on it */
+	Libc::init_malloc(heap);
 	Libc::init_mem_alloc(env);
 	Libc::init_dl(env);
 	Libc::sysctl_init(env);
+
+	kernel = unmanaged_singleton<Libc::Kernel>(env, heap);
+
+	Libc::libc_config_init(kernel->libc_env().libc_config());
+
+	/*
+	 * XXX The following two steps leave us with the dilemma that we don't know
+	 * which linked library may depend on the successfull initialization of a
+	 * plugin. For example, some high-level library may try to open a network
+	 * connection in its constructor before the network-stack library is
+	 * initialized. But, we can't initialize plugins before calling static
+	 * constructors as those are needed to know about the libc plugin. The only
+	 * solution is to remove all libc plugins beside the VFS implementation,
+	 * which is our final goal anyway.
+	 */
+
+	/* finish static construction of component and libraries */
+	Libc::with_libc([&] () { env.exec_static_constructors(); });
 
 	/* initialize plugins that require Genode::Env */
 	auto init_plugin = [&] (Libc::Plugin &plugin) {
 		plugin.init(env);
 	};
 	Libc::plugin_registry()->for_each_plugin(init_plugin);
-
-	kernel = unmanaged_singleton<Libc::Kernel>(env);
-
-	Libc::libc_config_init(kernel->libc_env().libc_config());
 
 	/* construct libc component on kernel stack */
 	Libc::Component::construct(kernel->libc_env());

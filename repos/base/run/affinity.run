@@ -5,12 +5,11 @@
 #
 
 if {
-	![have_spec arndale]    &&
-	![have_spec wand_quad]  &&
-	![have_spec panda]      &&
-	![have_spec x86_32]     &&
-	![have_spec x86_64]     &&
-	![have_spec foc]        &&
+	![have_spec arndale]                           &&
+	![have_spec wand_quad]                         &&
+	![have_spec panda]                             &&
+	![expr [have_spec x86_32] && [have_spec foc] ] &&
+	![expr [have_spec x86_64] && [have_spec foc] ] &&
 	![have_spec nova]
 } {
 	puts "Platform is unsupported."
@@ -32,13 +31,13 @@ set config {
 			<service name="LOG"/>
 			<service name="CPU"/>
 			<service name="PD"/>
-			<service name="RAM"/>
 			<service name="ROM"/>
 			<service name="IO_MEM"/>
 		</parent-provides>
 		<default-route>
 			<any-service> <parent/> </any-service>
-		</default-route> }
+		</default-route>
+		<default caps="100"/>}
 
 append_if [have_spec arndale] config {
 	<start name="platform_drv">
@@ -65,7 +64,7 @@ if {[have_include "power_on/qemu"]} {
 	set want_cpus_y 1
 	set want_cpus_total [expr $want_cpus_x*$want_cpus_y]
 	set rounds "03"
-	append qemu_args "-nographic -m 64 -smp $want_cpus_total,cores=$want_cpus_total "
+	append qemu_args "-nographic  -smp $want_cpus_total,cores=$want_cpus_total "
 } else {
 	set rounds "10"
 	if {[have_spec x86]} { set rounds "40" }

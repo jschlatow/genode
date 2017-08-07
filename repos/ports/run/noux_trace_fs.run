@@ -46,8 +46,10 @@ append_platform_drv_build_components
 
 build $build_components
 
+create_boot_directory
+
 # write default vimrc file
-set vimrc_fd [open "bin/vim/share/vim/vimrc" w]
+set vimrc_fd [open "bin/vimrc" w]
 puts $vimrc_fd {
 set noloadplugins
 set hls
@@ -57,19 +59,11 @@ set noswapfile
 set viminfo=}
 close $vimrc_fd
 
-# strip all binaries prior archiving
-foreach pkg $noux_pkgs {
-	exec sh -c "find bin/$pkg -type f | (xargs [cross_dev_prefix]strip || true) 2>/dev/null"
-	exec tar cfv bin/$pkg.tar -h -C bin/$pkg . }
-
-create_boot_directory
-
 append config {
 <config verbose="yes">
 	<parent-provides>
 		<service name="ROM"/>
 		<service name="LOG"/>
-		<service name="RAM"/>
 		<service name="RM"/>
 		<service name="CPU"/>
 		<service name="PD"/>
@@ -81,6 +75,7 @@ append config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 	<start name="timer">
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Timer"/></provides>
@@ -98,7 +93,7 @@ append_if [have_spec sdl] config {
 append_platform_drv_config
 
 append_if [have_spec framebuffer] config {
-	<start name="fb_drv">
+	<start name="fb_drv" caps="200">
 		<resource name="RAM" quantum="4M"/>
 		<provides><service name="Framebuffer"/></provides>
 		<config width="640" height="480" />
@@ -161,7 +156,7 @@ append config {
 			<policy label="noux -> tmp"  root="/tmp"  writeable="yes" />
 		</config>
 	</start>
-	<start name="noux">
+	<start name="noux" caps="200">
 		<resource name="RAM" quantum="256M" />
 		<config>
 			<fstab> }
@@ -176,6 +171,8 @@ append config {
 				<dir name="dev">
 					<null /> <zero />
 				</dir>
+
+				<dir name="share"> <dir name="vim"> <rom name="vimrc"/> </dir> </dir>
 			</fstab>
 			<start name="/bin/bash">
 				<env name="TERM" value="linux" />
@@ -207,7 +204,7 @@ install_config $config
 # generic modules
 set boot_modules {
 	core init timer ld.lib.so noux terminal ram_fs
-	libc.lib.so libm.lib.so libc_noux.lib.so
+	libc.lib.so libm.lib.so libc_noux.lib.so posix.lib.so
 	ncurses.lib.so pcre.lib.so zlib.lib.so readline.lib.so
 	trace_fs
 
@@ -228,7 +225,6 @@ append_platform_drv_boot_modules
 
 build_boot_image $boot_modules
 
-append qemu_args " -m 512 "
 
 run_genode_until forever
 

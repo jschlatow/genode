@@ -73,7 +73,12 @@ struct Genode::Irq_session : Session
 	 ** Session **
 	 *************/
 
+	/**
+	 * \noapi
+	 */
 	static const char * service_name() { return "IRQ"; }
+
+	enum { CAP_QUOTA = 3 };
 
 
 	/*********************

@@ -43,7 +43,6 @@ class Genode::Cpu_thread_component : public Rpc_object<Cpu_thread>,
 
 		Rpc_entrypoint           &_ep;
 		Pager_entrypoint         &_pager_ep;
-		Capability<Pd_session>    _pd;
 		Region_map_component     &_address_space_region_map;
 		Cpu_session::Weight const _weight;
 		Session_label       const _session_label;
@@ -77,7 +76,7 @@ class Genode::Cpu_thread_component : public Rpc_object<Cpu_thread>,
 			: trace_control_area(trace_control_area)
 			{
 				if (!trace_control_area.alloc(index))
-					throw Cpu_session::Out_of_metadata();
+					throw Out_of_ram();
 			}
 
 			~Trace_control_slot()
@@ -138,7 +137,7 @@ class Genode::Cpu_thread_component : public Rpc_object<Cpu_thread>,
 		                     unsigned                   priority,
 		                     addr_t                     utcb)
 		:
-			_ep(ep), _pager_ep(pager_ep), _pd(pd.cap()),
+			_ep(ep), _pager_ep(pager_ep),
 			_address_space_region_map(pd.address_space_region_map()),
 			_weight(weight),
 			_session_label(label), _name(name),
@@ -156,7 +155,7 @@ class Genode::Cpu_thread_component : public Rpc_object<Cpu_thread>,
 
 			/*
 			 * Acquaint thread with its pager object, caution on some base platforms
-			 * this may raise an 'Out_of_meta_data' exception, which causes the
+			 * this may raise an 'Out_of_ram' exception, which causes the
 			 * destructor of this object to not being called. Catch it and remove this
 			 * object from the object pool
 			 */
@@ -201,8 +200,6 @@ class Genode::Cpu_thread_component : public Rpc_object<Cpu_thread>,
 		 * Define default exception handler installed for the CPU session
 		 */
 		void session_exception_sigh(Signal_context_capability);
-
-		Capability<Pd_session> pd() const { return _pd; }
 
 		void quota(size_t);
 

@@ -23,6 +23,10 @@ class Qt_launchpad : public QMainWindow, public Launchpad, private Ui::Qt_launch
 {
 	Q_OBJECT
 
+	private:
+
+		Genode::Env &_env;
+
 	private slots:
 
 		void _avail_quota_update();
@@ -35,7 +39,7 @@ class Qt_launchpad : public QMainWindow, public Launchpad, private Ui::Qt_launch
 		virtual void quota(unsigned long quota) override;
 
 		virtual	void add_launcher(Launchpad_child::Name const &binary_name,
-		                          unsigned long default_quota,
+		                          Cap_quota caps, unsigned long default_quota,
 		                          Genode::Dataspace_capability config_ds) override;
 
 		virtual void add_child(Launchpad_child::Name const &name,

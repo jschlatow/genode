@@ -8,13 +8,13 @@ install_config {
 		<service name="CPU"/>
 		<service name="LOG"/>
 		<service name="PD"/>
-		<service name="RAM"/>
 		<service name="RM"/>
 		<service name="ROM"/>
 	</parent-provides>
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 	<start name="timer">
 		<resource name="RAM" quantum="2M"/>
 		<provides> <service name="Timer"/> </provides>
@@ -37,10 +37,10 @@ install_config {
 
 build_boot_image {
 	core init timer test-libc_getenv
-	ld.lib.so libc.lib.so libm.lib.so
+	ld.lib.so libc.lib.so libm.lib.so posix.lib.so
 }
 
-append qemu_args " -nographic -m 64 "
+append qemu_args " -nographic  "
 
 run_genode_until "child .* exited with exit value 0.*\n" 10
 

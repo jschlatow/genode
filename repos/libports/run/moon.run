@@ -11,7 +11,6 @@ install_config {
 	<parent-provides>
 		<service name="PD"/>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="LOG"/>
 		<service name="IO_PORT"/>
 		<service name="IO_MEM"/>
@@ -21,6 +20,7 @@ install_config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 	<start name="timer">
 		<resource name="RAM" quantum="1M"/>
 		<provides> <service name="Timer"/> </provides>
@@ -28,9 +28,8 @@ install_config {
 	<start name="test-moon">
 		<resource name="RAM" quantum="1G"/>
 		<config>
-			<libc stdout="/dev/log">
-				<vfs> <dir name="dev"> <log/> </dir> </vfs>
-			</libc>
+			<vfs> <dir name="dev"> <log/> </dir> </vfs>
+			<libc stdout="/dev/log"/>
 		</config>
 	</start>
 </config>
@@ -41,6 +40,6 @@ build_boot_image {
 	ld.lib.so libc.lib.so libm.lib.so
 }
 
-append qemu_args " -nographic -m 65 "
+append qemu_args " -nographic "
 
-run_genode_until {.*test-moon.*Finished\..*} 30
+run_genode_until {.*test-moon.*Finished\..*} 40

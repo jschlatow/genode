@@ -39,14 +39,18 @@ struct Genode::Local_connection_base : Noncopyable
 
 	private:
 
-		static Args _init_args(Args const &args, size_t const &ram_quota)
+		static Args _init_args(Args const &args, Session::Resources resources,
+		                       Session::Diag diag)
 		{
 			/* copy original arguments into modifiable buffer */
 			char buf[Args::capacity()];
 			strncpy(buf, args.string(), sizeof(buf));
 
 			Arg_string::set_arg(buf, sizeof(buf), "ram_quota",
-			                    String<64>(ram_quota).string());
+			                    String<64>(resources.ram_quota.value).string());
+			Arg_string::set_arg(buf, sizeof(buf), "cap_quota",
+			                    String<64>(resources.cap_quota.value).string());
+			Arg_string::set_arg(buf, sizeof(buf), "diag", diag.enabled);
 
 			/* return result as a copy  */
 			return Args(Cstring(buf));
@@ -54,27 +58,41 @@ struct Genode::Local_connection_base : Noncopyable
 
 	protected:
 
-		Local_connection_base(Service &service,
-		                      Id_space<Parent::Client> &id_space,
-		                      Parent::Client::Id id,
+		Local_connection_base(Service                          &service,
+		                      Id_space<Parent::Client>         &id_space,
+		                      Parent::Client::Id                id,
 		                      Args const &args, Affinity const &affinity,
-		                      size_t ram_quota)
+		                      Session::Label             const &label,
+		                      Session::Diag                     diag,
+		                      Session::Resources                resources)
 		{
 			enum { NUM_ATTEMPTS = 10 };
 			for (unsigned i = 0; i < NUM_ATTEMPTS; i++) {
-				_session_state.construct(service, id_space, id,
-				                         label_from_args(args.string()),
-				                         _init_args(args, ram_quota), affinity);
+				_session_state.construct(service, id_space, id, label,
+				                         _init_args(args, resources, diag),
+				                         affinity);
 
 				_session_state->service().initiate_request(*_session_state);
 
-				if (_session_state->phase == Session_state::QUOTA_EXCEEDED)
-					ram_quota += 4096;
-				else
+				if (_session_state->alive())
 					break;
+
+				switch (_session_state->phase) {
+
+				case Session_state::INSUFFICIENT_RAM_QUOTA:
+					resources.ram_quota.value += 4096;
+					break;
+
+				case Session_state::INSUFFICIENT_CAP_QUOTA:
+					resources.cap_quota.value += 1;
+					break;
+
+				default: break;
+				}
 			}
 
-			if (_session_state->phase == Session_state::QUOTA_EXCEEDED)
+			if (_session_state->phase == Session_state::INSUFFICIENT_RAM_QUOTA
+			 || _session_state->phase == Session_state::INSUFFICIENT_CAP_QUOTA)
 				warning("giving up to increase session quota for ", service.name(), " session "
 				        "after ", (int)NUM_ATTEMPTS, " attempts");
 		}
@@ -132,15 +150,25 @@ class Genode::Local_connection : Local_connection_base
 			 */
 			error(SESSION::service_name(), " session (", _session_state->args(), ") "
 			      "unavailable");
-			throw Parent::Service_denied();
+			throw Service_denied();
+		}
+
+		SESSION const &session() const
+		{
+			return const_cast<Local_connection *>(this)->session();
 		}
 
 		Local_connection(Service &service, Id_space<Parent::Client> &id_space,
 		                 Parent::Client::Id id, Args const &args,
-		                 Affinity const &affinity)
+		                 Affinity const &affinity,
+		                 Session::Label const &label = Session_label(),
+		                 Session::Diag diag = { false })
 		:
-			Local_connection_base(service, id_space, id, args,
-			                      affinity, CONNECTION::RAM_QUOTA)
+			Local_connection_base(service, id_space, id, args, affinity,
+			                      label.valid() ? label : label_from_args(args.string()),
+			                      diag,
+			                      Session::Resources { Ram_quota { CONNECTION::RAM_QUOTA },
+			                                           Cap_quota { CONNECTION::CAP_QUOTA } })
 		{
 			service.wakeup();
 		}

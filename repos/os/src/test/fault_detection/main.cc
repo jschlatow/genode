@@ -70,11 +70,11 @@ class Test_child : public Genode::Child_policy
 	private:
 
 		Env                      &_env;
-		size_t              const _ram_quota = 1024*1024;
+		Cap_quota           const _cap_quota { 50 };
+		Ram_quota           const _ram_quota { 1024*1024 };
 		Binary_name         const _binary_name;
 		Signal_context_capability _sigh;
 		Parent_service            _cpu_service { _env, Cpu_session::service_name() };
-		Parent_service            _ram_service { _env, Ram_session::service_name() };
 		Parent_service            _pd_service  { _env,  Pd_session::service_name() };
 		Parent_service            _log_service { _env, Log_session::service_name() };
 		Parent_service            _rom_service { _env, Rom_session::service_name() };
@@ -101,14 +101,8 @@ class Test_child : public Genode::Child_policy
 
 		Binary_name binary_name() const override { return _binary_name; }
 
-		Ram_session           &ref_ram()           override { return _env.ram(); }
-		Ram_session_capability ref_ram_cap() const override { return _env.ram_session_cap(); }
-
-		void init(Ram_session &ram, Ram_session_capability ram_cap) override
-		{
-			ram.ref_account(ref_ram_cap());
-			ref_ram().transfer_quota(ram_cap, _ram_quota);
-		}
+		Pd_session           &ref_pd()           override { return _env.pd(); }
+		Pd_session_capability ref_pd_cap() const override { return _env.pd_session_cap(); }
 
 		void init(Cpu_session &cpu, Cpu_session_capability) override
 		{
@@ -116,8 +110,12 @@ class Test_child : public Genode::Child_policy
 			cpu.exception_sigh(_sigh);
 		}
 
-		void init(Pd_session &pd, Pd_session_capability) override
+		void init(Pd_session &pd, Pd_session_capability pd_cap) override
 		{
+			pd.ref_account(ref_pd_cap());
+			ref_pd().transfer_quota(pd_cap, _cap_quota);
+			ref_pd().transfer_quota(pd_cap, _ram_quota);
+
 			/* register handler for unresolvable page faults */
 			Region_map_client address_space(pd.address_space());
 			address_space.fault_handler(_sigh);
@@ -127,12 +125,11 @@ class Test_child : public Genode::Child_policy
 		                                 Session_state::Args const &args) override
 		{
 			if (service == Cpu_session::service_name()) return _cpu_service;
-			if (service == Ram_session::service_name()) return _ram_service;
 			if (service ==  Pd_session::service_name()) return  _pd_service;
 			if (service == Log_session::service_name()) return _log_service;
 			if (service == Rom_session::service_name()) return _rom_service;
 
-			throw Parent::Service_denied();
+			throw Service_denied();
 		}
 };
 
@@ -162,7 +159,7 @@ struct Faulting_loader_child_test
 
 	void start_iteration(Env &env, Signal_context_capability fault_sigh)
 	{
-		loader.construct(env, 1024*1024);
+		loader.construct(env, Ram_quota{1024*1024}, Cap_quota{100});
 
 		/* register fault handler at loader session */
 		loader->fault_sigh(fault_sigh);
@@ -195,7 +192,7 @@ struct Faulting_loader_grand_child_test
 			"  <default-route>\n"
 			"    <any-service> <parent/> <any-child/> </any-service>\n"
 			"  </default-route>\n"
-			"  <start name=\"test-segfault\">\n"
+			"  <start name=\"test-segfault\" caps=\"50\">\n"
 			"    <resource name=\"RAM\" quantum=\"10M\"/>\n"
 			"  </start>\n"
 			"</config>";
@@ -207,11 +204,12 @@ struct Faulting_loader_grand_child_test
 
 	void start_iteration(Env &env, Signal_context_capability fault_sigh)
 	{
-		loader.construct(env, 2*1024*1024);
+		loader.construct(env, Ram_quota{2*1024*1024}, Cap_quota{100});
 
 		/* import config into loader session */
 		{
-			Attached_dataspace ds(loader->alloc_rom_module("config", config_size()));
+			Attached_dataspace ds(env.rm(),
+			                      loader->alloc_rom_module("config", config_size()));
 			memcpy(ds.local_addr<char>(), config(), config_size());
 			loader->commit_rom_module("config");
 		}

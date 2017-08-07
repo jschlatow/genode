@@ -6,7 +6,6 @@ install_config {
 	<config>
 		<parent-provides>
 			<service name="ROM"/>
-			<service name="RAM"/>
 			<service name="IRQ"/>
 			<service name="IO_MEM"/>
 			<service name="IO_PORT"/>
@@ -18,6 +17,7 @@ install_config {
 		<default-route>
 			<any-service> <parent/> <any-child/> </any-service>
 		</default-route>
+		<default caps="100"/>
 		<start name="timer">
 			<resource name="RAM" quantum="1M"/>
 			<provides><service name="Timer"/></provides>
@@ -44,7 +44,7 @@ install_config {
 
 build_boot_image "core ld.lib.so init timer report_rom test-report_rom"
 
-append qemu_args "-nographic -m 128"
+append qemu_args "-nographic "
 
 run_genode_until {child "test-report_rom" exited with exit value 0.*\n} 30
 
@@ -70,7 +70,7 @@ compare_output_to {
 	[init -> test-report_rom] Reporter: start reporting (while the ROM client still listens)
 	[init -> test-report_rom] ROM client: wait for update notification
 	[init -> test-report_rom] ROM client: try to open the same report again
-	[init -> test-report_rom] Error: Report-session creation failed (label="brightness", ram_quota=14336, buffer_size=4096)
-	[init -> test-report_rom] ROM client: catched Parent::Service_denied - OK
+	[init -> test-report_rom] Error: Report-session creation failed (label="brightness", ram_quota=14336, cap_quota=3, buffer_size=4096)
+	[init -> test-report_rom] ROM client: caught Service_denied - OK
 	[init -> test-report_rom] --- test-report_rom finished ---
 }

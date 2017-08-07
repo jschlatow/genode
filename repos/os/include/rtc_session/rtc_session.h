@@ -40,7 +40,12 @@ struct Rtc::Timestamp
 
 struct Rtc::Session : Genode::Session
 {
+	/**
+	 * \noapi
+	 */
 	static const char *service_name() { return "Rtc"; }
+
+	enum { CAP_QUOTA = 2 };
 
 	virtual Timestamp current_time() = 0;
 

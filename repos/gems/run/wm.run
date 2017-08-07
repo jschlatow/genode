@@ -1,46 +1,24 @@
-#
-# Build
-#
-
-if {[have_spec odroid_xu]} {
-	puts "Run script not supported on this platform."; exit 0 }
-
-set build_components {
-	core init
-	drivers/timer
-	server/wm app/decorator app/floating_window_layouter
-	server/nitpicker app/pointer server/report_rom
-	drivers/framebuffer drivers/input
-	test/nitpicker
-	app/backdrop
-	app/launchpad
-	server/nit_fb
-}
-
-source ${genode_dir}/repos/base/run/platform_drv.inc
-
-lappend_if [need_usb_hid]   build_components drivers/usb
-lappend_if [have_spec gpio] build_components drivers/gpio
-
-proc gpio_drv { } { if {[have_spec rpi] && [have_spec hw]}  { return hw_gpio_drv }
-                    if {[have_spec rpi] && [have_spec foc]} { return foc_gpio_drv }
-                    return gpio_drv }
-
-append_platform_drv_build_components
-
-build $build_components
-
 create_boot_directory
 
 #
-# Generate config
+# To use the themed decorator instead of the default one, replace 'pkg/wm'
+# with 'pkg/themed_wm'.
 #
 
-append config {
+import_from_depot genodelabs/src/[base_src] \
+                  genodelabs/pkg/[drivers_interactive_pkg] \
+                  genodelabs/pkg/wm \
+                  genodelabs/raw/genode_bg \
+                  genodelabs/pkg/backdrop \
+                  genodelabs/src/demo \
+                  genodelabs/src/init \
+                  genodelabs/src/nitpicker \
+                  genodelabs/src/nit_fb
+
+install_config {
 <config prio_levels="2">
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -51,57 +29,27 @@ append config {
 	</parent-provides>
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
-	</default-route>}
+	</default-route>
+	<default caps="100"/>
 
-append_if [have_spec sdl] config {
-	<start name="fb_sdl">
-		<resource name="RAM" quantum="4M"/>
-		<provides>
-			<service name="Input"/>
-			<service name="Framebuffer"/>
-		</provides>
-	</start>}
-
-append_platform_drv_config
-
-append_if [have_spec framebuffer] config {
-	<start name="fb_drv">
-		<resource name="RAM" quantum="4M"/>
-		<provides><service name="Framebuffer"/></provides>
-	</start>}
-
-append_if [have_spec gpio] config "
-	<start name=\"[gpio_drv]\">
-		<resource name=\"RAM\" quantum=\"4M\"/>
-		<provides><service name=\"Gpio\"/></provides>
-		<config/>
-	</start>"
-
-append_if [have_spec imx53] config {
-	<start name="input_drv">
-		<resource name="RAM" quantum="1M"/>
-		<provides><service name="Input"/></provides>
-		<config/>
-	</start> }
-
-append_if [have_spec ps2] config {
-	<start name="ps2_drv">
-		<resource name="RAM" quantum="1M"/>
-		<provides><service name="Input"/></provides>
-	</start>}
-
-append_if [need_usb_hid] config {
-	<start name="usb_drv">
-		<resource name="RAM" quantum="12M"/>
-		<provides><service name="Input"/></provides>
-		<config ehci="yes" uhci="yes" xhci="no"> <hid/> </config>
-	</start> }
-
-append config {
 	<start name="timer">
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Timer"/></provides>
 	</start>
+
+	<start name="drivers" caps="1000">
+		<resource name="RAM" quantum="32M"/>
+		<binary name="init"/>
+		<route>
+			<service name="ROM" label="config"> <parent label="drivers.config"/> </service>
+			<service name="Timer"> <child name="timer"/> </service>
+			<any-service> <parent/> </any-service>
+		</route>
+		<provides>
+			<service name="Input"/> <service name="Framebuffer"/>
+		</provides>
+	</start>
+
 	<start name="nitpicker">
 		<resource name="RAM" quantum="4M"/>
 		<provides><service name="Nitpicker"/></provides>
@@ -113,6 +61,7 @@ append config {
 			<default-policy domain="default"/>
 		</config>
 	</start>
+
 	<start name="pointer">
 		<resource name="RAM" quantum="1M"/>
 		<route>
@@ -120,119 +69,65 @@ append config {
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
-	<start name="report_rom">
-		<resource name="RAM" quantum="4M"/>
-		<provides>
-			<service name="Report"/>
-			<service name="ROM"/>
-		</provides>
-		<config>
-			<policy label="layouter -> window_list"       report="wm -> window_list"/>
-			<policy label="layouter -> focus_request"     report="wm -> focus_request"/>
-			<policy label="decorator -> window_layout"    report="layouter -> window_layout"/>
-			<policy label="wm -> resize_request"          report="layouter -> resize_request"/>
-			<policy label="decorator -> pointer"          report="wm -> pointer"/>
-			<policy label="layouter -> hover"             report="decorator -> hover"/>
-			<policy label="layouter -> decorator_margins" report="decorator -> decorator_margins"/>
-			<policy label="wm -> focus"                   report="layouter -> focus"/>
-		</config>
-	</start>
-	<start name="wm" priority="-1">
-		<resource name="RAM" quantum="6M"/>
-		<provides>
-			<service name="Nitpicker"/>
-		</provides>
-		<config>
-			<policy label_prefix="decorator" role="decorator"/>
-			<policy label_prefix="layouter"  role="layouter"/>
-		</config>
+
+	<start name="wm" caps="1000">
+		<resource name="RAM" quantum="24M"/>
+		<binary name="init"/>
+		<provides> <service name="Nitpicker"/> </provides>
 		<route>
-			<service name="ROM" label="resize_request"> <child name="report_rom"/> </service>
-			<service name="ROM" label="focus">          <child name="report_rom"/> </service>
-			<service name="Report">                     <child name="report_rom"/> </service>
-			<any-service>
-				<child name="nitpicker"/> <parent/> <any-child/>
-			</any-service>
+			<service name="ROM" label="config"> <parent label="wm.config"/> </service>
+			<service name="Nitpicker"> <child name="nitpicker"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
-	<start name="layouter" priority="-1">
-		<binary name="floating_window_layouter"/>
-		<resource name="RAM" quantum="4M"/>
-		<route>
-			<service name="ROM" label="window_list">       <child name="report_rom"/> </service>
-			<service name="ROM" label="focus_request">     <child name="report_rom"/> </service>
-			<service name="ROM" label="hover">             <child name="report_rom"/> </service>
-			<service name="ROM" label="decorator_margins"> <child name="report_rom"/> </service>
-			<service name="Report">                        <child name="report_rom"/> </service>
-			<any-service>
-				<child name="wm"/> <parent/> <any-child/>
-			</any-service>
-		</route>
-	</start>
-	<start name="decorator" priority="-1">
-		<binary name="decorator"/>
-		<resource name="RAM" quantum="8M"/>
-		<config>
-			<controls> <maximizer/> <title/> </controls>
-		</config>
-		<route>
-			<service name="ROM" label="window_layout">
-				<child name="report_rom"/> </service>
-			<service name="ROM" label="pointer">
-				<child name="report_rom"/> </service>
-			<service name="Report"> <child name="report_rom"/> </service>
-			<any-service>
-				<child name="wm"/> <parent/> <any-child/>
-			</any-service>
-		</route>
-	</start>
-	<start name="launchpad" priority="-1">
+
+	<start name="launchpad" priority="-1" caps="500">
 		<resource name="RAM" quantum="20M"/>
 		<config>
-			<launcher name="nit_fb" ram_quota="7M">
+			<launcher name="nit_fb" ram_quota="7M" caps="30">
 				<config width="500" height="400" />
 			</launcher>
-			<launcher name="nitpicker" ram_quota="1M" >
+			<launcher name="nitpicker" ram_quota="1M" caps="50">
 				<config>
 					<domain name="default" layer="2" />
 					<default-policy domain="default"/>
 				</config>
 			</launcher>
-			<launcher name="testnit" ram_quota="768K" />
+			<launcher name="testnit" ram_quota="768K" caps="30"/>
 		</config>
 		<route>
 			<any-service> <child name="wm"/> <parent/> <any-child/>
 			</any-service>
 		</route>
 	</start>
+
 	<start name="backdrop" priority="-1">
-		<resource name="RAM" quantum="4M"/>
+		<resource name="RAM" quantum="24M"/>
 		<config>
-			<libc>
-				<vfs>
-					<rom name="genode_logo.png"/>
-					<rom name="grid.png"/>
-				</vfs>
-			</libc>
+			<libc/>
+			<vfs>
+				<rom name="genode_logo.png"/>
+				<rom name="grid.png"/>
+			</vfs>
 			<fill color="#224433" />
 			<image png="grid.png"        tiled="yes" alpha="200" />
 			<image png="genode_logo.png" anchor="bottom_right" alpha="150"
 			                             xpos="-20" ypos="-20" />
 		</config>
 		<route>
-			<any-service> <child name="nitpicker"/> <parent/> <any-child/>
+			<any-service> <child name="nitpicker" label="backdrop"/> <parent/> <any-child/>
 			</any-service>
 		</route>
 	</start>
+
 	<start name="wm_backdrop" priority="-1">
 		<binary name="backdrop" />
-		<resource name="RAM" quantum="4M"/>
+		<resource name="RAM" quantum="24M"/>
 		<config>
-			<libc>
-				<vfs>
-					<rom name="genode_logo.png"/>
-				</vfs>
-			</libc>
+			<libc/>
+			<vfs>
+				<rom name="genode_logo.png"/>
+			</vfs>
 			<fill color="#664455" />
 			<image png="genode_logo.png" scale="zoom" alpha="150" />
 			<image png="genode_logo.png" scale="fit" alpha="150" tiled="yes" />
@@ -245,42 +140,7 @@ append config {
 	</start>
 </config>}
 
-install_config $config
+build_boot_image { }
 
-# copy backdrop PNG images to bin directory
-foreach file { genode_logo.png grid.png } {
-	file copy -force [genode_dir]/repos/gems/src/app/backdrop/$file bin/ }
-
-
-#
-# Boot modules
-#
-
-# generic modules
-set boot_modules {
-	core ld.lib.so init
-	timer
-	wm decorator
-	floating_window_layouter
-	nitpicker pointer report_rom
-	backdrop
-	testnit launchpad nit_fb
-	libpng.lib.so libc.lib.so libm.lib.so zlib.lib.so
-	genode_logo.png grid.png
-}
-
-# platform-specific modules
-append_platform_drv_boot_modules
-
-lappend_if [have_spec linux]       boot_modules fb_sdl
-lappend_if [have_spec ps2]         boot_modules ps2_drv
-lappend_if [have_spec framebuffer] boot_modules fb_drv
-lappend_if [need_usb_hid]          boot_modules usb_drv
-lappend_if [have_spec gpio]        boot_modules [gpio_drv]
-lappend_if [have_spec imx53]       boot_modules input_drv
-
-build_boot_image $boot_modules
-
-append qemu_args " -m 256 "
 
 run_genode_until forever

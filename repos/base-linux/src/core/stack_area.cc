@@ -78,23 +78,15 @@ class Stack_area_region_map : public Genode::Region_map
 };
 
 
-class Stack_area_ram_session : public Genode::Ram_session
+struct Stack_area_ram_allocator : Genode::Ram_allocator
 {
-	public:
+	Genode::Ram_dataspace_capability alloc(Genode::size_t size,
+	                                       Genode::Cache_attribute) override {
+		return Genode::Ram_dataspace_capability(); }
 
-		Genode::Ram_dataspace_capability alloc(Genode::size_t size,
-		                                       Genode::Cache_attribute) {
-			return Genode::Ram_dataspace_capability(); }
+	void free(Genode::Ram_dataspace_capability) override { }
 
-		void free(Genode::Ram_dataspace_capability) { }
-
-		int ref_account(Genode::Ram_session_capability) { return 0; }
-
-		int transfer_quota(Genode::Ram_session_capability, Genode::size_t) { return 0; }
-
-		Genode::size_t quota() { return 0; }
-
-		Genode::size_t used() { return 0; }
+	Genode::size_t dataspace_size(Genode::Ram_dataspace_capability) const override { return 0; }
 };
 
 
@@ -103,16 +95,16 @@ class Stack_area_ram_session : public Genode::Ram_session
  */
 namespace Genode {
 
-	Region_map  *env_stack_area_region_map;
-	Ram_session *env_stack_area_ram_session;
+	Region_map    *env_stack_area_region_map;
+	Ram_allocator *env_stack_area_ram_allocator;
 
 	void init_stack_area()
 	{
 		static Stack_area_region_map rm_inst;
 		env_stack_area_region_map = &rm_inst;
 
-		static Stack_area_ram_session ram_inst;
-		env_stack_area_ram_session = &ram_inst;
+		static Stack_area_ram_allocator ram_inst;
+		env_stack_area_ram_allocator = &ram_inst;
 	}
 }
 

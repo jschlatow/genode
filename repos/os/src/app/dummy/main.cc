@@ -24,6 +24,8 @@ namespace Dummy {
 
 	struct Log_service;
 	struct Log_connections;
+	struct Ram_consumer;
+	struct Resource_yield_handler;
 	struct Main;
 	using namespace Genode;
 }
@@ -35,11 +37,27 @@ struct Dummy::Log_service
 
 	Heap _heap { _env.ram(), _env.rm() };
 
+	bool const _verbose;
+
 	struct Session_component : Rpc_object<Log_session>
 	{
 		Session_label const _label;
 
-		Session_component(Session_label const &label) : _label(label) { }
+		bool const _verbose;
+
+		Session_component(Session_label const &label, bool verbose)
+		:
+			_label(label), _verbose(verbose)
+		{
+			if (_verbose)
+				log("opening session with label ", _label);
+		}
+
+		~Session_component()
+		{
+			if (_verbose)
+				log("closing session with label ", _label);
+		}
 
 		size_t write(String const &string) override
 		{
@@ -58,17 +76,33 @@ struct Dummy::Log_service
 
 	struct Root : Root_component<Session_component>
 	{
-		Root(Entrypoint &ep, Allocator &alloc) : Root_component(ep, alloc) { }
+		Ram_session &_ram;
+
+		bool const _verbose;
+
+		Root(Entrypoint &ep, Allocator &alloc, Ram_session &ram, bool verbose)
+		:
+			Root_component(ep, alloc), _ram(ram), _verbose(verbose)
+		{ }
 
 		Session_component *_create_session(const char *args, Affinity const &) override
 		{
-			return new (md_alloc()) Session_component(label_from_args(args));
+			return new (md_alloc()) Session_component(label_from_args(args), _verbose);
+		}
+
+		void _upgrade_session(Session_component *, const char *args) override
+		{
+			size_t const ram_quota =
+				Arg_string::find_arg(args, "ram_quota").ulong_value(0);
+
+			if (_ram.avail_ram().value >= ram_quota)
+				log("received session quota upgrade");
 		}
 	};
 
-	Root _root { _env.ep(), _heap };
+	Root _root { _env.ep(), _heap, _env.ram(), _verbose };
 
-	Log_service(Env &env) : _env(env)
+	Log_service(Env &env, bool verbose) : _env(env), _verbose(verbose)
 	{
 		_env.parent().announce(_env.ep().manage(_root));
 		log("created LOG service");
@@ -92,10 +126,21 @@ struct Dummy::Log_connections
 	{
 		unsigned const count = node.attribute_value("count", 0UL);
 
+		Number_of_bytes const ram_upgrade =
+			node.attribute_value("ram_upgrade", Number_of_bytes());
+
 		log("going to create ", count, " LOG connections");
 
-		for (unsigned i = 0; i < count; i++)
-			new (_heap) Connection(_connections, _env, Session_label { i });
+		for (unsigned i = 0; i < count; i++) {
+
+			Connection *connection =
+				new (_heap) Connection(_connections, _env, Session_label { i });
+
+			if (ram_upgrade > 0) {
+				log("upgrade connection ", i);
+				connection->upgrade_ram(ram_upgrade);
+			}
+		}
 
 		log("created all LOG connections");
 	}
@@ -105,6 +150,64 @@ struct Dummy::Log_connections
 		_connections.for_each([&] (Connection &c) { destroy(_heap, &c); });
 
 		log("destroyed all LOG connections");
+	}
+};
+
+
+struct Dummy::Ram_consumer
+{
+	size_t _amount = 0;
+
+	Ram_dataspace_capability _ds_cap;
+
+	Ram_session &_ram;
+
+	Ram_consumer(Ram_session &ram) : _ram(ram) { }
+
+	void release()
+	{
+		if (!_amount)
+			return;
+
+		log("release ", Number_of_bytes(_amount), " bytes of memory");
+		_ram.free(_ds_cap);
+
+		_ds_cap = Ram_dataspace_capability();
+		_amount = 0;
+	}
+
+	void consume(size_t amount)
+	{
+		if (_amount)
+			release();
+
+		log("consume ", Number_of_bytes(amount), " bytes of memory");
+		_ds_cap = _ram.alloc(amount);
+		_amount = amount;
+	}
+};
+
+
+struct Dummy::Resource_yield_handler
+{
+	Env &_env;
+
+	Ram_consumer &_ram_consumer;
+
+	void _handle_yield()
+	{
+		log("got yield request");
+		_ram_consumer.release();
+		_env.parent().yield_response();
+	}
+
+	Signal_handler<Resource_yield_handler> _yield_handler {
+		_env.ep(), *this, &Resource_yield_handler::_handle_yield };
+
+	Resource_yield_handler(Env &env, Ram_consumer &ram_consumer)
+	: _env(env), _ram_consumer(ram_consumer)
+	{
+		_env.parent().yield_sigh(_yield_handler);
 	}
 };
 
@@ -124,6 +227,10 @@ struct Dummy::Main
 	Version _config_version;
 
 	Signal_handler<Main> _config_handler { _env.ep(), *this, &Main::_handle_config };
+
+	Ram_consumer _ram_consumer { _env.ram() };
+
+	Constructible<Resource_yield_handler> _resource_yield_handler;
 
 	void _handle_config()
 	{
@@ -148,7 +255,13 @@ struct Dummy::Main
 				_log_connections.destruct();
 
 			if (node.type() == "log_service")
-				_log_service.construct(_env);
+				_log_service.construct(_env, node.attribute_value("verbose", false));
+
+			if (node.type() == "consume_ram")
+				_ram_consumer.consume(node.attribute_value("amount", Number_of_bytes()));
+
+			if (node.type() == "handle_yield_requests")
+				_resource_yield_handler.construct(_env, _ram_consumer);
 
 			if (node.type() == "sleep") {
 

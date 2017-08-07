@@ -6,13 +6,12 @@
 #
 
 #
-# Only the NOVA and 32-bit Fiasco.OC base platforms support most of the tested features
-# at this time.
+# Only the NOVA platform supports most of the tested features at this time.
 #
 
 if {![have_include "power_on/qemu"] ||
-    !([have_spec nova] || ([have_spec foc] && [have_spec 32bit]))} {
-	 puts "Run script is only supported for NOVA or 32-bit Fiasco.OC in Qemu"; exit 0
+    !([have_spec nova])} {
+	 puts "Run script is only supported for NOVA in Qemu"; exit 0
 }
 
 #
@@ -40,7 +39,6 @@ set config {
 <config verbose="yes">
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -52,6 +50,7 @@ set config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 	<start name="timer">
 		<resource name="RAM" quantum="2M"/>
 		<provides> <service name="Timer"/> </provides>
@@ -66,20 +65,18 @@ set config {
 			<policy label_prefix="gdb_monitor" uart="1"/>
 		</config>
 	</start>
-	<start name="gdb_monitor">
+	<start name="gdb_monitor" caps="200">
 		<resource name="RAM" quantum="7M"/>
 		<config>
 			<target name="test-gdb_monitor">
 				<config>
-					<libc stdout="/dev/log" stderr="/dev/log">
-						<vfs> <dir name="dev"> <log/> </dir> </vfs>
-					</libc>
+					<vfs> <dir name="dev"> <log/> </dir> </vfs>
+					<libc stdout="/dev/log" stderr="/dev/log"/>
 				</config>
 			</target>
 			<preserve name="RAM" quantum="3M"/>
-			<libc stdout="/dev/log" stderr="/dev/log">
-				<vfs> <dir name="dev"> <log/> </dir> </vfs>
-			</libc>
+			<vfs> <dir name="dev"> <log/> </dir> </vfs>
+			<libc stdout="/dev/log" stderr="/dev/log"/>
 		</config>
 	</start>
 </config>
@@ -100,7 +97,7 @@ proc binary_name_gdbserver_platform_lib_so { } {
 set boot_modules {
 	core init timer
 	ld.lib.so libc.lib.so libm.lib.so libc_pipe.lib.so libc_terminal.lib.so
-	uart_drv
+	uart_drv posix.lib.so
 	gdb_monitor gdbserver_platform.lib.so test-gdb_monitor
 }
 
@@ -113,7 +110,7 @@ build_boot_image $boot_modules
 set local_port 5555
 
 # qemu config
-append qemu_args " -m 128 -nographic "
+append qemu_args "  -nographic "
 
 # connect comport 0 to stdio
 append qemu_args " -serial mon:stdio "
@@ -129,12 +126,9 @@ puts "GDB monitor is up, starting GDB"
 
 source ${genode_dir}/repos/ports/run/gdb_monitor.inc
 
-# GDB loads symbols from 'bin/ld.lib.so'
+# GDB loads symbols from 'debug/ld.lib.so'
 if { [have_spec nova] } {
-	exec ln -sf ld-nova.lib.so bin/ld.lib.so
-}
-if { [have_spec foc] } {
-	exec ln -sf ld-foc.lib.so bin/ld.lib.so
+	exec ln -sf ld-nova.lib.so debug/ld.lib.so
 }
 
 set gdb_target_binary "test-gdb_monitor"
@@ -145,7 +139,7 @@ append gdb_cmds {-ex "target remote localhost:$local_port" }
 append gdb_cmds [gdb_initial_breakpoint_cmds $gdb_target_binary]
 
 # run GDB and redirect stderr to stdio to get the relevant output into the expect buffer
-eval spawn [gdb] bin/ld.lib.so -n $gdb_cmds 2&>1
+eval spawn [gdb] debug/ld.lib.so -n $gdb_cmds 2&>1
 set gdb_id [list $spawn_id $genode_id]
 
 puts ""

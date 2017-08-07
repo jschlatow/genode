@@ -16,8 +16,6 @@
 #include <file_system/node_handle_registry.h>
 #include <file_system_session/rpc_object.h>
 #include <base/attached_rom_dataspace.h>
-#include <os/config.h>
-#include <os/server.h>
 #include <os/session_policy.h>
 #include <root/component.h>
 #include <base/heap.h>
@@ -308,7 +306,8 @@ class Trace_file_system
 				catch (...) { Genode::error("trace buffer is already managed"); }
 
 				subject->active_file.set_active();
-			} catch (...) { Genode::error("could not enable tracing"); }
+			}
+			catch (...) { Genode::error("could not enable tracing"); }
 		}
 
 		/**
@@ -332,7 +331,8 @@ class Trace_file_system
 				try {
 					child = new (&_alloc) Directory(walker.element());
 					parent.adopt_unsynchronized(child);
-				} catch (...) {
+				}
+				catch (...) {
 					Genode::error("could not create '", walker.element(), "'");
 					return 0;
 				}
@@ -451,12 +451,13 @@ class Trace_file_system
 
 								_rm.detach(ram);
 							}
-						} catch (...) { Genode::error("could not allocate policy"); }
+						}
+						catch (...) { Genode::error("could not allocate policy"); }
 					}
 
 					policy_changed = true;
-
-				} catch (Trace_fs::Followed_subject_registry::Invalid_subject) { }
+				}
+				catch (Trace_fs::Followed_subject_registry::Invalid_subject) { }
 			}
 
 			Enable_file *enable_file = dynamic_cast<Enable_file*>(node);
@@ -560,6 +561,7 @@ class Trace_file_system
 						continue;
 					}
 				} catch (Trace_fs::Followed_subject_registry::Invalid_subject) {
+
 					/* ignore unknown but already dead subject */
 					if (state == Subject_info::State::DEAD)
 						continue;
@@ -607,7 +609,7 @@ class File_system::Session_component : public Session_rpc_object
 {
 	private:
 
-		Server::Entrypoint   &_ep;
+		Genode::Entrypoint   &_ep;
 		Ram_session          &_ram;
 		Allocator            &_md_alloc;
 		Directory            &_root_dir;
@@ -622,8 +624,8 @@ class File_system::Session_component : public Session_rpc_object
 		Trace::Connection    *_trace;
 		Trace_file_system    *_trace_fs;
 
-		Signal_rpc_member<Session_component> _process_packet_dispatcher;
-		Signal_rpc_member<Session_component> _fs_update_dispatcher;
+		Signal_handler<Session_component> _process_packet_dispatcher;
+		Signal_handler<Session_component> _fs_update_dispatcher;
 
 
 		/**************************
@@ -633,7 +635,7 @@ class File_system::Session_component : public Session_rpc_object
 		/**
 		 * Update the file system hierarchie and data of active trace subjects
 		 */
-		void _fs_update(unsigned)
+		void _fs_update()
 		{
 			_trace_fs->update(_subject_limit);
 		}
@@ -649,12 +651,6 @@ class File_system::Session_component : public Session_rpc_object
 		{
 			void     * const content = tx_sink()->packet_content(packet);
 			size_t     const length  = packet.length();
-			seek_off_t const offset  = packet.position();
-
-			if (!content || (packet.length() > packet.size())) {
-				packet.succeeded(false);
-				return;
-			}
 
 			/* resulting length */
 			size_t res_length = 0;
@@ -662,12 +658,21 @@ class File_system::Session_component : public Session_rpc_object
 			switch (packet.operation()) {
 
 			case Packet_descriptor::READ:
-				res_length = node.read((char *)content, length, offset);
+				if (content && (packet.length() <= packet.size()))
+					res_length = node.read((char *)content, length, packet.position());
 				break;
 
 			case Packet_descriptor::WRITE:
-				res_length = node.write((char const *)content, length, offset);
+				if (content && (packet.length() <= packet.size()))
+					res_length = node.write((char const *)content, length, packet.position());
 				break;
+
+			case Packet_descriptor::CONTENT_CHANGED:
+				_handle_registry.register_notify(*tx_sink(), packet.handle());
+				/* notify_listeners may bounce the packet back*/
+				node.notify_listeners();
+				/* otherwise defer acknowledgement of this packet */
+				return;
 
 			case Packet_descriptor::READ_READY:
 				/* not supported */
@@ -676,6 +681,7 @@ class File_system::Session_component : public Session_rpc_object
 
 			packet.length(res_length);
 			packet.succeeded(res_length > 0);
+			tx_sink()->acknowledge_packet(packet);
 		}
 
 		void _process_packet()
@@ -687,10 +693,9 @@ class File_system::Session_component : public Session_rpc_object
 
 			try {
 				Node *node = _handle_registry.lookup(packet.handle());
-
 				_process_packet_op(packet, *node);
 			}
-			catch (Invalid_handle)     { Genode::error("Invalid_handle");     }
+			catch (Invalid_handle) { Genode::error("Invalid_handle"); }
 
 			/*
 			 * The 'acknowledge_packet' function cannot block because we
@@ -703,7 +708,7 @@ class File_system::Session_component : public Session_rpc_object
 		 * Called by signal dispatcher, executed in the context of the main
 		 * thread (not serialized with the RPC functions)
 		 */
-		void _process_packets(unsigned)
+		void _process_packets()
 		{
 			while (tx_sink()->packet_avail()) {
 
@@ -744,7 +749,7 @@ class File_system::Session_component : public Session_rpc_object
 		 * Constructor
 		 */
 		Session_component(size_t                 tx_buf_size,
-		                  Server::Entrypoint     &ep,
+		                  Genode::Entrypoint     &ep,
 		                  Genode::Ram_session    &ram,
 		                  Genode::Region_map     &rm,
 		                  Genode::Env            &env,
@@ -902,13 +907,11 @@ class File_system::Session_component : public Session_rpc_object
 
 				File *file = dynamic_cast<File*>(node);
 				if (file) { file->truncate(size); }
-			} catch (Invalid_handle) { }
+			}
+			catch (Invalid_handle) { }
 		}
 
 		void move(Dir_handle, Name const &, Dir_handle, Name const &) { }
-
-		void sigh(Node_handle node_handle, Signal_context_capability sigh) {
-			_handle_registry.sigh(node_handle, sigh); }
 };
 
 
@@ -916,12 +919,14 @@ class File_system::Root : public Root_component<Session_component>
 {
 	private:
 
-		Server::Entrypoint  &_ep;
+		Genode::Entrypoint  &_ep;
 		Genode::Ram_session &_ram;
 		Genode::Region_map  &_rm;
 		Genode::Env         &_env;
 
 		Directory           &_root_dir;
+
+		Genode::Attached_rom_dataspace _config { _env, "config" };
 
 	protected:
 
@@ -948,26 +953,26 @@ class File_system::Root : public Root_component<Session_component>
 
 			Session_label const label = label_from_args(args);
 			try {
-				Session_policy policy(label);
+				Session_policy policy(label, _config.xml());
 
 				/*
 				 * Override default settings with specific session settings by
 				 * evaluating the policy.
 				 */
-				try { policy.attribute("interval").value(&interval);
-				} catch (...) { }
-				try { policy.attribute("subject_limit").value(&subject_limit);
-				} catch (...) { }
-				try { policy.attribute("trace_quota").value(&trace_quota);
-				} catch (...) { }
-				try { policy.attribute("trace_meta_quota").value(&trace_meta_quota);
-				} catch (...) { }
-				try { policy.attribute("parent_levels").value(&trace_parent_levels);
-				} catch (...) { }
-				try { policy.attribute("buffer_size").value(&buffer_size);
-				} catch (...) { }
-				try { policy.attribute("buffer_size_max").value(&buffer_size_max);
-				} catch (...) { }
+				try { policy.attribute("interval").value(&interval); }
+				catch (...) { }
+				try { policy.attribute("subject_limit").value(&subject_limit); }
+				catch (...) { }
+				try { policy.attribute("trace_quota").value(&trace_quota); }
+				catch (...) { }
+				try { policy.attribute("trace_meta_quota").value(&trace_meta_quota); }
+				catch (...) { }
+				try { policy.attribute("parent_levels").value(&trace_parent_levels); } 
+				catch (...) { }
+				try { policy.attribute("buffer_size").value(&buffer_size); }
+				catch (...) { }
+				try { policy.attribute("buffer_size_max").value(&buffer_size_max); }
+				catch (...) { }
 
 				/*
 				 * Determine directory that is used as root directory of
@@ -983,18 +988,20 @@ class File_system::Root : public Root_component<Session_component>
 					 */
 					if (root[0] != '/')
 						throw Lookup_failed();
-				} catch (Xml_node::Nonexistent_attribute) {
+				}
+				catch (Xml_node::Nonexistent_attribute) {
 					Genode::error("Missing \"root\" attribute in policy definition");
-					throw Root::Unavailable();
-				} catch (Lookup_failed) {
+					throw Service_denied();
+				}
+				catch (Lookup_failed) {
 					Genode::error("session root directory "
 					              "\"", Genode::Cstring(root), "\" does not exist");
-					throw Root::Unavailable();
+					throw Service_denied();
 				}
-
-			} catch (Session_policy::No_policy_defined) {
+			}
+			catch (Session_policy::No_policy_defined) {
 				Genode::error("Invalid session request, no matching policy");
-				throw Root::Unavailable();
+				throw Service_denied();
 			}
 
 			size_t ram_quota =
@@ -1004,7 +1011,7 @@ class File_system::Root : public Root_component<Session_component>
 
 			if (!tx_buf_size) {
 				Genode::error(label, " requested a session with a zero length transmission buffer");
-				throw Root::Invalid_args();
+				throw Genode::Service_denied();
 			}
 
 			/*
@@ -1015,7 +1022,7 @@ class File_system::Root : public Root_component<Session_component>
 			if (max((size_t)4096, session_size) > ram_quota) {
 				Genode::error("insufficient 'ram_quota', got ", ram_quota, ", "
 				              "need ", session_size);
-				throw Root::Quota_exceeded();
+				throw Insufficient_ram_quota();
 			}
 			return new (md_alloc())
 				Session_component(tx_buf_size, _ep, _ram, _rm, _env, _root_dir,
@@ -1035,7 +1042,7 @@ class File_system::Root : public Root_component<Session_component>
 		 *                    data-flow signals of packet streams
 		 * \param md_alloc    meta-data allocator
 		 */
-		Root(Server::Entrypoint &ep, Allocator &md_alloc, Ram_session &ram,
+		Root(Genode::Entrypoint &ep, Allocator &md_alloc, Ram_session &ram,
 		     Region_map &rm, Env &env, Directory &root_dir)
 		:
 			Root_component<Session_component>(&ep.rpc_ep(), &md_alloc),

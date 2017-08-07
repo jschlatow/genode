@@ -17,14 +17,17 @@
 
 /* Genode/Virtualbox includes */
 #include "sup.h"
+#include "vmm.h"
 
 /* VirtualBox includes */
-#include <iprt/semaphore.h>
 #include <iprt/ldr.h>
+#include <iprt/semaphore.h>
+#include <iprt/timer.h>
 #include <iprt/uint128.h>
 #include <VBox/err.h>
 
-#include "vmm.h"
+static PFNRTTIMER rttimer_func = nullptr;
+static void *     rttimer_obj  = nullptr;
 
 enum {
 	UPDATE_HZ  = 1000,
@@ -87,6 +90,10 @@ struct Periodic_gip : public Genode::Thread
 		 * read struct SUPGIPCPU description for more details.
 		 */
 		ASMAtomicIncU32(&cpu->u32TransactionId);
+
+		/* call the timer function of the RTTimerCreate call */
+		if (rttimer_func)
+			rttimer_func(nullptr, rttimer_obj, 0);
 	}
 
 	void entry() override { genode_update_tsc(update, UPDATE_US); }
@@ -135,6 +142,33 @@ struct Attached_gip : Genode::Attached_ram_dataspace
 		static Periodic_gip periodic_gip(genode_env());
 	}
 };
+
+
+int RTTimerCreate(PRTTIMER *pptimer, unsigned ms, PFNRTTIMER func, void *obj)
+{
+	if (pptimer)
+		*pptimer = NULL;
+
+	/* used solely at one place in TM.cpp */
+	Assert(!rttimer_func);
+
+	/*
+	 * Ignore (10) ms which is too high for audio. Instead the callback
+	 * handler will run at UPDATE_HZ rate.
+	 */
+	rttimer_func = func;
+	rttimer_obj  = obj;
+
+	return VINF_SUCCESS;
+}
+
+
+int RTTimerDestroy(PRTTIMER)
+{
+	rttimer_obj  = nullptr;
+	rttimer_func = nullptr;
+	return VINF_SUCCESS;
+}
 
 
 int SUPR3Init(PSUPDRVSESSION *ppSession)
@@ -215,8 +249,7 @@ int SUPSemEventWaitNoResume(PSUPDRVSESSION pSession, SUPSEMEVENT hEvent,
 }
 
 
-SUPDECL(int) SUPSemEventMultiCreate(PSUPDRVSESSION,
-                                    PSUPSEMEVENTMULTI phEventMulti)
+int SUPSemEventMultiCreate(PSUPDRVSESSION, PSUPSEMEVENTMULTI phEventMulti)
 {
     RTSEMEVENTMULTI sem;
 
@@ -236,10 +269,21 @@ SUPDECL(int) SUPSemEventMultiCreate(PSUPDRVSESSION,
 }
 
 
-SUPDECL(int) SUPSemEventMultiClose(PSUPDRVSESSION, SUPSEMEVENTMULTI hEvMulti)
+int SUPSemEventMultiWaitNoResume(PSUPDRVSESSION, SUPSEMEVENTMULTI event,
+                                 uint32_t ms)
 {
-	return RTSemEventMultiDestroy(reinterpret_cast<RTSEMEVENTMULTI>(hEvMulti));
+	RTSEMEVENTMULTI const rtevent = reinterpret_cast<RTSEMEVENTMULTI>(event);
+	return RTSemEventMultiWait(rtevent, ms);
 }
+
+int SUPSemEventMultiSignal(PSUPDRVSESSION, SUPSEMEVENTMULTI event) {
+	return RTSemEventMultiSignal(reinterpret_cast<RTSEMEVENTMULTI>(event)); }
+
+int SUPSemEventMultiReset(PSUPDRVSESSION, SUPSEMEVENTMULTI event) {
+	return RTSemEventMultiReset(reinterpret_cast<RTSEMEVENTMULTI>(event)); }
+
+int SUPSemEventMultiClose(PSUPDRVSESSION, SUPSEMEVENTMULTI event) {
+	return RTSemEventMultiDestroy(reinterpret_cast<RTSEMEVENTMULTI>(event)); }
 
 
 int SUPR3CallVMMR0(PVMR0 pVMR0, VMCPUID idCpu, unsigned uOperation,
@@ -324,4 +368,33 @@ void genode_VMMR0_DO_GVMM_REGISTER_VMCPU(PVMR0 pVMR0, VMCPUID idCpu)
 {
 	PVM pVM = reinterpret_cast<PVM>(pVMR0);
 	pVM->aCpus[idCpu].hNativeThreadR0 = RTThreadNativeSelf();
+}
+
+
+HRESULT genode_check_memory_config(ComObjPtr<Machine> machine)
+{
+	HRESULT rc;
+
+	/* Validate configured memory of vbox file and Genode config */
+	ULONG memory_vbox;
+	rc = machine->COMGETTER(MemorySize)(&memory_vbox);
+	if (FAILED(rc))
+		return rc;
+
+	/* Request max available memory */
+	size_t memory_genode = genode_env().ram().avail_ram().value >> 20;
+	size_t memory_vmm    = 28;
+
+	if (memory_vbox + memory_vmm > memory_genode) {
+		using Genode::error;
+		error("Configured memory ", memory_vbox, " MB (vbox file) is insufficient.");
+		error(memory_genode,              " MB (1) - ",
+		      memory_vmm,                 " MB (2) = ",
+		      memory_genode - memory_vmm, " MB (3)");
+		error("(1) available memory based defined by Genode config");
+		error("(2) minimum memory required for VBox VMM");
+		error("(3) maximal available memory to VM");
+		return E_FAIL;
+	}
+	return S_OK;
 }

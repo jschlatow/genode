@@ -28,7 +28,7 @@ ifeq ($(L4_BUILD_ARCH),)
 $(error L4_BUILD_ARCH undefined, architecture not supported)
 endif
 
-L4_BUILD_OPT = SYSTEM_TARGET=$(CROSS_DEV_PREFIX)
+L4_BUILD_OPT = CROSS_COMPILE=$(CROSS_DEV_PREFIX)
 L4_PKG_DIR  := $(call select_from_ports,foc)/src/kernel/foc/l4/pkg
 PKG_TAGS     = $(addsuffix .tag,$(PKGS))
 
@@ -50,7 +50,8 @@ endif
 .NOTPARALLEL: $(PKG_TAGS)
 
 %.tag:
-	$(VERBOSE_MK) $(MAKE) $(VERBOSE_DIR) O=$(L4_BUILD_DIR) -C $(L4_PKG_DIR)/$* \
-	                      "$(L4_BUILD_OPT)" $(BUILD_OUTPUT_FILTER)
+	$(VERBOSE_MK) set -o pipefail; \
+	              $(MAKE) $(VERBOSE_DIR) O=$(L4_BUILD_DIR) -C $(L4_PKG_DIR)/$* \
+	                      "$(L4_BUILD_OPT)" WARNINGS=$(WARNINGS) $(BUILD_OUTPUT_FILTER)
 	$(VERBOSE)mkdir -p $(dir $@) && touch $@
 

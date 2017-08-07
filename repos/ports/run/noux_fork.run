@@ -10,7 +10,6 @@ install_config {
 		<parent-provides>
 			<service name="ROM"/>
 			<service name="LOG"/>
-			<service name="RAM"/>
 			<service name="RM"/>
 			<service name="CPU"/>
 			<service name="PD"/>
@@ -44,7 +43,7 @@ install_config {
 
 build_boot_image {
 	core init timer log_terminal noux ld.lib.so libc.lib.so libm.lib.so
-	libc_noux.lib.so test-noux_fork
+	libc_noux.lib.so posix.lib.so test-noux_fork
 }
 
 append qemu_args " -nographic "

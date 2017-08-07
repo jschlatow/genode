@@ -12,8 +12,8 @@ set build_components {
 	test/cpu_sampler
 }
 
-if {[have_spec foc]} {
-	lappend build_components lib/cpu_sampler_platform-foc
+if {[have_spec foc] || [have_spec nova]} {
+	lappend build_components lib/cpu_sampler_platform-$::env(KERNEL)
 } else {
 	lappend build_components lib/cpu_sampler_platform-generic
 }
@@ -30,12 +30,12 @@ install_config {
 			<service name="IRQ"/>
 			<service name="LOG"/>
 			<service name="PD"/>
-			<service name="RAM"/>
 			<service name="ROM"/>
 		</parent-provides>
 		<default-route>
 			<any-service> <parent/> <any-child/> </any-service>
 		</default-route>
+		<default caps="100"/>
 		<start name="timer">
 			<resource name="RAM" quantum="1M"/>
 			<provides>
@@ -68,8 +68,8 @@ install_config {
 
 # evaluated by the run tool
 proc binary_name_cpu_sampler_platform_lib_so { } {
-	if {[have_spec foc]} {
-		return "cpu_sampler_platform-foc.lib.so"
+	if {[have_spec foc] || [have_spec nova]} {
+		return "cpu_sampler_platform-$::env(KERNEL).lib.so"
 	} else {
 		return "cpu_sampler_platform-generic.lib.so"
 	}
@@ -81,7 +81,7 @@ build_boot_image {
 	test-cpu_sampler
 }
 
-append qemu_args "-nographic -m 128"
+append qemu_args "-nographic "
 
 set match_string "Test started. func: 0x(\[0-9a-f\]+).*\n"
 

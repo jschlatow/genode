@@ -109,6 +109,7 @@ struct String
 	}
 
 	void print(Genode::Output &out) const { Genode::print(out, (char const *)buf); }
+	char const *cstring() { return buf; }
 };
 
 
@@ -188,10 +189,19 @@ struct Ata_driver : Port_driver
 	Io_command                               *io_cmd = nullptr;
 	Block::Packet_descriptor                  pending[32];
 
-	Ata_driver(Genode::Allocator &alloc,
-	           Port &port, Genode::Ram_session &ram,
-	           Ahci_root &root, unsigned &sem)
-	: Port_driver(port, ram, root, sem), alloc(alloc)
+	Signal_context_capability device_identified;
+
+	Ata_driver(Genode::Allocator   &alloc,
+	           Genode::Ram_session &ram,
+	           Ahci_root           &root,
+	           unsigned            &sem,
+	           Genode::Region_map  &rm,
+	           Hba                 &hba,
+	           Platform::Hba       &platform_hba,
+	           unsigned             number,
+	           Genode::Signal_context_capability device_identified)
+	: Port_driver(ram, root, sem, rm, hba, platform_hba, number),
+	  alloc(alloc), device_identified(device_identified)
 	{
 		Port::init();
 		identify_device();
@@ -311,6 +321,8 @@ struct Ata_driver : Port_driver
 					io_cmd = new (&alloc) Dma_ext_command();
 
 				ack_irq();
+
+				Genode::Signal_transmitter(device_identified).submit();
 			}
 			break;
 

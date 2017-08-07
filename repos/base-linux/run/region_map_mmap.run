@@ -6,7 +6,6 @@ install_config {
 	<config verbose="yes">
 		<parent-provides>
 			<service name="ROM"/>
-			<service name="RAM"/>
 			<service name="IRQ"/>
 			<service name="IO_MEM"/>
 			<service name="IO_PORT"/>
@@ -18,6 +17,7 @@ install_config {
 		<default-route>
 			<any-service> <parent/> <any-child/> </any-service>
 		</default-route>
+		<default caps="100"/>
 		<start name="test-region_map_mmap">
 			<resource name="RAM" quantum="2M"/>
 		</start>

@@ -33,7 +33,6 @@ set config {
 <config verbose="yes">
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -45,6 +44,7 @@ set config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 	<start name="timer">
 		<resource name="RAM" quantum="1M"/>
 		<provides> <service name="Timer"/> </provides>
@@ -82,7 +82,7 @@ append config {
 			</rom>
 		</config>
 	</start>
-	<start name="wifi_drv">
+	<start name="wifi_drv" caps="200">
 		<resource name="RAM" quantum="32M"/>
 		<provides> <service name="Nic"/> </provides>
 		<config ld_verbose="yes" verbose="yes" connected_scan_interval="30">
@@ -136,7 +136,7 @@ set firmware_modules {
 # generic modules
 set boot_modules {
 	core ld.lib.so init timer rtc_drv report_rom dynamic_rom
-	vfs_jitterentropy.lib.so
+	vfs_jitterentropy.lib.so posix.lib.so
 	libc.lib.so libm.lib.so libcrypto.lib.so libssl.lib.so
 	wpa_driver_nl80211.lib.so wpa_supplicant.lib.so
 	wifi.lib.so

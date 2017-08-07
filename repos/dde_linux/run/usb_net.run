@@ -38,7 +38,6 @@ set config {
 <config verbose="yes">
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -50,25 +49,25 @@ set config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 	<start name="timer">
 		<resource name="RAM" quantum="1M"/>
 		<provides> <service name="Timer"/> </provides>
 	</start>
 	<start name="usb_drv">
-		<resource name="RAM" quantum="12M"/>
+		<resource name="RAM" quantum="24M"/>
 		<provides>
 			<service name="Nic"/>
 		</provides>
-		<config uhci="no" ehci="yes" xhci="yes">
+		<config uhci="no" ohci="no" ehci="yes" xhci="yes">
 			<nic mac="02:00:00:00:01:01" />
 		</config>
 	</start>
 	<start name="test-lwip_httpsrv">
-		<resource name="RAM" quantum="2M"/>
+		<resource name="RAM" quantum="4M"/>
 		<config>
-			<libc stdout="/dev/log">
-				<vfs> <dir name="dev"> <log/> </dir> </vfs>
-			</libc>
+			<vfs> <dir name="dev"> <log/> </dir> </vfs>
+			<libc stdout="/dev/log" stderr="/dev/log"/>
 		</config>
 	</start>}
 
@@ -94,7 +93,7 @@ install_config $config
 # generic modules
 set boot_modules {
 	core ld.lib.so init timer usb_drv
-	libc.lib.so lwip.lib.so test-lwip_httpsrv
+	libc.lib.so libm.lib.so lwip.lib.so posix.lib.so test-lwip_httpsrv
 }
 
 append_platform_drv_boot_modules
@@ -102,7 +101,8 @@ lappend_if [have_spec gpio] boot_modules [gpio_drv]
 
 build_boot_image $boot_modules
 
-append qemu_args " -m 256 -nographic"
+append qemu_args "  -nographic"
 
 run_genode_until forever
+
 # vi: set ft=tcl :

@@ -19,7 +19,6 @@ set config {
 <config>
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -28,13 +27,15 @@ set config {
 		<service name="CPU"/>
 		<service name="LOG"/>
 	</parent-provides>
+	<default caps="100"/>
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 }
 
 append_if [have_spec sdl] config {
-	<start name="fb_sdl">
+	<start name="fb_sdl" caps="200">
 		<resource name="RAM" quantum="4M"/>
 		<provides>
 			<service name="Input"/>
@@ -45,7 +46,7 @@ append_if [have_spec sdl] config {
 append_platform_drv_config
 
 append_if [have_spec framebuffer] config {
-	<start name="fb_drv">
+	<start name="fb_drv" caps="200">
 		<resource name="RAM" quantum="4M"/>
 		<provides><service name="Framebuffer"/></provides>
 	</start>}
@@ -75,14 +76,13 @@ append config {
 	<start name="pointer">
 		<resource name="RAM" quantum="1M"/>
 	</start>
-	<start name="launchpad">
+	<start name="launchpad" caps="400">
 		<resource name="RAM" quantum="1G"/>
 		<config>
-			<launcher name="init" ram_quota="100M">
+			<launcher name="init" ram_quota="100M" caps="300">
 				<config>
 					<parent-provides>
 						<service name="ROM"/>
-						<service name="RAM"/>
 						<service name="IRQ"/>
 						<service name="IO_MEM"/>
 						<service name="IO_PORT"/>
@@ -94,6 +94,7 @@ append config {
 						<service name="Nitpicker"/>
 						<service name="Timer"/>
 					</parent-provides>
+					<default caps="100"/>
 					<start name="nit_fb">
 						<resource name="RAM" quantum="2M"/>
 						<provides><service name="Input"/><service name="Framebuffer"/></provides>
@@ -104,9 +105,8 @@ append config {
 						<resource name="RAM" quantum="1G"/>
 						<route><any-service> <parent /> <any-child/> </any-service></route>
 						<config>
-							<libc stdout="/dev/log">
-								<vfs> <dir name="dev"> <log/> </dir> </vfs>
-							</libc>
+							<vfs> <dir name="dev"> <log/> </dir> </vfs>
+							<libc stdout="/dev/log"/>
 						</config>
 					</start>
 				</config>
@@ -121,7 +121,7 @@ install_config $config
 set boot_modules {
 	core init ld.lib.so timer nitpicker nit_fb
 	launchpad eglgears pointer
-	gallium.lib.so libc.lib.so libm.lib.so pthread.lib.so
+	gallium.lib.so libc.lib.so libm.lib.so pthread.lib.so posix.lib.so
 }
 
 lappend_if [have_spec       linux] boot_modules fb_sdl

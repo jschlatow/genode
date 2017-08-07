@@ -43,7 +43,6 @@ append config {
 <config>
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -54,7 +53,8 @@ append config {
 	</parent-provides>
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
-	</default-route>}
+	</default-route>
+	<default caps="100"/>}
 
 append_if [have_spec gpio] config "
 	<start name=\"[gpio_drv]\">
@@ -73,7 +73,7 @@ append config {
 	<start name="usb_drv">
 		<resource name="RAM" quantum="32M"/>
 		<provides><service name="Usb"/></provides>
-		<config uhci="yes" ehci="yes" xhci="yes">
+		<config uhci="yes" ohci="yes" ehci="yes" xhci="yes">
 			<raw>
 				<policy label="usb_terminal -> usb_serial" vendor_id="0x67b" product_id="0x2303"/>
 			</raw>
@@ -106,7 +106,7 @@ append_platform_drv_boot_modules
 
 build_boot_image $boot_modules
 
-append qemu_args " -m 256 -nographic -usb  -usbdevice host:$usb_raw_device -nographic"
+append qemu_args "  -nographic -usb  -usbdevice host:$usb_raw_device -nographic"
 
 
 run_genode_until forever

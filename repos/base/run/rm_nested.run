@@ -9,7 +9,6 @@ install_config {
 	<config>
 		<parent-provides>
 			<service name="ROM"/>
-			<service name="RAM"/>
 			<service name="CPU"/>
 			<service name="RM"/>
 			<service name="PD"/>
@@ -18,6 +17,7 @@ install_config {
 		<default-route>
 			<any-service> <parent/> </any-service>
 		</default-route>
+		<default caps="100"/>
 		<start name="test-rm_nested">
 			<resource name="RAM" quantum="10M"/>
 		</start>
@@ -26,6 +26,6 @@ install_config {
 
 build_boot_image "core ld.lib.so init test-rm_nested"
 
-append qemu_args "-nographic -m 64"
+append qemu_args "-nographic "
 
 run_genode_until ".*--- finished nested region map test ---.*\n" 300

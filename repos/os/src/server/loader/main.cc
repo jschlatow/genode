@@ -14,7 +14,6 @@
 /* Genode includes */
 #include <base/component.h>
 #include <base/heap.h>
-#include <base/rpc_server.h>
 #include <base/sleep.h>
 #include <loader_session/loader_session.h>
 #include <root/component.h>
@@ -89,7 +88,7 @@ class Loader::Session_component : public Rpc_object<Session>
 
 				} catch (...) { }
 
-				throw Denied();
+				throw Service_denied();
 			}
 
 			void upgrade(Rom_session_component &, Args const &) override { }
@@ -159,10 +158,10 @@ class Loader::Session_component : public Rpc_object<Session>
 
 		struct Local_nitpicker_factory : Local_service<Nitpicker::Session_component>::Factory
 		{
-			Entrypoint  &_ep;
-			Env         &_env;
-			Region_map  &_rm;
-			Ram_session &_ram;
+			Entrypoint    &_ep;
+			Env           &_env;
+			Region_map    &_rm;
+			Ram_allocator &_ram;
 
 			Area                       _max_size;
 			Nitpicker::View_capability _parent_view;
@@ -171,7 +170,8 @@ class Loader::Session_component : public Rpc_object<Session>
 
 			Constructible<Nitpicker::Session_component> session;
 
-			Local_nitpicker_factory(Entrypoint &ep, Env &env, Region_map &rm, Ram_session &ram)
+			Local_nitpicker_factory(Entrypoint &ep, Env &env,
+			                        Region_map &rm, Ram_allocator &ram)
 			: _ep(ep), _env(env), _rm(rm), _ram(ram) { }
 
 			void constrain_geometry(Area size) { _max_size = size; }
@@ -185,7 +185,7 @@ class Loader::Session_component : public Rpc_object<Session>
 			{
 				if (session.constructed()) {
 					warning("attempt to open more than one nitpicker session");
-					throw Parent::Service_denied();
+					throw Service_denied();
 				}
 
 				session.construct(_ep, _env, _rm, _ram, _max_size,
@@ -204,9 +204,11 @@ class Loader::Session_component : public Rpc_object<Session>
 		Env                        &_env;
 		Session_label         const _label;
 		Xml_node              const _config;
-		size_t                const _ram_quota;
+		Cap_quota             const _cap_quota;
+		Ram_quota             const _ram_quota;
 		Ram_session_client_guard    _local_ram { _env.ram_session_cap(), _ram_quota };
 		Heap                        _md_alloc { _local_ram, _env.rm() };
+		size_t                      _subsystem_cap_quota_limit = 0;
 		size_t                      _subsystem_ram_quota_limit = 0;
 		Parent_services             _parent_services;
 		Rom_module_registry         _rom_modules { _env, _config, _local_ram, _md_alloc };
@@ -243,10 +245,11 @@ class Loader::Session_component : public Rpc_object<Session>
 		/**
 		 * Constructor
 		 */
-		Session_component(Env &env, Session_label const &label,
-		                  Xml_node config, size_t quota)
+		Session_component(Env &env, Session_label const &label, Xml_node config,
+		                  Cap_quota cap_quota, Ram_quota ram_quota)
 		:
-			_env(env), _label(label), _config(config), _ram_quota(quota)
+			_env(env), _label(label), _config(config),
+			_cap_quota(cap_quota), _ram_quota(ram_quota)
 		{
 			/* fetch all parent-provided ROMs according to the config */
 			config.for_each_sub_node("parent-rom", [&] (Xml_node rom)
@@ -287,9 +290,14 @@ class Loader::Session_component : public Rpc_object<Session>
 				throw Rom_module_does_not_exist(); }
 		}
 
-		void ram_quota(size_t quantum) override
+		void cap_quota(Cap_quota caps) override
 		{
-			_subsystem_ram_quota_limit = quantum;
+			_subsystem_cap_quota_limit = caps.value;
+		}
+
+		void ram_quota(Ram_quota quantum) override
+		{
+			_subsystem_ram_quota_limit = quantum.value;
 		}
 
 		void constrain_geometry(Area size) override
@@ -334,18 +342,23 @@ class Loader::Session_component : public Rpc_object<Session>
 				return;
 			}
 
+			size_t const cap_quota = (_subsystem_cap_quota_limit > 0)
+			                       ? min(_subsystem_cap_quota_limit, _cap_quota.value)
+			                       : _cap_quota.value;
+
 			size_t const ram_quota = (_subsystem_ram_quota_limit > 0)
-			                       ? min(_subsystem_ram_quota_limit, _ram_quota)
-			                       : _ram_quota;
+			                       ? min(_subsystem_ram_quota_limit, _ram_quota.value)
+			                       : _ram_quota.value;
 
 			try {
 				_child.construct(_env, _md_alloc, binary_name.string(),
 				                 prefixed_label(_label, Session_label(label.string())),
-				                 ram_quota, _parent_services, _rom_service,
+				                 Cap_quota{cap_quota}, Ram_quota{ram_quota},
+				                 _parent_services, _rom_service,
 				                 _cpu_service, _pd_service, _nitpicker_service,
 				                 _fault_sigh);
 			}
-			catch (Genode::Parent::Service_denied) {
+			catch (Genode::Service_denied) {
 				throw Rom_module_does_not_exist(); }
 		}
 
@@ -372,8 +385,6 @@ class Loader::Root : public Root_component<Session_component>
 
 		Session_component *_create_session(const char *args)
 		{
-			size_t quota = Arg_string::find_arg(args, "ram_quota").ulong_value(0);
-
 			Xml_node session_config("<policy/>");
 
 			Session_label const label = label_from_args(args);
@@ -381,7 +392,9 @@ class Loader::Root : public Root_component<Session_component>
 			try { session_config = Session_policy(label, _config); }
 			catch (...) { }
 
-			return new (md_alloc()) Session_component(_env, label, session_config, quota);
+			return new (md_alloc()) Session_component(_env, label, session_config,
+			                                          cap_quota_from_args(args),
+			                                          ram_quota_from_args(args));
 		}
 
 	public:

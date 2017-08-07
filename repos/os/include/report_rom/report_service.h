@@ -45,11 +45,8 @@ struct Report::Session_component : Genode::Rpc_object<Session>, Rom::Writer
 
 		Rom::Module &_create_module(Rom::Module::Name const &name)
 		{
-			try {
-				return _registry.lookup(*this, name);
-			} catch (...) {
-				throw Genode::Root::Invalid_args();
-			}
+			try { return _registry.lookup(*this, name); }
+			catch (...) { throw Genode::Service_denied(); }
 		}
 
 		static void _log_lines(char const *string, size_t len)
@@ -129,12 +126,12 @@ struct Report::Root : Genode::Root_component<Session_component>
 
 			if (ram_quota < session_size) {
 				Genode::error("insufficient ram donation from ", label.string());
-				throw Root::Quota_exceeded();
+				throw Insufficient_ram_quota();
 			}
 
 			if (buffer_size == 0) {
 				Genode::error("zero-length report requested by ", label.string());
-				throw Root::Invalid_args();
+				throw Service_denied();
 			}
 
 			return new (md_alloc())

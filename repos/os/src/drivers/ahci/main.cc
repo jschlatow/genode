@@ -19,6 +19,7 @@
 #include <block/component.h>
 #include <os/session_policy.h>
 #include <util/xml_node.h>
+#include <os/reporter.h>
 
 /* local includes */
 #include <ahci.h>
@@ -105,7 +106,7 @@ class Block::Root_multiple_clients : public Root_component< ::Session_component>
 				Arg_string::find_arg(args, "tx_buf_size").ulong_value(0);
 
 			if (!tx_buf_size)
-				throw Invalid_args();
+				throw Service_denied();
 
 			size_t session_size = sizeof(::Session_component)
 			                    + sizeof(Factory) +	tx_buf_size;
@@ -113,7 +114,7 @@ class Block::Root_multiple_clients : public Root_component< ::Session_component>
 			if (max((size_t)4096, session_size) > ram_quota) {
 				error("insufficient 'ram_quota' from '", label, "',"
 				      " got ", ram_quota, ", need ", session_size);
-				throw Root::Quota_exceeded();
+				throw Insufficient_ram_quota();
 			}
 
 			/* Search for configured device */
@@ -128,12 +129,12 @@ class Block::Root_multiple_clients : public Root_component< ::Session_component>
 				error("rejecting session request, no matching policy for '", label, "'",
 				      model_buf[0] == 0 ? ""
 				      : " (model=", Cstring(model_buf), " serial=", Cstring(sn_buf), ")");
-				throw Root::Invalid_args();
+				throw Service_denied();
 			}
 
 			if (!Ahci_driver::avail(num)) {
 				error("Device ", num, " not available");
-				throw Root::Unavailable();
+				throw Service_denied();
 			}
 
 			Block::Factory *factory = new (&_alloc) Block::Factory(num);
@@ -175,14 +176,39 @@ struct Block::Main
 
 	Genode::Attached_rom_dataspace config { env, "config" };
 
+	Genode::Constructible<Genode::Reporter> reporter;
+
 	Block::Root_multiple_clients root;
+
+	Signal_handler<Main> device_identified {
+		env.ep(), *this, &Main::handle_device_identified };
 
 	Main(Genode::Env &env)
 	: env(env), root(env, heap, config.xml())
 	{
 		Genode::log("--- Starting AHCI driver ---");
-		bool support_atapi = config.xml().attribute_value("atapi", false);
-		Ahci_driver::init(env, heap, root, support_atapi);
+		bool support_atapi  = config.xml().attribute_value("atapi", false);
+		try {
+			Ahci_driver::init(env, heap, root, support_atapi, device_identified);
+		} catch (Ahci_driver::Missing_controller) {
+			Genode::error("no AHCI controller found");
+			env.parent().exit(~0);
+		} catch (Genode::Service_denied) {
+			Genode::error("hardware access denied");
+			env.parent().exit(~0);
+		}
+	}
+
+	void handle_device_identified()
+	{
+		try {
+			Xml_node report = config.xml().sub_node("report");
+			if (report.attribute_value("ports", false)) {
+				reporter.construct(env, "ports");
+				reporter->enabled(true);
+				Ahci_driver::report_ports(*reporter);
+			}
+		} catch (Genode::Xml_node::Nonexistent_sub_node) { }
 	}
 };
 

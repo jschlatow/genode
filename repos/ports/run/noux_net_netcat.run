@@ -27,8 +27,6 @@ append_platform_drv_build_components
 
 build $build_components
 
-exec tar cfv bin/noux_netcat.tar -h -C bin/netcat .
-
 #
 # The '<build-dir>/bin/etc/' directory is expected to contain the
 # files 'services', 'protocols', 'hosts', and 'resolv.conf'.
@@ -41,7 +39,7 @@ foreach etc_file { services protocols hosts } {
 		catch { exec wget -c -P bin/etc $freebsd_url/$etc_file } } }
 exec touch bin/etc/resolv.conf
 
-exec tar rfv bin/noux_netcat.tar -h -C bin/ etc
+exec tar rfv bin/netcat.tar -h -C bin/ etc
 
 create_boot_directory
 
@@ -50,7 +48,6 @@ append config {
 	<parent-provides>
 		<service name="ROM"/>
 		<service name="LOG"/>
-		<service name="RAM"/>
 		<service name="RM"/>
 		<service name="CPU"/>
 		<service name="PD"/>
@@ -61,6 +58,7 @@ append config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 	<start name="timer">
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Timer"/></provides>
@@ -80,7 +78,7 @@ append_if [have_include "power_on/qemu"] config {
 
 if {![have_include "power_on/qemu"]} {
 append config {
-	<start name="tcp_terminal">
+	<start name="tcp_terminal" caps="200">
 		<resource name="RAM" quantum="5M"/>
 		<provides> <service name="Terminal"/> </provides>
 		<route>
@@ -91,8 +89,8 @@ append config {
 			<policy label_prefix="noux_net" port="8888"/>
 		</config>
 	</start>
-	<start name="nic_bridge">
-		<resource name="RAM" quantum="4M"/>
+	<start name="nic_bridge" caps="200">
+		<resource name="RAM" quantum="6M"/>
 		<provides><service name="Nic"/></provides>
 		<config/>
 		<route>}
@@ -134,10 +132,10 @@ append_if $use_usb_driver config {
 append_platform_drv_config
 
 append config {
-	<start name="noux_net">
+	<start name="noux_net" caps="500">
 		<resource name="RAM" quantum="1G"/>
 		<config>
-			<fstab> <tar name="noux_netcat.tar" at="/"/> </fstab>
+			<fstab> <tar name="netcat.tar" at="/"/> </fstab>
 			<start name="/bin/netcat">
 				<arg value="-l"/>
 				<arg value="-p 5555"/>
@@ -165,7 +163,7 @@ install_config $config
 set boot_modules {
 	core init timer tcp_terminal nic_bridge
 	ld.lib.so noux_net libc.lib.so libm.lib.so libc_pipe.lib.so pthread.lib.so
-	libc_resolv.lib.so libc_noux.lib.so lwip.lib.so noux_netcat.tar
+	libc_resolv.lib.so libc_noux.lib.so lwip.lib.so netcat.tar posix.lib.so
 }
 
 # platform-specific modules
@@ -232,7 +230,6 @@ set output [exec cat $noux_output_file]
 puts "\noutput:\n$output\n"
 exec rm $noux_output_file
 
-exec rm bin/noux_netcat.tar
 exec rm -r bin/etc
 
 if {![regexp {Hello Genode} $output dummy]} {

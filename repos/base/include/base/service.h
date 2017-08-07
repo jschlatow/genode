@@ -15,11 +15,12 @@
 #define _INCLUDE__BASE__SERVICE_H_
 
 #include <util/list.h>
-#include <ram_session/client.h>
+#include <pd_session/client.h>
 #include <base/env.h>
 #include <base/session_state.h>
 #include <base/log.h>
 #include <base/registry.h>
+#include <base/quota_transfer.h>
 
 namespace Genode {
 
@@ -27,11 +28,13 @@ namespace Genode {
 	template <typename> class Session_factory;
 	template <typename> class Local_service;
 	class Parent_service;
+	class Async_service;
 	class Child_service;
 }
 
 
-class Genode::Service : Noncopyable
+class Genode::Service : public Ram_transfer::Account,
+                        public Cap_transfer::Account
 {
 	public:
 
@@ -39,8 +42,7 @@ class Genode::Service : Noncopyable
 
 	private:
 
-		Name                   const _name;
-		Ram_session_capability const _ram;
+		Name const _name;
 
 	protected:
 
@@ -53,22 +55,12 @@ class Genode::Service : Noncopyable
 
 	public:
 
-		/*********************
-		 ** Exception types **
-		 *********************/
-
-		class Invalid_args   { };
-		class Unavailable    { };
-		class Quota_exceeded { };
-
 		/**
 		 * Constructor
 		 *
 		 * \param name  service name
-		 * \param ram   RAM session to receive/withdraw session quota
 		 */
-		Service(Name const &name, Ram_session_capability ram)
-		: _name(name), _ram(ram) { }
+		Service(Name const &name) : _name(name) { }
 
 		virtual ~Service() { }
 
@@ -105,11 +97,6 @@ class Genode::Service : Noncopyable
 		 */
 		virtual void wakeup() { }
 
-		/**
-		 * Return the RAM session to be used for trading resources
-		 */
-		virtual Ram_session_capability ram() const { return _ram; }
-
 		virtual bool operator == (Service const &other) const { return this == &other; }
 };
 
@@ -126,13 +113,12 @@ class Genode::Local_service : public Service
 		{
 			typedef Session_state::Args Args;
 
-			class Denied : Exception { };
-
 			/**
 			 * Create session
 			 *
-			 * \throw Denied
-			 * \throw Quota_exceeded
+			 * \throw Service_denied
+			 * \throw Insufficient_ram_quota
+			 * \throw Insufficient_cap_quota
 			 */
 			virtual SESSION &create(Args const &, Affinity)  = 0;
 
@@ -182,10 +168,7 @@ class Genode::Local_service : public Service
 		 * Constructor
 		 */
 		Local_service(Factory &factory)
-		:
-			Service(SESSION::service_name(), Ram_session_capability()),
-			_factory(factory)
-		{ }
+		: Service(SESSION::service_name()), _factory(factory) { }
 
 		void initiate_request(Session_state &session) override
 		{
@@ -200,16 +183,22 @@ class Genode::Local_service : public Service
 					session.cap       = rpc_obj.cap();
 					session.phase     = Session_state::AVAILABLE;
 				}
-				catch (typename Factory::Denied) {
-					session.phase = Session_state::INVALID_ARGS; }
-				catch (Quota_exceeded) {
-					session.phase = Session_state::QUOTA_EXCEEDED; }
+				catch (Service_denied) {
+					session.phase = Session_state::SERVICE_DENIED; }
+				catch (Insufficient_cap_quota) {
+					session.phase = Session_state::INSUFFICIENT_CAP_QUOTA; }
+				catch (Insufficient_ram_quota) {
+					session.phase = Session_state::INSUFFICIENT_RAM_QUOTA; }
+				catch (...) {
+					warning("unexpected exception during ",
+					        SESSION::service_name(), " session construction"); }
 
 				break;
 
 			case Session_state::UPGRADE_REQUESTED:
 				{
-					String<64> const args("ram_quota=", session.ram_upgrade);
+					String<100> const args("ram_quota=", session.ram_upgrade, ", "
+					                       "cap_quota=", session.cap_upgrade);
 
 					_apply_to_rpc_obj(session, [&] (SESSION &rpc_obj) {
 						_factory.upgrade(rpc_obj, args.string()); });
@@ -228,14 +217,16 @@ class Genode::Local_service : public Service
 				}
 				break;
 
-			case Session_state::INVALID_ARGS:
-			case Session_state::QUOTA_EXCEEDED:
+			case Session_state::SERVICE_DENIED:
+			case Session_state::INSUFFICIENT_RAM_QUOTA:
+			case Session_state::INSUFFICIENT_CAP_QUOTA:
 			case Session_state::AVAILABLE:
 			case Session_state::CAP_HANDED_OUT:
 			case Session_state::CLOSED:
 				break;
 			}
 		}
+
 };
 
 
@@ -258,7 +249,7 @@ class Genode::Parent_service : public Service
 		 * Constructor
 		 */
 		Parent_service(Env &env, Service::Name const &name)
-		: Service(name, Ram_session_capability()), _env(env) { }
+		: Service(name), _env(env) { }
 
 		/**
 		 * Constructor
@@ -266,7 +257,7 @@ class Genode::Parent_service : public Service
 		 * \deprecated
 		 */
 		Parent_service(Service::Name const &name)
-		: Service(name, Ram_session_capability()), _env(_env_deprecated()) { }
+		: Service(name), _env(_env_deprecated()) { }
 
 		void initiate_request(Session_state &session) override
 		{
@@ -285,27 +276,42 @@ class Genode::Parent_service : public Service
 
 					session.phase = Session_state::AVAILABLE;
 				}
-				catch (Parent::Quota_exceeded) {
+				catch (Out_of_ram) {
 					session.id_at_parent.destruct();
-					session.phase = Session_state::INVALID_ARGS; }
+					session.phase = Session_state::SERVICE_DENIED; }
 
-				catch (Parent::Service_denied) {
+				catch (Out_of_caps) {
 					session.id_at_parent.destruct();
-					session.phase = Session_state::INVALID_ARGS; }
+					session.phase = Session_state::SERVICE_DENIED; }
+
+				catch (Insufficient_ram_quota) {
+					session.id_at_parent.destruct();
+					session.phase = Session_state::INSUFFICIENT_RAM_QUOTA; }
+
+				catch (Insufficient_cap_quota) {
+					session.id_at_parent.destruct();
+					session.phase = Session_state::INSUFFICIENT_CAP_QUOTA; }
+
+				catch (Service_denied) {
+					session.id_at_parent.destruct();
+					session.phase = Session_state::SERVICE_DENIED; }
 
 				break;
 
 			case Session_state::UPGRADE_REQUESTED:
 				{
-					String<64> const args("ram_quota=", session.ram_upgrade);
+					String<100> const args("ram_quota=", session.ram_upgrade, ", "
+					                       "cap_quota=", session.cap_upgrade);
 
 					if (!session.id_at_parent.constructed())
 						error("invalid parent-session state: ", session);
 
 					try {
 						_env.upgrade(session.id_at_parent->id(), args.string()); }
-					catch (Parent::Quota_exceeded) {
-						warning("quota exceeded while upgrading parent session"); }
+					catch (Out_of_ram) {
+						warning("RAM quota exceeded while upgrading parent session"); }
+					catch (Out_of_caps) {
+						warning("cap quota exceeded while upgrading parent session"); }
 
 					session.confirm_ram_upgrade();
 					session.phase = Session_state::CAP_HANDED_OUT;
@@ -321,8 +327,9 @@ class Genode::Parent_service : public Service
 				session.phase = Session_state::CLOSED;
 				break;
 
-			case Session_state::INVALID_ARGS:
-			case Session_state::QUOTA_EXCEEDED:
+			case Session_state::SERVICE_DENIED:
+			case Session_state::INSUFFICIENT_RAM_QUOTA:
+			case Session_state::INSUFFICIENT_CAP_QUOTA:
 			case Session_state::AVAILABLE:
 			case Session_state::CAP_HANDED_OUT:
 			case Session_state::CLOSED:
@@ -333,13 +340,13 @@ class Genode::Parent_service : public Service
 
 
 /**
- * Representation of a service that is implemented in a child
+ * Representation of a service that asynchronously responds to session request
  */
-class Genode::Child_service : public Service
+class Genode::Async_service : public Service
 {
 	public:
 
-		struct Wakeup { virtual void wakeup_child_service() = 0; };
+		struct Wakeup { virtual void wakeup_async_service() = 0; };
 
 	private:
 
@@ -361,24 +368,20 @@ class Genode::Child_service : public Service
 
 	public:
 
-
 		/**
 		 * Constructor
 		 *
 		 * \param factory  server-side session-state factory
 		 * \param name     name of service
-		 * \param ram      recipient of session quota
 		 * \param wakeup   callback to be notified on the arrival of new
 		 *                 session requests
-		 *
 		 */
-		Child_service(Id_space<Parent::Server> &server_id_space,
+		Async_service(Service::Name      const &name,
+		              Id_space<Parent::Server> &server_id_space,
 		              Session_state::Factory   &factory,
-		              Service::Name      const &name,
-		              Ram_session_capability    ram,
 		              Wakeup                   &wakeup)
 		:
-			Service(name, ram),
+			Service(name),
 			_server_id_space(server_id_space),
 			_server_factory(factory), _wakeup(wakeup)
 		{ }
@@ -396,7 +399,59 @@ class Genode::Child_service : public Service
 			return &_server_id_space == &id_space;
 		}
 
-		void wakeup() override { _wakeup.wakeup_child_service(); }
+		void wakeup() override { _wakeup.wakeup_async_service(); }
+};
+
+
+/**
+ * Representation of a service that is implemented in a child
+ */
+class Genode::Child_service : public Async_service
+{
+	private:
+
+		Pd_session_client _pd;
+
+	public:
+
+		/**
+		 * Constructor
+		 */
+		Child_service(Service::Name      const &name,
+		              Id_space<Parent::Server> &server_id_space,
+		              Session_state::Factory   &factory,
+		              Wakeup                   &wakeup,
+		              Pd_session_capability     ram,
+		              Pd_session_capability     pd)
+		:
+			Async_service(name, server_id_space, factory, wakeup), _pd(pd)
+		{ }
+
+		/**
+		 * Ram_transfer::Account interface
+		 */
+		void transfer(Ram_session_capability to, Ram_quota amount) override
+		{
+			if (to.valid()) _pd.transfer_quota(to, amount);
+		}
+
+		/**
+		 * Ram_transfer::Account interface
+		 */
+		Pd_session_capability cap(Ram_quota) const override { return _pd; }
+
+		/**
+		 * Cap_transfer::Account interface
+		 */
+		void transfer(Pd_session_capability to, Cap_quota amount) override
+		{
+			if (to.valid()) _pd.transfer_quota(to, amount);
+		}
+
+		/**
+		 * Cap_transfer::Account interface
+		 */
+		Pd_session_capability cap(Cap_quota) const override { return _pd; }
 };
 
 #endif /* _INCLUDE__BASE__SERVICE_H_ */

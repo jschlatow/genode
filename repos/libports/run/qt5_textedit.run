@@ -43,6 +43,7 @@ append config {
 append config [qt5_parent_provides feature]
 append config {
 	</parent-provides>
+	<default caps="100"/>
 	<default-route>
 		<any-service> <parent/> <child name="wm"/> <any-child/> </any-service>
 	</default-route>}
@@ -86,9 +87,9 @@ append_if [expr ![have_spec linux]] config {
 	</start>}
 
 append config {
-	<start name="textedit">
+	<start name="textedit" caps="250">
 		<resource name="RAM" quantum="70M"/>
-		<config xpos="3" ypos="0" width="500" height="710">
+		<config>
 			<libc stdout="/dev/log" stderr="/dev/log"/>
 			<vfs>
 				<dir name="dev"> <log/> </dir>
@@ -97,10 +98,10 @@ append config {
 			</vfs>
 		</config>
 	</start>
-	<start name="textedit2">
+	<start name="textedit2" caps="250">
 		<binary name="textedit" />
 		<resource name="RAM" quantum="70M"/>
-		<config xpos="512" ypos="0" width="500" height="710">
+		<config>
 			<libc stdout="/dev/log" stderr="/dev/log"/>
 			<vfs>
 				<dir name="dev"> <log/> </dir>
@@ -124,16 +125,18 @@ append boot_modules {
 	textedit
 	freetype.lib.so
 	gallium.lib.so
-	icu.lib.so
 	ld.lib.so
 	libc.lib.so
 	libc_pipe.lib.so
 	libm.lib.so
 	libpng.lib.so
 	jpeg.lib.so
+	pcre16.lib.so
 	pthread.lib.so
+	qt5_component.lib.so
 	qt5_core.lib.so
 	qt5_gui.lib.so
+	qt5_printsupport.lib.so
 	qt5_widgets.lib.so
 	qt5_xml.lib.so
 	zlib.lib.so
@@ -160,7 +163,7 @@ catch { exec sh -c $cmd }
 
 append_if $use_ahci_driver qemu_args " -drive id=disk,file=$disk_image,format=raw,if=none -device ahci,id=ahci -device ide-drive,drive=disk,bus=ahci.0 -boot d"
 
-append qemu_args " -m 256 -usbdevice tablet "
+append qemu_args "  -usbdevice tablet "
 
 run_genode_until forever
 

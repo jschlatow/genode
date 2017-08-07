@@ -17,23 +17,19 @@
 #include <kernel/pd.h>
 #include <kernel/perf_counter.h>
 #include <pic.h>
-#include <trustzone.h>
 
 void Kernel::Cpu::init(Kernel::Pic &pic)
 {
-	/* locally initialize interrupt controller */
-	pic.init_cpu_local();
-
-	/* TrustZone initialization code */
-	init_trustzone(pic);
-
 	/* enable performance counter */
 	perf_counter()->enable();
 
 	/* enable timer interrupt */
-	pic.unmask(Timer::interrupt_id(id()), id());
+	pic.unmask(_timer.interrupt_id(), id());
 }
 
 
-void Kernel::Cpu_domain_update::_domain_update() {
-	cpu_pool()->cpu(Cpu::executing_id())->invalidate_tlb_by_pid(_domain_id); }
+void Kernel::Cpu_domain_update::_domain_update()
+{
+	/* flush TLB by ASID */
+	Cpu::Tlbiasid::write(_domain_id);
+}

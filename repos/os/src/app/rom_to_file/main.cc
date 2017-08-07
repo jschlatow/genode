@@ -124,7 +124,11 @@ void Rom_to_file::Main::_handle_update()
 				Handle_guard dir_guard(_fs, dir_handle);
 				File_handle handle;
 
-				handle = _fs.file(dir_handle, file_name, File_system::WRITE_ONLY, true);
+				try {
+					handle = _fs.file(dir_handle, file_name, File_system::WRITE_ONLY, true);
+				} catch (Node_already_exists) {
+					handle = _fs.file(dir_handle, file_name, File_system::WRITE_ONLY, false);
+				}
 
 				_fs.truncate(handle, 0);
 
@@ -136,14 +140,18 @@ void Rom_to_file::Main::_handle_update()
 				}
 
 				_fs.close(handle);
+
 			} catch (Permission_denied) {
 				error(Cstring(dir_path), file_name, ": permission denied");
 
 			} catch (No_space) {
 				error("file system out of space");
 
-			} catch (Out_of_metadata) {
-				error("server ran out of memory");
+			} catch (Out_of_ram) {
+				error("server ran out of RAM");
+
+			} catch (Out_of_caps) {
+				error("server ran out of caps");
 
 			} catch (Invalid_name) {
 				error(Cstring(dir_path), file_name, ": invalid path");

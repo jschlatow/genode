@@ -15,9 +15,6 @@
 #include <libc/component.h>
 #include <base/attached_rom_dataspace.h>
 
-extern int genode_argc;
-extern char **genode_argv;
-
 namespace Qt_launchpad_namespace {
 	struct Local_env;
 	using namespace Genode;
@@ -54,17 +51,36 @@ struct Qt_launchpad_namespace::Local_env : Genode::Env
 	{ return genode_env.upgrade(id, args); }
 
 	void close(Parent::Client::Id id) { return genode_env.close(id); }
+
+	void exec_static_constructors() override { }
+
+	void reinit(Native_capability::Raw raw) override {
+		genode_env.reinit(raw);
+	}
+
+	void reinit_main_thread(Capability<Region_map> &stack_area_rm) override {
+		genode_env.reinit_main_thread(stack_area_rm);
+	}
 };
 
+extern void initialize_qt_core(Genode::Env &);
+extern void initialize_qt_gui(Genode::Env &);
 
 void Libc::Component::construct(Libc::Env &env)
 {
 	Libc::with_libc([&] {
+
+		initialize_qt_core(env);
+		initialize_qt_gui(env);
+
 		Qt_launchpad_namespace::Local_env local_env(env);
 
-		QApplication a(genode_argc, genode_argv);
+		int argc = 1;
+		char const *argv[] = { "qt_launchpad", 0 };
 
-		Qt_launchpad launchpad(local_env, env.ram().avail());
+		QApplication a(argc, (char**)argv);
+
+		Qt_launchpad launchpad(local_env, env.ram().avail_ram().value);
 
 		Genode::Attached_rom_dataspace config(env, "config");
 

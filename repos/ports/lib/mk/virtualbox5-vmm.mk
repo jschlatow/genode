@@ -58,6 +58,8 @@ SRC_CC += VMM/VMMAll/EMAll.cpp
 SRC_CC += VMM/VMMR3/EM.cpp
 SRC_CC += VMM/VMMR3/EMHM.cpp
 
+SRC_CC += VMM/VMMAll/HMAll.cpp
+
 SRC_CC += VMM/VMMR3/TRPM.cpp
 SRC_CC += VMM/VMMAll/SELMAll.cpp
 
@@ -85,8 +87,13 @@ SRC_CC += VMM/VMMR3/IOM.cpp
 SRC_CC += VMM/VMMAll/IOMAll.cpp
 SRC_CC += VMM/VMMAll/IOMAllMMIO.cpp
 
+ifneq ($(filter $(VBOX_CC_OPT),-DVBOX_WITH_NEW_APIC),)
 SRC_CC += VMM/VMMR3/APIC.cpp
 SRC_CC += VMM/VMMAll/APICAll.cpp
+endif
+
+SRC_CC += VMM/VMMR3/MM.cpp
+SRC_CC += VMM/VMMR3/MMHeap.cpp
 
 CC_OPT += -DVBOX_IN_VMM
 

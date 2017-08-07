@@ -28,7 +28,6 @@ append config {
 <config>
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -38,13 +37,13 @@ append config {
 		<service name="LOG"/>
 	</parent-provides>
 	<default-route/>
+	<default caps="100"/>
 
 	<start name="timer">
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Timer"/></provides>
 		<route>
 			<service name="PD">      <parent/> </service>
-			<service name="RAM">     <parent/> </service>
 			<service name="CPU">     <parent/> </service>
 			<service name="LOG">     <parent/> </service>
 			<service name="ROM">     <parent/> </service>
@@ -64,7 +63,6 @@ append_if [have_spec ps2] config {
 		<route>
 			<service name="ROM">      <parent/>    </service>
 			<service name="CPU">      <parent/>    </service>
-			<service name="RAM">      <parent/>    </service>
 			<service name="PD">       <parent/>    </service>
 			<service name="IO_PORT">  <parent/>    </service>
 			<service name="LOG">      <parent/>    </service>
@@ -80,7 +78,6 @@ append_if [have_spec sdl] config {
 		<route>
 			<service name="ROM">   <parent/> </service>
 			<service name="CPU">   <parent/> </service>
-			<service name="RAM">   <parent/> </service>
 			<service name="PD">    <parent/> </service>
 			<service name="LOG">   <parent/> </service>
 			<service name="Timer"> <child name="timer"/> </service>
@@ -94,7 +91,6 @@ append config {
 		<route>
 			<service name="ROM">   <parent/>                 </service>
 			<service name="CPU">   <parent/>                 </service>
-			<service name="RAM">   <parent/>                 </service>
 			<service name="PD">    <parent/>                 </service>
 			<service name="LOG">   <parent/>                 </service>
 			<service name="Timer"> <child name="timer"/>     </service>
@@ -126,6 +122,5 @@ lappend_if [have_spec sdl] boot_modules fb_sdl
 
 build_boot_image $boot_modules
 
-append qemu_args " -m 256 "
 
 run_genode_until forever

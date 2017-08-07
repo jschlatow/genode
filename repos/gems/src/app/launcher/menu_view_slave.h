@@ -73,20 +73,23 @@ class Launcher::Menu_view_slave
 					configure(config);
 				}
 
-				static Name           _name()  { return "menu_view"; }
-				static Genode::size_t _quota() { return 6*1024*1024; }
+				static Name              _name()  { return "menu_view"; }
+				static Genode::Ram_quota _quota() { return { 6*1024*1024 }; }
+				static Genode::Cap_quota _caps()  { return { 25 }; }
 
 			public:
 
 				Policy(Genode::Rpc_entrypoint        &ep,
 				       Genode::Region_map            &rm,
-				       Genode::Ram_session_capability ram,
+				       Genode::Pd_session            &ref_pd,
+				       Genode::Pd_session_capability  ref_pd_cap,
 				       Capability<Nitpicker::Session> nitpicker_session,
 				       Capability<Rom_session>        dialog_rom_session,
 				       Capability<Report::Session>    hover_report_session,
 				       Position                       position)
 				:
-					Genode::Slave::Policy(_name(), _name(), *this, ep, rm, ram, _quota()),
+					Genode::Slave::Policy(_name(), _name(), *this, ep, rm,
+					                      ref_pd, ref_pd_cap, _caps(), _quota()),
 					_nitpicker(rm, nitpicker_session),
 					_dialog_rom(dialog_rom_session),
 					_hover_report(hover_report_session),
@@ -125,16 +128,17 @@ class Launcher::Menu_view_slave
 		/**
 		 * Constructor
 		 */
-		Menu_view_slave(Genode::Pd_session            &pd,
-		                Genode::Region_map            &rm,
-		                Genode::Ram_session_capability ram,
+		Menu_view_slave(Genode::Region_map            &rm,
+		                Genode::Pd_session            &ref_pd,
+		                Genode::Pd_session_capability  ref_pd_cap,
 		                Capability<Nitpicker::Session> nitpicker_session,
 		                Capability<Rom_session>        dialog_rom_session,
 		                Capability<Report::Session>    hover_report_session,
 		                Position                       initial_position)
 		:
-			_ep(&pd, _ep_stack_size, "nit_fader"),
-			_policy(_ep, rm, ram, nitpicker_session, dialog_rom_session,
+			_ep(&ref_pd, _ep_stack_size, "nit_fader"),
+			_policy(_ep, rm, ref_pd, ref_pd_cap,
+			        nitpicker_session, dialog_rom_session,
 			        hover_report_session, initial_position),
 			_child(rm, _ep, _policy)
 		{ }

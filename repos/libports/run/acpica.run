@@ -52,16 +52,18 @@ set config {
 	<config>
 		<parent-provides>
 			<service name="IRQ"/>
-			<service name="RAM"/>
 			<service name="ROM"/>
 			<service name="LOG"/>
 			<service name="RM"/>
+			<service name="PD"/>
+			<service name="CPU"/>
 			<service name="IO_MEM" />
 			<service name="IO_PORT" />
 		</parent-provides>
 		<default-route>
 			<any-service> <parent/> <any-child/> </any-service>
 		</default-route>
+		<default caps="100"/>
 		<start name="timer">
 			<resource name="RAM" quantum="2M"/>
 			<provides><service name="Timer"/></provides>
@@ -71,9 +73,8 @@ set config {
 			<resource name="RAM" quantum="4M"/>
 			<config ld_verbose="yes" reset="no" poweroff="no" report="yes" acpi_ready="yes">
 <!-- required for "debug-acpica":
-				<libc stdout="/dev/log">
-					<vfs> <dir name="dev"> <log/> </dir> </vfs>
-				</libc>
+				<vfs> <dir name="dev"> <log/> </dir> </vfs>
+				<libc stdout="/dev/log"/>
 -->
 			</config>
 			<route>
@@ -100,10 +101,7 @@ append config {
 				<policy label="acpi_input -> acpi_lid" report="acpica -> acpi_lid"/>
 			</config>
 			<route>
-				<service name="LOG"> <parent/> </service>
-				<service name="SIGNAL"> <parent/> </service>
-				<service name="CAP"> <parent/> </service>
-				<service name="RM"> <parent/> </service>
+				<any-service> <parent/> </any-service>
 			</route>
 		</start>}
 
@@ -139,9 +137,9 @@ append config {
 				<input label="acpi" />
 			</config>
 			<route>
-				<service name="LOG"> <parent/> </service>
 				<service name="Input" label="ps2"> <child name="ps2_drv" /> </service>
 				<service name="Input" label="acpi"> <child name="acpi_input" /> </service>
+				<any-service> <parent/> </any-service>
 			</route>
 		</start>}
 
@@ -151,20 +149,17 @@ append config {
 			<provides><service name="Input"/></provides>
 			<config verbose_keyboard="no" verbose_mouse="no" verbose_scancodes="no"/>
 			<route>
-				<service name="LOG">     <parent/> </service>
-				<service name="RM">      <parent/> </service>
 				<service name="Platform"> <child name="platform_drv"/> </service>
+				<any-service> <parent/> </any-service>
 			</route>
 		</start>
 
 		<start name="test-input">
 			<resource name="RAM" quantum="1M"/>
 			<route>
-				<service name="LOG">     <parent/> </service>
-				<service name="RM">      <parent/> </service>
-
-				<service name="Input">   <child name="input_merger"/> </service>
-				<service name="Timer">   <child name="timer"/> </service>
+				<service name="Input"> <child name="input_merger"/> </service>
+				<service name="Timer"> <child name="timer"/> </service>
+				<any-service> <parent/> </any-service>
 			</route>
 		</start>}
 
@@ -191,7 +186,7 @@ append config {
 				<service name="ROM" label="acpi_ec"> <child name="acpi_state"/> </service>
 				<service name="ROM" label="acpi_fixed"> <child name="acpi_state"/> </service>
 				<service name="ROM" label="acpi_lid"> <child name="acpi_state"/> </service>
-				<service name="LOG"> <parent/> </service>
+				<any-service> <parent/> </any-service>
 			</route>
 		</start>}
 
@@ -221,6 +216,6 @@ append_platform_drv_boot_modules
 
 build_boot_image $boot_modules
 
-append qemu_args "-nographic -m 128"
+append qemu_args "-nographic "
 
 run_genode_until {\[init -\> acpica\].*SCI IRQ:.*\n} 30

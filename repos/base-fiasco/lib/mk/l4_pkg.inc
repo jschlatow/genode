@@ -53,8 +53,10 @@ endif
 # 'off64_t' type, which is used by bootstrap.
 #
 %.tag:
-	$(VERBOSE_MK) MAKEFLAGS= CPPFLAGS="$(CC_MARCH)" \
-	              CFLAGS="$(CC_MARCH)" CXXFLAGS="$(CC_MARCH) -D_GNU_SOURCE" \
+	$(VERBOSE_MK) set -o pipefail; \
+	              MAKEFLAGS= CPPFLAGS="$(CC_MARCH)" \
+	              CFLAGS="$(CC_MARCH) -std=gnu89" \
+	              CXXFLAGS="$(CC_MARCH) -D_GNU_SOURCE -std=gnu++98" \
 	              ASFLAGS="$(CC_MARCH)" LDFLAGS="$(LD_MARCH)" \
 	              $(MAKE) $(VERBOSE_DIR) O=$(L4_BUILD_DIR) $(L4_VERBOSE) \
 	                      -C $(L4_PKG_DIR)/$* \

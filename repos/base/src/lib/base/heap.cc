@@ -58,7 +58,7 @@ void Heap::Dataspace_pool::remove_and_free(Dataspace &ds)
 	ds.~Dataspace();
 
 	region_map->detach(ds_local_addr);
-	ram_session->free(ds_cap);
+	ram_alloc->free(ds_cap);
 }
 
 
@@ -87,20 +87,27 @@ Heap::Dataspace *Heap::_allocate_dataspace(size_t size, bool enforce_separate_me
 
 	/* make new ram dataspace available at our local address space */
 	try {
-		new_ds_cap = _ds_pool.ram_session->alloc(size);
+		new_ds_cap = _ds_pool.ram_alloc->alloc(size);
 		ds_addr = _ds_pool.region_map->attach(new_ds_cap);
-	} catch (Ram_session::Alloc_failed) {
-		return 0;
-	} catch (Region_map::Attach_failed) {
-		warning("could not attach dataspace");
-		_ds_pool.ram_session->free(new_ds_cap);
-		return 0;
+	}
+	catch (Out_of_ram) {
+		return nullptr;
+	}
+	catch (Region_map::Invalid_dataspace) {
+		warning("heap: attempt to attach invalid dataspace");
+		_ds_pool.ram_alloc->free(new_ds_cap);
+		return nullptr;
+	}
+	catch (Region_map::Region_conflict) {
+		warning("heap: region conflict while allocating dataspace");
+		_ds_pool.ram_alloc->free(new_ds_cap);
+		return nullptr;
 	}
 
 	if (enforce_separate_metadata) {
 
 		/* allocate the Dataspace structure */
-		if (_unsynchronized_alloc(sizeof(Heap::Dataspace), &ds_meta_data_addr) < 0) {
+		if (!_unsynchronized_alloc(sizeof(Heap::Dataspace), &ds_meta_data_addr)) {
 			warning("could not allocate dataspace meta data");
 			return 0;
 		}
@@ -128,7 +135,7 @@ Heap::Dataspace *Heap::_allocate_dataspace(size_t size, bool enforce_separate_me
 
 bool Heap::_try_local_alloc(size_t size, void **out_addr)
 {
-	if (_alloc->alloc_aligned(size, out_addr, log2(sizeof(addr_t))).error())
+	if (_alloc->alloc_aligned(size, out_addr, log2(16)).error())
 		return false;
 
 	_quota_used += size;
@@ -258,14 +265,14 @@ void Heap::free(void *addr, size_t)
 }
 
 
-Heap::Heap(Ram_session *ram_session,
-           Region_map  *region_map,
-           size_t       quota_limit,
-           void        *static_addr,
-           size_t       static_size)
+Heap::Heap(Ram_allocator *ram_alloc,
+           Region_map    *region_map,
+           size_t         quota_limit,
+           void          *static_addr,
+           size_t         static_size)
 :
 	_alloc(nullptr),
-	_ds_pool(ram_session, region_map),
+	_ds_pool(ram_alloc, region_map),
 	_quota_limit(quota_limit), _quota_used(0),
 	_chunk_size(MIN_CHUNK_SIZE)
 {

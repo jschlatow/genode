@@ -60,7 +60,6 @@ set config {
 <config verbose="yes">
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -72,6 +71,7 @@ set config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 	<start name="timer">
 		<resource name="RAM" quantum="1M"/>
 		<provides> <service name="Timer"/> </provides>
@@ -93,7 +93,7 @@ append_if [have_spec gpio] config "
 
 append_if $use_usb_driver config {
 	<start name="usb_drv">
-		<resource name="RAM" quantum="12M"/>
+		<resource name="RAM" quantum="14M"/>
 		<provides>
 			<service name="Nic"/>
 		</provides>
@@ -123,7 +123,7 @@ install_config $config
 # generic modules
 set boot_modules {
 	core init timer
-	ld.lib.so libc.lib.so libm.lib.so lwip.lib.so test-lwip_httpsrv
+	ld.lib.so libc.lib.so libm.lib.so lwip.lib.so test-lwip_httpsrv posix.lib.so
 }
 
 # platform-specific modules
@@ -140,7 +140,7 @@ build_boot_image $boot_modules
 #
 
 # qemu config
-append qemu_args " -m 128 -nographic "
+append qemu_args "  -nographic "
 
 append_if [have_spec x86]     qemu_args " -net nic,model=e1000 "
 append_if [have_spec lan9118] qemu_args " -net nic,model=lan9118 "

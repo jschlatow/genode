@@ -23,7 +23,6 @@ append config {
 <config>
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -60,7 +59,7 @@ build_boot_image {
 	test-terminal_crosslink
 }
 
-append qemu_args "-nographic -m 64"
+append qemu_args "-nographic "
 
 #
 # Execute test case

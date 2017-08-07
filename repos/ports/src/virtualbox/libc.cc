@@ -19,7 +19,6 @@
 /* libc includes */
 #include <stdlib.h>
 #include <signal.h>
-#include <sys/time.h>
 #include <sys/mount.h>    /* statfs */
 #include <sys/statvfs.h>
 #include <unistd.h>
@@ -47,7 +46,7 @@ static const bool verbose = false;
  * Additionally static constructors are executed currently before the libc
  * is done with initialization and so we also have no Env pointer here.
  */
-static char     buffer[2048];
+static char     buffer[3 * 1024];
 static unsigned buffer_len = 0;
 
 static bool initial_memory(void * ptr)
@@ -155,18 +154,28 @@ extern "C" char *getenv(const char *name)
 //		               "+dev_pcnet.e.l.f"
 //		               "+dev_pic.e.l.f"
 //		               "+dev_apic.e.l.f"
-//		               "+dev_vmm.e"
 //		               "+usb_mouse.e.l.f"
-//		               "+main.e.l.f"
-//		               "+hgcm.e.l.f"
+//		               "+main.e.l3.f"
 //		               "+shared_folders.e.l.f"
 //		               "+drv_host_serial.e.l.f"
 //		               "+dev_audio.e.l.f"
+//		               "+dev_hda.e"
+//		               "+drv_host_audio.e.l.f"
+//		               "+drv_audio.e.l.f"
+//		               "+dev_vmm_backdoor.e.l.f"
+//		               "+hgcm.e.l.f"
+//		               "+dev_vmm.e.l.f"
 		               ;
+
+	/*
+	 * see https://www.virtualbox.org/wiki/VBoxLogging for useful tips to
+	 * enable useful debugging of Guest additions in Windows/Linux together
+	 * with +dev_vmm_backdoor, hgcm and dev_vmm
+	 */
 
 	if (Genode::strcmp(name, "VBOX_LOG_FLAGS") == 0 ||
 	    Genode::strcmp(name, "VBOX_RELEASE_LOG_FLAGS") == 0)
-		return (char *)"thread";
+		return (char *)"thread"; //" tsc";
 
 	return 0;
 }
@@ -183,17 +192,6 @@ extern "C" int sigaction(int signum, const struct sigaction *act,
 
 	return 0;
 }
-
-
-/* our libc provides a _nanosleep function */
-extern "C" int _nanosleep(const struct timespec *req, struct timespec *rem);
-extern "C" int nanosleep(const struct timespec *req, struct timespec *rem)
-{
-	Assert(req);
-
-	return _nanosleep(req, rem);
-}
-
 
 
 /* Some dummy implementation for LibC functions */

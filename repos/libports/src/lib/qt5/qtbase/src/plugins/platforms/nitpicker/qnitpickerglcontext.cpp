@@ -21,7 +21,7 @@
 #include <EGL/eglext.h>
 
 /* Qt includes */
-#include <QtPlatformSupport/private/qeglconvenience_p.h>
+#include <QtEglSupport/private/qeglconvenience_p.h>
 #include <QDebug>
 
 /* local includes */
@@ -124,13 +124,13 @@ void QNitpickerGLContext::swapBuffers(QPlatformSurface *surface)
 }
 
 
-void (*QNitpickerGLContext::getProcAddress(const QByteArray &procName)) ()
+QFunctionPointer QNitpickerGLContext::getProcAddress(const char *procName)
 {
 	if (qnglc_verbose)
-		Genode::log("procName=", procName.constData(), " , "
-		            "pointer=", eglGetProcAddress(procName.constData()));
+		Genode::log("procName=", Genode::Cstring(procName), " , "
+		            "pointer=", eglGetProcAddress(procName));
 
-	return static_cast<QFunctionPointer>(eglGetProcAddress(procName.constData()));
+	return static_cast<QFunctionPointer>(eglGetProcAddress(procName));
 }
 
 

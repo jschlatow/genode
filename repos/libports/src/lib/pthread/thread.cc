@@ -12,15 +12,14 @@
  * under the terms of the GNU Affero General Public License version 3.
  */
 
-#include <base/env.h>
 #include <base/log.h>
-#include <base/sleep.h>
 #include <base/thread.h>
 #include <os/timed_semaphore.h>
 #include <util/list.h>
 
 #include <errno.h>
 #include <pthread.h>
+#include <stdlib.h> /* malloc, free */
 #include "thread.h"
 
 using namespace Genode;
@@ -36,12 +35,16 @@ struct thread_cleanup : List<thread_cleanup>::Element
 
 	~thread_cleanup() {
 		if (thread)
-			destroy(env()->heap(), thread);
+			delete thread;
 	}
 };
 
 static Lock pthread_cleanup_list_lock;
 static List<thread_cleanup> pthread_cleanup_list;
+
+
+void * operator new(__SIZE_TYPE__ size) { return malloc(size); }
+void operator delete (void * p) { return free(p); }
 
 
 /*
@@ -114,7 +117,7 @@ extern "C" {
 		if (!attr)
 			return EINVAL;
 
-		*attr = new (env()->heap()) pthread_attr;
+		*attr = new pthread_attr;
 
 		return 0;
 	}
@@ -125,7 +128,7 @@ extern "C" {
 		if (!attr || !*attr)
 			return EINVAL;
 
-		destroy(env()->heap(), *attr);
+		delete *attr;
 		*attr = 0;
 
 		return 0;
@@ -139,7 +142,7 @@ extern "C" {
 
 			while (thread_cleanup * t = pthread_cleanup_list.first()) {
 				pthread_cleanup_list.remove(t);
-				destroy(env()->heap(), t);
+				delete t;
 			}
 		}
 	}
@@ -151,9 +154,9 @@ extern "C" {
 
 		if (pthread_equal(pthread_self(), thread)) {
 			Lock_guard<Lock> lock_guard(pthread_cleanup_list_lock);
-			pthread_cleanup_list.insert(new (env()->heap()) thread_cleanup(thread));
+			pthread_cleanup_list.insert(new thread_cleanup(thread));
 		} else
-			destroy(env()->heap(), thread);
+			delete thread;
 
 		return 0;
 	}
@@ -161,7 +164,9 @@ extern "C" {
 	void pthread_exit(void *value_ptr)
 	{
 		pthread_cancel(pthread_self());
-		sleep_forever();
+
+		Lock lock;
+		while (true) lock.lock();
 	}
 
 
@@ -203,8 +208,7 @@ extern "C" {
 		 */
 
 		static struct pthread_attr main_thread_attr;
-		static struct pthread *main = new (Genode::env()->heap())
-		                              struct pthread(*myself, &main_thread_attr);
+		static struct pthread *main = new pthread(*myself, &main_thread_attr);
 
 		return main;
 	}
@@ -415,7 +419,7 @@ extern "C" {
 		if (!attr)
 			return EINVAL;
 
-		*attr = new (env()->heap()) pthread_mutex_attr;
+		*attr = new pthread_mutex_attr;
 
 		return 0;
 	}
@@ -426,7 +430,7 @@ extern "C" {
 		if (!attr || !*attr)
 			return EINVAL;
 
-		destroy(env()->heap(), *attr);
+		delete *attr;
 		*attr = 0;
 
 		return 0;
@@ -450,7 +454,7 @@ extern "C" {
 		if (!mutex)
 			return EINVAL;
 
-		*mutex = new (env()->heap()) pthread_mutex(attr);
+		*mutex = new pthread_mutex(attr);
 
 		return 0;
 	}
@@ -461,7 +465,7 @@ extern "C" {
 		if ((!mutex) || (*mutex == PTHREAD_MUTEX_INITIALIZER))
 			return EINVAL;
 
-		destroy(env()->heap(), *mutex);
+		delete *mutex;
 		*mutex = PTHREAD_MUTEX_INITIALIZER;
 
 		return 0;
@@ -568,7 +572,7 @@ extern "C" {
 		if (!cond)
 			return EINVAL;
 
-		*cond = new (env()->heap()) pthread_cond;
+		*cond = new pthread_cond;
 
 		return 0;
 	}
@@ -579,16 +583,51 @@ extern "C" {
 		if (!cond || !*cond)
 			return EINVAL;
 
-		destroy(env()->heap(), *cond);
+		delete *cond;
 		*cond = 0;
 
 		return 0;
 	}
 
 
-	static unsigned long timespec_to_ms(const struct timespec ts)
+	static uint64_t timeout_ms(struct timespec currtime,
+	                           struct timespec abstimeout)
 	{
-		return (ts.tv_sec * 1000) + (ts.tv_nsec / (1000 * 1000));
+		enum { S_IN_MS = 1000, S_IN_NS = 1000 * 1000 * 1000 };
+
+		if (currtime.tv_nsec >= S_IN_NS) {
+			currtime.tv_sec  += currtime.tv_nsec / S_IN_NS;
+			currtime.tv_nsec  = currtime.tv_nsec % S_IN_NS;
+		}
+		if (abstimeout.tv_nsec >= S_IN_NS) {
+			abstimeout.tv_sec  += abstimeout.tv_nsec / S_IN_NS;
+			abstimeout.tv_nsec  = abstimeout.tv_nsec % S_IN_NS;
+		}
+
+		/* check whether absolute timeout is in the past */
+		if (currtime.tv_sec > abstimeout.tv_sec)
+			return 0;
+
+		uint64_t diff_ms = (abstimeout.tv_sec - currtime.tv_sec) * S_IN_MS;
+		uint64_t diff_ns = 0;
+
+		if (abstimeout.tv_nsec >= currtime.tv_nsec)
+			diff_ns = abstimeout.tv_nsec - currtime.tv_nsec;
+		else {
+			/* check whether absolute timeout is in the past */
+			if (diff_ms == 0)
+				return 0;
+			diff_ns  = S_IN_NS - currtime.tv_nsec + abstimeout.tv_nsec;
+			diff_ms -= S_IN_MS;
+		}
+
+		diff_ms += diff_ns / 1000 / 1000;
+
+		/* if there is any diff then let the timeout be at least 1 MS */
+		if (diff_ms == 0 && diff_ns != 0)
+			return 1;
+
+		return diff_ms;
 	}
 
 
@@ -597,7 +636,6 @@ extern "C" {
 	                           const struct timespec *__restrict abstime)
 	{
 		int result = 0;
-		Alarm::Time timeout = 0;
 
 		if (!cond || !*cond)
 			return EINVAL;
@@ -615,10 +653,9 @@ extern "C" {
 		else {
 			struct timespec currtime;
 			clock_gettime(CLOCK_REALTIME, &currtime);
-			unsigned long abstime_ms = timespec_to_ms(*abstime);
-			unsigned long currtime_ms = timespec_to_ms(currtime);
-			if (abstime_ms > currtime_ms)
-				timeout = abstime_ms - currtime_ms;
+
+			Alarm::Time timeout = timeout_ms(currtime, *abstime);
+
 			try {
 				c->signal_sem.down(timeout);
 			} catch (Timeout_exception) {
@@ -724,7 +761,7 @@ extern "C" {
 			 * thread to mark the key slot as used.
 			 */
 			if (!key_list[k].first()) {
-				Key_element *key_element = new (env()->heap()) Key_element(Thread::myself(), 0);
+				Key_element *key_element = new Key_element(Thread::myself(), 0);
 				key_list[k].insert(key_element);
 				*key = k;
 				return 0;
@@ -744,7 +781,7 @@ extern "C" {
 
 		while (Key_element * element = key_list[key].first()) {
 			key_list[key].remove(element);
-			destroy(env()->heap(), element);
+			delete element;
 		}
 
 		return 0;
@@ -768,7 +805,7 @@ extern "C" {
 			}
 
 		/* key element does not exist yet - create a new one */
-		Key_element *key_element = new (env()->heap()) Key_element(Thread::myself(), value);
+		Key_element *key_element = new Key_element(Thread::myself(), value);
 		key_list[key].insert(key_element);
 		return 0;
 	}
@@ -799,7 +836,7 @@ extern "C" {
 			return EINTR;
 
 		if (!once->mutex) {
-			pthread_mutex_t p = new (env()->heap()) pthread_mutex(0);
+			pthread_mutex_t p = new pthread_mutex(0);
 			/* be paranoid */
 			if (!p)
 				return EINTR;
@@ -818,7 +855,7 @@ extern "C" {
 			 * free our mutex since it is not used.
 			 */
 			if (p)
-				destroy(env()->heap(), p);
+				delete p;
 		}
 
 		once->mutex->lock();

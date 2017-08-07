@@ -15,8 +15,8 @@ set build_components {
 	test/cpu_sampler
 }
 
-if {[have_spec foc]} {
-	lappend build_components lib/cpu_sampler_platform-foc
+if {[have_spec foc] || [have_spec nova]} {
+	lappend build_components lib/cpu_sampler_platform-$::env(KERNEL)
 } else {
 	lappend build_components lib/cpu_sampler_platform-generic
 }
@@ -37,7 +37,7 @@ append_platform_drv_build_components
 build $build_components
 
 # write default vimrc file
-set vimrc_fd [open "bin/vim/share/vim/vimrc" w]
+set vimrc_fd [open "bin/vimrc" w]
 puts $vimrc_fd {
 set noloadplugins
 set hls
@@ -46,14 +46,6 @@ set laststatus=2
 set noswapfile
 set viminfo=}
 close $vimrc_fd
-
-# strip all binaries prior archiving
-exec sh -c "find bin/bash/ bin/vim/ bin/coreutils/ -type f | (xargs [cross_dev_prefix]strip || true) 2>/dev/null"
-
-exec tar cfv bin/bash.tar      -h -C bin/bash .
-exec tar cfv bin/coreutils.tar -h -C bin/coreutils .
-exec tar cfv bin/vim.tar       -h -C bin/vim .
-exec tar cfv bin/diffutils.tar -h -C bin/diffutils .
 
 create_boot_directory
 
@@ -66,7 +58,6 @@ append config {
 		<parent-provides>
 			<service name="ROM"/>
 			<service name="LOG"/>
-			<service name="RAM"/>
 			<service name="RM"/>
 			<service name="CPU"/>
 			<service name="PD"/>
@@ -77,6 +68,7 @@ append config {
 		<default-route>
 			<any-service> <parent/> <any-child/> </any-service>
 		</default-route>
+		<default caps="100"/>
 		<start name="timer">
 			<resource name="RAM" quantum="1M"/>
 			<provides><service name="Timer"/></provides>
@@ -185,7 +177,7 @@ append config {
 		</route>
 	</start>
 
-	<start name="noux">
+	<start name="noux" caps="500">
 		<resource name="RAM" quantum="16M" />
 		<config>
 			<fstab>
@@ -199,6 +191,7 @@ append config {
 				<dir name="home"> <fs label="home" /> </dir>
 				<dir name="samples"> <fs label="samples" /> </dir>
 				<dir name="tmp"> <fs label="tmp" /> </dir>
+				<dir name="share"> <dir name="vim"> <rom name="vimrc"/> </dir> </dir>
 			</fstab>
 			<start name="/bin/bash">
 				<env name="TERM" value="linux" />
@@ -222,8 +215,8 @@ install_config $config
 
 # evaluated by the run tool
 proc binary_name_cpu_sampler_platform_lib_so { } {
-	if {[have_spec foc]} {
-		return "cpu_sampler_platform-foc.lib.so"
+	if {[have_spec foc] || [have_spec nova]} {
+		return "cpu_sampler_platform-$::env(KERNEL).lib.so"
 	} else {
 		return "cpu_sampler_platform-generic.lib.so"
 	}
@@ -232,8 +225,8 @@ proc binary_name_cpu_sampler_platform_lib_so { } {
 # generic modules
 set boot_modules {
 	core ld.lib.so init timer noux terminal ram_fs log_terminal
-	libc.lib.so libm.lib.so libc_noux.lib.so ncurses.lib.so
-	bash.tar coreutils.tar diffutils.tar vim.tar
+	libc.lib.so libm.lib.so libc_noux.lib.so ncurses.lib.so posix.lib.so
+	bash.tar coreutils.tar diffutils.tar vim.tar vimrc
 	fs_log cpu_sampler cpu_sampler_platform.lib.so test-cpu_sampler
 }
 
@@ -249,9 +242,7 @@ build_boot_image $boot_modules
 
 if {[have_spec x86_64]} {
 	# bash.tar is really huge when built for x86_64
-	append qemu_args " -m 320 "
 } else {
-	append qemu_args " -m 256 "
 }
 
 if { ![get_cmd_switch --autopilot] } { run_genode_until forever }
@@ -268,7 +259,3 @@ regexp $match_string $output all func
 
 run_genode_until "\\\[init -> terminal] \[0\]*$func" 90 [output_spawn_id]
 
-exec rm bin/bash.tar
-exec rm bin/coreutils.tar
-exec rm bin/diffutils.tar
-exec rm bin/vim.tar

@@ -17,8 +17,6 @@ append_platform_drv_build_components
 
 build $build_components
 
-exec tar cfv bin/vim.tar -h -C bin/vim .
-
 create_boot_directory
 
 append config {
@@ -26,7 +24,6 @@ append config {
 		<parent-provides>
 			<service name="ROM"/>
 			<service name="LOG"/>
-			<service name="RAM"/>
 			<service name="RM"/>
 			<service name="CPU"/>
 			<service name="PD"/>
@@ -37,6 +34,7 @@ append config {
 		<default-route>
 			<any-service> <parent/> <any-child/> </any-service>
 		</default-route>
+		<default caps="50"/>
 		<start name="timer">
 			<resource name="RAM" quantum="1M"/>
 			<provides><service name="Timer"/></provides>
@@ -116,7 +114,7 @@ install_config $config
 # generic modules
 set boot_modules {
 	core init timer ld.lib.so noux terminal
-	libc.lib.so libm.lib.so libc_noux.lib.so ncurses.lib.so
+	libc.lib.so libm.lib.so libc_noux.lib.so ncurses.lib.so posix.lib.so
 	vim.tar
 }
 
@@ -130,5 +128,3 @@ append_platform_drv_boot_modules
 build_boot_image $boot_modules
 
 run_genode_until forever
-
-exec rm bin/vim.tar

@@ -6,13 +6,10 @@
 #
 
 # add include paths
-INC_DIR += $(REP_DIR)/src/core/include/spec/pbxa9
-INC_DIR += $(REP_DIR)/src/core/include/spec/pl011
+INC_DIR += $(REP_DIR)/src/core/spec/pbxa9
 
 # add C++ sources
 SRC_CC += platform_services.cc
-SRC_CC += spec/pbxa9/platform_support.cc
-SRC_CC += spec/pbxa9/board.cc
 
 NR_OF_CPUS = 1
 

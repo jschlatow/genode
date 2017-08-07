@@ -38,7 +38,6 @@ set config {
 <config verbose="yes">
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
 		<service name="IRQ"/>
@@ -50,6 +49,7 @@ set config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 	<start name="timer">
 		<resource name="RAM" quantum="1M"/>
 		<provides> <service name="Timer"/> </provides>
@@ -111,7 +111,7 @@ append config {
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
-	<start name="wm" >
+	<start name="wm" caps="150">
 		<resource name="RAM" quantum="16M"/>
 		<provides><service name="Nitpicker"/></provides>
 		<config>
@@ -120,15 +120,23 @@ append config {
 		</config>
 		<route>
 			<service name="Nitpicker"> <child name="nitpicker"/> </service>
-			<any-service> <child name="report_rom"/> <parent/> <any-child/> </any-service>
+			<service name="ROM" label="focus">          <child name="report_rom"/> </service>
+			<service name="ROM" label="resize_request"> <child name="report_rom"/> </service>
+			<service name="Report">                     <child name="report_rom"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
 	<start name="layouter">
 		<binary name="floating_window_layouter"/>
 		<resource name="RAM" quantum="4M"/>
 		<route>
+			<service name="ROM" label="window_list">       <child name="report_rom"/> </service>
+			<service name="ROM" label="focus_request">     <child name="report_rom"/> </service>
+			<service name="ROM" label="hover">             <child name="report_rom"/> </service>
+			<service name="ROM" label="decorator_margins"> <child name="report_rom"/> </service>
+			<service name="Report">                        <child name="report_rom"/> </service>
 			<any-service>
-				<child name="wm"/> <child name="report_rom"/> <parent/> <any-child/>
+				<child name="wm"/> <parent/> <any-child/>
 			</any-service>
 		</route>
 	</start>
@@ -136,8 +144,11 @@ append config {
 		<binary name="decorator"/>
 		<resource name="RAM" quantum="8M"/>
 		<route>
+			<service name="ROM" label="window_layout"> <child name="report_rom"/> </service>
+			<service name="ROM" label="pointer">       <child name="report_rom"/> </service>
+			<service name="Report">                    <child name="report_rom"/> </service>
 			<any-service>
-				<child name="wm"/> <child name="report_rom"/> <parent/> <any-child/>
+				<child name="wm"/> <parent/> <any-child/>
 			</any-service>
 		</route>
 	</start>
@@ -179,16 +190,15 @@ append config {
 		</config>
 	</start>
 
-	<start name="mixer_gui_qt">
+	<start name="mixer_gui_qt" caps="200">
 		<resource name="RAM" quantum="32M"/>
 		<config ld_verbose="yes">
-			<libc stdout="/dev/log" stderr="/dev/log">
-				<vfs>
-					<dir name="dev"> <log/> </dir>
-					<tar name="qt5_fs_mixer_gui_qt.tar"/>
-					<!--<dir name="config"> <fs label="config"/> </dir>-->
-				</vfs>
-			</libc>
+			<vfs>
+				<dir name="dev"> <log/> </dir>
+				<tar name="qt5_fs_mixer_gui_qt.tar"/>
+				<!--<dir name="config"> <fs label="config"/> </dir>-->
+			</vfs>
+			<libc stdout="/dev/log" stderr="/dev/log"/>
 		</config>
 		<route>
 			<service name="Nitpicker"> <child name="wm"/> </service>
@@ -221,18 +231,18 @@ exec tar chf bin/qt5_fs_mixer_gui_qt.tar -C bin/qt5_fs/mixer_gui_qt .
 
 set boot_modules {
 	core ld.lib.so init timer
-	libc.lib.so
+	libc.lib.so 
 
 	report_rom dynamic_rom ram_fs
 	fs_rom
 
+	qt5_component.lib.so
 	qt5_gui.lib.so
 	qt5_widgets.lib.so
 	qt5_xml.lib.so
 	qt5_core.lib.so
 	freetype.lib.so
 	gallium.lib.so
-	icu.lib.so
 	libc_pipe.lib.so
 	libm.lib.so
 	libpng.lib.so
@@ -240,6 +250,7 @@ set boot_modules {
 	zlib.lib.so
 	stdcxx.lib.so
 	pthread.lib.so
+	pcre16.lib.so
 	mixer_gui_qt
 	qt5_fs_mixer_gui_qt.tar
 	nitpicker

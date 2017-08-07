@@ -219,10 +219,6 @@ inline bool set_cr(struct Subject_state *cur_state, unsigned cr, uint64_t value)
 			cur_state->Regs.Cr2 = value;
 			res = true;
 			break;
-		case 3:
-			cur_state->Cr3 = value;
-			res = true;
-			break;
 		case 4:
 			cur_state->Shadow_cr4 = value;
 			cur_state->Cr4  = value | 1 << 13;
@@ -320,7 +316,6 @@ inline void check_vm_state(PVMCPU pVCpu, struct Subject_state *cur_state)
 	Assert(cur_state->ldtr.base   == pCtx->ldtr.u64Base);
 	if(cur_state->ldtr.sel != 0)
 		Assert(cur_state->ldtr.access == pCtx->ldtr.Attr.u);
-	Assert(pCtx->tr.Attr.u & X86_SEL_TYPE_SYS_TSS_BUSY_MASK);
 	{
 		Assert(cur_state->tr.sel    == pCtx->tr.Sel);
 		Assert(cur_state->tr.limit  == pCtx->tr.u32Limit);
@@ -434,7 +429,6 @@ int SUPR3CallVMMR0Fast(PVMR0 pVMR0, unsigned uOperation, VMCPUID idCpu)
 
 		set_cr(cur_state, 0, pCtx->cr0);
 		set_cr(cur_state, 2, pCtx->cr2);
-		set_cr(cur_state, 3, pCtx->cr3);
 		set_cr(cur_state, 4, pCtx->cr4);
 
 		GENODE_WRITE_SELREG(cs);
@@ -455,7 +449,6 @@ int SUPR3CallVMMR0Fast(PVMR0 pVMR0, unsigned uOperation, VMCPUID idCpu)
 			cur_state->ldtr.base   = pCtx->ldtr.u64Base;
 			cur_state->ldtr.access = pCtx->ldtr.Attr.u;
 		}
-		Assert(pCtx->tr.Attr.u & X86_SEL_TYPE_SYS_TSS_BUSY_MASK);
 		{
 			cur_state->tr.sel    = pCtx->tr.Sel;
 			cur_state->tr.limit  = pCtx->tr.u32Limit;

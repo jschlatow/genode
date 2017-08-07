@@ -14,7 +14,7 @@
 
 /* Genode includes */
 #include <base/env.h>
-#include <os/config.h>
+#include <base/attached_rom_dataspace.h>
 
 /* GDB monitor includes */
 #include "app_child.h"
@@ -104,9 +104,14 @@ class Memory_model
 					_region     = region;
 					_local_base = rm.attach(_region->ds_cap(),
 					                        0, _region->offset());
-				} catch (Region_map::Attach_failed) {
+				}
+				catch (Region_map::Region_conflict) {
 					flush(rm);
-					error(__func__, ": RM attach failed");
+					error(__func__, ": RM attach failed (region conflict)");
+				}
+				catch (Region_map::Invalid_dataspace) {
+					flush(rm);
+					error(__func__, ": RM attach failed (invalid dataspace)");
 				}
 			}
 
@@ -438,8 +443,9 @@ extern "C" int fork()
 
 	static char filename[32] = "";
 
+	Genode::Attached_rom_dataspace config { *genode_env, "config" };
 	try {
-		config()->xml_node().sub_node("target").attribute("name").value(filename, sizeof(filename));
+		config.xml().sub_node("target").attribute("name").value(filename, sizeof(filename));
 	} catch (Xml_node::Nonexistent_sub_node) {
 		error("missing '<target>' sub node");
 		return -1;
@@ -449,7 +455,7 @@ extern "C" int fork()
 	}
 
 	/* extract target node from config file */
-	Xml_node target_node = config()->xml_node().sub_node("target");
+	Xml_node target_node = config.xml().sub_node("target");
 
 	/*
 	 * preserve the configured amount of memory for gdb_monitor and give the
@@ -457,7 +463,7 @@ extern "C" int fork()
 	 */
 	Number_of_bytes preserved_ram_quota = 0;
 	try {
-		Xml_node preserve_node = config()->xml_node().sub_node("preserve");
+		Xml_node preserve_node = config.xml().sub_node("preserve");
 		if (preserve_node.attribute("name").has_value("RAM"))
 			preserve_node.attribute("quantum").value(&preserved_ram_quota);
 		else
@@ -467,7 +473,18 @@ extern "C" int fork()
 		return -1;
 	}
 
-	Number_of_bytes ram_quota = genode_env->ram().avail() - preserved_ram_quota;
+	Number_of_bytes ram_quota = genode_env->ram().avail_ram().value - preserved_ram_quota;
+
+	Cap_quota const avail_cap_quota = genode_env->pd().avail_caps();
+
+	Genode::size_t const preserved_caps = 100;
+
+	if (avail_cap_quota.value < preserved_caps) {
+		error("not enough available caps for preservation of ", preserved_caps);
+		return -1;
+	}
+
+	Cap_quota const cap_quota { avail_cap_quota.value - preserved_caps };
 
 	/* start the application */
 
@@ -482,7 +499,8 @@ extern "C" int fork()
 	App_child *child = new (alloc) App_child(*genode_env,
 	                                         alloc,
 	                                         filename,
-	                                         ram_quota,
+	                                         Ram_quota{ram_quota},
+	                                         cap_quota,
 	                                         signal_receiver,
 	                                         target_node);
 
@@ -492,12 +510,11 @@ extern "C" int fork()
 
 	_memory_model = &memory_model;
 
-	try {
-		child->start();
-	} catch (...) {
-		Genode::error("Could not start child process");
-		return -1;
-	}
+	try { child->start(); }
+	catch (Out_of_caps)    { error("out of caps during child startup");    return -1; }
+	catch (Out_of_ram)     { error("out of RAM during child startup");     return -1; }
+	catch (Service_denied) { error("service denied during child startup"); return -1; }
+	catch (...)            { error("could not start child process");       return -1; }
 
 	return GENODE_MAIN_LWPID;
 }

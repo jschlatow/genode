@@ -71,6 +71,9 @@ class Genode::Child_policy_dynamic_rom_file : public Rpc_object<Rom_session>,
 		 * \param ram  RAM session used to allocate the backing store
 		 *             for buffering ROM module data
 		 *
+		 * \throw Out_of_ram
+		 * \throw Out_of_caps
+		 *
 		 * If 'ram' is 0, the child policy is ineffective.
 		 */
 		Child_policy_dynamic_rom_file(Region_map     &rm,
@@ -78,7 +81,7 @@ class Genode::Child_policy_dynamic_rom_file : public Rpc_object<Rom_session>,
 		                              Rpc_entrypoint &ep,
 		                              Ram_session    *ram)
 		:
-			Service("ROM", Ram_session_capability()),
+			Service("ROM"),
 			_ram(ram), _rm(rm),
 			_fg(*_ram, _rm, 0), _bg(*_ram, _rm, 0),
 			_bg_has_pending_data(false),
@@ -101,7 +104,7 @@ class Genode::Child_policy_dynamic_rom_file : public Rpc_object<Rom_session>,
 		                              Rpc_entrypoint &ep,
 		                              Ram_session    *ram) __attribute__((deprecated))
 		:
-			Service("ROM", Ram_session_capability()),
+			Service("ROM"),
 			_ram(ram), _rm(*env_deprecated()->rm_session()),
 			_fg(*_ram, _rm, 0), _bg(*_ram, _rm, 0),
 			_bg_has_pending_data(false),
@@ -118,8 +121,10 @@ class Genode::Child_policy_dynamic_rom_file : public Rpc_object<Rom_session>,
 		/**
 		 * Load new content into ROM module
 		 *
-		 * \throw Ram_session::Alloc_failed
-		 * \throw Rm_session::Attach_failed
+		 * \throw Out_of_ram
+		 * \throw Out_of_caps
+		 * \throw Region_map::Region_conflict
+		 * \throw Region_map::Invalid_dataspace
 		 */
 		void load(void const *data, size_t data_len)
 		{
@@ -193,8 +198,9 @@ class Genode::Child_policy_dynamic_rom_file : public Rpc_object<Rom_session>,
 				session.phase = Session_state::CLOSED;
 				break;
 
-			case Session_state::INVALID_ARGS:
-			case Session_state::QUOTA_EXCEEDED:
+			case Session_state::SERVICE_DENIED:
+			case Session_state::INSUFFICIENT_RAM_QUOTA:
+			case Session_state::INSUFFICIENT_CAP_QUOTA:
 			case Session_state::AVAILABLE:
 			case Session_state::CAP_HANDED_OUT:
 			case Session_state::CLOSED:

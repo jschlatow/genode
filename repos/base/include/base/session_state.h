@@ -58,15 +58,16 @@ class Genode::Session_state : public Parent::Client, public Parent::Server,
 		/**
 		 * Total of quota associated with this session
 		 */
-		size_t _donated_ram_quota = 0;
+		Ram_quota _donated_ram_quota { 0 };
+		Cap_quota _donated_cap_quota { 0 };
 
 		Factory *_factory = nullptr;
 
 		Reconstructible<Id_space<Parent::Client>::Element> _id_at_client;
 
-		Session_label const _label;
-		Args                _args;
-		Affinity            _affinity;
+		Session::Label const _label;
+		Args                 _args;
+		Affinity             _affinity;
 
 	public:
 
@@ -78,8 +79,9 @@ class Genode::Session_state : public Parent::Client, public Parent::Server,
 		Parent::Client parent_client;
 
 		enum Phase { CREATE_REQUESTED,
-		             INVALID_ARGS,
-		             QUOTA_EXCEEDED,
+		             SERVICE_DENIED,
+		             INSUFFICIENT_RAM_QUOTA,
+		             INSUFFICIENT_CAP_QUOTA,
 		             AVAILABLE,
 		             CAP_HANDED_OUT,
 		             UPGRADE_REQUESTED,
@@ -87,7 +89,7 @@ class Genode::Session_state : public Parent::Client, public Parent::Server,
 		             CLOSED };
 
 		/**
-		 * If set, the server reponds asynchronously to the session request.
+		 * If set, the server responds asynchronously to the session request.
 		 * The client waits for a notification that is delivered as soon as 
 		 * the server delivers the session capability.
 		 */
@@ -106,7 +108,8 @@ class Genode::Session_state : public Parent::Client, public Parent::Server,
 
 		Session_capability cap;
 
-		size_t ram_upgrade = 0;
+		Ram_quota ram_upgrade { 0 };
+		Cap_quota cap_upgrade { 0 };
 
 		void print(Output &out) const;
 
@@ -129,7 +132,7 @@ class Genode::Session_state : public Parent::Client, public Parent::Server,
 		Session_state(Service                  &service,
 		              Id_space<Parent::Client> &client_id_space,
 		              Parent::Client::Id        client_id,
-		              Session_label      const &label,
+		              Session::Label     const &label,
 		              Args               const &args,
 		              Affinity           const &affinity);
 
@@ -147,13 +150,16 @@ class Genode::Session_state : public Parent::Client, public Parent::Server,
 		 */
 		void confirm_ram_upgrade()
 		{
-			ram_upgrade = 0;
+			ram_upgrade = Ram_quota { 0 };
 		}
 
-		void increase_donated_quota(size_t upgrade)
+		void increase_donated_quota(Ram_quota added_ram_quota,
+		                            Cap_quota added_cap_quota)
 		{
-			_donated_ram_quota += upgrade;
-			ram_upgrade = upgrade;
+			_donated_ram_quota.value += added_ram_quota.value;
+			_donated_cap_quota.value += added_cap_quota.value;
+			ram_upgrade = added_ram_quota;
+			cap_upgrade = added_cap_quota;
 		}
 
 		Parent::Client::Id id_at_client() const
@@ -177,15 +183,17 @@ class Genode::Session_state : public Parent::Client, public Parent::Server,
 		void generate_client_side_info(Xml_generator &, Detail detail) const;
 		void generate_server_side_info(Xml_generator &, Detail detail) const;
 
-		size_t donated_ram_quota() const { return _donated_ram_quota; }
+		Ram_quota donated_ram_quota() const { return _donated_ram_quota; }
+		Cap_quota donated_cap_quota() const { return _donated_cap_quota; }
 
 		bool alive() const
 		{
 			switch (phase) {
 
 			case CREATE_REQUESTED:
-			case INVALID_ARGS:
-			case QUOTA_EXCEEDED:
+			case SERVICE_DENIED:
+			case INSUFFICIENT_RAM_QUOTA:
+			case INSUFFICIENT_CAP_QUOTA:
 			case CLOSED:
 				return false;
 
@@ -201,12 +209,12 @@ class Genode::Session_state : public Parent::Client, public Parent::Server,
 		/**
 		 * Return client-side label of the session request
 		 */
-		Session_label client_label() const { return label_from_args(_args.string()); }
+		Session::Label client_label() const { return label_from_args(_args.string()); }
 
 		/**
 		 * Return label presented to the server along with the session request
 		 */
-		Session_label label() const { return _label; }
+		Session::Label label() const { return _label; }
 
 		/**
 		 * Assign owner

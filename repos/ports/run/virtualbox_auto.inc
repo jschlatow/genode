@@ -27,6 +27,7 @@ lappend_if [have_spec x86]    build_components drivers/rtc
 lappend_if [expr $use_ram_fs || $use_usb] build_components server/ram_fs
 lappend_if [expr $use_cpu_load] build_components app/trace_subject_reporter
 lappend_if [expr $use_cpu_load] build_components app/cpu_load_display
+lappend_if [expr $use_cpu_load] build_components app/top
 
 source ${genode_dir}/repos/base/run/platform_drv.inc
 # override defaults of platform_drv.inc
@@ -49,7 +50,6 @@ if {$use_vms > 1} {
 append config {
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -69,6 +69,8 @@ append config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
+
 	<start name="timer">
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Timer"/></provides>
@@ -96,15 +98,15 @@ append config {
 	</start>}
 
 append_if [expr $use_rumpfs] config {
-	<start name="rump_fs" priority="-1">
+	<start name="rump_fs" priority="-1" caps="200">
 		<resource name="RAM" quantum="32M"/>
 		<provides><service name="File_system"/></provides>
 		<config ld_verbose="yes" fs="ext2fs">}
 
 append_if [expr $use_rumpfs && $use_ram_fs && $use_overlay_from_disk] config {
-			<policy label_prefix="overlay_from_disk" root="/ram" writeable="yes"/>}
+			<policy label_prefix="overlay_from_disk" root="/ram" writeable="no"/>}
 append_if [expr $use_rumpfs] config {
-			<default-policy root="/" writeable="yes"/>
+			<default-policy root="/" writeable="no"/>
 		</config>
 		<route>
 			<any-service><child name="part_blk"/> <parent/><any-child/></any-service>
@@ -112,9 +114,9 @@ append_if [expr $use_rumpfs] config {
 	</start>}
 
 append_if [expr $use_ram_fs] config {
-	<start name="ram_fs" priority="-1">}
+	<start name="ram_fs" priority="-1" caps="400">}
 append_if [expr $use_ram_fs] config "
-		<resource name=\"RAM\" quantum=\"[expr $use_vms * 3 * 128]M\"/>"
+		<resource name=\"RAM\" quantum=\"[expr $use_vms * 8 * 128]M\"/>"
 append_if [expr $use_ram_fs] config {
 		<provides><service name="File_system"/></provides>
 		<config>
@@ -188,6 +190,18 @@ append_if [expr $use_cpu_load] config {
 			<service name="Timer"><child name="timer"/></service>
 			<service name="ROM" label="trace_subjects"><child name="report_rom"/></service>
 			<service name="Nitpicker"><child name="nitpicker"/></service>
+			<any-service><parent/></any-service>
+		</route>
+	</start>
+
+	<start name="top" priorirty="-1">
+		<resource name="RAM" quantum="2M"/>
+		<config period_ms="10000"/>
+		<route>
+			<service name="TRACE"><parent/></service>
+			<service name="LOG"><parent/></service>
+			<service name="Timer"><child name="timer"/></service>
+			<service name="Report"><child name="report_rom"/></service>
 			<any-service><parent/></any-service>
 		</route>
 	</start>}
@@ -292,7 +306,7 @@ append_if [expr $use_usb] config {
 }
 
 append_if [have_spec framebuffer] config {
-	<start name="fb_drv" priority="-1">
+	<start name="fb_drv" priority="-1" caps="150">
 		<resource name="RAM" quantum="8M"/>
 		<provides><service name="Framebuffer"/></provides>
 		<config buffered="yes"/>
@@ -327,11 +341,12 @@ lappend_if [expr $use_rumpfs] boot_modules rump.lib.so
 lappend_if [expr $use_rumpfs] boot_modules rump_fs.lib.so
 lappend_if [expr $use_rumpfs] boot_modules rump_fs
 lappend_if [expr $use_vbox4] boot_modules $virtualbox_binary
-lappend_if [expr $use_vbox5] boot_modules virtualbox5
+lappend_if [expr $use_vbox5] boot_modules $virtualbox5_binary
 lappend_if [expr $use_ram_fs || $use_usb] boot_modules ram_fs
 lappend_if [expr $use_ram_fs && !$use_overlay_from_disk] boot_modules $overlay_image
 lappend_if [expr    $use_cpu_load] boot_modules trace_subject_reporter
 lappend_if [expr    $use_cpu_load] boot_modules cpu_load_display
+lappend_if [expr    $use_cpu_load] boot_modules top
 
 # platform-specific modules
 lappend_if [expr         $use_ps2] boot_modules ps2_drv

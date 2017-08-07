@@ -6,7 +6,6 @@ install_config {
 	<config>
 		<parent-provides>
 			<service name="ROM"/>
-			<service name="RAM"/>
 			<service name="CPU"/>
 			<service name="RM"/>
 			<service name="PD"/>
@@ -17,6 +16,7 @@ install_config {
 		<default-route>
 			<any-service> <parent/> <any-child/> </any-service>
 		</default-route>
+		<default caps="100"/>
 		<start name="timer">
 			<resource name="RAM" quantum="1M"/>
 			<provides><service name="Timer"/></provides>
@@ -25,7 +25,7 @@ install_config {
 			<resource name="RAM" quantum="1M"/>
 			<provides> <service name="ROM" /> </provides>
 		</start>
-		<start name="test-dynamic_config">
+		<start name="test-dynamic_config" cap="500">
 			<resource name="RAM" quantum="1M"/>
 			<configfile name="config.dynamic" />
 			<route>
@@ -40,7 +40,7 @@ install_config {
 
 build_boot_image "core ld.lib.so init timer test-dynamic_config test-dynamic_config_server"
 
-append qemu_args "-nographic -m 64"
+append qemu_args "-nographic "
 
 run_genode_until {obtained counter value 11 from config.*} 100
 

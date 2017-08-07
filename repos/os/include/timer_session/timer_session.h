@@ -26,7 +26,12 @@ struct Timer::Session : Genode::Session
 {
 	typedef Genode::Signal_context_capability Signal_context_capability;
 
+	/**
+	 * \noapi
+	 */
 	static const char *service_name() { return "Timer"; }
+
+	enum { CAP_QUOTA = 2 };
 
 	virtual ~Session() { }
 

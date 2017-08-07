@@ -228,10 +228,9 @@ class Guest_memory
 				_local_addr = env.rm().attach(_ds);
 				_fb_addr = env.rm().attach_at(_fb_ds,
 				        ((Genode::addr_t) _local_addr)+backing_store_size-fb_size);
-
-			} catch (Genode::Rm_session::Region_conflict) {
-				Genode::error("region conflict");
 			}
+			catch (Genode::Region_map::Region_conflict) {
+				Genode::error("region conflict"); }
 		}
 
 		~Guest_memory()
@@ -1403,7 +1402,7 @@ void Component::construct(Genode::Env &env)
 		Genode::log("--- Vancouver VMM starting ---");
 
 		/* request max available memory */
-		vm_size = env.ram().avail();
+		vm_size = env.ram().avail_ram().value;
 		/* reserve some memory for the VMM */
 		vm_size -= 8 * 1024 * 1024;
 		/* calculate max memory for the VM */

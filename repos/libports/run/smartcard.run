@@ -47,7 +47,6 @@ append config {
 <config>
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -58,7 +57,8 @@ append config {
 	</parent-provides>
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
-	</default-route>}
+	</default-route>
+	<default caps="100"/>}
 
 append_if [have_spec gpio] config "
 	<start name=\"[gpio_drv]\">
@@ -83,22 +83,21 @@ append config {
 			</raw>
 		</config>
 	</start>
-	<start name="test-smartcard">
+	<start name="test-smartcard" caps="120">
 		<resource name="RAM" quantum="4M"/>
 		<config>
-			<libc stdout="/dev/log" stderr="/dev/log">
-				<vfs>
-					<dir name="dev"> <log/> </dir>
-					<dir name="ifd-ccid.bundle">
-						<dir name="Contents">
-							<rom name="Info.plist"/>
-						</dir>
+			<vfs>
+				<dir name="dev"> <log/> </dir>
+				<dir name="ifd-ccid.bundle">
+					<dir name="Contents">
+						<rom name="Info.plist"/>
 					</dir>
-					<inline name="config.pcsc-lite">
-						<config vendor_id="0x04e6" product_id="0x5116"/>
-					</inline>
-				</vfs>
-			</libc>
+				</dir>
+				<inline name="config.pcsc-lite">
+					<config vendor_id="0x04e6" product_id="0x5116"/>
+				</inline>
+			</vfs>
+			<libc stdout="/dev/log" stderr="/dev/log"/>
 		</config>
 	</start>
 </config>}
@@ -113,7 +112,7 @@ install_config $config
 set boot_modules {
 	core init timer usb_drv test-smartcard
 	ld.lib.so pcsc-lite.lib.so ccid.lib.so libusb.lib.so
-	libc.lib.so libm.lib.so libc_pipe.lib.so pthread.lib.so
+	libc.lib.so libm.lib.so libc_pipe.lib.so pthread.lib.so posix.lib.so
 	Info.plist
 }
 

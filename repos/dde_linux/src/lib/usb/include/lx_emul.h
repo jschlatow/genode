@@ -181,6 +181,8 @@ typedef struct { __u8 b[16]; } uuid_le;
 
 #include <lx_emul/byteorder.h>
 
+#define __aligned(N) __attribute__((aligned(N)))
+
 struct __una_u16 { u16 x; } __attribute__((packed));
 struct __una_u32 { u32 x; } __attribute__((packed));
 struct __una_u64 { u64 x; } __attribute__((packed));
@@ -1516,6 +1518,7 @@ enum {
 	GFP_NOWAIT   = 0x2000000u,
 };
 
+unsigned long get_zeroed_page(gfp_t gfp_mask);
 unsigned long __get_free_pages(gfp_t gfp_mask, unsigned int order);
 #define __get_free_page(gfp_mask)  __get_free_pages((gfp_mask), 0)
 

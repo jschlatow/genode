@@ -18,7 +18,6 @@
 /* Genode includes */
 #include <util/mmio.h>
 #include <util/string.h>
-#include <drivers/board_base.h>
 #include <base/attached_io_mem_dataspace.h>
 
 
@@ -215,7 +214,7 @@ class Ipu : Genode::Mmio
 		                       Genode::uint16_t width, Genode::uint16_t height,
 		                       Genode::uint32_t stride, Genode::addr_t phys_base)
 		{
-			void *dst =(void*)(base + Cp_mem::OFFSET + channel*sizeof(Cp_mem));
+			void *dst =(void*)(base() + Cp_mem::OFFSET + channel*sizeof(Cp_mem));
 			Cp_mem cpmem;
 
 			cpmem.fw   = width  - 1;
@@ -529,7 +528,7 @@ class Ipu : Genode::Mmio
 		void overlay(Genode::addr_t phys_base, int x, int y, int alpha)
 		{
 			volatile Genode::uint32_t *ptr = (volatile Genode::uint32_t*)
-				(base + Cp_mem::OFFSET + CHAN_DP_PRIMARY_AUXI*sizeof(Cp_mem));
+				(base() + Cp_mem::OFFSET + CHAN_DP_PRIMARY_AUXI*sizeof(Cp_mem));
 			ptr[8] = (((phys_base >> 3) & 0b111) << 29) | (phys_base >> 3);
 			ptr[9] = (phys_base >> 6);
 

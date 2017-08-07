@@ -19,7 +19,6 @@
 #include <base/child.h>
 #include <util/arg_string.h>
 #include <init/child_policy.h>
-#include <ram_session/connection.h>
 #include <cpu_session/connection.h>
 #include <pd_session/connection.h>
 #include <region_map/client.h>
@@ -45,7 +44,8 @@ class Loader::Child : public Child_policy
 		Session_label const _label;
 		Name          const _binary_name;
 
-		size_t const _ram_quota;
+		Cap_quota const _cap_quota;
+		Ram_quota const _ram_quota;
 
 		Parent_services &_parent_services;
 
@@ -62,7 +62,8 @@ class Loader::Child : public Child_policy
 		      Allocator                 &alloc,
 		      Name                const &binary_name,
 		      Session_label       const &label,
-		      size_t                     ram_quota,
+		      Cap_quota                  cap_quota,
+		      Ram_quota                  ram_quota,
 		      Parent_services           &parent_services,
 		      Service                   &local_rom_service,
 		      Service                   &local_cpu_service,
@@ -74,7 +75,8 @@ class Loader::Child : public Child_policy
 			_alloc(alloc),
 			_label(label),
 			_binary_name(binary_name),
-			_ram_quota(Genode::Child::effective_ram_quota(ram_quota)),
+			_cap_quota(Genode::Child::effective_quota(cap_quota)),
+			_ram_quota(Genode::Child::effective_quota(ram_quota)),
 			_parent_services(parent_services),
 			_local_nitpicker_service(local_nitpicker_service),
 			_local_rom_service(local_rom_service),
@@ -94,13 +96,14 @@ class Loader::Child : public Child_policy
 
 		Binary_name binary_name() const override { return _binary_name; }
 
-		Ram_session           &ref_ram()           override { return _env.ram(); }
-		Ram_session_capability ref_ram_cap() const override { return _env.ram_session_cap(); }
+		Pd_session           &ref_pd()           override { return _env.pd(); }
+		Pd_session_capability ref_pd_cap() const override { return _env.pd_session_cap(); }
 
-		void init(Ram_session &ram, Ram_session_capability ram_cap) override
+		void init(Pd_session &pd, Pd_session_capability pd_cap) override
 		{
-			ram.ref_account(ref_ram_cap());
-			ref_ram().transfer_quota(ram_cap, _ram_quota);
+			pd.ref_account(ref_pd_cap());
+			ref_pd().transfer_quota(pd_cap, _cap_quota);
+			ref_pd().transfer_quota(pd_cap, _ram_quota);
 		}
 
 		Service &resolve_session_request(Service::Name const &name,

@@ -12,10 +12,9 @@
  */
 
 /* Genode includes */
-#include <os/server.h>
-#include <root/component.h>
 #include <base/heap.h>
 #include <base/component.h>
+#include <root/component.h>
 
 /* local includes */
 #include <sync_session/connection.h>
@@ -53,7 +52,7 @@ struct Sync_root : public Root_component<Session_component>
 	Session_component *_create_session(char const *args) override
 	{
 		try { return new (md_alloc()) Session_component(*this); }
-		catch (...) { throw Root::Exception(); }
+		catch (...) { throw Service_denied(); }
 	}
 
 	Sync_root(Entrypoint &ep, Allocator &md_alloc)

@@ -19,7 +19,6 @@ append config {
 <config>
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="PD"/>
 		<service name="RM"/>
 		<service name="CPU"/>
@@ -28,6 +27,7 @@ append config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 
 	<start name="timer">
 		<resource name="RAM" quantum="1M"/>
@@ -80,12 +80,12 @@ install_config $config
 set boot_modules {
 	core init timer terminal_crosslink vfs
 	test-libc_counter-source test-libc_counter-sink
-	ld.lib.so libc.lib.so libm.lib.so
+	ld.lib.so libc.lib.so libm.lib.so posix.lib.so
 }
 
 build_boot_image $boot_modules
 
-append qemu_args "-nographic -m 64"
+append qemu_args "-nographic "
 
 #
 # Execute test case

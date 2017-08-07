@@ -18,7 +18,6 @@
 #include <base/child.h>
 #include <base/service.h>
 
-#include <init/child_config.h>
 #include <init/child_policy.h>
 
 #include <util/arg_string.h>
@@ -28,6 +27,7 @@
 #include "cpu_session_component.h"
 #include "pd_session_component.h"
 #include "rom.h"
+#include "child_config.h"
 
 namespace Gdb_monitor {
 	using namespace Genode;
@@ -50,8 +50,8 @@ class Gdb_monitor::App_child : public Child_policy
 
 		Allocator                          &_alloc;
 
-		Ram_session_capability              _ref_ram_cap { _env.ram_session_cap() };
-		Ram_session_client                  _ref_ram { _ref_ram_cap };
+		Pd_session_capability               _ref_pd_cap { _env.pd_session_cap() };
+		Pd_session                         &_ref_pd     { _env.pd() };
 
 		const char                         *_unique_name;
 
@@ -59,7 +59,8 @@ class Gdb_monitor::App_child : public Child_policy
 
 		Region_map                         &_rm;
 
-		size_t                              _ram_quota;
+		Ram_quota                           _ram_quota;
+		Cap_quota                           _cap_quota;
 
 		Rpc_entrypoint                      _entrypoint;
 
@@ -111,7 +112,8 @@ class Gdb_monitor::App_child : public Child_policy
 		App_child(Env             &env,
 		          Allocator       &alloc,
 		          char const      *unique_name,
-		          size_t           ram_quota,
+		          Ram_quota        ram_quota,
+		          Cap_quota        cap_quota,
 		          Signal_receiver &signal_receiver,
 		          Xml_node         target_node)
 		:
@@ -119,7 +121,7 @@ class Gdb_monitor::App_child : public Child_policy
 			_alloc(alloc),
 			_unique_name(unique_name),
 			_rm(_env.rm()),
-			_ram_quota(ram_quota),
+			_ram_quota(ram_quota), _cap_quota(cap_quota),
 			_entrypoint(&_env.pd(), STACK_SIZE, "GDB monitor entrypoint"),
 			_child_config(env.ram(), _rm, target_node),
 			_config_policy("config", _child_config.dataspace(), &_entrypoint),
@@ -155,19 +157,25 @@ class Gdb_monitor::App_child : public Child_policy
 
 		Name name() const override { return _unique_name; }
 
-		Ram_session &ref_ram() override { return _ref_ram; }
+		Pd_session &ref_pd() override { return _ref_pd; }
 
-		Ram_session_capability ref_ram_cap() const override { return _ref_ram_cap; }
+		Pd_session_capability ref_pd_cap() const override { return _ref_pd_cap; }
 
-		void init(Ram_session &session,
-		          Ram_session_capability cap) override
+		void init(Pd_session &session,
+		          Pd_session_capability cap) override
 		{
-			session.ref_account(_ref_ram_cap);
-			_ref_ram.transfer_quota(cap, _ram_quota);
+			session.ref_account(_ref_pd_cap);
+
+			_entrypoint.apply(cap, [&] (Pd_session_component *pd) {
+				if (pd) {
+					_ref_pd.transfer_quota(pd->core_pd_cap(), _cap_quota);
+					_ref_pd.transfer_quota(pd->core_pd_cap(), _ram_quota);
+				}
+			});
 		}
 
 		Service &resolve_session_request(Service::Name const &service_name,
-										 Session_state::Args const &args) override
+		                                 Session_state::Args const &args) override
 		{
 			Service *service = nullptr;
 
@@ -189,7 +197,7 @@ class Gdb_monitor::App_child : public Child_policy
 				service = new (_alloc) Parent_service(_parent_services, _env, service_name);
 
 			if (!service)
-				throw Parent::Service_denied();
+				throw Service_denied();
 
 			return *service;
 		}

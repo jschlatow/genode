@@ -116,6 +116,29 @@ class Gdb_monitor::Pd_session_component : public Rpc_object<Pd_session>
 		Capability<Region_map> linker_area() override {
 			return _linker_area.Rpc_object<Region_map>::cap(); }
 
+		void ref_account(Capability<Pd_session> pd) override {
+			_pd.ref_account(pd); }
+
+		void transfer_quota(Capability<Pd_session> pd, Cap_quota amount) override {
+			warning("Pd_session::transfer_quota not implemented"); }
+
+		Cap_quota cap_quota() const override { return _pd.cap_quota(); }
+		Cap_quota used_caps() const override { return _pd.used_caps(); }
+
+		Ram_dataspace_capability alloc(size_t amount, Cache_attribute cached) override {
+			return _pd.alloc(amount, cached); }
+
+		void free(Ram_dataspace_capability ds) override { _pd.free(ds); }
+
+		size_t dataspace_size(Ram_dataspace_capability ds) const override {
+			return _pd.dataspace_size(ds); }
+
+		void transfer_quota(Pd_session_capability pd, Ram_quota amount) override {
+			_pd.transfer_quota(pd, amount); }
+
+		Ram_quota ram_quota() const override { return _pd.ram_quota(); }
+		Ram_quota used_ram()  const override { return _pd.used_ram(); }
+
 		Capability<Native_pd> native_pd() override {
 			return _pd.native_pd(); }
 };

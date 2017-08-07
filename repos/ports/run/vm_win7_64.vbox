@@ -53,7 +53,9 @@
         <PXEDebug enabled="false"/>
       </BIOS>
       <USB>
-        <Controllers/>
+        <Controllers>
+          <Controller name="OHCI" type="OHCI"/>
+        </Controllers>
         <DeviceFilters/>
       </USB>
       <Network>
@@ -70,7 +72,7 @@
         <Port slot="0" enabled="false" IOBase="0x378" IRQ="7"/>
         <Port slot="1" enabled="false" IOBase="0x378" IRQ="7"/>
       </LPT>
-      <AudioAdapter controller="AC97" driver="Pulse" enabled="false"/>
+      <AudioAdapter controller="HDA" driver="Pulse" enabled="false"/>
       <RTC localOrUTC="UTC"/>
       <SharedFolders/>
       <Clipboard mode="Disabled"/>

@@ -56,6 +56,11 @@ static inline bool Test::xml_attribute_matches(Xml_node condition, Xml_node node
 		return (size_t)node.attribute_value(name.string(), Number_of_bytes()) > value;
 	}
 
+	if (condition.has_attribute("lower")) {
+		size_t const value = condition.attribute_value("lower", Number_of_bytes());
+		return (size_t)node.attribute_value(name.string(), Number_of_bytes()) < value;
+	}
+
 	error("missing condition in <attribute> node");
 	return false;
 }
@@ -86,6 +91,9 @@ static inline bool Test::xml_matches(Xml_node expected, Xml_node node)
 
 			matches = matches && at_least_one_sub_node_matches;
 		}
+
+		if (condition.type() == "not")
+			matches = matches && !xml_matches(condition, node);
 	});
 	return matches;
 }
@@ -178,6 +186,8 @@ struct Test::Main : Log_message_handler
 
 	Timer::Connection _timer { _env };
 
+	bool _timer_scheduled = false;
+
 	Reporter _init_config_reporter { _env, "config",  "init.config" };
 
 	Attached_rom_dataspace _config { _env, "config" };
@@ -269,8 +279,11 @@ struct Test::Main : Log_message_handler
 			}
 
 			if (step.type() == "sleep") {
-				unsigned long const timeout_ms = step.attribute_value("ms", 250UL);
-				_timer.trigger_once(timeout_ms*1000);
+				if (!_timer_scheduled) {
+					unsigned long const timeout_ms = step.attribute_value("ms", 250UL);
+					_timer.trigger_once(timeout_ms*1000);
+					_timer_scheduled = true;
+				}
 				return;
 			}
 
@@ -310,6 +323,8 @@ struct Test::Main : Log_message_handler
 			error("got spurious timeout signal");
 			throw Exception();
 		}
+
+		_timer_scheduled = false;
 
 		_advance_step();
 		_execute_curr_step();

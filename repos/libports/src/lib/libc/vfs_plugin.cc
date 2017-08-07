@@ -91,7 +91,11 @@ namespace Libc {
 	Genode::Xml_node config() __attribute__((weak));
 	Genode::Xml_node config()
 	{
-		return _config_node->sub_node("libc");
+		if (!_config_node) {
+			error("libc config not initialized - aborting");
+			exit(1);
+		}
+		return *_config_node;
 	}
 
 	class Config_attr
@@ -126,6 +130,30 @@ namespace Libc {
 		static Config_attr socket("socket", "");
 		return socket.string();
 	}
+
+	void notify_read_ready(Vfs::Vfs_handle *handle)
+	{
+		struct Check : Libc::Suspend_functor
+		{
+			Vfs::Vfs_handle *handle;
+			Check(Vfs::Vfs_handle *handle) : handle(handle) { }
+			bool suspend() override { return !handle->fs().notify_read_ready(handle); }
+		} check(handle);
+
+		while (!handle->fs().notify_read_ready(handle))
+			Libc::suspend(check);
+	}
+
+	bool read_ready(Libc::File_descriptor *fd)
+	{
+		Vfs::Vfs_handle *handle = vfs_handle(fd);
+		if (!handle) return false;
+
+		notify_read_ready(handle);
+
+		return handle->fs().read_ready(handle);
+	}
+
 }
 
 int Libc::Vfs_plugin::access(const char *path, int amode)
@@ -190,7 +218,7 @@ Libc::File_descriptor *Libc::Vfs_plugin::open(char const *path, int flags,
 	Libc::File_descriptor *fd =
 		Libc::file_descriptor_allocator()->alloc(this, vfs_context(handle), libc_fd);
 
-	fd->status = flags;
+	fd->flags = flags & (O_NONBLOCK|O_APPEND);
 
 	if ((flags & O_TRUNC) && (ftruncate(fd, 0) == -1)) {
 		/* XXX leaking fd, missing errno */
@@ -321,6 +349,9 @@ ssize_t Libc::Vfs_plugin::read(Libc::File_descriptor *fd, void *buf,
 
 	Vfs::file_size out_count  = 0;
 	Result         out_result = Result::READ_OK;
+
+	if (fd->flags & O_NONBLOCK && !Libc::read_ready(fd))
+		return Errno(EAGAIN);
 
 	while (!handle->fs().queue_read(handle, (char *)buf, count,
 	                                out_result, out_count)) {
@@ -632,9 +663,11 @@ int Libc::Vfs_plugin::fcntl(Libc::File_descriptor *fd, int cmd, long arg)
 
 			return new_fd->libc_fd;
 		}
-	case F_GETFD:                  return fd->flags;
-	case F_SETFD: fd->flags = arg; return 0;
-	case F_GETFL:                  return fd->status;
+	case F_GETFD: return fd->cloexec ? FD_CLOEXEC : 0;
+	case F_SETFD: fd->cloexec = arg == FD_CLOEXEC;  return 0;
+
+	case F_GETFL: return fd->flags;
+	case F_SETFL: fd->flags = arg; return 0;
 
 	default:
 		break;
@@ -833,15 +866,7 @@ int Libc::Vfs_plugin::select(int nfds,
 				FD_SET(fd, readfds);
 				++nready;
 			} else {
-				struct Check : Libc::Suspend_functor {
-					Vfs::Vfs_handle * handle;
-					Check(Vfs::Vfs_handle * handle) : handle (handle) { }
-					bool suspend() override {
-						return !handle->fs().notify_read_ready(handle); }
-				} check ( handle );
-
-				while (!handle->fs().notify_read_ready(handle))
-					Libc::suspend(check);
+				Libc::notify_read_ready(handle);
 			}
 		}
 
@@ -855,18 +880,4 @@ int Libc::Vfs_plugin::select(int nfds,
 		/* XXX exceptfds not supported */
 	}
 	return nready;
-}
-
-namespace Libc {
-
-	bool read_ready(Libc::File_descriptor *fd)
-	{
-		Vfs::Vfs_handle *handle = vfs_handle(fd);
-		if (!handle) return false;
-
-		handle->fs().notify_read_ready(handle);
-
-		return handle->fs().read_ready(handle);
-	}
-
 }

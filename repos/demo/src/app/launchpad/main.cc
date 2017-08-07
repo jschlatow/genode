@@ -63,7 +63,7 @@ class Avail_quota_update : public Scout::Tick
 		 */
 		int on_tick()
 		{
-			size_t new_avail = _ram.avail();
+			size_t new_avail = _ram.avail_ram().value;
 
 			/* update launchpad window if needed */
 			if (new_avail != _avail)
@@ -108,7 +108,7 @@ struct Main : Scout::Event_handler
 
 	Launchpad_window<Pixel_rgb565>
 		_launchpad { _env, _graphics_backend, _initial_position, _initial_size,
-		             _max_size, _env.ram().avail() };
+		             _max_size, _env.ram().avail_ram().value };
 
 	void _process_config()
 	{
@@ -160,4 +160,10 @@ struct Main : Scout::Event_handler
 };
 
 
-void Component::construct(Genode::Env &env) { static Main main(env); }
+void Component::construct(Genode::Env &env)
+{
+	/* XXX execute constructors of global statics */
+	env.exec_static_constructors();
+
+	static Main main(env);
+}

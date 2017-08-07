@@ -18,7 +18,6 @@
 
 /* core includes */
 #include <boot_modules.h>
-#include <core_parent.h>
 #include <platform.h>
 #include <map_local.h>
 #include <cnode.h>
@@ -371,7 +370,8 @@ void Platform::_init_rom_modules()
 			_phys_cnode.copy(initial_cspace, Cnode_index(module_frame_sel + i),
 			                                 Cnode_index(dst_frame + i));
 
-		log("boot module '", header->name, "' (", header->size, " bytes)");
+		log("boot module '", (char const *)header->name, "' "
+		    "(", header->size, " bytes)");
 
 		/*
 		 * Register ROM module, the base address refers to location of the
@@ -467,5 +467,3 @@ void Platform::wait_for_exit()
 	sleep_forever();
 }
 
-
-void Core_parent::exit(int exit_value) { }

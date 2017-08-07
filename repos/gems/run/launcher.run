@@ -1,76 +1,56 @@
-#
-# Build
-#
-
-set build_components {
-	core init drivers/timer drivers/framebuffer drivers/input
-	server/dynamic_rom server/nitpicker server/report_rom
-	app/pointer app/menu_view
-	app/scout app/launchpad app/launcher test/nitpicker
-	server/nit_fader server/rom_filter server/wm app/decorator
-	app/floating_window_layouter app/status_bar server/nit_fb
-	app/backdrop app/xray_trigger
-}
-
-source ${genode_dir}/repos/base/run/platform_drv.inc
-append_platform_drv_build_components
-
-build $build_components
-
 create_boot_directory
 
-#
-# Generate config
-#
+import_from_depot genodelabs/src/[base_src] \
+                  genodelabs/pkg/[drivers_interactive_pkg] \
+                  genodelabs/pkg/wm \
+                  genodelabs/raw/genode_bg \
+                  genodelabs/pkg/backdrop \
+                  genodelabs/src/demo \
+                  genodelabs/src/init \
+                  genodelabs/src/nitpicker \
+                  genodelabs/src/nit_fb \
+                  genodelabs/src/nit_fader \
+                  genodelabs/src/rom_filter \
+                  genodelabs/src/menu_view
 
-append config {
+install_config {
 <config>
 	<parent-provides>
 		<service name="ROM"/>
 		<service name="CPU"/>
 		<service name="PD"/>
-		<service name="RAM"/>
 		<service name="RM"/>
 		<service name="LOG"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
 	</parent-provides>
+
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
-	</default-route>}
+	</default-route>
 
-append_if [have_spec sdl] config {
-	<start name="fb_sdl">
-		<resource name="RAM" quantum="4M"/>
-		<provides>
-			<service name="Input"/>
-			<service name="Framebuffer"/>
-		</provides>
-		<config width="640" height="480"/>
-	</start>}
+	<default caps="50"/>
 
-append_platform_drv_config
-
-append_if [have_spec framebuffer] config {
-	<start name="fb_drv">
-		<resource name="RAM" quantum="4M"/>
-		<provides><service name="Framebuffer"/></provides>
-		<config buffered="yes" />
-	</start>}
-
-append_if [have_spec ps2] config {
-	<start name="ps2_drv">
-		<resource name="RAM" quantum="1M"/>
-		<provides><service name="Input"/></provides>
-	</start>}
-
-append config {
 	<start name="timer">
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Timer"/></provides>
 	</start>
-	<start name="nitpicker">
+
+	<start name="drivers" caps="300">
+		<resource name="RAM" quantum="32M"/>
+		<binary name="init"/>
+		<route>
+			<service name="ROM" label="config"> <parent label="drivers.config"/> </service>
+			<service name="Timer"> <child name="timer"/> </service>
+			<any-service> <parent/> </any-service>
+		</route>
+		<provides>
+			<service name="Input"/> <service name="Framebuffer"/>
+		</provides>
+	</start>
+
+	<start name="nitpicker" caps="100">
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Nitpicker"/></provides>
 		<config>
@@ -97,6 +77,7 @@ append config {
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
+
 	<start name="pointer">
 		<resource name="RAM" quantum="1M"/>
 		<route>
@@ -188,9 +169,8 @@ append config {
 	<start name="decorator">
 		<binary name="decorator"/>
 		<resource name="RAM" quantum="8M"/>
-		<configfile name="decorator.config"/>
 		<route>
-			<service name="ROM" label="decorator.config">
+			<service name="ROM" label="config">
 				<child name="decorator_config"/> </service>
 			<service name="ROM" label="window_layout">
 				<child name="report_rom"/> </service>
@@ -235,38 +215,38 @@ append config {
 		</route>
 	</start>
 
-	<start name="launcher">
+	<start name="launcher" caps="1000">
 		<resource name="RAM" quantum="60M" />
 		<config focus_prefix="wm -> launcher -> ">
-			<subsystem name="scout" title="Scout">
+			<subsystem name="scout" title="Scout" caps="200">
 				<resource name="RAM" quantum="20M" />
 				<binary name="scout" />
 			</subsystem>
-			<subsystem name="testnit1" title="Nitpicker Test">
+			<subsystem name="testnit1" title="Nitpicker Test" caps="25">
 				<resource name="RAM" quantum="2M" />
 				<binary name="testnit" />
 			</subsystem>
-			<subsystem name="testnit2" title="Nitpicker Test 2">
+			<subsystem name="testnit2" title="Nitpicker Test 2" caps="25">
 				<resource name="RAM" quantum="2M" />
 				<binary name="testnit" />
 			</subsystem>
-			<subsystem name="testnit3" title="Nitpicker Test 3">
+			<subsystem name="testnit3" title="Nitpicker Test 3" caps="25">
 				<resource name="RAM" quantum="2M" />
 				<binary name="testnit" />
 			</subsystem>
-			<subsystem name="scout2" title="Scoutx">
+			<subsystem name="scout2" title="Scoutx" caps="25">
 				<resource name="RAM" quantum="20M" />
 				<binary name="scout" />
 			</subsystem>
-			<subsystem name="testnit4" title="Nitpicker Testx">
+			<subsystem name="testnit4" title="Nitpicker Testx" caps="25">
 				<resource name="RAM" quantum="2M" />
 				<binary name="testnit" />
 			</subsystem>
-			<subsystem name="testnit5" title="Nitpicker Test5">
+			<subsystem name="testnit5" title="Nitpicker Test5" caps="25">
 				<resource name="RAM" quantum="2M" />
 				<binary name="testnit" />
 			</subsystem>
-			<subsystem name="backdrop" title="Backdrop">
+			<subsystem name="backdrop" title="Backdrop" caps="25">
 				<resource name="RAM" quantum="4M"/>
 				<binary name="backdrop" />
 				<config>
@@ -286,29 +266,9 @@ append config {
 	</start>
 </config>}
 
-install_config $config
+build { app/launcher test/nitpicker app/status_bar app/xray_trigger }
 
-#
-# Boot modules
-#
+build_boot_image { testnit launcher xray_trigger status_bar }
 
-# generic modules
-set boot_modules {
-	core init timer dynamic_rom nitpicker pointer menu_view
-	ld.lib.so libpng.lib.so libc.lib.so libm.lib.so zlib.lib.so
-	menu_view_styles.tar
-	scout launchpad testnit
-	nit_fader report_rom launcher rom_filter xray_trigger
-	decorator wm floating_window_layouter status_bar nit_fb backdrop
-}
-
-# platform-specific modules
-append_platform_drv_boot_modules
-
-lappend_if [have_spec linux]        boot_modules fb_sdl
-lappend_if [have_spec ps2]          boot_modules ps2_drv
-lappend_if [have_spec framebuffer]  boot_modules fb_drv
-
-build_boot_image $boot_modules
 
 run_genode_until forever

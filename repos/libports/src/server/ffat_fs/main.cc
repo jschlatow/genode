@@ -12,12 +12,11 @@
  */
 
 /* Genode includes */
+#include <base/component.h>
 #include <file_system/node_handle_registry.h>
 #include <file_system_session/rpc_object.h>
 #include <root/component.h>
-#include <cap_session/connection.h>
 #include <base/attached_rom_dataspace.h>
-#include <os/config.h>
 #include <os/session_policy.h>
 #include <util/xml_node.h>
 #include <base/heap.h>
@@ -27,6 +26,9 @@
 #include <directory.h>
 #include <file.h>
 #include <util.h>
+
+/* Genode block backend */
+#include <ffat/block.h>
 
 /* ffat includes */
 namespace Ffat { extern "C" {
@@ -57,12 +59,14 @@ namespace File_system {
 	{
 		private:
 
+			Genode::Env          &_env;
+			Genode::Allocator    &_heap;
+
 			Directory            &_root;
 			Node_handle_registry  _handle_registry;
 			bool                  _writable;
 
-			Signal_dispatcher<Session_component> _process_packet_dispatcher;
-
+			Signal_handler<Session_component> _process_packet_dispatcher;
 
 			/******************************
 			 ** Packet-stream processing **
@@ -132,7 +136,7 @@ namespace File_system {
 			 * Called by signal dispatcher, executed in the context of the main
 			 * thread (not serialized with the RPC functions)
 			 */
-			void _process_packets(unsigned)
+			void _process_packets()
 			{
 				while (tx_sink()->packet_avail()) {
 
@@ -171,15 +175,16 @@ namespace File_system {
 			/**
 			 * Constructor
 			 */
-			Session_component(size_t tx_buf_size, Rpc_entrypoint &ep,
-			                  Region_map &rm,
-			                  Signal_receiver &sig_rec,
-			                  Directory &root, bool writable)
+			Session_component(Genode::Env       &env,
+			                  Genode::Allocator &heap,
+			                  size_t             tx_buf_size,
+			                  Directory         &root,
+			                  bool               writable)
 			:
-				Session_rpc_object(env()->ram_session()->alloc(tx_buf_size), rm, ep),
-				_root(root),
-				_writable(writable),
-				_process_packet_dispatcher(sig_rec, *this,
+				Session_rpc_object(env.ram().alloc(tx_buf_size),
+				                   env.rm(), env.ep().rpc_ep()),
+				_env(env), _heap(heap), _root(root), _writable(writable),
+				_process_packet_dispatcher(env.ep(), *this,
 				                           &Session_component::_process_packets)
 			{
 				/*
@@ -196,9 +201,8 @@ namespace File_system {
 			~Session_component()
 			{
 				Dataspace_capability ds = tx_sink()->dataspace();
-				env()->ram_session()->free(static_cap_cast<Ram_dataspace>(ds));
+				_env.ram().free(static_cap_cast<Ram_dataspace>(ds));
 			}
-
 
 			/***************************
 			 ** File_system interface **
@@ -244,7 +248,7 @@ namespace File_system {
 
 				switch(res) {
 					case FR_OK: {
-						File *file_node = new (env()->heap()) File(absolute_path.base());
+						File *file_node = new (&_heap) File(absolute_path.base());
 						file_node->ffat_fil(ffat_fil);
 						return _handle_registry.alloc(file_node);
 					}
@@ -300,7 +304,7 @@ namespace File_system {
 				 *  The 'Directory' constructor removes trailing slashes,
 				 *  except for "/"
 				 */
-				Directory *dir_node = new (env()->heap()) Directory(path.string());
+				Directory *dir_node = new (&_heap) Directory(path.string());
 
 				using namespace Ffat;
 
@@ -356,7 +360,7 @@ namespace File_system {
 								throw Lookup_failed();
 						}
 					} catch (Exception e) {
-						destroy(env()->heap(), dir_node);
+						destroy(&_heap, dir_node);
 						throw e;
 					}
 				}
@@ -396,7 +400,7 @@ namespace File_system {
 							throw Lookup_failed();
 					}
 				} catch (Exception e) {
-					destroy(env()->heap(), dir_node);
+					destroy(&_heap, dir_node);
 					throw e;
 				}
 			}
@@ -417,7 +421,7 @@ namespace File_system {
 					throw Lookup_failed();
 				}
 
-				Node *node = new (env()->heap()) Node(absolute_path.base());
+				Node *node = new (&_heap) Node(absolute_path.base());
 
 				/* f_stat() does not work for "/" */
 				if (!is_root(node->name())) {
@@ -462,7 +466,7 @@ namespace File_system {
 								throw Lookup_failed();
 						}
 					} catch (Exception e) {
-						destroy(env()->heap(), node);
+						destroy(&_heap, node);
 						throw e;
 					}
 				}
@@ -493,7 +497,7 @@ namespace File_system {
 					FRESULT res = f_close(file->ffat_fil());
 
 					/* free the node */
-					destroy(env()->heap(), file);
+					destroy(&_heap, file);
 
 					switch(res) {
 						case FR_OK:
@@ -825,10 +829,11 @@ namespace File_system {
 	{
 		private:
 
-			Rpc_entrypoint  &_channel_ep;
-			Region_map      &_rm;
-			Signal_receiver &_sig_rec;
-			Directory       &_root_dir;
+			Genode::Env                   &_env;
+			Genode::Allocator             &_md_alloc;
+			Genode::Allocator             &_heap;
+			Genode::Attached_rom_dataspace _config { _env, "config" };
+			Directory                     &_root_dir;
 
 		protected:
 
@@ -847,7 +852,7 @@ namespace File_system {
 
 				Session_label const label = label_from_args(args);
 				try {
-					Session_policy policy(label);
+					Session_policy policy(label, _config.xml());
 
 					/*
 					 * Determine directory that is used as root directory of
@@ -882,43 +887,45 @@ namespace File_system {
 									throw Lookup_failed();
 								case FR_NOT_READY:
 									error("f_chdir() failed with error code FR_NOT_READY");
-									throw Root::Unavailable();
+									throw Service_denied();
 								case FR_DISK_ERR:
 									error("f_chdir() failed with error code FR_DISK_ERR");
-									throw Root::Unavailable();
+									throw Service_denied();
 								case FR_INT_ERR:
 									error("f_chdir() failed with error code FR_INT_ERR");
-									throw Root::Unavailable();
+									throw Service_denied();
 								case FR_NOT_ENABLED:
 									error("f_chdir() failed with error code FR_NOT_ENABLED");
-									throw Root::Unavailable();
+									throw Service_denied();
 								case FR_NO_FILESYSTEM:
 									error("f_chdir() failed with error code FR_NO_FILESYSTEM");
-									throw Root::Unavailable();
+									throw Service_denied();
 								default:
 									/* not supposed to occur according to the libffat documentation */
 									error("f_chdir() returned an unexpected error code");
-									throw Root::Unavailable();
+									throw Service_denied();
 							}
 
-							session_root_dir = new (env()->heap()) Directory(root);
+							session_root_dir = new (&_md_alloc) Directory(root);
 						}
-					} catch (Xml_node::Nonexistent_attribute) {
+					}
+					catch (Xml_node::Nonexistent_attribute) {
 						error("missing \"root\" attribute in policy definition");
-						throw Root::Unavailable();
-					} catch (Lookup_failed) {
+						throw Service_denied();
+					}
+					catch (Lookup_failed) {
 						error("session root directory \"", Cstring(root), "\" does not exist");
-						throw Root::Unavailable();
+						throw Service_denied();
 					}
 
 					/*
 					 * Determine if write access is permitted for the session.
 					 */
 					writeable = policy.attribute_value("writeable", false);
-
-				} catch (Session_policy::No_policy_defined) {
+				}
+				catch (Session_policy::No_policy_defined) {
 					error("Invalid session request, no matching policy");
-					throw Root::Unavailable();
+					throw Service_denied();
 				}
 
 				size_t ram_quota =
@@ -928,7 +935,7 @@ namespace File_system {
 
 				if (!tx_buf_size) {
 					error(label, " requested a session with a zero length transmission buffer");
-					throw Root::Invalid_args();
+					throw Service_denied();
 				}
 
 				/*
@@ -939,10 +946,10 @@ namespace File_system {
 				if (max((size_t)4096, session_size) > ram_quota) {
 					error("insufficient 'ram_quota', got ", ram_quota, ", "
 					      "need ", session_size);
-					throw Root::Quota_exceeded();
+					throw Insufficient_ram_quota();
 				}
 				return new (md_alloc())
-					Session_component(tx_buf_size, _channel_ep, _rm, _sig_rec,
+					Session_component(_env, _heap, tx_buf_size,
 					                  *session_root_dir, writeable);
 			}
 
@@ -951,52 +958,58 @@ namespace File_system {
 			/**
 			 * Constructor
 			 *
-			 * \param session_ep  session entrypoint
-			 * \param sig_rec     signal receiver used for handling the
-			 *                    data-flow signals of packet streams
-			 * \param md_alloc    meta-data allocator
+			 * \param env   reference to Genode environment
+			 * \param heap  meta-data allocator
+			 * \param root  normal root directory if root in policy starts
+			 *              at root
 			 */
-			Root(Rpc_entrypoint &session_ep, Allocator &md_alloc,
-			     Region_map &rm,
-			     Signal_receiver &sig_rec, Directory &root_dir)
+			Root(Genode::Env &env, Allocator &md_alloc, Genode::Allocator &heap,
+			     Directory &root)
 			:
-				Root_component<Session_component>(&session_ep, &md_alloc),
-				_channel_ep(session_ep), _rm(rm), _sig_rec(sig_rec),
-				_root_dir(root_dir)
+				Root_component<Session_component>(&env.ep().rpc_ep(), &md_alloc),
+				_env(env), _md_alloc(md_alloc), _heap(heap), _root_dir(root)
 			{ }
 	};
 };
 
 
-int main(int, char **)
+struct Main
 {
-	using namespace File_system;
-	using namespace Ffat;
+	Genode::Env         &_env;
+	Genode::Heap         _heap        { _env.ram(), _env.rm() };
+	Genode::Sliced_heap  _sliced_heap { _env.ram(), _env.rm() };
 
-	static Ffat::FATFS _fatfs;
+	File_system::Directory _root_dir { "/" };
+	File_system::Root      _root { _env, _sliced_heap, _heap, _root_dir };
 
-	/* mount the file system */
-	if (f_mount(0, &_fatfs) != Ffat::FR_OK) {
-		error("mount failed");
-		return -1;
+	Ffat::FATFS _fatfs;
+
+	Main(Genode::Env &env) : _env(env)
+	{
+		Ffat::block_init(_env, _heap);
+
+		using namespace File_system;
+		using namespace Ffat;
+
+		/* mount the file system */
+		if (f_mount(0, &_fatfs) != Ffat::FR_OK) {
+			error("mount failed");
+
+			struct Mount_failed : Genode::Exception { };
+			throw Mount_failed();
+		}
+
+		Genode::log("--- Starting Ffat_fs ---");
+
+		_env.parent().announce(_env.ep().manage(_root));
 	}
+};
 
-	enum { STACK_SIZE = 3*sizeof(addr_t)*1024 };
-	static Cap_connection cap;
-	static Rpc_entrypoint ep(&cap, STACK_SIZE, "ffat_fs_ep");
-	static Sliced_heap sliced_heap(env()->ram_session(), env()->rm_session());
-	static Signal_receiver sig_rec;
 
-	static Directory root_dir("/");
+void Component::construct(Genode::Env &env)
+{
+	/* XXX execute constructors of global statics */
+	env.exec_static_constructors();
 
-	static File_system::Root root(ep, sliced_heap, *env()->rm_session(), sig_rec, root_dir);
-
-	env()->parent()->announce(ep.manage(&root));
-
-	for (;;) {
-		Signal s = sig_rec.wait_for_signal();
-		static_cast<Signal_dispatcher_base *>(s.context())->dispatch(s.num());
-	}
-
-	return 0;
+	static Main main(env);
 }

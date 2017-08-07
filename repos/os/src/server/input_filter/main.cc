@@ -52,10 +52,9 @@ struct Input_filter::Main : Input_connection::Avail_handler,
 	{
 		struct Lazy
 		{
-			Timer::Connection connection;
-			Genode::Timer     timer;
+			Timer::Connection timer;
 
-			Lazy(Env &env) : connection(env), timer(connection, env.ep()) { }
+			Lazy(Env &env) : timer(env) { }
 		};
 
 		Env &_env;
@@ -67,7 +66,7 @@ struct Input_filter::Main : Input_connection::Avail_handler,
 		/**
 		 * Timer_accessor interface
 		 */
-		Genode::Timer &timer() override
+		Timer::Connection &timer() override
 		{
 			if (!lazy.constructed())
 				lazy.construct(_env);
@@ -382,11 +381,11 @@ struct Input_filter::Main : Input_connection::Avail_handler,
 					input_node.attribute_value("label", Label());
 
 				try {
-					Input_connection &conn = *new (_heap)
+					new (_heap)
 						Registered<Input_connection>(_input_connections, _env,
 						                             label, *this, _heap);
 
-				} catch (Genode::Parent::Service_denied) {
+				} catch (Genode::Service_denied) {
 					error("parent denied input source '", label, "'");
 				}
 			} catch (Xml_node::Nonexistent_attribute) {

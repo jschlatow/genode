@@ -14,13 +14,13 @@ install_config {
 		<parent-provides>
 			<service name="LOG"/>
 			<service name="CPU"/>
-			<service name="RAM"/>
 			<service name="ROM"/>
 			<service name="PD"/>
 		</parent-provides>
 		<default-route>
 			<any-service> <parent/> </any-service>
 		</default-route>
+		<default caps="100"/>
 		<start name="test-server-mp">
 			<resource name="RAM" quantum="10M"/>
 		</start>
@@ -44,7 +44,7 @@ if {[have_include "power_on/qemu"]} {
 	if {[have_spec zynq]}                       { set want_cpus 1 }
 	if {[have_spec sel4]}                       { set want_cpus 1 }
 
-	append qemu_args " -nographic -m 64 -smp $want_cpus,cores=$want_cpus "
+	append qemu_args " -nographic  -smp $want_cpus,cores=$want_cpus "
 }
 
 # run the test

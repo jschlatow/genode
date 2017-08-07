@@ -33,6 +33,7 @@ append config {
 append config [qt5_parent_provides feature]
 append config {
 	</parent-provides>
+	<default caps="100"/>
 	<default-route>
 		<any-service> <parent/> <child name="wm"/> <any-child/> </any-service>
 	</default-route>}
@@ -40,19 +41,26 @@ append config {
 append config [qt5_start_nodes feature]
 
 append config {
-	<start name="loader">
+	<start name="loader" caps="100">
 		<resource name="RAM" quantum="8M"/>
 		<provides><service name="Loader"/></provides>
+		<config>
+			<policy label_prefix="test-qpluginwidget">
+				<parent-rom name="ld.lib.so"/>
+				<parent-rom name="init"/>
+				<parent-rom name="tar_rom"/>
+				<parent-rom name="testnit"/>
+			</policy>
+		</config>
 	</start>
-	<start name="test-qpluginwidget">
+	<start name="test-qpluginwidget" caps="900">
 		<resource name="RAM" quantum="30M"/>
 		<config>
-			<libc stdout="/dev/log" stderr="/dev/log">
-				<vfs>
-					<dir name="dev"> <log/> </dir>
-					<tar name="qt5_fs_test-qpluginwidget.tar"/>
-				</vfs>
-			</libc>
+			<vfs>
+				<dir name="dev"> <log/> </dir>
+				<tar name="qt5_fs_test-qpluginwidget.tar"/>
+			</vfs>
+			<libc stdout="/dev/log" stderr="/dev/log"/>
 		</config>
 	</start>
 </config>
@@ -64,7 +72,7 @@ install_config $config
 # Boot modules
 #
 
-exec sh -c "ln -sf ../test/qt5/qpluginwidget/test-plugin.tar bin/"
+exec sh -c "ln -sf [pwd]/test/qt5/qpluginwidget/test-plugin.tar bin/"
 
 append boot_modules [qt5_boot_modules feature]
 
@@ -75,7 +83,6 @@ append boot_modules {
 	test-qpluginwidget
 	freetype.lib.so
 	gallium.lib.so
-	icu.lib.so
 	ld.lib.so
 	libc.lib.so
 	libc_pipe.lib.so
@@ -84,7 +91,9 @@ append boot_modules {
 	libpng.lib.so
 	libssl.lib.so
 	jpeg.lib.so
+	pcre16.lib.so
 	pthread.lib.so
+	qt5_component.lib.so
 	qt5_core.lib.so
 	qt5_gui.lib.so
 	qt5_qnitpickerviewwidget.lib.so
@@ -100,7 +109,6 @@ append boot_modules {
 
 build_boot_image $boot_modules
 
-append qemu_args " -m 256"
 
 run_genode_until forever
 

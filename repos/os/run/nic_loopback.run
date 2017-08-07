@@ -20,7 +20,6 @@ append config {
 <config>
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -32,6 +31,7 @@ append config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 	<start name="nic_loopback">
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Nic"/></provides>
@@ -56,6 +56,6 @@ set boot_modules {
 
 build_boot_image $boot_modules
 
-append qemu_args " -nographic -serial mon:stdio -m 256 "
+append qemu_args " -nographic -serial mon:stdio  "
 
 run_genode_until {child .* exited with exit value 0.*} 60

@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include <util/retry.h>
 #include <base/connection.h>
 #include <platform_session/client.h>
 
@@ -26,7 +27,8 @@ struct Platform::Connection : Genode::Connection<Session>, Client
 	 */
 	Connection(Genode::Env &env)
 	:
-		Genode::Connection<Session>(env, session("ram_quota=16K")),
+		Genode::Connection<Session>(env, session("ram_quota=16K, cap_quota=%u",
+		                                         CAP_QUOTA)),
 		Client(cap())
 	{ }
 
@@ -39,7 +41,21 @@ struct Platform::Connection : Genode::Connection<Session>, Client
 	 */
 	Connection() __attribute__((deprecated))
 	:
-		Genode::Connection<Session>(session("ram_quota=16K")),
+		Genode::Connection<Session>(session("ram_quota=16K, cap_quota=%u",
+		                                    CAP_QUOTA)),
 		Client(cap())
 	{ }
+
+	template <typename FUNC>
+	auto with_upgrade(FUNC func) -> decltype(func())
+	{
+		return Genode::retry<Genode::Out_of_ram>(
+			[&] () {
+				return Genode::retry<Genode::Out_of_caps>(
+					[&] () { return func(); },
+					[&] () { this->upgrade_caps(2); });
+			},
+			[&] () { this->upgrade_ram(4096); }
+		);
+	}
 };

@@ -36,6 +36,12 @@ Untyped_capability Rpc_entrypoint::_manage(Rpc_object_base *obj)
 {
 	using namespace Nova;
 
+	/* don't manage RPC object twice */
+	if (obj->cap().valid()) {
+		warning("attempt to manage RPC object twice");
+		return obj->cap();
+	}
+
 	Untyped_capability ec_cap;
 
 	/* _ec_sel is invalid until thread gets started */
@@ -60,6 +66,10 @@ Untyped_capability Rpc_entrypoint::_manage(Rpc_object_base *obj)
 
 void Rpc_entrypoint::_dissolve(Rpc_object_base *obj)
 {
+	/* don't dissolve RPC object twice */
+	if (!obj->cap().valid())
+		return;
+
 	/* de-announce object from cap_session */
 	_free_rpc_cap(_pd_session, obj->cap());
 
@@ -90,7 +100,7 @@ void Rpc_entrypoint::_dissolve(Rpc_object_base *obj)
 	_delay_start.unlock();
 
 	/* make a IPC to ensure that cap() identifier is not used anymore */
-	utcb->msg[0] = 0xdead;
+	utcb->msg()[0] = 0xdead;
 	utcb->set_msg_word(1);
 	if (uint8_t res = call(_cap.local_name()))
 		error(utcb, " - could not clean up entry point of thread ", this->utcb(), " - res ", res);

@@ -34,7 +34,6 @@ set config {
 <config>
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -46,6 +45,7 @@ set config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 }
 
 append_if [have_spec sdl] config {
@@ -78,26 +78,23 @@ append config {
 		<provides><service name="Timer"/></provides>
 	</start>
 	<start name="audio_drv">
+		<binary name="} [audio_drv_binary] {"/>
 		<resource name="RAM" quantum="8M"/>
-		<route>
-			<any-service> <any-child /> <parent /></any-service>
-		</route>
 		<provides>
 			<service name="Audio_out"/>
 		</provides>
 	</start>
-	<start name="avplay">
+	<start name="avplay" caps="200">
 		<resource name="RAM" quantum="64M"/>
 		<config>
 			<arg value="avplay"/>
 			<arg value="mediafile"/>
 			<sdl_audio_volume value="100"/>
-			<libc stdout="/dev/log" stderr="/dev/log">
-				<vfs>
-					<dir name="dev"> <log/> </dir>
-					<rom name="mediafile"/>
-				</vfs>
-			</libc>
+			<vfs>
+				<dir name="dev"> <log/> </dir>
+				<rom name="mediafile"/>
+			</vfs>
+			<libc stdout="/dev/log" stderr="/dev/log"/>
 		</config>
 		<route>
 			<service name="Platform"> <any-child /> </service>
@@ -114,11 +111,11 @@ install_config $config
 # Boot modules
 #
 
-set boot_modules {
-	core init timer audio_drv avplay
+append boot_modules {
+	core init timer } [audio_drv_binary] { avplay
 	ld.lib.so libc.lib.so libm.lib.so pthread.lib.so zlib.lib.so sdl.lib.so
 	avfilter.lib.so avutil.lib.so avcodec.lib.so avformat.lib.so swscale.lib.so
-	avresample.lib.so
+	avresample.lib.so posix.lib.so
 	mediafile
 }
 
@@ -130,7 +127,7 @@ append_platform_drv_boot_modules
 
 build_boot_image $boot_modules
 
-append qemu_args " -m 256 -soundhw es1370"
+append qemu_args "  -soundhw es1370"
 
 run_genode_until forever
 

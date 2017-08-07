@@ -14,7 +14,10 @@
 #ifndef _QNITPICKERINTEGRATIONPLUGIN_H_
 #define _QNITPICKERINTEGRATIONPLUGIN_H_
 
-#include <QDebug>
+/* Genode includes */
+#include <base/env.h>
+
+/* Qt includes */
 #include <qpa/qplatformintegrationplugin.h>
 #include "qnitpickerintegration.h"
 
@@ -23,10 +26,16 @@ QT_BEGIN_NAMESPACE
 class QNitpickerIntegrationPlugin : public QPlatformIntegrationPlugin
 {
 	Q_OBJECT
-    Q_PLUGIN_METADATA(IID "org.qt-project.Qt.QPA.QPlatformIntegrationFactoryInterface.5.1" FILE "nitpicker.json")
+    Q_PLUGIN_METADATA(IID "org.qt-project.Qt.QPA.QPlatformIntegrationFactoryInterface.5.3" FILE "nitpicker.json")
+
+private:
+	static Genode::Env *_env;
+
 public:
     QStringList keys() const;
     QPlatformIntegration *create(const QString&, const QStringList&);
+
+	static void env(Genode::Env &env) { _env = &env; }
 };
 
 QT_END_NAMESPACE

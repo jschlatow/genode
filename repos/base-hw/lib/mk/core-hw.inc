@@ -7,10 +7,11 @@
 LIBS += base-hw-common cxx
 
 # add include paths
-INC_DIR += $(BASE_DIR)/../base-hw/src/core/include
+INC_DIR += $(BASE_DIR)/../base-hw/src/core
 INC_DIR += $(BASE_DIR)/src/core/include
 INC_DIR += $(BASE_DIR)/../base-hw/src/include
 INC_DIR += $(BASE_DIR)/src/include
+INC_DIR += $(BASE_DIR)/../base-hw/src/lib
 
 # add C++ sources
 SRC_CC += cpu_session_component.cc
@@ -28,18 +29,20 @@ SRC_CC += io_mem_session_component.cc
 SRC_CC += io_mem_session_support.cc
 SRC_CC += irq_session_component.cc
 SRC_CC += main.cc
-SRC_CC += pd_session_component.cc
 SRC_CC += pd_upgrade_ram_quota.cc
 SRC_CC += pd_assign_pci.cc
 SRC_CC += platform.cc
 SRC_CC += platform_pd.cc
 SRC_CC += platform_thread.cc
 SRC_CC += stack_area.cc
-SRC_CC += ram_session_component.cc
-SRC_CC += ram_session_support.cc
+SRC_CC += pd_session_component.cc
+SRC_CC += ram_dataspace_support.cc
 SRC_CC += region_map_component.cc
 SRC_CC += rom_session_component.cc
 SRC_CC += trace_session_component.cc
+SRC_CC += signal_receiver.cc
+SRC_CC += ram_dataspace_factory.cc
+SRC_CC += signal_transmitter_noinit.cc
 SRC_CC += thread_start.cc
 SRC_CC += env.cc
 SRC_CC += region_map_support.cc
@@ -54,7 +57,7 @@ SRC_CC += kernel/ipc_node.cc
 SRC_CC += kernel/irq.cc
 SRC_CC += kernel/pd.cc
 SRC_CC += kernel/cpu.cc
-SRC_CC += kernel/clock.cc
+SRC_CC += kernel/timer.cc
 SRC_CC += kernel/object.cc
 SRC_CC += init_main_thread.cc
 SRC_CC += capability.cc

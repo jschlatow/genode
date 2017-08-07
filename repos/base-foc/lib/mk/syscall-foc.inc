@@ -36,17 +36,17 @@ CC_OPT += -DL4SYS_USE_UTCB_WRAP=1
 # build system will stuble over predefined variables, i.e., 'LIB'
 #
 $(L4_BUILD_DIR)/.kconfig:
-	$(VERBOSE_MK) MAKEFLAGS= $(MAKE) $(VERBOSE_DIR) -C $(L4_SRC_DIR)/l4 \
+	$(VERBOSE_MK) set -o pipefail; \
+	     MAKEFLAGS= $(MAKE) $(VERBOSE_DIR) -C $(L4_SRC_DIR)/l4 \
 	     B=$(L4_BUILD_DIR) DROPSCONF_DEFCONFIG="$(L4_CONFIG)" \
-	     VERBOSE="$(VERBOSE)" SYSTEM_TARGET="$(CROSS_DEV_PREFIX)" \
+	     VERBOSE="$(VERBOSE)" CROSS_COMPILE="$(CROSS_DEV_PREFIX)" \
 	     2>&1 | sed "s/^/      [l4build]  /"
 
-PKGS := ldscripts \
-        libgcc-pure \
-        l4sys \
-        libgcc \
-        libsigma0 \
-        libvcpu/include
+PKGS := l4re-core/ldscripts \
+        l4re-core/libgcc-pure \
+        l4re-core/l4sys \
+        l4re-core/libgcc \
+        l4re-core/libsigma0
 
 include $(REP_DIR)/lib/mk/l4_pkg.inc
 
@@ -57,3 +57,21 @@ $(PKG_TAGS): $(addprefix include/,$(L4_INC_TARGETS))
 # Compile 'syscall-foc.lib.a' not before the 'PKGS' are completely built
 #
 $(SRC_S) $(SRC_C) : $(PKG_TAGS)
+
+#
+# Install sigma0 and bootstap to <build-dir>/bin such that the binaries will be
+# included in the depot's base-foc binary archives.
+#
+ifneq ($(INSTALL_DIR),)
+all: $(INSTALL_DIR)/sigma0-foc $(INSTALL_DIR)/bootstrap-foc
+
+$(INSTALL_DIR)/sigma0-foc $(INSTALL_DIR)/bootstrap-foc: $(PKG_TAGS)
+
+$(INSTALL_DIR)/sigma0-foc:
+	$(VERBOSE)ln -sf $(L4_BIN_DIR)/l4f/sigma0 $@
+
+$(INSTALL_DIR)/bootstrap-foc:
+	$(VERBOSE)ln -sf $(L4_BIN_DIR)/bootstrap $@
+endif
+
+

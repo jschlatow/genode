@@ -11,23 +11,22 @@ SHARED_LIB = yes
 # wifi_include *must* be the first library, otherwise the include
 # order is wrong
 #
-LIBS  += wifi_include libc
+LIBS  += wifi_include lx_kit_setjmp libc
 
 LD_OPT += --version-script=$(LIB_DIR)/symbol.map
 
 SRC_CC += dummies.cc init.cc lxcc_emul.cc nic.cc socket_call.cc
 
 # lx_kit
-CC_OPT += -DUSE_INTERNAL_SETJMP
 SRC_CC += mapped_io_mem_range.cc irq.cc pci.cc malloc.cc scheduler.cc \
           work.cc timer.cc printf.cc env.cc
-SRC_S  += setjmp.S
 
 SRC_C += lxc_emul.c
 
 CC_WARN  =
 CC_OPT  += -fno-builtin-toupper
 
+CC_C_OPT   += -std=gnu89
 CC_C_OPT   += -include $(LIB_INC_DIR)/lx_emul.h
 CC_C_OPT   += -Wall -Wno-unused-variable -Wno-unused-function -Wno-uninitialized
 CC_C_OPT   += -Wno-unused-but-set-variable -Wno-pointer-sign -Wno-cast-qual

@@ -90,11 +90,15 @@ namespace Allocator {
 					Region_map_client::attach_at(_ds_cap[_index], _index * BLOCK_SIZE, BLOCK_SIZE, 0);
 					/* lookup phys. address */
 					_ds_phys[_index] = Genode::Dataspace_client(_ds_cap[_index]).phys_addr();
-				} catch (Genode::Ram_session::Quota_exceeded) {
-					warning("backend allocator exhausted");
+				} catch (Genode::Out_of_ram) {
+					warning("backend allocator exhausted (out of RAM)");
 					_quota_exceeded = true;
 					return false;
-				} catch (Genode::Region_map::Attach_failed) {
+				} catch (Genode::Out_of_caps) {
+					warning("backend allocator exhausted (out of caps)");
+					_quota_exceeded = true;
+					return false;
+				} catch (Genode::Region_map::Region_conflict) {
 					warning("backend VM region exhausted");
 					_quota_exceeded = true;
 					return false;
@@ -112,6 +116,7 @@ namespace Allocator {
 
 			Backend_alloc(Cache_attribute cached)
 			:
+				Rm_connection(Rump::env().env()),
 				Region_map_client(Rm_connection::create(VM_SIZE)),
 				_cached(cached),
 				_range(&Rump::env().heap())

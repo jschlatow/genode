@@ -32,13 +32,11 @@ Genode::Signal_receiver &QNitpickerIntegration::_signal_receiver()
 	return _inst;
 }
 
-QNitpickerIntegration::QNitpickerIntegration()
-: _signal_handler_thread(_signal_receiver()),
-  _nitpicker_screen(new QNitpickerScreen()),
-  _event_dispatcher(createUnixEventDispatcher())
+QNitpickerIntegration::QNitpickerIntegration(Genode::Env &env)
+: _env(env),
+  _signal_handler_thread(_signal_receiver()),
+  _nitpicker_screen(new QNitpickerScreen(env))
 {
-    QGuiApplicationPrivate::instance()->setEventDispatcher(_event_dispatcher);
-    screenAdded(_nitpicker_screen);
     _signal_handler_thread.start();
 }
 
@@ -58,7 +56,7 @@ QPlatformWindow *QNitpickerIntegration::createPlatformWindow(QWindow *window) co
 		qDebug() << "QNitpickerIntegration::createPlatformWindow(" << window << ")";
 
     QRect screen_geometry = _nitpicker_screen->geometry();
-    return new QNitpickerPlatformWindow(window,
+    return new QNitpickerPlatformWindow(_env, window,
                                         _signal_receiver(),
                                         screen_geometry.width(),
                                         screen_geometry.height());
@@ -73,11 +71,17 @@ QPlatformBackingStore *QNitpickerIntegration::createPlatformBackingStore(QWindow
 }
 
 
-QAbstractEventDispatcher *QNitpickerIntegration::guiThreadEventDispatcher() const
+QAbstractEventDispatcher *QNitpickerIntegration::createEventDispatcher() const
 {
 	if (verbose)
-		qDebug() << "QNitpickerIntegration::guiThreadEventDispatcher()";
-	return _event_dispatcher;
+		qDebug() << "QNitpickerIntegration::createEventDispatcher()";
+	return createUnixEventDispatcher();
+}
+
+
+void QNitpickerIntegration::initialize()
+{
+    screenAdded(_nitpicker_screen);
 }
 
 
@@ -91,7 +95,7 @@ QPlatformFontDatabase *QNitpickerIntegration::fontDatabase() const
 #ifndef QT_NO_CLIPBOARD
 QPlatformClipboard *QNitpickerIntegration::clipboard() const
 {
-	static QGenodeClipboard cb(_signal_receiver());
+	static QGenodeClipboard cb(_env, _signal_receiver());
 	return &cb;
 }
 #endif

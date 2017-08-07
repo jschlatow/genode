@@ -17,17 +17,16 @@
 
 /* core includes */
 #include <boot_modules.h>
-#include <memory_region.h>
-#include <core_parent.h>
+#include <hw/memory_region.h>
 #include <map_local.h>
 #include <platform.h>
 #include <platform_pd.h>
-#include <page_flags.h>
-#include <util.h>
+#include <hw/page_flags.h>
+#include <hw/util.h>
 #include <pic.h>
 #include <kernel/kernel.h>
 #include <translation_table.h>
-#include <trustzone.h>
+#include <kernel/cpu.h>
 
 /* base-internal includes */
 #include <base/internal/crt0.h>
@@ -35,45 +34,47 @@
 
 using namespace Genode;
 
-void __attribute__((weak)) Kernel::init_trustzone(Pic & pic) { }
-
 
 /**************
  ** Platform **
  **************/
 
-Bootinfo const & Platform::_bootinfo() {
-	return *reinterpret_cast<Bootinfo*>(round_page((addr_t)&_prog_img_end)); }
+Hw::Boot_info const & Platform::_boot_info() {
+	return *reinterpret_cast<Hw::Boot_info*>(round_page((addr_t)&_prog_img_end)); }
 
 addr_t Platform::mmio_to_virt(addr_t mmio) {
-	return _bootinfo().core_mmio.virt_addr(mmio); }
+	return _boot_info().mmio_space.virt_addr(mmio); }
 
-Translation_table * Platform::core_translation_table() {
-	return _bootinfo().table; }
+Hw::Page_table & Platform::core_page_table() {
+	return *(Hw::Page_table*)_boot_info().table; }
 
-Translation_table_allocator * Platform::core_translation_table_allocator() {
-	return _bootinfo().table_allocator->alloc(); }
+Hw::Page_table::Allocator & Platform::core_page_table_allocator()
+{
+	using Allocator = Hw::Page_table::Allocator;
+	using Array     = Allocator::Array<Hw::Page_table::CORE_TRANS_TABLE_COUNT>;
+	return unmanaged_singleton<Array>(*((Array*)_boot_info().table_allocator))->alloc();
+}
 
 void Platform::_init_io_mem_alloc()
 {
 	/* add entire adress space minus the RAM memory regions */
 	_io_mem_alloc.add_range(0, ~0x0UL);
-	_bootinfo().ram_regions.for_each([this] (Memory_region const &r) {
+	_boot_info().ram_regions.for_each([this] (Hw::Memory_region const &r) {
 		_io_mem_alloc.remove_range(r.base, r.size); });
 };
 
 
-Memory_region_array const & Platform::_core_virt_regions()
+Hw::Memory_region_array const & Platform::_core_virt_regions()
 {
-	return *unmanaged_singleton<Memory_region_array>(
-	Memory_region(stack_area_virtual_base(), stack_area_virtual_size()));
+	return *unmanaged_singleton<Hw::Memory_region_array>(
+	Hw::Memory_region(stack_area_virtual_base(), stack_area_virtual_size()));
 }
 
 
 addr_t Platform::core_phys_addr(addr_t virt)
 {
 	addr_t ret = 0;
-	_bootinfo().elf_mappings.for_each([&] (Mapping const & m)
+	_boot_info().elf_mappings.for_each([&] (Hw::Mapping const & m)
 	{
 		if (virt >= m.virt() && virt < (m.virt() + m.size()))
 			ret = (virt - m.virt()) + m.phys();
@@ -88,21 +89,33 @@ Platform::Platform()
 	_io_port_alloc(core_mem_alloc()),
 	_irq_alloc(core_mem_alloc())
 {
+	struct Kernel_resource : Exception { };
+
 	_core_mem_alloc.virt_alloc()->add_range(VIRT_ADDR_SPACE_START,
 	                                        VIRT_ADDR_SPACE_SIZE);
-	_core_virt_regions().for_each([this] (Memory_region const & r) {
+	_core_virt_regions().for_each([this] (Hw::Memory_region const & r) {
 		_core_mem_alloc.virt_alloc()->remove_range(r.base, r.size); });
-	_bootinfo().elf_mappings.for_each([this] (Mapping const & m) {
+	_boot_info().elf_mappings.for_each([this] (Hw::Mapping const & m) {
 		_core_mem_alloc.virt_alloc()->remove_range(m.virt(), m.size()); });
-	_bootinfo().ram_regions.for_each([this] (Memory_region const & region) {
+	_boot_info().ram_regions.for_each([this] (Hw::Memory_region const & region) {
 		_core_mem_alloc.phys_alloc()->add_range(region.base, region.size); });
 
 	_init_io_port_alloc();
 
 	/* make all non-kernel interrupts available to the interrupt allocator */
 	for (unsigned i = 0; i < Kernel::Pic::NR_OF_IRQ; i++) {
-		if (i == Timer::interrupt_id(i) || i == Pic::IPI)
+		bool kernel_resource = false;
+		Kernel::cpu_pool()->for_each_cpu([&] (Kernel::Cpu const &cpu) {
+			if (i == cpu.timer_interrupt_id()) {
+				kernel_resource = true;
+			}
+		});
+		if (i == Pic::IPI) {
+			kernel_resource = true;
+		}
+		if (kernel_resource) {
 			continue;
+		}
 		_irq_alloc.add_range(i, 1);
 	}
 
@@ -126,17 +139,6 @@ Platform::Platform()
 	log(":io_port_alloc: ", _io_port_alloc);
 	log(":irq_alloc: ",     _irq_alloc);
 	log(":rom_fs: ",        _rom_fs);
-}
-
-
-/*****************
- ** Core_parent **
- *****************/
-
-void Core_parent::exit(int exit_value)
-{
-	warning(__PRETTY_FUNCTION__, "not implemented");
-	while (1);
 }
 
 

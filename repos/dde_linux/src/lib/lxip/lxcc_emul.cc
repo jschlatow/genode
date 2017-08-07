@@ -305,7 +305,7 @@ void *memmove(void *d, const void *s, size_t n)
  ** linux/sched.h **
  *******************/
 
-struct Timeout : Genode::Signal_handler<Timeout>
+struct Timeout : Genode::Io_signal_handler<Timeout>
 {
 	Genode::Entrypoint &ep;
 	Timer::Connection timer;
@@ -321,7 +321,7 @@ struct Timeout : Genode::Signal_handler<Timeout>
 
 	Timeout(Genode::Env &env, Genode::Entrypoint &ep, void (*ticker)())
 	:
-		Signal_handler<Timeout>(ep, *this, &Timeout::handle),
+		Io_signal_handler<Timeout>(ep, *this, &Timeout::handle),
 		ep(ep), timer(env), tick(ticker)
 	{
 		timer.sigh(*this);
@@ -334,7 +334,7 @@ struct Timeout : Genode::Signal_handler<Timeout>
 
 	void wait()
 	{
-		ep.wait_and_dispatch_one_signal();
+		ep.wait_and_dispatch_one_io_signal();
 	}
 };
 
@@ -344,7 +344,7 @@ static Genode::Signal_context_capability tick_sig_cap;
 
 void Lx::event_init(Genode::Env &env, Genode::Entrypoint &ep, void (*ticker)())
 {
-	static Timeout handler(env, ep, ticker);
+	static ::Timeout handler(env, ep, ticker);
 	_timeout = &handler;
 }
 
@@ -535,60 +535,61 @@ extern "C" void lx_trace_event(char const *fmt, ...)
  ** linux/uio.h **
  *****************/
 
-size_t copy_from_iter(void *addr, size_t bytes, struct iov_iter *i)
+static inline size_t _copy_iter(void *addr, size_t bytes,
+                                struct iov_iter *i, bool to_iter)
 {
-	if (bytes > i->count)
-		bytes = i->count;
+	if (addr == nullptr) { return 0; }
 
-	if (bytes == 0)
+	if (i->count == 0 ||
+	    i->iov == nullptr ||
+	    i->iov->iov_len == 0) {
 		return 0;
-
-	char             *kdata = reinterpret_cast<char*>(addr);
-	struct iovec const *iov = i->iov;
-
-	size_t len = bytes;
-	while (len > 0) {
-		if (iov->iov_len) {
-			size_t copy_len = (size_t)len < iov->iov_len ? len : iov->iov_len;
-			Genode::memcpy(kdata, iov->iov_base, copy_len);
-
-			len -= copy_len;
-			kdata += copy_len;
-			i->count -= copy_len; /* XXX the vanilla macro does that */
-		}
-		iov++;
 	}
 
-	return bytes;
+	if (i->nr_segs > 1) {
+		Genode::error(__func__, ": too many segments ", i->nr_segs);
+		return 0;
+	}
+
+	/* make sure the whole iter fits as there is only 1 iovec */
+	if (i->iov->iov_len < i->count) {
+		Genode::error(__func__, ": "
+		              "iov->iov_len: ", i->iov->iov_len, " < "
+		              "i->count: ", i->count);
+		return 0;
+	}
+
+	struct iovec const * const iov = i->iov;
+	size_t const           iov_len = iov->iov_len;
+	void * const              base = (iov->iov_base + i->iov_offset);
+
+	if (bytes > i->count) { bytes = i->count; }
+
+	size_t const         len = (size_t)(bytes < iov_len ? bytes : iov_len);
+	void * const         dst = to_iter ? base : addr;
+	void const * const   src = to_iter ? addr : base;
+
+	/* actual function body */
+	{
+		Genode::memcpy(dst, src, len);
+	}
+
+	i->iov_offset += len;
+	i->count      -= len;
+
+	return len;
+}
+
+
+size_t copy_from_iter(void *addr, size_t bytes, struct iov_iter *i)
+{
+	return _copy_iter(addr, bytes, i, false);
 }
 
 
 size_t copy_to_iter(void *addr, size_t bytes, struct iov_iter *i)
 {
-	if (bytes > i->count)
-		bytes = i->count;
-
-	if (bytes == 0)
-		return 0;
-
-	char             *kdata = reinterpret_cast<char*>(addr);
-	struct iovec const *iov = i->iov;
-
-	size_t len = bytes;
-	while (len > 0) {
-		if (iov->iov_len) {
-			size_t copy_len = (size_t)len < iov->iov_len ? len : iov->iov_len;
-			Genode::memcpy(iov->iov_base, kdata, copy_len);
-
-			len   -= copy_len;
-			kdata += copy_len;
-
-			i->count -= copy_len; /* XXX the vanilla macro does that */
-		}
-		iov++;
-	}
-
-	return bytes;
+	return _copy_iter(addr, bytes, i, true);
 }
 
 
@@ -606,83 +607,69 @@ size_t copy_page_from_iter(struct page *page, size_t offset, size_t bytes,
 }
 
 
-size_t csum_and_copy_from_iter(void *addr, size_t bytes, __wsum *csum, struct iov_iter *i)
+static size_t _csum_and_copy_iter(void *addr, size_t bytes, __wsum *csum,
+                                  struct iov_iter *i, bool to_iter)
 {
-	if (bytes > i->count)
-		bytes = i->count;
+	if (addr == nullptr) { return 0; }
 
-	if (bytes == 0)
+	if (i->count == 0 ||
+	    i->iov == nullptr ||
+	    i->iov->iov_len == 0) {
 		return 0;
-
-	char             *kdata = reinterpret_cast<char*>(addr);
-	struct iovec const *iov = i->iov;
-
-	__wsum sum = *csum;
-	size_t len = bytes;
-	while (len > 0) {
-		if (iov->iov_len) {
-			size_t copy_len = (size_t)len < iov->iov_len ? len : iov->iov_len;
-			int err = 0;
-			__wsum next = csum_and_copy_from_user(iov->iov_base, kdata, copy_len, 0, &err);
-
-			if (err) {
-				Genode::error(__func__, ": err: ", err, " - sleeping");
-				Genode::sleep_forever();
-			}
-
-			sum = csum_block_add(sum, next, bytes-len);
-
-			len   -= copy_len;
-			kdata += copy_len;
-
-			i->count -= copy_len; /* XXX the vanilla macro does that */
-		}
-		iov++;
 	}
 
-	*csum = sum;
+	if (i->nr_segs > 1) {
+		Genode::error(__func__, ": too many segments ", i->nr_segs);
+		return 0;
+	}
 
-	return bytes;
+	/* make sure the whole iter fits as there is only 1 iovec */
+	if (i->iov->iov_len < i->count) {
+		Genode::error(__func__, ": "
+		              "iov->iov_len: ", i->iov->iov_len, " < "
+		              "i->count: ", i->count);
+		return 0;
+	}
+
+	struct iovec const * const iov = i->iov;
+	size_t const           iov_len = iov->iov_len;
+	void * const              base = (iov->iov_base + i->iov_offset);
+
+	if (bytes > i->count) { bytes = i->count; }
+
+	size_t const         len = (size_t)(bytes < iov_len ? bytes : iov_len);
+	void * const         dst = to_iter ? base : addr;
+	void const * const   src = to_iter ? addr : base;
+
+	/* actual function body */
+	{
+		int err = 0;
+		__wsum next = csum_and_copy_from_user(src, dst, len, 0, &err);
+
+		if (err) {
+			Genode::error(__func__, ": err: ", err, " - sleeping");
+			Genode::sleep_forever();
+		}
+
+		*csum = csum_block_add(*csum, next, 0);
+	}
+
+	i->iov_offset += len;
+	i->count      -= len;
+
+	return len;
+}
+
+
+size_t csum_and_copy_from_iter(void *addr, size_t bytes, __wsum *csum, struct iov_iter *i)
+{
+	return _csum_and_copy_iter(addr, bytes, csum, i, false);
 }
 
 
 size_t csum_and_copy_to_iter(void *addr, size_t bytes, __wsum *csum, struct iov_iter *i)
 {
-	if (bytes > i->count)
-		bytes = i->count;
-
-	if (bytes == 0)
-		return 0;
-
-	char             *kdata = reinterpret_cast<char*>(addr);
-	struct iovec const *iov = i->iov;
-
-	__wsum sum = *csum;
-	size_t len = bytes;
-	while (len > 0) {
-		if (iov->iov_len) {
-			size_t copy_len = (size_t)len < iov->iov_len ? len : iov->iov_len;
-			int err = 0;
-			__wsum next = csum_and_copy_to_user(kdata, iov->iov_base, copy_len, 0, &err);
-
-			if (err) {
-				Genode::error(__func__, ": err: ", err, " - sleeping");
-				Genode::sleep_forever();
-			}
-
-			sum = csum_block_add(sum, next, bytes-len);
-
-			len   -= copy_len;
-			kdata += copy_len;
-
-			i->count -= copy_len; /* XXX the vanilla macro does that */
-		}
-		iov++;
-	}
-
-	*csum = sum;
-
-	return bytes;
+	return _csum_and_copy_iter(addr, bytes, csum, i, true);
 }
 
 

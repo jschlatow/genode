@@ -12,8 +12,9 @@ proc enable_test_6 { } { return 1 }
 source ${genode_dir}/repos/base/run/platform_drv.inc
 
 proc nic_drv { } {
-	if {[have_spec omap4] || [have_spec arndale] || [have_spec rpi]} { return usb_drv }
-	if {!([have_spec imx53] || [have_spec riscv] || [have_spec odroid_xu] || [have_spec linux] || [have_spec wand_quad])} { return nic_drv }
+	if {[nic_drv_binary] == "usb_drv"} { return usb_drv }
+	if {[nic_drv_binary] == ""}        { return "" }
+	return nic_drv
 }
 
 proc gpio_drv { } {
@@ -58,6 +59,7 @@ proc nic_drv_config { } {
 	if {[nic_drv] == "nic_drv"} {
 		append result {
 			<start name="nic_drv">
+				<binary name="} [nic_drv_binary] {"/>
 				<resource name="RAM" quantum="6M"/>
 				<provides><service name="Nic"/></provides>
 			</start>}
@@ -66,7 +68,7 @@ proc nic_drv_config { } {
 	if {[nic_drv] == "usb_drv"} {
 		append result {
 			<start name="usb_drv">
-				<resource name="RAM" quantum="12M"/>
+				<resource name="RAM" quantum="14M"/>
 				<provides>
 					<service name="Nic"/>
 				</provides>
@@ -86,11 +88,16 @@ proc server_bin { prot } {
 	if {$prot == "udp"}  { return "test-lxip_udp_echo" }
 	if {$prot == "http"} { return "test-lwip_httpsrv_static" } }
 
+proc ram_quota { prot } {
+	if {$prot == "udp"}  { return 28M }
+	if {$prot == "http"} { return 12M }
+}
+
 proc client_config { prot index ip_addr gateway netmask nic srv_port srv_ip } {
 	append result {
-		<start name="} $prot {_client_} $index {">
+		<start name="} $prot {_client_} $index {" caps="200">
 			<binary  name="} [client_bin $prot] {" />
-			<resource name="RAM" quantum="2M"/>
+			<resource name="RAM" quantum="} [ram_quota $prot] {"/>
 			<route>
 				<service name="Nic"> <child name="} $nic {"/> </service>
 				<any-service> <parent/> <any-child/> </any-service>
@@ -106,9 +113,9 @@ proc client_config { prot index ip_addr gateway netmask nic srv_port srv_ip } {
 
 proc server_config { prot index ip_addr gateway netmask nic port } {
 	append result {
-		<start name="} $prot {_server_} $index {">
+		<start name="} $prot {_server_} $index {" caps="200">
 			<binary  name="} [server_bin $prot] {" />
-			<resource name="RAM" quantum="2M"/>
+			<resource name="RAM" quantum="} [ram_quota $prot] {"/>
 			<route>
 				<service name="Nic"> <child name="} $nic {"/> </service>
 				<any-service> <parent/> <any-child/> </any-service>
@@ -162,7 +169,6 @@ append config {
 <config>
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -176,6 +182,8 @@ append config {
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
 
+	<default caps="100"/>
+
 	} [gpio_drv_config] {
 	} [nic_drv_config] {
 	} [platform_drv_config] {
@@ -185,7 +193,7 @@ append config {
 		<provides><service name="Timer"/></provides>
 	</start>
 
-	<start name="nic_router">
+	<start name="nic_router" caps="200">
 		<resource name="RAM" quantum="10M"/>
 		<provides><service name="Nic"/></provides>
 		<config rtt_sec="3" verbose="no">
@@ -232,7 +240,7 @@ append config {
 		</route>
 	</start>
 
-	<start name="nic_bridge">
+	<start name="nic_bridge" caps="200">
 		<resource name="RAM" quantum="10M"/>
 		<provides><service name="Nic"/></provides>
 		<config>
@@ -267,14 +275,14 @@ install_config $config
 
 build_boot_image "
 	core init timer nic_router nic_bridge ld.lib.so libc.lib.so libm.lib.so
-	libc_resolv.lib.so lwip.lib.so lxip.lib.so test-http_clnt
+	libc_resolv.lib.so lwip.lib.so lxip.lib.so posix.lib.so test-http_clnt
 	test-lwip_httpsrv_static test-lxip_udp_echo test-lxip_udp_client
-	[nic_drv] [gpio_drv] [platform_drv_boot_modules]"
+	[nic_drv_binary] [gpio_drv] [platform_drv_boot_modules]"
 
 proc nic_qemu_args { } {
 	if {[have_spec x86]}     { return "-net nic,model=e1000" }
 	if {[have_spec lan9118]} { return "-net nic,model=lan9118" } }
 
-append qemu_args "-m 384 -nographic -net user -redir udp:5555::1337 [nic_qemu_args]"
+append qemu_args "-nographic -net user -redir udp:5555::1337 [nic_qemu_args]"
 
 run_genode_until {.*Test done.*\n.*Test done.*\n.*Test done.*\n.*Test done.*\n.*Test done.*\n.*Test done.*\n} 60

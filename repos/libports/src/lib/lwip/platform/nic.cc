@@ -55,9 +55,9 @@ class Nic_receiver_thread : public Genode::Thread_deprecated<8192>
 
 		Genode::Signal_receiver  _sig_rec;
 
-		Genode::Signal_dispatcher<Nic_receiver_thread> _link_state_dispatcher;
-		Genode::Signal_dispatcher<Nic_receiver_thread> _rx_packet_avail_dispatcher;
-		Genode::Signal_dispatcher<Nic_receiver_thread> _rx_ready_to_ack_dispatcher;
+		Genode::Io_signal_dispatcher<Nic_receiver_thread> _link_state_dispatcher;
+		Genode::Io_signal_dispatcher<Nic_receiver_thread> _rx_packet_avail_dispatcher;
+		Genode::Io_signal_dispatcher<Nic_receiver_thread> _rx_ready_to_ack_dispatcher;
 
 		void _handle_rx_packet_avail(unsigned)
 		{
@@ -288,7 +288,8 @@ extern "C" {
 			nic = new (env()->heap()) Nic::Connection(tx_block_alloc,
 			                                          nbs->tx_buf_size,
 			                                          nbs->rx_buf_size);
-		} catch (Parent::Service_denied) {
+		}
+		catch (Service_denied) {
 			destroy(env()->heap(), tx_block_alloc);
 			return ERR_IF;
 		}

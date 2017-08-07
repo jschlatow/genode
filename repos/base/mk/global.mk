@@ -11,17 +11,18 @@
 #
 # Set undefined CUSTOM_ tools to their default values
 #
-CUSTOM_CC      ?= $(CROSS_DEV_PREFIX)gcc
-CUSTOM_CXX     ?= $(CROSS_DEV_PREFIX)g++
-CUSTOM_CXX_LIB ?= $(CUSTOM_CXX)
-CUSTOM_LD      ?= $(CROSS_DEV_PREFIX)ld
-CUSTOM_AS      ?= $(CROSS_DEV_PREFIX)as
-CUSTOM_AR      ?= $(CROSS_DEV_PREFIX)ar
-CUSTOM_NM      ?= $(CROSS_DEV_PREFIX)nm
-CUSTOM_OBJCOPY ?= $(CROSS_DEV_PREFIX)objcopy
-CUSTOM_RANLIB  ?= $(CROSS_DEV_PREFIX)ranlib
-CUSTOM_STRIP   ?= $(CROSS_DEV_PREFIX)strip
-CUSTOM_HOST_CC ?= gcc
+CUSTOM_CC       ?= $(CROSS_DEV_PREFIX)gcc
+CUSTOM_CXX      ?= $(CROSS_DEV_PREFIX)g++
+CUSTOM_CXX_LIB  ?= $(CUSTOM_CXX)
+CUSTOM_LD       ?= $(CROSS_DEV_PREFIX)ld
+CUSTOM_AS       ?= $(CROSS_DEV_PREFIX)as
+CUSTOM_AR       ?= $(CROSS_DEV_PREFIX)ar
+CUSTOM_NM       ?= $(CROSS_DEV_PREFIX)nm
+CUSTOM_OBJCOPY  ?= $(CROSS_DEV_PREFIX)objcopy
+CUSTOM_RANLIB   ?= $(CROSS_DEV_PREFIX)ranlib
+CUSTOM_STRIP    ?= $(CROSS_DEV_PREFIX)strip
+CUSTOM_GNATMAKE ?= $(CROSS_DEV_PREFIX)gnatmake
+CUSTOM_HOST_CC  ?= gcc
 
 #
 # GNU utilities
@@ -37,16 +38,27 @@ ECHO      ?= echo -e
 #
 # Build tools
 #
-CC      = $(CUSTOM_CC)
-CXX     = $(CUSTOM_CXX)
-LD      = $(CUSTOM_LD)
-AS      = $(CUSTOM_AS)
-AR      = $(CUSTOM_AR)
-NM      = $(CUSTOM_NM)
-OBJCOPY = $(CUSTOM_OBJCOPY)
-RANLIB  = $(CUSTOM_RANLIB)
-STRIP   = $(CUSTOM_STRIP)
-HOST_CC = $(CUSTOM_HOST_CC)
+CC       = $(CUSTOM_CC)
+CXX      = $(CUSTOM_CXX)
+LD       = $(CUSTOM_LD)
+AS       = $(CUSTOM_AS)
+AR       = $(CUSTOM_AR)
+NM       = $(CUSTOM_NM)
+OBJCOPY  = $(CUSTOM_OBJCOPY)
+RANLIB   = $(CUSTOM_RANLIB)
+STRIP    = $(CUSTOM_STRIP)
+GNATMAKE = $(CUSTOM_GNATMAKE)
+HOST_CC  = $(CUSTOM_HOST_CC)
+
+#
+# Nim toolchain
+#
+NIM ?= nim
+
+#
+# JSON parsing utility
+#
+JQ ?= jq
 
 #
 # Compiler and Linker options
@@ -121,7 +133,7 @@ CC_OPT     += $(CC_OPT_PIC)
 #
 CC_CXX_OPT += $(CC_OPT)
 CC_C_OPT   += $(CC_OPT)
-CC_ADA_OPT += $(CC_OLEVEL) $(CC_WARN)
+CC_ADA_OPT += $(CC_OPT)
 
 #
 # Rust-specific arguments
@@ -134,9 +146,12 @@ CC_RUSTC_OPT += $(foreach lib,$(LIBS),-L$(LIB_CACHE_DIR)/$(lib))
 #
 # Enable C++11 by default
 #
+# We substitute '.' characters by '_' to allow a source-file-specific
+# C++ standard option for files with more than one dot in their name.
+#
 CC_CXX_OPT_STD ?= -std=gnu++11
-CC_CXX_OPT     += $(CC_CXX_OPT_STD)
-
+CC_CXX_OPT += $(lastword $(CC_CXX_OPT_STD) $(CC_CXX_OPT_STD_$(subst .,_,$*)))
+ 
 #
 # Linker options
 #
@@ -186,8 +201,6 @@ ALL_INC_DIR += $(foreach DIR,$(REP_INC_DIR), $(foreach REP,$(REPOSITORIES),$(REP
 ALL_INC_DIR += $(foreach REP,$(REPOSITORIES),$(REP)/include)
 ALL_INC_DIR += $(LIBGCC_INC_DIR)
 ALL_INC_DIR += $(HOST_INC_DIR)
-
-INSTALL_DIR ?=
 
 VERBOSE     ?= @
 VERBOSE_DIR ?= --no-print-directory

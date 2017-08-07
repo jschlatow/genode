@@ -15,22 +15,23 @@
  */
 
 #include <base/allocator_avl.h>
+#include <base/attached_rom_dataspace.h>
 #include <base/log.h>
 #include <base/thread.h>
 #include <audio_out_session/connection.h>
-#include <os/config.h>
+#include <util/reconstructible.h>
 
 
 enum {
 	AUDIO_CHANNELS = 2,
 };
 
-using Genode::env;
 using Genode::Allocator_avl;
 using Genode::Signal_context;
 using Genode::Signal_receiver;
 using Genode::log;
 using Genode::Hex;
+using Genode::Constructible;
 
 static const char *channel_names[] = { "front left", "front right" };
 static float volume = 1.0;
@@ -57,7 +58,7 @@ extern "C" {
 struct SDL_PrivateAudioData {
 	Uint8             *mixbuf;
 	Uint32             mixlen;
-	Audio_out::Connection *audio[AUDIO_CHANNELS];
+	Constructible<Audio_out::Connection> audio[AUDIO_CHANNELS];
 	Audio_out::Packet     *packet[AUDIO_CHANNELS];
 };
 
@@ -75,13 +76,17 @@ static Signal_receiver *signal_receiver()
 }
 
 
-static void read_config()
+static void read_config(Genode::Signal_context_capability sigh =
+                        Genode::Signal_context_capability())
 {
 	/* read volume from config file */
 	try {
 		unsigned int config_volume;
 
-		Genode::config()->xml_node().sub_node("sdl_audio_volume")
+		Genode::Attached_rom_dataspace config("config");
+		if (sigh.valid()) config.sigh(sigh);
+		else              config.update();
+		config.xml().sub_node("sdl_audio_volume")
 			.attribute("value").value(&config_volume);
 
 		volume = (float)config_volume / 100;
@@ -109,7 +114,7 @@ static int GENODEAUD_Available(void)
 static void GENODEAUD_DeleteDevice(SDL_AudioDevice *device)
 {
 	for (int channel = 0; channel < AUDIO_CHANNELS; channel++)
-		destroy(env()->heap(), device->hidden->audio[channel]);
+		device->hidden->audio[channel].destruct();
 
 	SDL_free(device->hidden);
 	SDL_free(device);
@@ -148,22 +153,21 @@ static SDL_AudioDevice *GENODEAUD_CreateDevice(int devindex)
 	/* connect to 'Audio_out' service */
 	for (int channel = 0; channel < AUDIO_CHANNELS; channel++) {
 		try {
-			_this->hidden->audio[channel] = new (env()->heap())
-				Audio_out::Connection(channel_names[channel],
-				                      false, channel == 0 ? true : false);
+			_this->hidden->audio[channel].construct(
+				channel_names[channel], false, channel == 0 ? true : false);
 			_this->hidden->audio[channel]->start();
-		} catch(Genode::Parent::Service_denied) {
+		}
+		catch(Genode::Service_denied) {
 			Genode::error("could not connect to 'Audio_out' service");
 
 			while(--channel > 0)
-				destroy(env()->heap(), _this->hidden->audio[channel]);
+				_this->hidden->audio[channel].destruct();
 
 			return NULL;
 		}
 	}
 
-	Genode::config()->sigh(signal_receiver()->manage(&config_signal_context));
-	read_config();
+	read_config(signal_receiver()->manage(&config_signal_context));
 
 	return _this;
 }
@@ -177,18 +181,18 @@ AudioBootStrap GENODEAUD_bootstrap = {
 
 static void GENODEAUD_WaitAudio(_THIS)
 {
-	Audio_out::Connection *con = _this->hidden->audio[0];
-	Audio_out::Packet     *p   = _this->hidden->packet[0];
+	Audio_out::Connection &con = *_this->hidden->audio[0];
+	Audio_out::Packet     *p   =  _this->hidden->packet[0];
 
-	unsigned const packet_pos = con->stream()->packet_position(p);
-	unsigned const play_pos   = con->stream()->pos();
+	unsigned const packet_pos = con.stream()->packet_position(p);
+	unsigned const play_pos   = con.stream()->pos();
 	unsigned queued           = packet_pos < play_pos
 	                            ? ((Audio_out::QUEUE_SIZE + packet_pos) - play_pos)
 	                            : packet_pos - play_pos;
 
 	/* wait until there is only one packet left to play */
 	while (queued > 1) {
-		con->wait_for_progress();
+		con.wait_for_progress();
 		queued--;
 	}
 }
@@ -199,7 +203,7 @@ static void GENODEAUD_PlayAudio(_THIS)
 	Audio_out::Connection *c[AUDIO_CHANNELS];
 	Audio_out::Packet     *p[AUDIO_CHANNELS];
 	for (int channel = 0; channel < AUDIO_CHANNELS; channel++) {
-		c[channel] = _this->hidden->audio[channel];
+		c[channel] = &(*_this->hidden->audio[channel]);
 		p[channel] = _this->hidden->packet[channel];
 	}
 
@@ -220,7 +224,6 @@ static void GENODEAUD_PlayAudio(_THIS)
 
 	if (signal_receiver()->pending()) {
 		signal_receiver()->wait_for_signal();
-		Genode::config()->reload();
 		read_config();
 	}
 

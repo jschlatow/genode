@@ -211,6 +211,7 @@ class Block::Root :
 	private:
 
 		Genode::Env            &_env;
+		Genode::Xml_node        _config;
 		Block::Driver          &_driver;
 		Block::Partition_table &_table;
 
@@ -233,7 +234,7 @@ class Block::Root :
 			Session_label const label = label_from_args(args);
 			char const *label_str = label.string();
 			try {
-				Session_policy policy(label);
+				Session_policy policy(label, _config);
 
 				/* read partition attribute */
 				policy.attribute("partition").value(&num);
@@ -241,16 +242,16 @@ class Block::Root :
 			} catch (Xml_node::Nonexistent_attribute) {
 				error("policy does not define partition number for for '",
 				      label_str, "'");
-				throw Root::Unavailable();
+				throw Service_denied();
 			} catch (Session_policy::No_policy_defined) {
 				error("rejecting session request, no matching policy for '",
 				      label_str, "'");
-				throw Root::Unavailable();
+				throw Service_denied();
 			}
 
 			if (!_table.partition(num)) {
 				error("Partition ", num, " unavailable for '", label_str, "'");
-				throw Root::Unavailable();
+				throw Service_denied();
 			}
 
 			size_t ram_quota =
@@ -259,14 +260,14 @@ class Block::Root :
 				Arg_string::find_arg(args, "tx_buf_size").ulong_value(0);
 
 			if (!tx_buf_size)
-				throw Root::Invalid_args();
+				throw Service_denied();
 
 			/* delete ram quota by the memory needed for the session */
 			size_t session_size = max((size_t)4096,
 			                          sizeof(Session_component)
 			                          + sizeof(Allocator_avl));
 			if (ram_quota < session_size)
-				throw Root::Quota_exceeded();
+				throw Insufficient_ram_quota();
 
 			/*
 			 * Check if donated ram quota suffices for both
@@ -276,7 +277,7 @@ class Block::Root :
 			if (tx_buf_size > ram_quota - session_size) {
 				error("insufficient 'ram_quota', got ", ram_quota, ", need ",
 				     tx_buf_size + session_size);
-				throw Root::Quota_exceeded();
+				throw Insufficient_ram_quota();
 			}
 
 			Ram_dataspace_capability ds_cap;
@@ -291,9 +292,9 @@ class Block::Root :
 
 	public:
 
-		Root(Genode::Env &env, Genode::Heap &heap,
+		Root(Genode::Env &env, Genode::Xml_node config, Genode::Heap &heap,
 		     Block::Driver &driver, Block::Partition_table &table)
-		: Root_component(env.ep(), heap), _env(env),
+		: Root_component(env.ep(), heap), _env(env), _config(config),
 		  _driver(driver), _table(table) { }
 };
 

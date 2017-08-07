@@ -1,7 +1,23 @@
+/**
+ * VirtualBox COM base class definition adjusted to Genode
+ * - based on VBox/Main/include/VirtualBoxBase.h
+ */
+
+/*
+ * Copyright (C) 2006-2016 Oracle Corporation
+ * Copyright (C) 2013-2017 Genode Labs GmbH
+ *
+ * This file is part of VirtualBox Open Source Edition (OSE), as
+ * available from http://www.virtualbox.org. This file is free software;
+ * you can redistribute it and/or modify it under the terms of the GNU
+ * General Public License (GPL) as published by the Free Software
+ * Foundation, in version 2 as it comes in the "COPYING" file of the
+ * VirtualBox OSE distribution. VirtualBox OSE is distributed in the
+ * hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
+ */
+
 #ifndef ____H_VIRTUALBOXBASEIMPL
 #define ____H_VIRTUALBOXBASEIMPL
-
-//#include <base/log.h>
 
 #include <iprt/cdefs.h>
 #include <iprt/thread.h>
@@ -182,8 +198,12 @@ class Backupable : public Shareable<T>
 		void rollback() { }
 		void commit() { }
 		void commitCopy() { }
-		void assignCopy(const T *) { }
-		void assignCopy(const Backupable &) { }
+
+		void assignCopy(const T *t) {
+			*this->Shareable<T>::data() = *t; }
+
+		void assignCopy(const Backupable<T> &t) {
+			*this->Shareable<T>::data() = *t.data(); }
 
 		HRESULT backupEx() { return S_OK; }
 

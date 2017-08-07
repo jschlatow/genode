@@ -28,7 +28,16 @@ namespace Genode {
 
 struct Genode::Log_session : Session
 {
+	/**
+	 * \noapi
+	 */
 	static const char *service_name() { return "LOG"; }
+
+	/*
+	 * A LOG connection consumes a dataspace capability for the session-object
+	 * allocation and its session capability.
+	 */
+	enum { CAP_QUOTA = 2 };
 
 	typedef Log_session_client Client;
 

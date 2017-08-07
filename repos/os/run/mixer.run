@@ -28,7 +28,6 @@ set config  {
 	<config>
 		<parent-provides>
 			<service name="ROM"/>
-			<service name="RAM"/>
 			<service name="IRQ"/>
 			<service name="IO_MEM"/>
 			<service name="IO_PORT"/>
@@ -51,6 +50,7 @@ append config {
 		</start>
 
 		<start name="audio_drv">
+			<binary name="} [audio_drv_binary] {"/>
 			<resource name="RAM" quantum="8M"/>
 			<provides><service name="Audio_out"/></provides>
 			<config/>
@@ -171,10 +171,10 @@ if {[expr ![file exists bin/client1.f32] || ![file exists bin/client2.f32]]} {
 #
 
 # generic modules
-set boot_modules {
+append boot_modules {
 	core ld.lib.so init timer
 	report_rom dynamic_rom
-	audio_drv test-audio_out
+	} [audio_drv_binary] { test-audio_out
 	mixer client1.f32 client2.f32
 }
 
@@ -182,5 +182,5 @@ set boot_modules {
 append_platform_drv_boot_modules
 
 build_boot_image $boot_modules
-append qemu_args "-m 256 -soundhw es1370 -nographic"
+append qemu_args "-soundhw es1370 -nographic"
 run_genode_until forever

@@ -15,7 +15,7 @@
 #define _LINK_H_
 
 /* Genode includes */
-#include <os/timer.h>
+#include <timer_session/connection.h>
 #include <util/avl_tree.h>
 #include <util/list.h>
 #include <net/ipv4.h>
@@ -42,13 +42,14 @@ namespace Net {
 
 struct Net::Link_side_id
 {
-	int          const data[];
 	Ipv4_address const src_ip;
 	Port         const src_port;
 	Ipv4_address const dst_ip;
 	Port         const dst_port;
 
 	static constexpr Genode::size_t data_size();
+
+	void *data_base() const { return (void *)&src_ip; }
 
 
 	/************************
@@ -128,13 +129,13 @@ class Net::Link : public Link_list::Element
 		Link_side                            _client;
 		Pointer<Port_allocator_guard> const  _server_port_alloc;
 		Link_side                            _server;
-		Genode::One_shot_timeout<Link>       _close_timeout;
-		Genode::Timer::Microseconds   const  _close_timeout_us;
+		Timer::One_shot_timeout<Link>        _close_timeout;
+		Genode::Microseconds          const  _close_timeout_us;
 		Genode::uint8_t               const  _protocol;
 
-		void _handle_close_timeout(Genode::Timer::Microseconds);
+		void _handle_close_timeout(Genode::Duration);
 
-		void _packet() { _close_timeout.start(_close_timeout_us); }
+		void _packet() { _close_timeout.schedule(_close_timeout_us); }
 
 	public:
 
@@ -145,7 +146,7 @@ class Net::Link : public Link_list::Element
 		     Pointer<Port_allocator_guard> const  srv_port_alloc,
 		     Interface                           &srv_interface,
 		     Link_side_id                  const &srv_id,
-		     Genode::Timer                       &timer,
+		     Timer::Connection                   &timer,
 		     Configuration                       &config,
 		     Genode::uint8_t               const  protocol);
 
@@ -187,7 +188,7 @@ class Net::Tcp_link : public Link
 		         Pointer<Port_allocator_guard> const  srv_port_alloc,
 		         Interface                           &srv_interface,
 		         Link_side_id                  const &srv_id,
-		         Genode::Timer                       &timer,
+		         Timer::Connection                   &timer,
 		         Configuration                       &config,
 		         Genode::uint8_t               const  protocol);
 
@@ -204,7 +205,7 @@ struct Net::Udp_link : Link
 	         Pointer<Port_allocator_guard> const  srv_port_alloc,
 	         Interface                           &srv_interface,
 	         Link_side_id                  const &srv_id,
-	         Genode::Timer                       &timer,
+	         Timer::Connection                   &timer,
 	         Configuration                       &config,
 	         Genode::uint8_t               const  protocol);
 

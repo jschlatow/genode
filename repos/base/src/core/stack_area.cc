@@ -14,7 +14,7 @@
 
 /* Genode includes */
 #include <region_map/region_map.h>
-#include <ram_session/ram_session.h>
+#include <pd_session/pd_session.h>
 #include <base/log.h>
 #include <base/synced_allocator.h>
 #include <base/thread.h>
@@ -30,8 +30,8 @@
 
 namespace Genode {
 
-	Region_map  *env_stack_area_region_map;
-	Ram_session *env_stack_area_ram_session;
+	Region_map    *env_stack_area_region_map;
+	Ram_allocator *env_stack_area_ram_allocator;
 
 	void init_stack_area();
 }
@@ -125,18 +125,14 @@ class Stack_area_region_map : public Region_map
 };
 
 
-class Stack_area_ram_session : public Ram_session
+struct Stack_area_ram_allocator : Ram_allocator
 {
-	public:
+	Ram_dataspace_capability alloc(size_t, Cache_attribute) override {
+		return reinterpret_cap_cast<Ram_dataspace>(Native_capability()); }
 
-		Ram_dataspace_capability alloc(size_t, Cache_attribute) override {
-			return reinterpret_cap_cast<Ram_dataspace>(Native_capability()); }
+	void free(Ram_dataspace_capability) override { }
 
-		void   free           (Ram_dataspace_capability)       override { }
-		int    ref_account    (Ram_session_capability)         override { return 0; }
-		int    transfer_quota (Ram_session_capability, size_t) override { return 0; }
-		size_t quota          ()                               override { return 0; }
-		size_t used           ()                               override { return 0; }
+	size_t dataspace_size(Ram_dataspace_capability) const override { return 0; }
 };
 
 
@@ -145,6 +141,6 @@ void Genode::init_stack_area()
 	static Stack_area_region_map rm;
 	env_stack_area_region_map = &rm;
 
-	static Stack_area_ram_session ram;
-	env_stack_area_ram_session = &ram;
+	static Stack_area_ram_allocator ram;
+	env_stack_area_ram_allocator = &ram;
 }

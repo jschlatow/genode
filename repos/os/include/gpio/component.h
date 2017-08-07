@@ -127,13 +127,13 @@ class Gpio::Root : public Genode::Root_component<Gpio::Session_component>
 				Genode::Arg_string::find_arg(args, "ram_quota").ulong_value(0);
 
 			if (!_driver.gpio_valid(pin))
-				throw Invalid_args();
+				throw Genode::Service_denied();
 
 			if (ram_quota < sizeof(Session_component)) {
 				Genode::warning("insufficient dontated ram_quota "
 				                "(", ram_quota, " bytes), "
 				                "require ", sizeof(Session_component), " bytes");
-				throw Genode::Root::Quota_exceeded();
+				throw Genode::Insufficient_ram_quota();
 			}
 
 			return new (md_alloc()) Session_component(_ep, _driver, pin);

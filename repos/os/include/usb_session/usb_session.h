@@ -153,7 +153,12 @@ struct Usb::Session : public Genode::Session
 	 ** Session interface **
 	 ***********************/
 
+	/**
+	 * \noapi
+	 */
 	static const char *service_name() { return "Usb"; }
+
+	enum { CAP_QUOTA = 5 };
 
 	/**
 	 * Send from the server to the client upon device state change

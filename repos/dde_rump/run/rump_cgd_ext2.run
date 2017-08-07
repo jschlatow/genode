@@ -48,7 +48,6 @@ append config {
 <config>
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -127,7 +126,7 @@ append boot_modules "$disk_image"
 
 build_boot_image $boot_modules
 
-append qemu_args " -m 256 -nographic"
+append qemu_args "  -nographic"
 
 run_genode_until {.*child "test-libc_vfs" exited with exit value 0.*} 60
 

@@ -204,12 +204,12 @@ static void test_cpu_session(Env &env)
 	thread0.start();
 	thread0.join();
 
-	Cpu_connection con1("prio middle", Cpu_session::PRIORITY_LIMIT / 4);
+	Cpu_connection con1(env, "prio middle", Cpu_session::PRIORITY_LIMIT / 4);
 	Cpu_helper thread1(env, "prio middle", con1);
 	thread1.start();
 	thread1.join();
 
-	Cpu_connection con2("prio low", Cpu_session::PRIORITY_LIMIT / 2);
+	Cpu_connection con2(env, "prio low", Cpu_session::PRIORITY_LIMIT / 2);
 	Cpu_helper thread2(env, "prio low   ", con2);
 	thread2.start();
 	thread2.join();
@@ -221,7 +221,7 @@ struct Pause_helper : Thread
 	volatile unsigned loop = 0;
 	volatile bool beep = false;
 
-	enum { STACK_SIZE = 0x1000 };
+	enum { STACK_SIZE = 0x2000 };
 
 	Pause_helper(Env &env, const char * name, Cpu_session &cpu)
 	: Thread(env, name, STACK_SIZE, Thread::Location(), Thread::Weight(), cpu) { }
@@ -333,6 +333,310 @@ static void test_create_as_many_threads(Env &env)
 }
 
 
+/*********************************
+ ** Using Locks in creative ways *
+ *********************************/
+
+struct Lock_helper : Thread
+{
+	enum { STACK_SIZE = 0x2000 };
+
+	Lock &lock;
+	bool &lock_is_free;
+	bool  unlock;
+
+	Lock_helper(Env &env, const char * name, Cpu_session &cpu, Lock &lock,
+	            bool &lock_is_free, bool unlock = false)
+	:
+		Thread(env, name, STACK_SIZE, Thread::Location(), Thread::Weight(),
+		       cpu),
+		lock(lock), lock_is_free(lock_is_free), unlock(unlock)
+	{ }
+
+	void entry()
+	{
+		log(" thread '", name(), "' started");
+
+		if (unlock)
+			lock.unlock();
+
+		lock.lock();
+
+		if (!lock_is_free) {
+			log(" thread '", name(), "' got lock but somebody else is within"
+			    " critical section !?");
+			throw -22;
+		}
+
+		log(" thread '", name(), "' done");
+
+		lock.unlock();
+	}
+};
+
+static void test_locks(Genode::Env &env)
+{
+	Lock lock         (Lock::LOCKED);
+
+	bool lock_is_free = true;
+
+	Cpu_connection cpu_m(env, "prio middle", Cpu_session::PRIORITY_LIMIT / 4);
+	Cpu_connection cpu_l(env, "prio low", Cpu_session::PRIORITY_LIMIT / 2);
+
+	enum { SYNC_STARTUP = true };
+
+	Lock_helper l1(env, "lock_low1", cpu_l, lock, lock_is_free);
+	Lock_helper l2(env, "lock_low2", cpu_l, lock, lock_is_free);
+	Lock_helper l3(env, "lock_low3", cpu_l, lock, lock_is_free);
+	Lock_helper l4(env, "lock_low4", cpu_l, lock, lock_is_free, SYNC_STARTUP);
+
+	l1.start();
+	l2.start();
+	l3.start();
+	l4.start();
+
+	lock.lock();
+
+	log(" thread '", Thread::myself()->name(), "' - I'm the lock holder - "
+	    "take lock again");
+
+	/* we are within the critical section - lock is not free */
+	lock_is_free = false;
+
+	/* start another low prio thread to wake current thread when it blocks */
+	Lock_helper l5(env, "lock_low5", cpu_l, lock, lock_is_free, SYNC_STARTUP);
+	l5.start();
+
+	lock.lock();
+	log(" I'm the lock holder - still alive");
+	lock_is_free = true;
+
+	lock.unlock();
+
+	/* check that really all threads come back ! */
+	l1.join();
+	l2.join();
+	l3.join();
+	l4.join();
+	l5.join();
+
+	log("running '", __func__, "' done");
+}
+
+
+/**********************************
+ ** Using cxa guards concurrently *
+ **********************************/
+
+struct Cxa_helper : Thread
+{
+	enum { STACK_SIZE = 0x2000 };
+
+	Lock &in_cxa;
+	Lock &sync_startup;
+	int   test;
+	bool  sync;
+
+	Cxa_helper(Env &env, const char * name, Cpu_session &cpu, Lock &cxa,
+	           Lock &startup, int test, bool sync = false)
+	:
+		Thread(env, name, STACK_SIZE, Thread::Location(), Thread::Weight(),
+		       cpu),
+		in_cxa(cxa), sync_startup(startup), test(test), sync(sync)
+	{ }
+
+	void entry()
+	{
+		log(" thread '", name(), "' started");
+
+		if (sync)
+			sync_startup.unlock();
+
+		struct Contention {
+			Contention(Name name, Lock &in_cxa, Lock &sync_startup)
+			{
+				log(" thread '", name, "' in static constructor");
+				sync_startup.unlock();
+				in_cxa.lock();
+			}
+		};
+
+		if (test == 1)
+			static Contention contention (name(), in_cxa, sync_startup);
+		else
+		if (test == 2)
+			static Contention contention (name(), in_cxa, sync_startup);
+		else
+		if (test == 3)
+			static Contention contention (name(), in_cxa, sync_startup);
+		else
+		if (test == 4)
+			static Contention contention (name(), in_cxa, sync_startup);
+		else
+			throw -25;
+
+		log(" thread '", name(), "' done");
+	}
+};
+
+static void test_cxa_guards(Env &env)
+{
+	log("running '", __func__, "'");
+
+	Cpu_connection cpu_m(env, "prio middle", Cpu_session::PRIORITY_LIMIT / 4);
+	Cpu_connection cpu_l(env, "prio low", Cpu_session::PRIORITY_LIMIT / 2);
+
+	{
+		enum { TEST_1ST = 1 };
+
+		Lock in_cxa       (Lock::LOCKED);
+		Lock sync_startup (Lock::LOCKED);
+
+		/* start low priority thread */
+		Cxa_helper cxa_l(env, "cxa_low", cpu_l, in_cxa, sync_startup, TEST_1ST);
+		cxa_l.start();
+
+		/* wait until low priority thread is inside static variable */
+		sync_startup.lock();
+		sync_startup.unlock();
+
+		/* start high priority threads */
+		Cxa_helper cxa_h1(env, "cxa_high_1", env.cpu(), in_cxa, sync_startup,
+		                  TEST_1ST);
+		Cxa_helper cxa_h2(env, "cxa_high_2", env.cpu(), in_cxa, sync_startup,
+		                  TEST_1ST);
+		Cxa_helper cxa_h3(env, "cxa_high_3", env.cpu(), in_cxa, sync_startup,
+		                  TEST_1ST);
+		Cxa_helper cxa_h4(env, "cxa_high_4", env.cpu(), in_cxa, sync_startup,
+		                  TEST_1ST);
+		cxa_h1.start();
+		cxa_h2.start();
+		cxa_h3.start();
+		cxa_h4.start();
+
+		/* start middle priority thread */
+		enum { SYNC_STARTUP = true };
+		Cxa_helper cxa_m(env, "cxa_middle", cpu_m, in_cxa, sync_startup,
+		                 TEST_1ST, SYNC_STARTUP);
+		cxa_m.start();
+
+		/*
+		 * high priority threads are for sure in the static Contention variable,
+		 * if the middle priority thread manages to sync with current
+		 * (high priority) entrypoint thread
+		 */
+		sync_startup.lock();
+
+		/* let's see whether we get all our threads out of the static variable */
+		in_cxa.unlock();
+
+		/* eureka ! */
+		cxa_h1.join(); cxa_h2.join(); cxa_h3.join(); cxa_h4.join();
+		cxa_m.join();
+		cxa_l.join();
+	}
+
+	{
+		enum { TEST_2ND = 2, TEST_3RD = 3, TEST_4TH = 4 };
+
+		Lock in_cxa_2       (Lock::LOCKED);
+		Lock sync_startup_2 (Lock::LOCKED);
+		Lock in_cxa_3       (Lock::LOCKED);
+		Lock sync_startup_3 (Lock::LOCKED);
+		Lock in_cxa_4       (Lock::LOCKED);
+		Lock sync_startup_4 (Lock::LOCKED);
+
+		/* start low priority threads */
+		Cxa_helper cxa_l_2(env, "cxa_low_2", cpu_l, in_cxa_2, sync_startup_2,
+		                   TEST_2ND);
+		Cxa_helper cxa_l_3(env, "cxa_low_3", cpu_l, in_cxa_3, sync_startup_3,
+		                   TEST_3RD);
+		Cxa_helper cxa_l_4(env, "cxa_low_4", cpu_l, in_cxa_4, sync_startup_4,
+		                   TEST_4TH);
+		cxa_l_2.start();
+		cxa_l_3.start();
+		cxa_l_4.start();
+
+		/* wait until low priority threads are inside static variables */
+		sync_startup_2.lock();
+		sync_startup_2.unlock();
+		sync_startup_3.lock();
+		sync_startup_3.unlock();
+		sync_startup_4.lock();
+		sync_startup_4.unlock();
+
+		/* start high priority threads */
+		Cxa_helper cxa_h1_2(env, "cxa_high_1_2", env.cpu(), in_cxa_2,
+		                    sync_startup_2, TEST_2ND);
+		Cxa_helper cxa_h2_2(env, "cxa_high_2_2", env.cpu(), in_cxa_2,
+		                    sync_startup_2, TEST_2ND);
+		Cxa_helper cxa_h3_2(env, "cxa_high_3_2", env.cpu(), in_cxa_2,
+		                    sync_startup_2, TEST_2ND);
+		Cxa_helper cxa_h4_2(env, "cxa_high_4_2", env.cpu(), in_cxa_2,
+		                    sync_startup_2, TEST_2ND);
+
+		Cxa_helper cxa_h1_3(env, "cxa_high_1_3", env.cpu(), in_cxa_3,
+		                    sync_startup_3, TEST_3RD);
+		Cxa_helper cxa_h2_3(env, "cxa_high_2_3", env.cpu(), in_cxa_3,
+		                    sync_startup_3, TEST_3RD);
+		Cxa_helper cxa_h3_3(env, "cxa_high_3_3", env.cpu(), in_cxa_3,
+		                    sync_startup_3, TEST_3RD);
+		Cxa_helper cxa_h4_3(env, "cxa_high_4_3", env.cpu(), in_cxa_3,
+		                    sync_startup_3, TEST_3RD);
+
+		Cxa_helper cxa_h1_4(env, "cxa_high_1_4", env.cpu(), in_cxa_4,
+		                    sync_startup_4, TEST_4TH);
+		Cxa_helper cxa_h2_4(env, "cxa_high_2_4", env.cpu(), in_cxa_4,
+		                    sync_startup_4, TEST_4TH);
+		Cxa_helper cxa_h3_4(env, "cxa_high_3_4", env.cpu(), in_cxa_4,
+		                    sync_startup_4, TEST_4TH);
+		Cxa_helper cxa_h4_4(env, "cxa_high_4_4", env.cpu(), in_cxa_4,
+		                    sync_startup_4, TEST_4TH);
+
+		cxa_h1_2.start(); cxa_h1_3.start(); cxa_h1_4.start();
+		cxa_h2_2.start(); cxa_h2_3.start(); cxa_h2_4.start();
+		cxa_h3_2.start(); cxa_h3_3.start(); cxa_h3_4.start();
+		cxa_h4_2.start(); cxa_h4_3.start(); cxa_h4_4.start();
+
+		/* start middle priority threads */
+		enum { SYNC_STARTUP = true };
+		Cxa_helper cxa_m_2(env, "cxa_middle_2", cpu_m, in_cxa_2,
+		                   sync_startup_2, TEST_2ND, SYNC_STARTUP);
+		Cxa_helper cxa_m_3(env, "cxa_middle_3", cpu_m, in_cxa_3,
+		                   sync_startup_3, TEST_3RD, SYNC_STARTUP);
+		Cxa_helper cxa_m_4(env, "cxa_middle_4", cpu_m, in_cxa_4,
+		                   sync_startup_4, TEST_4TH, SYNC_STARTUP);
+
+		cxa_m_2.start();
+		cxa_m_3.start();
+		cxa_m_4.start();
+
+		/*
+		 * high priority threads are for sure in the static Contention
+		 * variables, if the middle priority threads manage to sync with
+		 * current (high priority) entrypoint thread
+		 */
+		sync_startup_2.lock();
+		sync_startup_3.lock();
+		sync_startup_4.lock();
+
+		/* let's see whether we get all our threads out of the static variable */
+		in_cxa_4.unlock();
+		in_cxa_3.unlock();
+		in_cxa_2.unlock();
+
+		cxa_h1_2.join(); cxa_h2_2.join(); cxa_h3_2.join(); cxa_h4_2.join();
+		cxa_m_2.join(); cxa_l_2.join();
+
+		cxa_h1_3.join(); cxa_h2_3.join(); cxa_h3_3.join(); cxa_h4_3.join();
+		cxa_m_3.join(); cxa_l_3.join();
+
+		cxa_h1_4.join(); cxa_h2_4.join(); cxa_h3_4.join(); cxa_h4_4.join();
+		cxa_m_4.join(); cxa_l_4.join();
+	}
+	log("running '", __func__, "' done");
+}
+
 void Component::construct(Env &env)
 {
 	log("--- thread test started ---");
@@ -344,6 +648,8 @@ void Component::construct(Env &env)
 		test_stack_alignment(env);
 		test_main_thread();
 		test_cpu_session(env);
+		test_locks(env);
+		test_cxa_guards(env);
 
 		if (config.xml().has_sub_node("pause_resume"))
 			test_pause_resume(env);

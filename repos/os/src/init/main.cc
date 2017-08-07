@@ -14,371 +14,19 @@
 /* Genode includes */
 #include <base/component.h>
 #include <base/attached_rom_dataspace.h>
-#include <os/reporter.h>
-#include <timer_session/connection.h>
 
-/* init includes */
-#include <init/child.h>
-
-namespace Init {
-
-	using namespace Genode;
-
-	/**
-	 * Read priority-levels declaration from config
-	 */
-	inline long read_prio_levels(Xml_node config)
-	{
-		long const prio_levels = config.attribute_value("prio_levels", 0UL);
-
-		if (prio_levels && (prio_levels != (1 << log2(prio_levels)))) {
-			warning("prio levels is not power of two, priorities are disabled");
-			return 0;
-		}
-		return prio_levels;
-	}
-
-
-	/**
-	 * Read affinity-space parameters from config
-	 *
-	 * If no affinity space is declared, construct a space with a single element,
-	 * width and height being 1. If only one of both dimensions is specified, the
-	 * other dimension is set to 1.
-	 */
-	inline Genode::Affinity::Space read_affinity_space(Xml_node config)
-	{
-		try {
-			Xml_node node = config.sub_node("affinity-space");
-			return Affinity::Space(node.attribute_value<unsigned long>("width",  1),
-			                       node.attribute_value<unsigned long>("height", 1));
-		} catch (...) {
-			return Affinity::Space(1, 1); }
-	}
-}
-
-
-/********************
- ** Child registry **
- ********************/
-
-namespace Init { struct Alias; }
-
-
-/**
- * Representation of an alias for a child
- */
-struct Init::Alias : Genode::List<Alias>::Element
-{
-	typedef Genode::String<128> Name;
-	typedef Genode::String<128> Child;
-
-	Name  name;
-	Child child;
-
-	/**
-	 * Exception types
-	 */
-	class Name_is_missing  { };
-	class Child_is_missing { };
-
-	/**
-	 * Utility to read a string attribute from an XML node
-	 *
-	 * \param STR        string type
-	 * \param EXC        exception type raised if attribute is not present
-	 *
-	 * \param node       XML node
-	 * \param attr_name  name of attribute to read
-	 */
-	template <typename STR, typename EXC>
-	static STR _read_string_attr(Genode::Xml_node node, char const *attr_name)
-	{
-		char buf[STR::size()];
-
-		if (!node.has_attribute(attr_name))
-			throw EXC();
-
-		node.attribute(attr_name).value(buf, sizeof(buf));
-
-		return STR(buf);
-	}
-
-	/**
-	 * Constructor
-	 *
-	 * \throw Name_is_missing
-	 * \throw Child_is_missing
-	 */
-	Alias(Genode::Xml_node alias)
-	:
-		name (_read_string_attr<Name, Name_is_missing> (alias, "name")),
-		child(_read_string_attr<Name, Child_is_missing>(alias, "child"))
-	{ }
-};
-
-
-namespace Init {
-
-	typedef Genode::List<Genode::List_element<Child> > Child_list;
-
-	struct Child_registry;
-}
-
-
-class Init::Child_registry : public Name_registry, Child_list
-{
-	private:
-
-		List<Alias> _aliases;
-
-	public:
-
-		/**
-		 * Exception type
-		 */
-		class Alias_name_is_not_unique { };
-
-		/**
-		 * Register child
-		 */
-		void insert(Child *child)
-		{
-			Child_list::insert(&child->_list_element);
-		}
-
-		/**
-		 * Unregister child
-		 */
-		void remove(Child *child)
-		{
-			Child_list::remove(&child->_list_element);
-		}
-
-		/**
-		 * Register alias
-		 */
-		void insert_alias(Alias *alias)
-		{
-			if (!unique(alias->name.string())) {
-				error("alias name ", alias->name, " is not unique");
-				throw Alias_name_is_not_unique();
-			}
-			_aliases.insert(alias);
-		}
-
-		/**
-		 * Unregister alias
-		 */
-		void remove_alias(Alias *alias)
-		{
-			_aliases.remove(alias);
-		}
-
-		/**
-		 * Return any of the registered children, or 0 if no child exists
-		 */
-		Child *any()
-		{
-			return first() ? first()->object() : 0;
-		}
-
-		/**
-		 * Return any of the registered aliases, or 0 if no alias exists
-		 */
-		Alias *any_alias()
-		{
-			return _aliases.first() ? _aliases.first() : 0;
-		}
-
-		template <typename FN>
-		void for_each_child(FN const &fn) const
-		{
-			Genode::List_element<Child> const *curr = first();
-			for (; curr; curr = curr->next())
-				fn(*curr->object());
-		}
-
-		template <typename FN>
-		void for_each_child(FN const &fn)
-		{
-			Genode::List_element<Child> *curr = first(), *next = nullptr;
-			for (; curr; curr = next) {
-				next = curr->next();
-				fn(*curr->object());
-			}
-		}
-
-		void report_state(Xml_generator &xml, Report_detail const &detail) const
-		{
-			for_each_child([&] (Child &child) { child.report_state(xml, detail); });
-
-			/* check for name clash with an existing alias */
-			for (Alias const *a = _aliases.first(); a; a = a->next()) {
-				xml.node("alias", [&] () {
-					xml.attribute("name", a->name);
-					xml.attribute("child", a->child);
-				});
-			}
-		}
-
-
-		/*****************************
-		 ** Name-registry interface **
-		 *****************************/
-
-		bool unique(const char *name) const
-		{
-			/* check for name clash with an existing child */
-			Genode::List_element<Child> const *curr = first();
-			for (; curr; curr = curr->next())
-				if (curr->object()->has_name(name))
-					return false;
-
-			/* check for name clash with an existing alias */
-			for (Alias const *a = _aliases.first(); a; a = a->next()) {
-				if (Alias::Name(name) == a->name)
-					return false;
-			}
-
-			return true;
-		}
-
-		Name deref_alias(Name const &name) override
-		{
-			for (Alias const *a = _aliases.first(); a; a = a->next())
-				if (name == a->name)
-					return a->child;
-
-			return name;
-		}
-};
-
-
-namespace Init {
-	struct State_reporter;
-	struct Main;
-}
-
-
-class Init::State_reporter : public Report_update_trigger
-{
-	public:
-
-		struct Producer
-		{
-			virtual void produce_state_report(Xml_generator &xml,
-			                                  Report_detail const &) const = 0;
-		};
-
-	private:
-
-		Env &_env;
-
-		Producer &_producer;
-
-		Constructible<Reporter> _reporter;
-
-		size_t _buffer_size = 0;
-
-		Reconstructible<Report_detail> _report_detail;
-
-		unsigned _report_delay_ms = 0;
-
-		/* version string from config, to be reflected in the report */
-		typedef String<64> Version;
-		Version _version;
-
-		Constructible<Timer::Connection> _timer;
-
-		Signal_handler<State_reporter> _timer_handler {
-			_env.ep(), *this, &State_reporter::_handle_timer };
-
-		bool _scheduled = false;
-
-		void _handle_timer()
-		{
-			_scheduled = false;
-
-			try {
-				Reporter::Xml_generator xml(*_reporter, [&] () {
-
-					if (_version.valid())
-						xml.attribute("version", _version);
-
-					_producer.produce_state_report(xml, *_report_detail);
-				});
-			}
-			catch(Xml_generator::Buffer_exceeded) {
-
-				error("state report exceeds maximum size");
-
-				/* try to reflect the error condition as state report */
-				try {
-					Reporter::Xml_generator xml(*_reporter, [&] () {
-						xml.attribute("error", "report buffer exceeded"); });
-				}
-				catch (...) { }
-			}
-		}
-
-	public:
-
-		State_reporter(Env &env, Producer &producer)
-		:
-			_env(env), _producer(producer)
-		{ }
-
-		void apply_config(Xml_node config)
-		{
-			try {
-				Xml_node report = config.sub_node("report");
-
-				/* (re-)construct reporter whenever the buffer size is changed */
-				Number_of_bytes const buffer_size =
-					report.attribute_value("buffer", Number_of_bytes(4096));
-
-				if (buffer_size != _buffer_size || !_reporter.constructed()) {
-					_buffer_size = buffer_size;
-					_reporter.construct(_env, "state", "state", _buffer_size);
-				}
-
-				_report_detail.construct(report);
-				_report_delay_ms = report.attribute_value("delay_ms", 100UL);
-				_reporter->enabled(true);
-			}
-			catch (Xml_node::Nonexistent_sub_node) {
-				_report_detail.construct();
-				_report_delay_ms = 0;
-				if (_reporter.constructed())
-					_reporter->enabled(false);
-			}
-
-			_version = config.attribute_value("version", Version());
-
-			if (_report_delay_ms) {
-
-				if (!_timer.constructed()) {
-					_timer.construct(_env);
-					_timer->sigh(_timer_handler);
-				}
-
-				trigger_report_update();
-			}
-		}
-
-		void trigger_report_update() override
-		{
-			if (!_scheduled && _timer.constructed() && _report_delay_ms) {
-				_timer->trigger_once(_report_delay_ms*1000);
-				_scheduled = true;
-			}
-		}
-};
+/* local includes */
+#include <child_registry.h>
+#include <child.h>
+#include <alias.h>
+#include <state_reporter.h>
+#include <server.h>
+
+namespace Init { struct Main; }
 
 
 struct Init::Main : State_reporter::Producer, Child::Default_route_accessor,
-                    Child::Ram_limit_accessor
+                    Child::Default_caps_accessor, Child::Ram_limit_accessor
 {
 	Env &_env;
 
@@ -394,6 +42,8 @@ struct Init::Main : State_reporter::Producer, Child::Default_route_accessor,
 
 	Constructible<Buffered_xml> _default_route;
 
+	Cap_quota _default_caps { 0 };
+
 	unsigned _child_cnt = 0;
 
 	static Ram_quota _preserved_ram_from_config(Xml_node config)
@@ -407,19 +57,61 @@ struct Init::Main : State_reporter::Producer, Child::Default_route_accessor,
 		return Ram_quota { preserve };
 	}
 
-	Ram_quota _ram_limit { 0 };
+	Ram_quota _avail_ram()
+	{
+		Ram_quota const preserved_ram = _preserved_ram_from_config(_config.xml());
+
+		Ram_quota avail_ram = _env.ram().avail_ram();
+
+		if (preserved_ram.value > avail_ram.value) {
+			error("RAM preservation exceeds available memory");
+			return Ram_quota { 0 };
+		}
+
+		/* deduce preserved quota from available quota */
+		return Ram_quota { avail_ram.value - preserved_ram.value };
+	}
+
+	static Cap_quota _preserved_caps_from_config(Xml_node config)
+	{
+		size_t preserve = 20;
+
+		config.for_each_sub_node("resource", [&] (Xml_node node) {
+			if (node.attribute_value("name", String<16>()) == "CAP")
+				preserve = node.attribute_value("preserve", preserve); });
+
+		return Cap_quota { preserve };
+	}
+
+	Cap_quota _avail_caps()
+	{
+		Cap_quota const preserved_caps = _preserved_caps_from_config(_config.xml());
+
+		Cap_quota avail_caps { _env.pd().avail_caps().value };
+
+		if (preserved_caps.value > avail_caps.value) {
+			error("Capability preservation exceeds available capabilities");
+			return Cap_quota { 0 };
+		}
+
+		/* deduce preserved quota from available quota */
+		return Cap_quota { avail_caps.value - preserved_caps.value };
+	}
 
 	/**
 	 * Child::Ram_limit_accessor interface
 	 */
-	Ram_quota ram_limit() override { return _ram_limit; }
+	Ram_quota ram_limit() override { return _avail_ram(); }
 
 	void _handle_resource_avail() { }
 
 	void produce_state_report(Xml_generator &xml, Report_detail const &detail) const
 	{
 		if (detail.init_ram())
-			xml.node("ram", [&] () { generate_ram_info(xml, _env.ram()); });
+			xml.node("ram",  [&] () { generate_ram_info (xml, _env.ram()); });
+
+		if (detail.init_caps())
+			xml.node("caps", [&] () { generate_caps_info(xml, _env.pd()); });
 
 		if (detail.children())
 			_children.report_state(xml, detail);
@@ -433,6 +125,11 @@ struct Init::Main : State_reporter::Producer, Child::Default_route_accessor,
 		return _default_route.constructed() ? _default_route->xml()
 		                                    : Xml_node("<empty/>");
 	}
+
+	/**
+	 * Default_caps_accessor interface
+	 */
+	Cap_quota default_caps() override { return _default_caps; }
 
 	State_reporter _state_reporter { _env, *this };
 
@@ -448,6 +145,8 @@ struct Init::Main : State_reporter::Producer, Child::Default_route_accessor,
 
 	Signal_handler<Main> _config_handler {
 		_env.ep(), *this, &Main::_handle_config };
+
+	Server _server { _env, _heap, _child_services, _state_reporter };
 
 	Main(Env &env) : _env(env)
 	{
@@ -595,6 +294,15 @@ void Init::Main::_handle_config()
 		_default_route.construct(_heap, _config.xml().sub_node("default-route")); }
 	catch (...) { }
 
+	_default_caps = Cap_quota { 0 };
+	try {
+		_default_caps = Cap_quota { _config.xml().sub_node("default")
+		                                   .attribute_value("caps", 0UL) }; }
+	catch (...) { }
+
+	Prio_levels     const prio_levels    = prio_levels_from_xml(_config.xml());
+	Affinity::Space const affinity_space = affinity_space_from_xml(_config.xml());
+
 	_update_aliases_from_config();
 	_update_parent_services_from_config();
 	_abandon_obsolete_children();
@@ -610,23 +318,13 @@ void Init::Main::_handle_config()
 
 	_destroy_abandoned_parent_services();
 
-	Ram_quota const preserved_ram = _preserved_ram_from_config(_config.xml());
+	/* initial RAM and caps limit before starting new children */
+	Ram_quota const avail_ram  = _avail_ram();
+	Cap_quota const avail_caps = _avail_caps();
 
-	Ram_quota avail_ram { _env.ram().avail() };
-
-	if (preserved_ram.value > avail_ram.value) {
-		error("RAM preservation exceeds available memory");
-		return;
-	}
-
-	/* deduce preserved quota from available quota */
-	avail_ram = Ram_quota { avail_ram.value - preserved_ram.value };
-
-	/* initial RAM limit before starting new children */
-	_ram_limit = Ram_quota { avail_ram.value };
-
-	/* variable used to track the RAM taken by new started children */
-	Ram_quota used_ram { 0 };
+	/* variable used to track the RAM and caps taken by new started children */
+	Ram_quota used_ram  { 0 };
+	Cap_quota used_caps { 0 };
 
 	/* create new children */
 	try {
@@ -643,16 +341,22 @@ void Init::Main::_handle_config()
 
 			if (used_ram.value > avail_ram.value) {
 				error("RAM exhausted while starting childen");
-				throw Ram_session::Alloc_failed();
+				throw Out_of_ram();
+			}
+
+			if (used_caps.value > avail_caps.value) {
+				error("capabilities exhausted while starting childen");
+				throw Out_of_caps();
 			}
 
 			try {
 				Init::Child &child = *new (_heap)
 					Init::Child(_env, _heap, *_verbose,
 					            Init::Child::Id { ++_child_cnt }, _state_reporter,
-					            start_node, *this, _children, *this,
-					            read_prio_levels(_config.xml()),
-					            read_affinity_space(_config.xml()),
+					            start_node, *this, *this, _children,
+					            Ram_quota { avail_ram.value  - used_ram.value },
+					            Cap_quota { avail_caps.value - used_caps.value },
+					             *this, prio_levels, affinity_space,
 					            _parent_services, _child_services);
 				_children.insert(&child);
 
@@ -663,7 +367,9 @@ void Init::Main::_handle_config()
 				used_ram = Ram_quota { used_ram.value
 				                     + child.ram_quota().value
 				                     + metadata_overhead };
-				_ram_limit = Ram_quota { avail_ram.value - used_ram.value };
+
+				used_caps = Cap_quota { used_caps.value
+				                      + child.cap_quota().value };
 			}
 			catch (Rom_connection::Rom_connection_failed) {
 				/*
@@ -671,22 +377,24 @@ void Init::Main::_handle_config()
 				 * by the Rom_connection constructor.
 				 */
 			}
-			catch (Allocator::Out_of_memory) {
-				warning("local memory exhausted during child creation"); }
-			catch (Ram_session::Alloc_failed) {
-				warning("failed to allocate memory during child construction"); }
+			catch (Out_of_ram) {
+				warning("memory exhausted during child creation"); }
+			catch (Out_of_caps) {
+				warning("local capabilities exhausted during child creation"); }
 			catch (Child::Missing_name_attribute) {
 				warning("skipped startup of nameless child"); }
-			catch (Region_map::Attach_failed) {
+			catch (Region_map::Region_conflict) {
 				warning("failed to attach dataspace to local address space "
 				        "during child construction"); }
-			catch (Parent::Service_denied) {
+			catch (Region_map::Invalid_dataspace) {
+				warning("attempt to attach invalid dataspace to local address space "
+				        "during child construction"); }
+			catch (Service_denied) {
 				warning("failed to create session during child construction"); }
 		});
 	}
 	catch (Xml_node::Nonexistent_sub_node) { error("no children to start"); }
 	catch (Xml_node::Invalid_syntax) { error("config has invalid syntax"); }
-	catch (Init::Child::Child_name_is_not_unique) { }
 	catch (Init::Child_registry::Alias_name_is_not_unique) { }
 
 	/*
@@ -700,6 +408,17 @@ void Init::Main::_handle_config()
 	 */
 	_children.for_each_child([&] (Child &child) {
 		child.initiate_env_sessions(); });
+
+	/*
+	 * (Re-)distribute RAM among the childen, given their resource assignments
+	 * and the available slack memory. We first apply possible downgrades to
+	 * free as much memory as we can. This memory is then incorporated in the
+	 * subsequent upgrade step.
+	 */
+	_children.for_each_child([&] (Child &child) { child.apply_ram_downgrade(); });
+	_children.for_each_child([&] (Child &child) { child.apply_ram_upgrade(); });
+
+	_server.apply_config(_config.xml());
 }
 
 

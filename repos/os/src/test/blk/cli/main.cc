@@ -68,9 +68,9 @@ class Test
 		Genode::Entrypoint          &_ep;
 		Genode::Allocator_avl        _alloc;
 		Block::Connection            _session;
-		Genode::Signal_handler<Test> _disp_ack;
-		Genode::Signal_handler<Test> _disp_submit;
-		Genode::Signal_handler<Test> _disp_timeout;
+		Genode::Io_signal_handler<Test> _disp_ack;
+		Genode::Io_signal_handler<Test> _disp_submit;
+		Genode::Io_signal_handler<Test> _disp_timeout;
 		Timer::Connection            _timer;
 		bool                         _handle;
 
@@ -110,7 +110,7 @@ class Test
 		void _handle_signal()
 		{
 			_handle = true;
-			while (_handle) _ep.wait_and_dispatch_one_signal();
+			while (_handle) _ep.wait_and_dispatch_one_io_signal();
 		}
 };
 
@@ -385,6 +385,9 @@ void perform(Genode::Env &env, Genode::Heap &heap, unsigned timeo_ms = 0)
 
 void Component::construct(Genode::Env &env)
 {
+	/* XXX execute constructors of global statics */
+	env.exec_static_constructors();
+
 	using namespace Genode;
 
 	try {
@@ -423,9 +426,11 @@ void Component::construct(Genode::Env &env)
 		perform<Violation_test>(env, heap, 1000);
 
 		log("Tests finished successfully!");
-	} catch(Genode::Parent::Service_denied) {
+	}
+	catch (Genode::Service_denied) {
 		error("opening block session was denied!");
-	} catch(Test::Exception &e) {
+	}
+	catch (Test::Exception &e) {
 		error("test failed!");
 		e.print_error();
 	}

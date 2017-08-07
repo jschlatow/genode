@@ -14,13 +14,10 @@
 #ifndef _INCLUDE__OS__SESSION_POLICY_H_
 #define _INCLUDE__OS__SESSION_POLICY_H_
 
-#include <util/arg_string.h>
 #include <base/session_label.h>
-
-/* to be removed along with the \deprecated API */
-#define INCLUDED_FROM_OS_SESSION_POLICY_H
-#include <os/config.h>
-#undef INCLUDED_FROM_OS_SESSION_POLICY_H
+#include <session/session.h>
+#include <util/arg_string.h>
+#include <util/xml_node.h>
 
 namespace Genode {
 
@@ -167,7 +164,7 @@ class Genode::Session_policy : public Xml_node
 		/**
 		 * Exception type
 		 */
-		class No_policy_defined { };
+		class No_policy_defined : public Service_denied { };
 
 	private:
 
@@ -211,9 +208,7 @@ class Genode::Session_policy : public Xml_node
 		 * Constructor
 		 *
 		 * \param label   label used as the selector of a policy
-		 * \param config  XML node that contains the policies as sub nodes,
-		 *                using the component's top-level config node by
-		 *                default
+		 * \param config  XML node that contains the policies as sub nodes
 		 *
 		 * \throw No_policy_defined  the server configuration has no
 		 *                           policy defined for the specified label
@@ -227,8 +222,7 @@ class Genode::Session_policy : public Xml_node
 		 * with the longest label is selected.
 		 */
 		template <size_t N>
-		explicit Session_policy(String<N> const &label,
-		                        Xml_node config = Genode::config()->xml_node())
+		Session_policy(String<N> const &label, Xml_node config)
 		:
 			Xml_node(_query_policy(label, config))
 		{ }

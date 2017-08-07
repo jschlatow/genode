@@ -98,6 +98,16 @@ class Genode::Expanding_parent_client : public Parent_client
 		Upgrade_result upgrade(Client::Id id, Upgrade_args const &args) override
 		{
 			/*
+			 * Upgrades from our PD to our own PD session are futile. The only
+			 * thing we can do when our PD is drained is requesting further
+			 * resources from our parent.
+			 */
+			if (id == Env::pd()) {
+				resource_request(Resource_args(args.string()));
+				return UPGRADE_DONE;
+			}
+
+			/*
 			 * If the upgrade fails, attempt to issue a resource request twice.
 			 *
 			 * If the default fallback for resource-available signals is used,
@@ -108,11 +118,11 @@ class Genode::Expanding_parent_client : public Parent_client
 			 * immediately. The second upgrade attempt may fail too if the
 			 * parent handles the resource request asynchronously. In this
 			 * case, we escalate the problem to caller by propagating the
-			 * 'Parent::Quota_exceeded' exception. Now, it is the job of the
-			 * caller to issue (and respond to) a resource request.
+			 * 'Out_of_ram' exception. Now, it is the job of the caller to
+			 * issue (and respond to) a resource request.
 			 */
 			enum { NUM_ATTEMPTS = 2 };
-			return retry<Parent::Quota_exceeded>(
+			return retry<Out_of_ram>(
 				[&] () { return Parent_client::upgrade(id, args); },
 				[&] () { resource_request(Resource_args(args.string())); },
 				NUM_ATTEMPTS);

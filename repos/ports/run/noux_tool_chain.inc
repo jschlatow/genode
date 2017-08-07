@@ -67,7 +67,7 @@ foreach pkg $noux_pkgs {
 build $build_components
 
 # write default vimrc file
-set vimrc_fd [open "bin/vim/share/vim/vimrc" w]
+set vimrc_fd [open "bin/vimrc" w]
 puts $vimrc_fd {
 set noloadplugins
 set hls
@@ -76,16 +76,6 @@ set laststatus=2
 set noswapfile
 set viminfo=}
 close $vimrc_fd
-
-# strip all binaries prior archiving
-set find_args ""
-foreach pkg $noux_pkgs { append find_args " bin/$pkg" }
-exec sh -c "find $find_args -type f | (xargs [cross_dev_prefix]strip -g || true) 2>/dev/null"
-
-exec ln -sf bash bin/bash/bin/sh
-
-foreach pkg $noux_pkgs {
-	exec tar cfv bin/$pkg.tar -h -C bin/$pkg . }
 
 exec tar cvf bin/genode.tar -C $genode_dir tool repos/base repos/$platform_base_dir repos/os repos/demo
 
@@ -96,7 +86,6 @@ append config {
 		<parent-provides>
 			<service name="ROM"/>
 			<service name="LOG"/>
-			<service name="RAM"/>
 			<service name="RM"/>
 			<service name="CPU"/>
 			<service name="PD"/>
@@ -107,6 +96,7 @@ append config {
 		<default-route>
 			<any-service> <parent/> <any-child/> </any-service>
 		</default-route>
+		<default caps="100"/>
 		<start name="timer">
 			<resource name="RAM" quantum="1M"/>
 			<provides><service name="Timer"/></provides>
@@ -124,7 +114,7 @@ append_if [have_spec sdl] config {
 append_platform_drv_config
 
 append_if [have_spec framebuffer] config {
-	<start name="fb_drv">
+	<start name="fb_drv" caps="200">
 		<resource name="RAM" quantum="8M"/>
 		<provides><service name="Framebuffer"/></provides>
 	</start>}
@@ -151,7 +141,7 @@ append config {
 		</config>
 	</start>
 	<start name="ram_fs">
-		<resource name="RAM" quantum="100M"/>
+		<resource name="RAM" quantum="124M"/>
 		<provides><service name="File_system"/></provides>
 		<config>
 			<content>
@@ -190,7 +180,7 @@ append config {
 }
 
 append config {
-	<start name="noux">
+	<start name="noux" caps="1000">
 		<resource name="RAM" quantum="1G" />
 }
 
@@ -215,6 +205,10 @@ append config {			</dir>
 				<dir name="genode">
 					<tar name="genode.tar" />
 				</dir>
+
+				<dir name="bin"> <symlink name="sh" target="bash"/> </dir>
+
+				<dir name="share"> <dir name="vim"> <rom name="vimrc"/> </dir> </dir>
 
 				<dir name="dev">
 					<null />
@@ -254,7 +248,7 @@ install_config $config
 set boot_modules {
 	core init timer ld.lib.so noux terminal ram_fs
 	libc.lib.so libm.lib.so libc_noux.lib.so ncurses.lib.so stdcxx.lib.so
-	pcre.lib.so zlib.lib.so readline.lib.so
+	pcre.lib.so posix.lib.so vimrc
 }
 
 append boot_modules { gmp.lib.so mpfr.lib.so mpc.lib.so }

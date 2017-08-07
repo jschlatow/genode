@@ -52,15 +52,17 @@ class Genode::Slave::Policy : public Child_policy
 
 	private:
 
-		Label                    const _label;
-		Binary_name              const _binary_name;
-		Ram_session_client             _ram;
-		Genode::Parent_service         _binary_service;
-		size_t                         _ram_quota;
-		Parent_services               &_parent_services;
-		Rpc_entrypoint                &_ep;
-		Child_policy_dynamic_rom_file  _config_policy;
-		Session_requester              _session_requester;
+		Label                   const _label;
+		Binary_name             const _binary_name;
+		Pd_session                   &_ref_pd;
+		Pd_session_capability         _ref_pd_cap;
+		Genode::Parent_service        _binary_service;
+		Cap_quota               const _cap_quota;
+		Ram_quota               const _ram_quota;
+		Parent_services              &_parent_services;
+		Rpc_entrypoint               &_ep;
+		Child_policy_dynamic_rom_file _config_policy;
+		Session_requester             _session_requester;
 
 	public:
 
@@ -74,22 +76,26 @@ class Genode::Slave::Policy : public Child_policy
 		 * \param local_rm  local address space, needed to populate dataspaces
 		 *                  provided to the child (config, session_requests)
 		 *
-		 * \throw Ram_session::Alloc_failed by 'Child_policy_dynamic_rom_file'
-		 * \throw Rm_session::Attach_failed by 'Child_policy_dynamic_rom_file'
+		 * \throw Out_of_ram   by 'Child_policy_dynamic_rom_file'
+		 * \throw Out_of_caps  by 'Child_policy_dynamic_rom_file'
 		 */
-		Policy(Label            const &label,
-		       Name             const &binary_name,
-		       Parent_services        &parent_services,
-		       Rpc_entrypoint         &ep,
-		       Region_map             &rm,
-		       Ram_session_capability  ram_cap,
-		       size_t                  ram_quota)
+		Policy(Label               const &label,
+		       Name                const &binary_name,
+		       Parent_services           &parent_services,
+		       Rpc_entrypoint            &ep,
+		       Region_map                &rm,
+		       Pd_session                &ref_pd,
+		       Pd_session_capability      ref_pd_cap,
+		       Cap_quota                  cap_quota,
+		       Ram_quota                  ram_quota)
 		:
-			_label(label), _binary_name(binary_name), _ram(ram_cap),
+			_label(label), _binary_name(binary_name),
+			_ref_pd(ref_pd), _ref_pd_cap(ref_pd_cap),
 			_binary_service(Rom_session::service_name()),
-			_ram_quota(ram_quota), _parent_services(parent_services), _ep(ep),
-			_config_policy(rm, "config", _ep, &_ram),
-			_session_requester(ep, _ram, rm)
+			_cap_quota(cap_quota), _ram_quota(ram_quota),
+			_parent_services(parent_services), _ep(ep),
+			_config_policy(rm, "config", _ep, &_ref_pd),
+			_session_requester(ep, _ref_pd, rm)
 		{
 			configure("<config/>");
 		}
@@ -123,13 +129,14 @@ class Genode::Slave::Policy : public Child_policy
 
 		Binary_name binary_name() const override { return _binary_name; }
 
-		Ram_session           &ref_ram()           override { return _ram; }
-		Ram_session_capability ref_ram_cap() const override { return _ram; }
+		Pd_session           &ref_pd()           override { return _ref_pd; }
+		Pd_session_capability ref_pd_cap() const override { return _ref_pd_cap; }
 
-		void init(Ram_session &session, Ram_session_capability cap) override
+		void init(Pd_session &session, Pd_session_capability cap) override
 		{
-			session.ref_account(_ram);
-			_ram.transfer_quota(cap, _ram_quota);
+			session.ref_account(_ref_pd_cap);
+			_ref_pd.transfer_quota(cap, _cap_quota);
+			_ref_pd.transfer_quota(cap, _ram_quota);
 		}
 
 		Service &resolve_session_request(Service::Name       const &service_name,
@@ -154,7 +161,7 @@ class Genode::Slave::Policy : public Child_policy
 			if (!service) {
 				error(name(), ": illegal session request of "
 				      "service \"", service_name, "\" (", args, ")");
-				throw Parent::Service_denied();
+				throw Service_denied();
 			}
 
 			return *service;
@@ -178,15 +185,13 @@ class Genode::Slave::Connection_base
 		struct Service : Genode::Service, Session_state::Ready_callback,
 		                                  Session_state::Closed_callback
 		{
-			Id_space<Parent::Server> &_id_space;
-
-			Lock _lock { Lock::LOCKED };
-			bool _alive = false;
+			Policy &_policy;
+			Lock    _lock { Lock::LOCKED };
+			bool    _alive = false;
 
 			Service(Policy &policy)
 			:
-				Genode::Service(CONNECTION::service_name(), policy.ref_ram_cap()),
-				_id_space(policy.server_id_space())
+				Genode::Service(CONNECTION::service_name()), _policy(policy)
 			{ }
 
 			void initiate_request(Session_state &session) override
@@ -196,7 +201,8 @@ class Genode::Slave::Connection_base
 				case Session_state::CREATE_REQUESTED:
 
 					if (!session.id_at_server.constructed())
-						session.id_at_server.construct(session, _id_space);
+						session.id_at_server.construct(session,
+						                               _policy.server_id_space());
 
 					session.ready_callback = this;
 					session.async_client_notify = true;
@@ -212,8 +218,9 @@ class Genode::Slave::Connection_base
 					session.phase = Session_state::CLOSED;
 					break;
 
-				case Session_state::INVALID_ARGS:
-				case Session_state::QUOTA_EXCEEDED:
+				case Session_state::SERVICE_DENIED:
+				case Session_state::INSUFFICIENT_RAM_QUOTA:
+				case Session_state::INSUFFICIENT_CAP_QUOTA:
 				case Session_state::AVAILABLE:
 				case Session_state::CAP_HANDED_OUT:
 				case Session_state::CLOSED:
@@ -237,6 +244,38 @@ class Genode::Slave::Connection_base
 			 */
 			void session_closed(Session_state &s) override { _lock.unlock(); }
 
+			/**
+			 * Service ('Ram_transfer::Account') interface
+			 */
+			void transfer(Ram_session_capability to, Ram_quota amount) override
+			{
+				if (to.valid()) _policy.ref_pd().transfer_quota(to, amount);
+			}
+
+			/**
+			 * Service ('Ram_transfer::Account') interface
+			 */
+			Pd_session_capability cap(Ram_quota) const override
+			{
+				return _policy.ref_pd_cap();
+			}
+
+			/**
+			 * Service ('Cap_transfer::Account') interface
+			 */
+			void transfer(Pd_session_capability to, Cap_quota amount) override
+			{
+				if (to.valid()) _policy.ref_pd().transfer_quota(to, amount);
+			}
+
+			/**
+			 * Service ('Cap_transfer::Account') interface
+			 */
+			Pd_session_capability cap(Cap_quota) const override
+			{
+				return _policy.ref_pd_cap();
+			}
+
 		} _service;
 
 		Local_connection<CONNECTION> _connection;
@@ -249,7 +288,7 @@ class Genode::Slave::Connection_base
 			_policy.trigger_session_requests();
 			_service._lock.lock();
 			if (!_service._alive)
-				throw Parent::Service_denied();
+				throw Service_denied();
 		}
 
 		~Connection_base()
@@ -271,9 +310,10 @@ struct Genode::Slave::Connection : private Connection_base<CONNECTION>,
 	/**
 	 * Constructor
 	 *
-	 * \throw Parent::Service_denied   parent denies session request
-	 * \throw Parent::Quota_exceeded   our own quota does not suffice for
-	 *                                 the creation of the new session
+	 * \throw Service_denied   parent denies session request
+	 * \throw Out_of_ram       our own quota does not suffice for
+	 *                         the creation of the new session
+	 * \throw Out_of_caps
 	 */
 	Connection(Slave::Policy &policy, Args const &args,
 	           Affinity const &affinity = Affinity())

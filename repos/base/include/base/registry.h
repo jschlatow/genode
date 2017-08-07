@@ -22,6 +22,7 @@ namespace Genode {
 	class Registry_base;
 	template <typename T> struct Registry;
 	template <typename T> class Registered;
+	template <typename T> class Registered_no_delete;
 }
 
 
@@ -29,7 +30,12 @@ class Genode::Registry_base
 {
 	private:
 
-		enum Keep { KEEP, DISCARD };
+		struct Notify {
+			enum Keep { KEEP, DISCARD } keep;
+			void * thread;
+
+			Notify(Keep k, void *t) : keep(k), thread(t) { }
+		};
 
 	protected:
 
@@ -49,7 +55,7 @@ class Genode::Registry_base
 				/*
 				 * Assigned by 'Registry::_for_each'
 				 */
-				Keep *_keep_ptr = nullptr;
+				Notify *_notify_ptr = nullptr;
 
 			protected:
 
@@ -77,7 +83,7 @@ class Genode::Registry_base
 		void _insert(Element &);
 		void _remove(Element &);
 
-		Element *_processed(Keep, List<Element> &, Element &, Element *);
+		Element *_processed(Notify &, List<Element> &, Element &, Element *);
 
 	protected:
 
@@ -138,8 +144,8 @@ struct Genode::Registry : private Registry_base
  * Using this helper, an arbitrary type can be turned into a registry element
  * type. E.g., in order to keep 'Child_service' objects in a registry, a new
  * registry-compatible type can be created via 'Registered<Child_service>'.
- * Objects of this type can be kept in a 'Registry<Registered<Child_service>
- * >'. The constructor of such "registered" objects expect the registry as the
+ * Objects of this type can be kept in a 'Registry<Registered<Child_service> >'.
+ * The constructor of such "registered" objects expect the registry as the
  * first argument. The other arguments are forwarded to the constructor of the
  * enclosed type.
  */
@@ -152,8 +158,38 @@ class Genode::Registered : public T
 
 	public:
 
+		/**
+		 * Compile-time check
+		 *
+		 * \noapi
+		 */
+		static_assert(__has_virtual_destructor(T), "registered object must have virtual destructor");
+
 		template <typename... ARGS>
 		Registered(Registry<Registered<T> > &registry, ARGS &&... args)
+		: T(args...), _element(registry, *this) { }
+};
+
+
+/**
+ * Variant of Registered that does not require a vtable in the base class
+ *
+ * The generic 'Registered' convenience class requires the base class to
+ * provide a vtable resp. a virtual destructor for safe deletion of a base
+ * class pointer. By using 'Registered_no_delete', this requirement can be
+ * lifted.
+ */
+template <typename T>
+class Genode::Registered_no_delete : public T
+{
+	private:
+
+		typename Registry<Registered_no_delete<T> >::Element _element;
+
+	public:
+
+		template <typename... ARGS>
+		Registered_no_delete(Registry<Registered_no_delete<T> > &registry, ARGS &&... args)
 		: T(args...), _element(registry, *this) { }
 };
 

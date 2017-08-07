@@ -63,12 +63,6 @@ class File_system::Session_component : public Session_rpc_object
 		{
 			void     * const content = tx_sink()->packet_content(packet);
 			size_t     const length  = packet.length();
-			seek_off_t const offset  = packet.position();
-
-			if (!content || (packet.length() > packet.size())) {
-				packet.succeeded(false);
-				return;
-			}
 
 			/* resulting length */
 			size_t res_length = 0;
@@ -76,12 +70,19 @@ class File_system::Session_component : public Session_rpc_object
 			switch (packet.operation()) {
 
 			case Packet_descriptor::READ:
-				res_length = node.read((char *)content, length, offset);
+				if (content && (packet.length() <= packet.size()))
+					res_length = node.read((char *)content, length, packet.position());
 				break;
 
 			case Packet_descriptor::WRITE:
-				res_length = node.write((char const *)content, length, offset);
+				if (content && (packet.length() <= packet.size()))
+					res_length = node.write((char const *)content, length, packet.position());
 				break;
+
+			case Packet_descriptor::CONTENT_CHANGED:
+				_handle_registry.register_notify(*tx_sink(), packet.handle());
+				node.notify_listeners();
+				return;
 
 			case Packet_descriptor::READ_READY:
 				/* not supported */
@@ -90,6 +91,7 @@ class File_system::Session_component : public Session_rpc_object
 
 			packet.length(res_length);
 			packet.succeeded(res_length > 0);
+			tx_sink()->acknowledge_packet(packet);
 		}
 
 		void _process_packet()
@@ -105,13 +107,10 @@ class File_system::Session_component : public Session_rpc_object
 
 				_process_packet_op(packet, *node);
 			}
-			catch (Invalid_handle)     { Genode::error("Invalid_handle");     }
-
-			/*
-			 * The 'acknowledge_packet' function cannot block because we
-			 * checked for 'ready_to_ack' in '_process_packets'.
-			 */
-			tx_sink()->acknowledge_packet(packet);
+			catch (Invalid_handle) {
+				Genode::error("Invalid_handle");
+				tx_sink()->acknowledge_packet(packet);
+			}
 		}
 
 		void _process_packets()
@@ -414,9 +413,11 @@ class File_system::Session_component : public Session_rpc_object
 			node->notify_listeners();
 		}
 
-		void sigh(Node_handle node_handle, Signal_context_capability sigh)
+		void sync(Node_handle handle) override
 		{
-			_handle_registry.sigh(node_handle, sigh);
+			Node *node = _handle_registry.lookup_and_lock(handle);
+			Node_lock_guard guard(node);
+			node->notify_listeners();
 		}
 };
 
@@ -441,12 +442,12 @@ class File_system::Root : public Root_component<Session_component>
 			 * the client's label.
 			 */
 
-			Directory *session_root_dir = 0;
-			bool writeable = false;
-
 			enum { ROOT_MAX_LEN = 256 };
-			char root[ROOT_MAX_LEN];
-			root[0] = 0;
+			Genode::Path<MAX_PATH_LEN> session_root;
+			char tmp[MAX_PATH_LEN];
+
+			Directory *session_root_dir = nullptr;
+			bool writeable = false;
 
 			Session_label const label = label_from_args(args);
 			try {
@@ -454,52 +455,59 @@ class File_system::Root : public Root_component<Session_component>
 
 				/*
 				 * Determine directory that is used as root directory of
-				 * the session.
+				 * the session. Clients without a specified root are denied.
 				 */
 				try {
-					policy.attribute("root").value(root, sizeof(root));
-					if (strcmp("/", root) == 0) {
-						session_root_dir = &_root_dir;
-					} else {
-
-						/*
-						 * Make sure the root path is specified with a
-						 * leading path delimiter. For performing the
-						 * lookup, we skip the first character.
-						 */
-						if (root[0] != '/')
-							throw Lookup_failed();
-
-						session_root_dir = _root_dir.lookup_and_lock_dir(root + 1);
-						session_root_dir->unlock();
-					}
+					policy.attribute("root").value(tmp, sizeof(tmp));
+					session_root.import(tmp, "/");
 				} catch (Xml_node::Nonexistent_attribute) {
 					Genode::error("missing \"root\" attribute in policy definition");
-					throw Root::Unavailable();
-				} catch (Lookup_failed) {
-					Genode::error("session root directory \"",
-					              Genode::Cstring(root), "\" does not exist");
-					throw Root::Unavailable();
+					throw Service_denied();
 				}
 
 				/*
-				 * Determine if write access is permitted for the session.
+				 * Determine if the session is writeable.
+				 * Policy overrides client argument, both default to false.
 				 */
-				writeable = policy.attribute_value("writeable", false);
+				if (policy.attribute_value("writeable", false))
+					writeable = Arg_string::find_arg(args, "writeable").bool_value(false);
 
 			} catch (Session_policy::No_policy_defined) {
 				Genode::error("invalid session request, no matching policy");
-				throw Root::Unavailable();
+				throw Service_denied();
+			}
+
+			/* apply client's root offset */
+			Arg_string::find_arg(args, "root").string(tmp, sizeof(tmp), "/");
+			if (Genode::strcmp("/", tmp, sizeof(tmp))) {
+				session_root.append("/");
+				session_root.append(tmp);
+			}
+			session_root.remove_trailing('/');
+			if (session_root == "/") {
+				session_root_dir = &_root_dir;
+			} else {
+				try {
+					/*
+					 * The root path is specified with a leading path
+					 * delimiter. For performing the lookup, we skip the first
+					 * character.
+					 */
+					session_root_dir = _root_dir.lookup_and_lock_dir(
+						session_root.base() + 1);
+					session_root_dir->unlock();
+				}
+				catch (Lookup_failed) { throw Service_denied(); }
 			}
 
 			size_t ram_quota =
-				Arg_string::find_arg(args, "ram_quota"  ).ulong_value(0);
+				Arg_string::find_arg(args, "ram_quota"  ).aligned_size();
 			size_t tx_buf_size =
-				Arg_string::find_arg(args, "tx_buf_size").ulong_value(0);
+				Arg_string::find_arg(args, "tx_buf_size").aligned_size();
 
 			if (!tx_buf_size) {
 				Genode::error(label, " requested a session with a zero length transmission buffer");
-				throw Root::Invalid_args();
+				throw Service_denied();
 			}
 
 			/*
@@ -510,7 +518,7 @@ class File_system::Root : public Root_component<Session_component>
 			if (max((size_t)4096, session_size) > ram_quota) {
 				Genode::error("insufficient 'ram_quota', got ", ram_quota, ", "
 				              "need ", session_size);
-				throw Root::Quota_exceeded();
+				throw Insufficient_ram_quota();
 			}
 			return new (md_alloc())
 				Session_component(tx_buf_size, _ep, _ram, _rm, _alloc,
@@ -556,9 +564,8 @@ struct Attribute_string
 	 */
 	Attribute_string(Genode::Xml_node node, char const *attr, char *fallback = 0)
 	{
-		try {
-			node.attribute(attr).value(buf, sizeof(buf));
-		} catch (Genode::Xml_node::Nonexistent_attribute) {
+		try { node.attribute(attr).value(buf, sizeof(buf)); }
+		catch (Genode::Xml_node::Nonexistent_attribute) {
 
 			if (fallback) {
 				Genode::strncpy(buf, fallback, sizeof(buf));
@@ -618,17 +625,15 @@ static void preload_content(Genode::Env            &env,
 			/* read file content from ROM module */
 			try {
 				Attached_rom_dataspace rom(env, name);
-				if (!rom.valid())
-					throw Rm_session::Attach_failed();
 
 				File *file = new (&alloc) File(alloc, as);
 				file->write(rom.local_addr<char>(), rom.size(), 0);
 				dir.adopt_unsynchronized(file);
 			}
 			catch (Rom_connection::Rom_connection_failed) {
-				Genode::warning("failed to open ROM file \"", name, "\""); }
-			catch (Rm_session::Attach_failed) {
-				Genode::warning("Could not locally attach ROM file \"", name, "\""); }
+				Genode::warning("failed to open ROM module \"", name, "\""); }
+			catch (Region_map::Region_conflict) {
+				Genode::warning("Could not locally attach ROM module \"", name, "\""); }
 		}
 
 		/*

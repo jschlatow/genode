@@ -71,10 +71,10 @@ static bool config_alpha   = true;
 /**
  * Size and position of virtual frame buffer
  */
-static unsigned long config_fb_width  = 500;
-static unsigned long config_fb_height = 400;
-static long          config_fb_x      = 400;
-static long          config_fb_y      = 260;
+static unsigned config_fb_width  = 500;
+static unsigned config_fb_height = 400;
+static long     config_fb_x      = 400;
+static long     config_fb_y      = 260;
 
 /**
  * Window title
@@ -202,7 +202,7 @@ class Liquid_fb::Main : public Scout::Event_handler
 
 		Scout::Area  const _max_size { config_fb_width  + WINBORDER_WIDTH,
 		                               config_fb_height + WINBORDER_HEIGHT };
-		Scout::Point const _initial_position { config_fb_x, config_fb_y };
+		Scout::Point const _initial_position { (int)config_fb_x, (int)config_fb_y };
 		Scout::Area  const _initial_size = _max_size;
 
 		Nitpicker_graphics_backend
@@ -311,4 +311,10 @@ class Liquid_fb::Main : public Scout::Event_handler
 };
 
 
-void Component::construct(Genode::Env &env) { static Liquid_fb::Main main(env); }
+void Component::construct(Genode::Env &env)
+{
+	/* XXX execute constructors of global statics */
+	env.exec_static_constructors();
+
+	static Liquid_fb::Main main(env);
+}

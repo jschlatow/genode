@@ -16,7 +16,6 @@ append config {
 		<parent-provides>
 			<service name="ROM"/>
 			<service name="LOG"/>
-			<service name="RAM"/>
 			<service name="RM"/>
 			<service name="CPU"/>
 			<service name="PD"/>
@@ -51,7 +50,7 @@ append config {
 install_config $config
 
 set boot_modules {
-	core init timer ld.lib.so noux libc.lib.so
+	core init timer ld.lib.so noux libc.lib.so posix.lib.so
 	uart_drv libc_noux.lib.so noux_signals.tar
 }
 

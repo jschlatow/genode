@@ -9,7 +9,6 @@ install_config {
 	<config>
 		<parent-provides>
 			<service name="ROM"/>
-			<service name="RAM"/>
 			<service name="CPU"/>
 			<service name="RM"/>
 			<service name="PD"/>
@@ -18,7 +17,7 @@ install_config {
 		<default-route>
 			<any-service> <parent/> </any-service>
 		</default-route>
-		<start name="test-rm_fault">
+		<start name="test-rm_fault" caps="100">
 			<resource name="RAM" quantum="10M"/>
 		</start>
 	</config>
@@ -26,6 +25,6 @@ install_config {
 
 build_boot_image "core ld.lib.so init test-rm_fault"
 
-append qemu_args "-nographic -m 64"
+append qemu_args "-nographic "
 
 run_genode_until {child "test-rm_fault" exited with exit value 0.*} 300

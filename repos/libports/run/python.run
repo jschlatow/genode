@@ -26,7 +26,6 @@ set config {
 <config verbose="yes">
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="PD"/>
 		<service name="RM"/>
 		<service name="CPU"/>
@@ -35,14 +34,13 @@ set config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 	<start name="test-python">
 		<resource name="RAM" quantum="3M"/>
 		<config>
-			<script name="hello.py"/>
-			<libc stdout="/dev/log" stderr="/dev/log">
-				<vfs>
-					<dir name="dev"> <log/> </dir>
-					<inline name="hello.py">
+			<vfs>
+				<dir name="dev"> <log/> </dir>
+				<inline name="hello.py">
 print " \r\n\r";
 print "        -============================-";
 print "        ||                          ||";
@@ -54,9 +52,10 @@ print "        -============================-";
 print " \r";
 print "   2011 by Genode Labs www.genode-labs.com";
 print " \r\n\r";
-					</inline>
-				</vfs>
-			</libc>
+				</inline>
+			</vfs>
+			<libc stdout="/dev/log" stderr="/dev/log"/>
+			<arg value="hello.py"/>
 		</config>
 	</start>
 </config>
@@ -71,7 +70,7 @@ install_config $config
 # generic modules
 set boot_modules {
 	core init
-	ld.lib.so libc.lib.so libm.lib.so python.lib.so
+	ld.lib.so libc.lib.so libm.lib.so python.lib.so posix.lib.so
 	test-python
 }
 
@@ -81,7 +80,7 @@ build_boot_image $boot_modules
 # Execute test case
 #
 
-append qemu_args " -m 128 -nographic "
+append qemu_args "  -nographic "
 
 run_genode_until {.*child "test-python" exited with exit value 0.*} 60
 

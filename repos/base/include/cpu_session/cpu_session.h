@@ -32,7 +32,17 @@ namespace Genode {
 
 struct Genode::Cpu_session : Session
 {
+	/**
+	 * \noapi
+	 */
 	static const char *service_name() { return "CPU"; }
+
+	/*
+	 * A CPU session consumes a dataspace capability for the session-object
+	 * allocation, its session capability, the capability of the 'Native_cpu'
+	 * RPC interface, and a capability for the trace-control dataspace.
+	 */
+	enum { CAP_QUOTA = 4 };
 
 	typedef Cpu_session_client Client;
 
@@ -43,7 +53,6 @@ struct Genode::Cpu_session : Session
 
 	class Thread_creation_failed : public Exception { };
 	class Quota_exceeded         : public Thread_creation_failed { };
-	class Out_of_metadata        : public Exception { };
 
 
 	enum { THREAD_NAME_LEN = 32 };
@@ -83,8 +92,8 @@ struct Genode::Cpu_session : Session
 	 * \param utcb      base of the UTCB that will be used by the thread
 	 * \return          capability representing the new thread
 	 * \throw           Thread_creation_failed
-	 * \throw           Out_of_metadata
-	 * \throw           Quota_exceeded
+	 * \throw           Out_of_ram
+	 * \throw           Out_of_caps
 	 */
 	virtual Thread_capability create_thread(Capability<Pd_session> pd,
 	                                        Name const            &name,
@@ -223,7 +232,7 @@ struct Genode::Cpu_session : Session
 	 *********************/
 
 	GENODE_RPC_THROW(Rpc_create_thread, Thread_capability, create_thread,
-	                 GENODE_TYPE_LIST(Thread_creation_failed, Out_of_metadata),
+	                 GENODE_TYPE_LIST(Thread_creation_failed, Out_of_ram, Out_of_caps),
 	                 Capability<Pd_session>, Name const &, Affinity::Location,
 	                 Weight, addr_t);
 	GENODE_RPC(Rpc_kill_thread, void, kill_thread, Thread_capability);

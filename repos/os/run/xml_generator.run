@@ -8,13 +8,13 @@ install_config {
 			<service name="ROM"/>
 			<service name="LOG"/>
 			<service name="CPU"/>
-			<service name="RAM"/>
 			<service name="RM"/>
 			<service name="PD"/>
 		</parent-provides>
 		<default-route>
 			<any-service> <any-child/> <parent/> </any-service>
 		</default-route>
+		<default caps="100"/>
 		<start name="test-xml_generator">
 			<resource name="RAM" quantum="1M"/>
 		</start>
@@ -23,7 +23,7 @@ install_config {
 
 build_boot_image "core ld.lib.so init test-xml_generator"
 
-append qemu_args "-nographic -m 64"
+append qemu_args "-nographic "
 
 run_genode_until "--- XML generator test finished ---.*\n" 30
 

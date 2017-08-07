@@ -202,7 +202,7 @@
 
 	/* buffer user psr */
 	ldr r0, [lr, #PSR_OFFSET]
-	msr spsr, r0
+	msr spsr_cxsf, r0
 
 	/* load user r0 ... r12 */
 	ldm lr, {r0-r12}
@@ -234,8 +234,3 @@
 	.p2align 2
 	.global _mt_end
 	_mt_end:
-
-	/* FIXME exists only because _vm_mon_entry pollutes generic kernel code */
-	.global _mt_vm_entry_pic
-	_mt_vm_entry_pic:
-	1: b 1b

@@ -5,13 +5,14 @@
 #
 
 # add include paths
-INC_DIR += $(BASE_DIR)/../base-hw/src/core/include/spec/cortex_a15
-INC_DIR += $(BASE_DIR)/../base-hw/src/core/include/spec/arm_gic
+INC_DIR += $(BASE_DIR)/../base-hw/src/core/spec/cortex_a15
+INC_DIR += $(BASE_DIR)/../base-hw/src/core/spec/arm_gic
 
 # add C++ sources
 SRC_CC += spec/cortex_a15/kernel/cpu.cc
 SRC_CC += spec/arm/smp/kernel/thread_update_pd.cc
 SRC_CC += spec/arm/smp/kernel/cpu.cc
+SRC_CC += spec/arm/cpu_context.cc
 
 # include less specific configuration
 include $(BASE_DIR)/../base-hw/lib/mk/spec/smp/core-hw.inc

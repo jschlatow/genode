@@ -52,12 +52,16 @@ struct Ahci
 	unsigned             ready_count = 0;
 	bool                 enable_atapi;
 
+	Signal_context_capability device_identified;
+
 	Ahci(Genode::Env &env, Genode::Allocator &alloc,
-	     Ahci_root &root, bool support_atapi)
+	     Ahci_root &root, bool support_atapi,
+	     Genode::Signal_context_capability device_identified)
 	:
 		env(env), alloc(alloc),
 		root(root), irq(root.entrypoint(), *this, &Ahci::handle_irq),
-		enable_atapi(support_atapi)
+		enable_atapi(support_atapi),
+		device_identified(device_identified)
 	{
 		info();
 
@@ -69,16 +73,6 @@ struct Ahci
 
 		/* search for devices */
 		scan_ports(env.rm(), env.ram());
-	}
-
-	bool atapi(unsigned sig)
-	{
-		return enable_atapi && (sig == ATAPI_SIG_QEMU || sig == ATAPI_SIG);
-	}
-
-	bool ata(unsigned sig)
-	{
-		return sig == ATA_SIG;
 	}
 
 	/**
@@ -115,8 +109,8 @@ struct Ahci
 
 	void scan_ports(Genode::Region_map &rm, Genode::Ram_session &ram)
 	{
-		Genode::log("number of ports: ", hba.port_count(), " "
-		            "pi: ", Genode::Hex(hba.read<Hba::Pi>()));
+		log("number of ports: ", hba.port_count(), " pi: ",
+		    Hex(hba.read<Hba::Pi>()));
 
 		unsigned available = hba.read<Hba::Pi>();
 		for (unsigned i = 0; i < hba.port_count(); i++) {
@@ -125,42 +119,35 @@ struct Ahci
 			if (!(available & (1U << i)))
 				continue;
 
-			Port port(rm, hba, platform_hba, i);
-
-			/* check for ATA/ATAPI devices */
-			unsigned sig = port.read<Port::Sig>();
-			if (!atapi(sig) && !ata(sig)) {
-				Genode::log("\t\t#", i, ": off");
-				continue;
-			}
-
-			port.reset();
-
 			bool enabled = false;
-			try { enabled = port.enable(); }
-			catch (Port::Not_ready) { Genode::error("could not enable port ", i); }
 
-			Genode::log("\t\t#", i, ": ", atapi(sig) ? "ATAPI" : "ATA");
-
-			if (!enabled)
-				continue;
-
-
-			switch (sig) {
-
+			switch (Port_base(i, hba).read<Port_base::Sig>()) {
 				case ATA_SIG:
-					ports[i] = new (&alloc) Ata_driver(alloc, port, ram, root,
-					                                   ready_count);
+					try {
+						ports[i] = new (&alloc)
+							Ata_driver(alloc, ram, root, ready_count, rm, hba,
+							           platform_hba, i, device_identified);
+						enabled = true;
+					} catch (...) { }
+
+					log("\t\t#", i, ":", enabled ? " ATA" : " off (ATA)");
 					break;
 
 				case ATAPI_SIG:
 				case ATAPI_SIG_QEMU:
-					ports[i] = new (&alloc) Atapi_driver(port, ram, root,
-					                                     ready_count);
+					if (enable_atapi)
+						try {
+							ports[i] = new (&alloc)
+								Atapi_driver(ram, root, ready_count, rm, hba,
+								             platform_hba, i);
+							enabled = true;
+						} catch (...) { }
+
+					log("\t\t#", i, ":", enabled ? " ATAPI" : " off (ATAPI)");
 					break;
 
 				default:
-					Genode::warning("device signature ", Genode::Hex(sig), " unsupported");
+					log("\t\t#", i, ": off (unknown device signature)");
 			}
 		}
 	};
@@ -183,6 +170,11 @@ struct Ahci
 	{
 		return port_num < MAX_PORTS && ports[port_num] && !port_claimed[port_num] &&
 		       ports[port_num]->ready();
+	}
+
+	Port_driver * port(unsigned num)
+	{
+		return num < MAX_PORTS ? ports[num] : nullptr;
 	}
 
 	long device_number(const char *model_num, const char *serial_num)
@@ -208,9 +200,10 @@ static Ahci *sata_ahci(Ahci *ahci = 0)
 
 
 void Ahci_driver::init(Genode::Env &env, Genode::Allocator &alloc,
-                       Ahci_root &root, bool support_atapi)
+                       Ahci_root &root, bool support_atapi,
+                       Genode::Signal_context_capability device_identified)
 {
-	static Ahci ahci(env, alloc, root, support_atapi);
+	static Ahci ahci(env, alloc, root, support_atapi, device_identified);
 	sata_ahci(&ahci);
 }
 
@@ -236,4 +229,28 @@ bool Ahci_driver::avail(long device_num)
 long Ahci_driver::device_number(char const *model_num, char const *serial_num)
 {
 	return sata_ahci()->device_number(model_num, serial_num);
+}
+
+
+void Ahci_driver::report_ports(Genode::Reporter &reporter)
+{
+	Genode::Reporter::Xml_generator xml(reporter, [&] () {
+		for (unsigned i = 0; i < Ahci::MAX_PORTS; ++i) {
+			Port_driver *port = sata_ahci()->port(i);
+			if (!port || !port->ready()) continue;
+
+			Ata_driver *ata = dynamic_cast<Ata_driver *>(port);
+
+			xml.node("port", [&] () {
+				xml.attribute("num", i);
+				xml.attribute("type", ata ? "ATA" : "ATAPI");
+				if (ata) {
+					xml.attribute("block_count", ata->block_count());
+					xml.attribute("block_size", ata->block_size());
+					xml.attribute("model", ata->model->cstring());
+					xml.attribute("serial", ata->serial->cstring());
+				}
+			});
+		}
+	});
 }

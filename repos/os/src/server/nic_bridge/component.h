@@ -56,7 +56,7 @@ class Net::Stream_allocator
 		Stream_allocator(Genode::Ram_session &ram,
 		                 Genode::Region_map  &rm,
 		                 Genode::size_t     amount)
-		: _ram(ram, Genode::Ram_session_capability(), amount),
+		: _ram(ram, amount),
 		  _heap(ram, rm),
 		  _range_alloc(&_heap) {}
 
@@ -217,12 +217,18 @@ class Net::Root : public Genode::Root_component<Net::Session_component>
 					Session_component(_env.ram(), _env.rm(), _env.ep(),
 					                  ram_quota, tx_buf_size, rx_buf_size,
 					                  _mac_alloc.alloc(), _nic, ip_addr);
-			} catch(Mac_allocator::Alloc_failed) {
+			}
+			catch (Mac_allocator::Alloc_failed) {
 				Genode::warning("Mac address allocation failed!");
-				throw Root::Unavailable();
-			} catch(Ram_session::Quota_exceeded) {
+				throw Service_denied();
+			}
+			catch (Out_of_ram) {
 				Genode::warning("insufficient 'ram_quota'");
-				throw Root::Quota_exceeded();
+				throw Insufficient_ram_quota();
+			}
+			catch (Out_of_caps) {
+				Genode::warning("insufficient 'cap_quota'");
+				throw Insufficient_cap_quota();
 			}
 		}
 

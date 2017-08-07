@@ -9,13 +9,15 @@ SRC_C  = $(filter-out $(FILTER_OUT), $(notdir $(wildcard $(FUSE_EXT2_DIR)/*.c)))
 SRC_CC   = fuse_fs_main.cc \
            init.cc
 
-LIBS     = config libc libfuse libext2fs
+LIBS     = libc libfuse libext2fs
 
 CC_OPT += -DHAVE_CONFIG_H -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
 
 CC_OPT += -Wno-unused-function -Wno-unused-variable \
           -Wno-unused-but-set-variable -Wno-cpp \
           -Wno-maybe-uninitialized
+
+CC_C_OPT += -std=gnu89
 
 CC_C_OPT += -Wno-implicit-function-declaration
 

@@ -192,6 +192,10 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 				catch (Dont_ack) { throw; }
 				catch (...) { }
 				break;
+
+			case Packet_descriptor::CONTENT_CHANGED:
+				/* The VFS does not track file changes yet */
+				throw Dont_ack();
 			}
 
 			packet.length(res_length);
@@ -340,7 +344,7 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 		                  bool                  writable)
 		:
 			Session_rpc_object(env.ram().alloc(tx_buf_size), env.rm(), env.ep().rpc_ep()),
-			_ram(env.ram(), env.ram_session_cap(), ram_quota),
+			_ram(env.ram(), ram_quota),
 			_alloc(_ram, env.rm()),
 			_process_packet_handler(env.ep(), *this, &Session_component::_process_packets),
 			_vfs(vfs),
@@ -416,7 +420,7 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 
 			Directory *dir;
 			try { dir = new (_alloc) Directory(_node_space, _vfs, path_str, create); }
-			catch (Out_of_memory) { throw Out_of_metadata(); }
+			catch (Out_of_memory) { throw Out_of_ram(); }
 
 			return Dir_handle(dir->id().value);
 		}
@@ -474,18 +478,18 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 			Node *node;
 
 			try { node  = new (_alloc) Node(_node_space, path_str, STAT_ONLY); }
-			catch (Out_of_memory) { throw Out_of_metadata(); }
+			catch (Out_of_memory) { throw Out_of_ram(); }
 
 			return Node_handle(node->id().value);
 		}
 
 		void close(Node_handle handle) override
 		{
-			_apply(handle, [&] (Node &node) {
+			try { _apply(handle, [&] (Node &node) {
 				/* root directory should not be freed */
 				if (!(node.id() == _root->id()))
 					_close(node);
-			});
+			}); } catch (File_system::Invalid_handle) { }
 		}
 
 		Status status(Node_handle node_handle) override
@@ -569,8 +573,6 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 				});
 			});
 		}
-
-		void sigh(Node_handle handle, Signal_context_capability sigh) override { }
 
 		/**
 		 * Sync the VFS and send any pending signals on the node.
@@ -660,7 +662,7 @@ class Vfs_server::Root :
 				Arg_string::find_arg(args, "tx_buf_size").aligned_size();
 
 			if (!tx_buf_size)
-				throw Root::Invalid_args();
+				throw Service_denied();
 
 			size_t session_size =
 				max((size_t)4096, sizeof(Session_component)) +
@@ -669,7 +671,7 @@ class Vfs_server::Root :
 			if (session_size > ram_quota) {
 				error("insufficient 'ram_quota' from '", label, "' "
 				      "got ", ram_quota, ", need ", session_size);
-				throw Root::Quota_exceeded();
+				throw Insufficient_ram_quota();
 			}
 			ram_quota -= session_size;
 
@@ -685,38 +687,36 @@ class Vfs_server::Root :
 			try {
 				Session_policy policy(label, _config_rom.xml());
 
-				/* Determine the session root directory.
-				 * Defaults to '/' if not specified by session
-				 * policy or session arguments.
-				 */
+				/* determine optional session root offset. */
 				try {
 					policy.attribute("root").value(tmp, sizeof(tmp));
 					session_root.import(tmp, "/");
 				} catch (Xml_node::Nonexistent_attribute) { }
 
-				/* Determine if the session is writeable.
-				 * Policy overrides arguments, both default to false.
+				/*
+				 * Determine if the session is writeable.
+				 * Policy overrides client argument, both default to false.
 				 */
 				if (policy.attribute_value("writeable", false))
 					writeable = Arg_string::find_arg(args, "writeable").bool_value(false);
 
-			} catch (Session_policy::No_policy_defined) { }
+			} catch (Session_policy::No_policy_defined) {
+				/* missing policy - deny request */
+				throw Service_denied();
+			}
 
+			/* apply client's root offset. */
 			Arg_string::find_arg(args, "root").string(tmp, sizeof(tmp), "/");
 			if (Genode::strcmp("/", tmp, sizeof(tmp))) {
 				session_root.append("/");
 				session_root.append(tmp);
+				session_root.remove_trailing('/');
 			}
-
-			/*
-			 * If no policy matches the client gets
-			 * read-only access to the root.
-			 */
 
 			/* check if the session root exists */
 			if (!((session_root == "/") || _vfs.directory(session_root.base()))) {
 				error("session root '", session_root, "' not found for '", label, "'");
-				throw Root::Unavailable();
+				throw Service_denied();
 			}
 
 			Session_component *session = new (md_alloc())

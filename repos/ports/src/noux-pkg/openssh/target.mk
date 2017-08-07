@@ -9,6 +9,7 @@ CONFIGURE_ARGS += --disable-ip6 \
                   --with-md5-passwords  \
                   --without-zlib-version-check \
                   --with-ssl-engine \
+                  --without-stackprotect \
                   --disable-finger \
                   --disable-gopher \
                   --disable-news \
@@ -63,4 +64,4 @@ libssl.a:
 libz.a:
 	$(VERBOSE)$(AR) -rc $@
 
-include $(REP_DIR)/mk/noux.mk
+include $(call select_from_repositories,mk/noux.mk)

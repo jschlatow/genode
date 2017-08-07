@@ -33,10 +33,10 @@ struct Genode::Env
 	virtual Parent &parent() = 0;
 
 	/**
-	 * RAM session of the component
+	 * RAM allocator of the component
 	 *
-	 * The RAM Session represents a budget of memory (quota) that is available
-	 * to the component. This budget can be used to allocate RAM dataspaces.
+	 * The RAM allocator is backed with the RAM budget of the component's PD
+	 * session. This budget can be used to allocate RAM dataspaces.
 	 */
 	virtual Ram_session &ram() = 0;
 
@@ -62,15 +62,21 @@ struct Genode::Env
 	 */
 	virtual Entrypoint &ep() = 0;
 
+	/**
+	 * Deprecated
+	 *
+	 * \deprecated  the RAM session has become part of the PD session
+	 * \noapi
+	 */
 	virtual Ram_session_capability ram_session_cap() = 0;
+
+	/**
+	 * Return the CPU-session capability of the component
+	 */
 	virtual Cpu_session_capability cpu_session_cap() = 0;
 
-	/*
-	 * XXX temporary
-	 *
-	 * The PD session capability is solely used for upgrading the PD session,
-	 * e.g., when the dynamic linker attaches dataspaces to the linker area.
-	 * Once we add 'Env::upgrade', we can remove this accessor.
+	/**
+	 * Return the PD-session capability of the component
 	 */
 	virtual Pd_session_capability pd_session_cap()  = 0;
 
@@ -92,10 +98,13 @@ struct Genode::Env
 	 * \param args             session constructor arguments
 	 * \param affinity         preferred CPU affinity for the session
 	 *
-	 * \throw Service_denied   parent denies session request
-	 * \throw Quota_exceeded   our own quota does not suffice for
-	 *                         the creation of the new session
-	 * \throw Unavailable
+	 * \throw Service_denied
+	 * \throw Insufficient_cap_quota
+	 * \throw Insufficient_ram_quota
+	 * \throw Out_of_caps
+	 * \throw Out_of_ram
+	 *
+	 * See the documentation of 'Parent::session'.
 	 *
 	 * This method blocks until the session is available or an error
 	 * occurred.
@@ -116,7 +125,10 @@ struct Genode::Env
 	 * \param id    ID of recipient session
 	 * \param args  description of the amount of quota to transfer
 	 *
-	 * \throw Quota_exceeded  quota could not be transferred
+	 * \throw Out_of_ram
+	 * \throw Out_of_caps
+	 *
+	 * See the documentation of 'Parent::upgrade'.
 	 *
 	 * The 'args' argument has the same principle format as the 'args'
 	 * argument of the 'session' operation.
@@ -128,6 +140,44 @@ struct Genode::Env
 	 * Close session and block until the session is gone
 	 */
 	virtual void close(Parent::Client::Id) = 0;
+
+	/**
+	 * Excecute pending static constructors
+	 *
+	 * On component startup, the dynamic linker does not call possible static
+	 * constructors in the binary and shared libraries the binary depends on. If
+	 * the component requires static construction it needs to call this function
+	 * at construction time explicitly. For example, the libc implementation
+	 * executes this function before constructing libc components.
+	 */
+	virtual void exec_static_constructors() = 0;
+
+	/**
+	 * Reload parent capability and reinitialize environment resources
+	 *
+	 * This method is solely used for implementing fork in Noux. After forking
+	 * a process, the new child process is executed within a copy of the
+	 * address space of the forking process. Thereby, the new process inherits
+	 * the original 'env' object of the forking process, which is meaningless
+	 * in the context of the new process. By calling this function, the new
+	 * process is able to reinitialize its 'env' with meaningful capabilities
+	 * obtained via its updated parent capability.
+	 *
+	 * \noapi
+	 */
+	virtual void reinit(Native_capability::Raw) = 0;
+
+	/**
+	 * Reinitialize main-thread object
+	 *
+	 * \param stack_area_rm  new region map of the stack area
+	 *
+	 * This function is solely used for implementing fork as provided by the
+	 * Noux environment.
+	 *
+	 * \noapi
+	 */
+	virtual void reinit_main_thread(Capability<Region_map> &stack_area_rm) = 0;
 };
 
 #endif /* _INCLUDE__BASE__ENV_H_ */

@@ -1,6 +1,6 @@
-INC_DIR += $(REP_DIR)/src/core/include/spec/riscv
+INC_DIR += $(REP_DIR)/src/core/spec/riscv
 
-CC_OPT += -fno-delete-null-pointer-checks -msoft-float
+CC_OPT += -fno-delete-null-pointer-checks
 
 # add C++ sources
 SRC_CC += platform_services.cc
@@ -10,11 +10,10 @@ SRC_CC += spec/riscv/kernel/thread.cc
 SRC_CC += spec/riscv/kernel/pd.cc
 SRC_CC += spec/riscv/kernel/cpu.cc
 SRC_CC += spec/riscv/platform_support.cc
-SRC_CC += spec/riscv/cpu.cc
+SRC_CC += spec/riscv/timer.cc
 
 #add assembly sources
-SRC_S += spec/riscv/mode_transition.s
-SRC_S += spec/riscv/kernel/crt0.s
+SRC_S += spec/riscv/exception_vector.s
 SRC_S += spec/riscv/crt0.s
 
 # include less specific configuration

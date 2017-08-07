@@ -91,6 +91,12 @@ struct Device : List<Device>::Element
 
 	usb_interface *interface(unsigned index)
 	{
+		if (!udev || !udev->actconfig)
+			return nullptr;
+
+		if (index >= udev->actconfig->desc.bNumInterfaces)
+			return nullptr;
+
 		usb_interface *iface = udev->actconfig->interface[index];
 		return iface;
 	}
@@ -527,8 +533,8 @@ class Usb::Session_component : public Session_rpc_object,
 		long                               _dev = 0;
 		Device                            *_device = nullptr;
 		Signal_context_capability          _sigh_state_change;
-		Signal_handler<Session_component>  _packet_avail;
-		Signal_handler<Session_component>  _ready_ack;
+		Io_signal_handler<Session_component> _packet_avail;
+		Io_signal_handler<Session_component> _ready_ack;
 		Worker                             _worker;
 		Ram_dataspace_capability           _tx_ds;
 
@@ -580,7 +586,7 @@ class Usb::Session_component : public Session_rpc_object,
 		~Session_component()
 		{
 			/* release claimed interfaces */
-			if (_device) {
+			if (_device && _device->udev && _device->udev->actconfig) {
 				unsigned const num = _device->udev->actconfig->desc.bNumInterfaces;
 				for (unsigned i = 0; i < num; i++)
 					release_interface(i);
@@ -643,7 +649,11 @@ class Usb::Session_component : public Session_rpc_object,
 			if (!_device)
 				throw Device_not_found();
 
-			return _device->interface(index)->num_altsetting;
+			usb_interface *iface = _device->interface(index);
+			if (!iface)
+				throw Interface_not_found();
+
+			return iface->num_altsetting;
 		}
 
 		void interface_descriptor(unsigned index, unsigned alt_setting,
@@ -652,10 +662,10 @@ class Usb::Session_component : public Session_rpc_object,
 			if (!_device)
 				throw Device_not_found();
 
-			if (index >= _device->udev->actconfig->desc.bNumInterfaces)
+			usb_interface *iface = _device->interface(index);
+			if (!iface)
 				throw Interface_not_found();
 
-			usb_interface *iface = _device->interface(index);
 			Genode::memcpy(interface_descr, &iface->altsetting[alt_setting].desc,
 			               sizeof(usb_interface_descriptor));
 
@@ -668,13 +678,13 @@ class Usb::Session_component : public Session_rpc_object,
 		                         unsigned              endpoint_num,
 		                         Endpoint_descriptor  *endpoint_descr) override
 		{
-			if (!_device)
+			if (!_device || !_device->udev)
 				throw Device_not_found();
 
-			if (interface_num >= _device->udev->actconfig->desc.bNumInterfaces)
+			usb_interface *iface = usb_ifnum_to_if(_device->udev, interface_num);
+			if (!iface)
 				throw Interface_not_found();
 
-			usb_interface *iface = usb_ifnum_to_if(_device->udev, interface_num);
 			Genode::memcpy(endpoint_descr, &_device->endpoint(iface, alt_setting,
 			               endpoint_num)->desc, sizeof(usb_endpoint_descriptor));
 		}
@@ -776,11 +786,13 @@ class Usb::Root : public Genode::Root_component<Session_component>
 			bool const uhci = config.attribute_value<bool>("uhci", false);
 			bool const ehci = config.attribute_value<bool>("ehci", false);
 			bool const xhci = config.attribute_value<bool>("xhci", false);
+			bool const ohci = config.attribute_value<bool>("ohci", false);
 
 			Genode::Reporter::Xml_generator xml(_config_reporter, [&] {
 				if (uhci) xml.attribute("uhci", "yes");
 				if (ehci) xml.attribute("ehci", "yes");
 				if (xhci) xml.attribute("xhci", "yes");
+				if (ohci) xml.attribute("ohci", "yes");
 
 				xml.append(config.content_base(), config.content_size());
 			});
@@ -810,12 +822,12 @@ class Usb::Root : public Genode::Root_component<Session_component>
 				/* check session quota */
 				size_t session_size = max<size_t>(4096, sizeof(Session_component));
 				if (ram_quota < session_size)
-					throw Root::Quota_exceeded();
+					throw Insufficient_ram_quota();
 
 				if (tx_buf_size > ram_quota - session_size) {
 					error("Insufficient 'ram_quota',got ", ram_quota, " need ",
-						    tx_buf_size + session_size);
-					throw Root::Quota_exceeded();
+					      tx_buf_size + session_size);
+					throw Insufficient_ram_quota();
 				}
 
 				Ram_dataspace_capability tx_ds = _env.ram().alloc(tx_buf_size);
@@ -823,10 +835,11 @@ class Usb::Root : public Genode::Root_component<Session_component>
 					Session_component(tx_ds, _env.ep(), _env.rm(), vendor, product, bus, dev);
 				::Session::list()->insert(session);
 				return session;
-			} catch (Genode::Session_policy::No_policy_defined) {
+			}
+			catch (Genode::Session_policy::No_policy_defined) {
 				error("Invalid session request, no matching policy for '",
 				      label.string(), "'");
-				throw Genode::Root::Unavailable();
+				throw Genode::Service_denied();
 			}
 		}
 

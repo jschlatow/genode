@@ -10,7 +10,8 @@
 ##   VERBOSE_MK       - verboseness of make calls
 ##   BUILD_BASE_DIR   - base of build directory tree
 ##   LIB_CACHE_DIR    - library build cache location
-##   INSTALL_DIR      - program target build directory
+##   INSTALL_DIR      - installation directory for stripped shared objects
+##   DEBUG_DIR        - installation directory for unstripped shared objects
 ##   SHARED_LIBS      - shared-library dependencies of the library
 ##   ARCHIVES         - archive dependencies of the library
 ##   REP_DIR          - repository where the library resides
@@ -64,18 +65,9 @@ include $(foreach LIB,$(LIBS),$(call select_from_repositories,lib/import/import-
 #
 include $(BASE_DIR)/mk/global.mk
 
-#
-# Name of <libname>.lib.a or <libname>.lib.so file to create
-#
-ifdef SHARED_LIB
-LIB_SO       := $(addsuffix .lib.so,$(LIB))
-INSTALL_SO   := $(INSTALL_DIR)/$(LIB_SO)
-LIB_FILENAME := $(LIB_SO)
-else
-LIB_A        := $(addsuffix .lib.a,$(LIB))
-LIB_FILENAME := $(LIB_A)
+ifneq ($(SYMBOLS),)
+SHARED_LIB := yes
 endif
-LIB_TAG := $(addsuffix .lib.tag,$(LIB))
 
 #
 # If a symbol list is provided, we create an ABI stub named '<lib>.abi.so'
@@ -128,9 +120,28 @@ all: message
 message:
 	$(MSG_LIB)$(LIB)
 
+include $(BASE_DIR)/mk/generic.mk
+
+#
+# Name of <libname>.lib.a or <libname>.lib.so file to create
+#
+# Skip the creation and installation of an .so file if there are no
+# ingredients. This is the case if the library is present as ABI only.
+#
+ifdef SHARED_LIB
+ ifneq ($(sort $(OBJECTS) $(LIBS)),)
+  LIB_SO     := $(addsuffix .lib.so,$(LIB))
+  INSTALL_SO := $(INSTALL_DIR)/$(LIB_SO)
+  DEBUG_SO   := $(DEBUG_DIR)/$(LIB_SO)
+ endif
+else
+LIB_A := $(addsuffix .lib.a,$(LIB))
+endif
+
 #
 # Trigger the creation of the <libname>.lib.a or <libname>.lib.so file
 #
+LIB_TAG := $(addsuffix .lib.tag,$(LIB))
 all: $(LIB_TAG)
 
 #
@@ -142,10 +153,8 @@ all: $(LIB_TAG)
 #
 $(LIB_TAG) $(OBJECTS): $(HOST_TOOLS)
 
-$(LIB_TAG): $(LIB_A) $(LIB_SO) $(ABI_SO) $(INSTALL_SO)
+$(LIB_TAG): $(LIB_A) $(LIB_SO) $(ABI_SO) $(INSTALL_SO) $(DEBUG_SO)
 	@touch $@
-
-include $(BASE_DIR)/mk/generic.mk
 
 #
 # Rust support
@@ -239,6 +248,11 @@ $(ABI_SO): $(LIB).symbols.o
 	                $(LIB_SO_DEPS) $< \
 	                --end-group --no-whole-archive
 
-$(INSTALL_SO):
-	$(VERBOSE)ln -sf $(CURDIR)/$(LIB_SO) $@
+$(LIB_SO).stripped: $(LIB_SO)
+	$(VERBOSE)$(STRIP) -o $@ $<
 
+$(DEBUG_SO): $(LIB_SO)
+	$(VERBOSE)ln -sf $(CURDIR)/$< $@
+
+$(INSTALL_SO): $(LIB_SO).stripped
+	$(VERBOSE)ln -sf $(CURDIR)/$< $@

@@ -27,6 +27,15 @@
  */
 static Genode::Env *env_ptr = nullptr;
 
+/**
+ * Excecute pending static constructors
+ *
+ * The weak function is used for statically linked binaries. The dynamic linker
+ * provides the real implementation for dynamically linked components.
+ */
+void Genode::exec_static_constructors() __attribute__((weak));
+void Genode::exec_static_constructors() { }
+
 namespace {
 
 	using namespace Genode;
@@ -90,6 +99,16 @@ namespace {
 			return Genode::env_session_id_space();
 		}
 
+		void reinit(Native_capability::Raw raw) override
+		{
+			Genode::env_deprecated()->reinit(raw);
+		}
+
+		void reinit_main_thread(Capability<Region_map> &stack_area_rm) override
+		{
+			Genode::env_deprecated()->reinit_main_thread(stack_area_rm);
+		}
+
 		void _block_for_session()
 		{
 			/*
@@ -114,59 +133,63 @@ namespace {
 			 * the route between client and server, the session quota provided
 			 * by the client may become successively diminished by intermediate
 			 * components, prompting the server to deny the session request.
-			 *
-			 * If the session creation failed due to insufficient session
-			 * quota, we try to repeatedly increase the quota up to
-			 * 'NUM_ATTEMPTS'.
 			 */
-			enum { NUM_ATTEMPTS = 10 };
 
 			/* extract session quota as specified by the 'Connection' */
 			char argbuf[Parent::Session_args::MAX_SIZE];
 			strncpy(argbuf, args.string(), sizeof(argbuf));
-			size_t ram_quota = Arg_string::find_arg(argbuf, "ram_quota").ulong_value(0);
 
-			return retry<Parent::Quota_exceeded>([&] () {
+			Ram_quota ram_quota = ram_quota_from_args(argbuf);
+			Cap_quota cap_quota = cap_quota_from_args(argbuf);
 
-				Arg_string::set_arg(argbuf, sizeof(argbuf), "ram_quota",
-				                    String<32>(Number_of_bytes(ram_quota)).string());
+			unsigned warn_after_attempts = 2;
 
-				Session_capability cap =
-					_parent.session(id, name, Parent::Session_args(argbuf), affinity);
+			for (unsigned cnt = 0;; cnt++) {
 
-				if (cap.valid())
-					return cap;
+				try {
 
-				_block_for_session();
-				return _parent.session_cap(id);
-			},
-			[&] () {
-					/*
-					 * If our RAM session has less quota available than the
-					 * session quota, the session-quota transfer failed. In
-					 * this case, we try to recover by issuing a resource
-					 * request to the parent.
-					 *
-					 * Otherwise, the session-quota transfer succeeded but
-					 * the request was denied by the server.
-					 */
-					if (ram_quota > ram().avail()) {
+					Arg_string::set_arg(argbuf, sizeof(argbuf), "ram_quota",
+					                    String<32>(ram_quota).string());
 
-						/* issue resource request */
-						char buf[128];
-						snprintf(buf, sizeof(buf), "ram_quota=%lu", ram_quota);
+					Arg_string::set_arg(argbuf, sizeof(argbuf), "cap_quota",
+					                    String<32>(cap_quota).string());
 
-						_parent.resource_request(Parent::Resource_args(buf));
-					} else {
-						ram_quota += 4096;
+					Session_capability cap =
+						_parent.session(id, name, Parent::Session_args(argbuf), affinity);
+
+					if (cap.valid())
+						return cap;
+
+					_block_for_session();
+					return _parent.session_cap(id);
+				}
+
+				catch (Insufficient_ram_quota) {
+					ram_quota = Ram_quota { ram_quota.value + 4096 }; }
+
+				catch (Insufficient_cap_quota) {
+					cap_quota = Cap_quota { cap_quota.value + 4 }; }
+
+				catch (Out_of_ram) {
+					if (ram_quota.value > ram().avail_ram().value) {
+						Parent::Resource_args args(String<64>("ram_quota=", ram_quota));
+						_parent.resource_request(args);
 					}
+				}
 
-			}, NUM_ATTEMPTS);
+				catch (Out_of_caps) {
+					if (cap_quota.value > pd().avail_caps().value) {
+						Parent::Resource_args args(String<64>("cap_quota=", cap_quota));
+						_parent.resource_request(args);
+					}
+				}
 
-			warning("giving up to increase session quota for ", name.string(), " session "
-			        "after ", (int)NUM_ATTEMPTS, " attempts");
-
-			throw Parent::Quota_exceeded();
+				if (cnt == warn_after_attempts) {
+					warning("re-attempted ", name.string(), " session request ",
+					        cnt, " times (args: ", Cstring(argbuf), ")");
+					warn_after_attempts *= 2;
+				}
+			}
 		}
 
 		void upgrade(Parent::Client::Id id, Parent::Upgrade_args const &args) override
@@ -183,6 +206,11 @@ namespace {
 
 			if (_parent.close(id) == Parent::CLOSE_PENDING)
 				_block_for_session();
+		}
+
+		void exec_static_constructors() override
+		{
+			Genode::exec_static_constructors();
 		}
 	};
 }

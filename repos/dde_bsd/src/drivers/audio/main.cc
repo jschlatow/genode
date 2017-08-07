@@ -226,7 +226,7 @@ struct Audio_out::Root_policy
 		    (sizeof(Stream) > ram_quota - session_size)) {
 			Genode::error("insufficient 'ram_quota', got ", ram_quota,
 			              " need ", sizeof(Stream) + session_size);
-			throw ::Root::Quota_exceeded();
+			throw Genode::Insufficient_ram_quota();
 		}
 
 		char channel_name[16];
@@ -237,12 +237,12 @@ struct Audio_out::Root_policy
 		if (!Out::channel_number(channel_name, &channel_number)) {
 			Genode::error("invalid output channel '",(char const *)channel_name,"' requested, "
 			              "denying '",Genode::label_from_args(args),"'");
-			throw ::Root::Invalid_args();
+			throw Genode::Service_denied();
 		}
 		if (Audio_out::channel_acquired[channel_number]) {
 			Genode::error("output channel '",(char const *)channel_name,"' is unavailable, "
 			              "denying '",Genode::label_from_args(args),"'");
-			throw ::Root::Unavailable();
+			throw Genode::Service_denied();
 		}
 	}
 
@@ -417,7 +417,7 @@ struct Audio_in::Root_policy
 			Genode::error("insufficient 'ram_quota', got ", ram_quota,
 			              " need ", sizeof(Stream) + session_size,
 			              ", denying '",Genode::label_from_args(args),"'");
-			throw Genode::Root::Quota_exceeded();
+			throw Genode::Insufficient_ram_quota();
 		}
 
 		char channel_name[16];
@@ -428,12 +428,12 @@ struct Audio_in::Root_policy
 		if (!In::channel_number(channel_name, &channel_number)) {
 			Genode::error("invalid input channel '",(char const *)channel_name,"' requested, "
 			              "denying '",Genode::label_from_args(args),"'");
-			throw ::Root::Invalid_args();
+			throw Genode::Service_denied();
 		}
 		if (Audio_in::channel_acquired) {
 			Genode::error("input channel '",(char const *)channel_name,"' is unavailable, "
 			              "denying '",Genode::label_from_args(args),"'");
-			throw Genode::Root::Unavailable();
+			throw Genode::Service_denied();
 		}
 	}
 
@@ -532,8 +532,10 @@ struct Main
 };
 
 
-/***************
- ** Component **
- ***************/
+void Component::construct(Genode::Env &env)
+{
+	/* XXX execute constructors of global statics */
+	env.exec_static_constructors();
 
-void Component::construct(Genode::Env &env) { static Main server(env); }
+	static Main server(env);
+}

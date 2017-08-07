@@ -23,7 +23,7 @@
 #include <base/internal/crt0.h>
 
 /* core includes */
-#include <assert.h>
+#include <hw/assert.h>
 #include <kernel/kernel.h>
 #include <kernel/thread.h>
 #include <kernel/irq.h>
@@ -153,8 +153,8 @@ size_t Thread::_core_to_kernel_quota(size_t const quota) const
 {
 	using Genode::Cpu_session;
 	using Genode::sizet_arithm_t;
-	size_t const tics = cpu_pool()->timer()->us_to_tics(Kernel::cpu_quota_us);
-	return Cpu_session::quota_lim_downscale<sizet_arithm_t>(quota, tics);
+	size_t const ticks = _cpu->us_to_ticks(Kernel::cpu_quota_us);
+	return Cpu_session::quota_lim_downscale<sizet_arithm_t>(quota, ticks);
 }
 
 
@@ -234,7 +234,7 @@ void Thread::_call_restart_thread()
 		return; }
 
 	Thread * const thread = pd()->cap_tree().find<Thread>(user_arg_1());
-	if (!thread || pd() != thread->pd()) {
+	if (!thread || (!_core() && (pd() != thread->pd()))) {
 		warning(*this, ": failed to lookup thread ", (unsigned)user_arg_1(),
 		        " to restart it");
 		_die();
@@ -286,13 +286,6 @@ void Thread::_cancel_blocking()
 		return;
 	}
 }
-
-
-Thread_event::Thread_event(Thread * const t)
-: _thread(t), _signal_context(0) { }
-
-
-void Thread_event::submit() { if (_signal_context) _signal_context->submit(1); }
 
 
 void Thread::_call_yield_thread()
@@ -367,36 +360,12 @@ void Thread::_call_send_reply_msg()
 }
 
 
-void Thread::_call_route_thread_event()
+void Thread::_call_pager()
 {
 	/* override event route */
 	Thread * const t = (Thread*) user_arg_1();
-	unsigned const event_id = user_arg_2();
-	Signal_context * c = pd()->cap_tree().find<Signal_context>(user_arg_3());
-	user_arg_0(t->_route_event(event_id, c));
+	t->_pager = pd()->cap_tree().find<Signal_context>(user_arg_2());
 }
-
-
-int Thread::_route_event(unsigned const event_id,
-                         Signal_context * c)
-{
-	/* lookup event and assign signal context */
-	Thread_event Thread::* e = _event(event_id);
-	if (!e) { return -1; }
-	(this->*e).signal_context(c);
-	return 0;
-}
-
-
-void Thread_event::signal_context(Signal_context * const c)
-{
-	_signal_context = c;
-	if (_signal_context) { _signal_context->ack_handler(this); }
-}
-
-
-Signal_context * const Thread_event::signal_context() const {
-	return _signal_context; }
 
 
 void Thread::_call_print_char() { Kernel::log((char)user_arg_1()); }
@@ -595,6 +564,7 @@ void Thread::_call()
 	case call_id_timeout():                  _call_timeout(); return;
 	case call_id_timeout_age_us():           _call_timeout_age_us(); return;
 	case call_id_timeout_max_us():           _call_timeout_max_us(); return;
+	case call_id_time():                     user_arg_0(Cpu_job::time()); return;
 	default:
 		/* check wether this is a core thread */
 		if (!_core()) {
@@ -611,11 +581,11 @@ void Thread::_call()
 	case call_id_start_thread():           _call_start_thread(); return;
 	case call_id_resume_thread():          _call_resume_thread(); return;
 	case call_id_cancel_thread_blocking(): _call_cancel_thread_blocking(); return;
-	case call_id_route_thread_event():     _call_route_thread_event(); return;
+	case call_id_thread_pager():           _call_pager(); return;
 	case call_id_update_pd():              _call_update_pd(); return;
 	case call_id_new_pd():
-		_call_new<Pd>((Genode::Translation_table *) user_arg_2(),
-		              (Genode::Platform_pd *)       user_arg_3());
+		_call_new<Pd>((Hw::Page_table *)      user_arg_2(),
+		              (Genode::Platform_pd *) user_arg_3());
 		return;
 	case call_id_delete_pd():              _call_delete<Pd>(); return;
 	case call_id_new_signal_receiver():    _call_new<Signal_receiver>(); return;
@@ -647,18 +617,11 @@ void Thread::_call()
 Thread::Thread(unsigned const priority, unsigned const quota,
                        char const * const label)
 :
-	Cpu_job(priority, quota), _fault(this), _fault_pd(0), _fault_addr(0),
-	_fault_writes(0), _fault_signal(0), _state(AWAITS_START),
+	Cpu_job(priority, quota), _fault_pd(0), _fault_addr(0),
+	_fault_writes(0), _state(AWAITS_START),
 	_signal_receiver(0), _label(label)
 {
 	_init();
-}
-
-
-Thread_event Thread::* Thread::_event(unsigned const id) const
-{
-	static Thread_event Thread::* _events[] = { &Thread::_fault };
-	return id < sizeof(_events)/sizeof(_events[0]) ? _events[id] : 0;
 }
 
 

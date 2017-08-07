@@ -55,7 +55,7 @@ Session_component_base(Allocator    &guarded_alloc_backing,
  ***********************/
 
 Net::Session_component::Session_component(Allocator         &alloc,
-                                          Genode::Timer     &timer,
+                                          Timer::Connection &timer,
                                           size_t      const  amount,
                                           Ram_session       &buf_ram,
                                           size_t      const  tx_buf_size,
@@ -95,7 +95,7 @@ void Session_component::link_state_sigh(Signal_context_capability sigh)
  **********/
 
 Net::Root::Root(Entrypoint        &ep,
-                Genode::Timer     &timer,
+                Timer::Connection &timer,
                 Allocator         &alloc,
                 Mac_address const &router_mac,
                 Configuration     &config,
@@ -130,14 +130,14 @@ Session_component *Net::Root::_create_session(char const *args)
 			max((size_t)4096, sizeof(Session_component));
 
 		if (ram_quota < session_size) {
-			throw Root::Quota_exceeded(); }
+			throw Insufficient_ram_quota(); }
 
 		if (tx_buf_size               > ram_quota - session_size ||
 		    rx_buf_size               > ram_quota - session_size ||
 		    tx_buf_size + rx_buf_size > ram_quota - session_size)
 		{
 			error("insufficient 'ram_quota' for session creation");
-			throw Root::Quota_exceeded();
+			throw Insufficient_ram_quota();
 		}
 		return new (md_alloc())
 			Session_component(*md_alloc(), _timer, ram_quota - session_size,
@@ -160,5 +160,5 @@ Session_component *Net::Root::_create_session(char const *args)
 	catch (Pointer<Interface>::Valid) {
 		error("one session per domain only");
 	}
-	throw Root::Unavailable();
+	throw Service_denied();
 }

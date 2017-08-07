@@ -25,7 +25,6 @@ append config {
 <config>
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -36,7 +35,8 @@ append config {
 	</parent-provides>
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
-	</default-route>}
+	</default-route>
+	<default caps="100"/>}
 
 append_platform_drv_config
 
@@ -83,7 +83,7 @@ append config {
 			</policy>
 		</config>
 	</start>
-	<start name="test-loader">
+	<start name="test-loader" caps="200">
 		<resource name="RAM" quantum="1G"/>
 	</start>
 </config>}
@@ -106,6 +106,5 @@ append_platform_drv_boot_modules
 
 build_boot_image $boot_modules
 
-append qemu_args " -m 256 "
 
 run_genode_until forever

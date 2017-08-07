@@ -29,15 +29,6 @@ namespace Genode {
 
 struct Genode::Root
 {
-	/*********************
-	 ** Exception types **
-	 *********************/
-
-	class Exception      : public ::Genode::Exception { };
-	class Unavailable    : public Exception { };
-	class Quota_exceeded : public Exception { };
-	class Invalid_args   : public Exception { };
-
 	typedef Rpc_in_buffer<160> Session_args;
 	typedef Rpc_in_buffer<160> Upgrade_args;
 
@@ -46,9 +37,9 @@ struct Genode::Root
 	/**
 	 * Create session
 	 *
-	 * \throw Unavailable
-	 * \throw Quota_exceeded
-	 * \throw Invalid_args
+	 * \throw Insufficient_ram_quota
+	 * \throw Insufficient_cap_quota
+	 * \throw Service_denied
 	 *
 	 * \return capability to new session
 	 */
@@ -71,11 +62,11 @@ struct Genode::Root
 	 *********************/
 
 	GENODE_RPC_THROW(Rpc_session, Session_capability, session,
-	                 GENODE_TYPE_LIST(Unavailable, Quota_exceeded, Invalid_args),
+	                 GENODE_TYPE_LIST(Service_denied, Insufficient_ram_quota,
+	                                  Insufficient_cap_quota),
 	                 Session_args const &, Affinity const &);
-	GENODE_RPC_THROW(Rpc_upgrade, void, upgrade,
-	                 GENODE_TYPE_LIST(Invalid_args),
-	                 Session_capability, Upgrade_args const &);
+	GENODE_RPC(Rpc_upgrade, void, upgrade,
+	           Session_capability, Upgrade_args const &);
 	GENODE_RPC(Rpc_close, void, close, Session_capability);
 
 	GENODE_RPC_INTERFACE(Rpc_session, Rpc_upgrade, Rpc_close);

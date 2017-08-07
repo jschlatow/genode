@@ -24,7 +24,6 @@ set config  {
 	<config>
 		<parent-provides>
 			<service name="ROM"/>
-			<service name="RAM"/>
 			<service name="IRQ"/>
 			<service name="IO_MEM"/>
 			<service name="PD"/>
@@ -85,5 +84,7 @@ if { [file exists $disk_image] == 0 } then {
 }
 
 run_genode_until forever
+
+exec rm $disk_image
 
 # vi: set ft=tcl :

@@ -1,16 +1,16 @@
-QT_DEFINES += -DQT_NO_LIBUDEV -DQT_NO_XCB -DQT_NO_XKBCOMMON -DQT_NO_USING_NAMESPACE -DQT_BUILD_NETWORK_LIB -DQT_BUILDING_QT -DQT_NO_CAST_TO_ASCII -DQT_ASCII_CAST_WARNINGS -DQT_MOC_COMPAT -DQT_USE_QSTRINGBUILDER -DQT_DEPRECATED_WARNINGS -DQT_DISABLE_DEPRECATED_BEFORE=0x050000 -DQT_NO_EXCEPTIONS -DQT_NO_DEBUG -DQT_CORE_LIB
+QT_DEFINES += -DQT_NO_USING_NAMESPACE -DQT_NO_FOREACH -DQT_BUILD_NETWORK_LIB -DQT_BUILDING_QT -DQT_NO_CAST_TO_ASCII -DQT_ASCII_CAST_WARNINGS -DQT_MOC_COMPAT -DQT_USE_QSTRINGBUILDER -DQT_DEPRECATED_WARNINGS -DQT_DISABLE_DEPRECATED_BEFORE=0x050000 -DQT_NO_EXCEPTIONS -D_LARGEFILE64_SOURCE -D_LARGEFILE_SOURCE -DQT_NO_DEBUG -DQT_CORE_LIB
 
 QT_INCPATH += \
-  qtbase/include \
-  qtbase/include/QtCore \
-  qtbase/include/QtCore/5.1.0 \
-  qtbase/include/QtCore/5.1.0/QtCore \
-  qtbase/include/QtNetwork \
-  qtbase/include/QtNetwork/5.1.0 \
-  qtbase/include/QtNetwork/5.1.0/QtNetwork \
-  qtbase/mkspecs/genode-g++ \
   qtbase/src/network \
   qtbase/src/network/kernel \
+  qtbase/include \
+  qtbase/include/QtNetwork \
+  qtbase/include/QtNetwork/5.8.0 \
+  qtbase/include/QtNetwork/5.8.0/QtNetwork \
+  qtbase/include/QtCore/5.8.0 \
+  qtbase/include/QtCore/5.8.0/QtCore \
+  qtbase/include/QtCore \
+  qtbase/mkspecs/genode-g++
 
 QT_SOURCES += \
   qftp.cpp \
@@ -19,6 +19,9 @@ QT_SOURCES += \
   qhttpnetworkreply.cpp \
   qhttpnetworkconnection.cpp \
   qhttpnetworkconnectionchannel.cpp \
+  qabstractprotocolhandler.cpp \
+  qhttpprotocolhandler.cpp \
+  qspdyprotocolhandler.cpp \
   qnetworkaccessauthenticationmanager.cpp \
   qnetworkaccessmanager.cpp \
   qnetworkaccesscache.cpp \
@@ -39,6 +42,15 @@ QT_SOURCES += \
   qnetworkdiskcache.cpp \
   qhttpthreaddelegate.cpp \
   qhttpmultipart.cpp \
+  qnetworkfile.cpp \
+  qhttp2protocolhandler.cpp \
+  bitstreams.cpp \
+  huffman.cpp \
+  hpack.cpp \
+  hpacktable.cpp \
+  http2frames.cpp \
+  http2streams.cpp \
+  http2protocol.cpp \
   qnetworksession.cpp \
   qnetworkconfigmanager.cpp \
   qnetworkconfiguration.cpp \
@@ -50,9 +62,10 @@ QT_SOURCES += \
   qdnslookup.cpp \
   qhostaddress.cpp \
   qhostinfo.cpp \
-  qurlinfo.cpp \
-  qnetworkproxy.cpp \
+  qnetworkdatagram.cpp \
   qnetworkinterface.cpp \
+  qnetworkproxy.cpp \
+  qurlinfo.cpp \
   qdnslookup_unix.cpp \
   qhostinfo_unix.cpp \
   qnetworkinterface_unix.cpp \
@@ -70,18 +83,27 @@ QT_SOURCES += \
   qnativesocketengine_unix.cpp \
   qlocalsocket_unix.cpp \
   qlocalserver_unix.cpp \
+  qasn1element.cpp \
   qssl.cpp \
   qsslcertificate.cpp \
   qsslconfiguration.cpp \
   qsslcipher.cpp \
+  qssldiffiehellmanparameters.cpp \
+  qsslellipticcurve.cpp \
+  qsslkey_p.cpp \
   qsslerror.cpp \
-  qsslkey.cpp \
   qsslsocket.cpp \
+  qsslpresharedkeyauthenticator.cpp \
+  qsslcertificateextension.cpp \
+  qsslcertificate_openssl.cpp \
+  qsslcontext_openssl.cpp \
+  qssldiffiehellmanparameters_openssl.cpp \
+  qsslellipticcurve_openssl.cpp \
+  qsslkey_openssl.cpp \
   qsslsocket_openssl.cpp \
   qsslsocket_openssl_symbols.cpp \
-  qsslcertificateextension.cpp \
-  qsslcontext.cpp \
   moc_qhttpnetworkreply_p.cpp \
+  moc_qspdyprotocolhandler_p.cpp \
   moc_qnetworkaccesscache_p.cpp \
   moc_qnetworkaccessbackend_p.cpp \
   moc_qnetworkaccessdebugpipebackend_p.cpp \
@@ -94,6 +116,8 @@ QT_SOURCES += \
   moc_qnetworkdiskcache.cpp \
   moc_qhttpthreaddelegate_p.cpp \
   moc_qhttpmultipart.cpp \
+  moc_qnetworkfile_p.cpp \
+  moc_qhttp2protocolhandler_p.cpp \
   moc_qnetworkconfigmanager_p.cpp \
   moc_qnetworksession_p.cpp \
   moc_qbearerplugin_p.cpp \
@@ -109,6 +133,7 @@ QT_SOURCES += \
 
 QT_VPATH += \
   qtbase/src/network/access \
+  qtbase/src/network/access/http2 \
   qtbase/src/network/bearer \
   qtbase/src/network/kernel \
   qtbase/src/network/socket \
@@ -125,6 +150,7 @@ COMPILER_MOC_HEADER_MAKE_ALL_FILES = \
   moc_qhttpnetworkreply_p.cpp \
   moc_qhttpnetworkconnection_p.cpp \
   moc_qhttpnetworkconnectionchannel_p.cpp \
+  moc_qspdyprotocolhandler_p.cpp \
   moc_qnetworkaccessmanager.cpp \
   moc_qnetworkaccesscache_p.cpp \
   moc_qnetworkaccessbackend_p.cpp \
@@ -141,6 +167,8 @@ COMPILER_MOC_HEADER_MAKE_ALL_FILES = \
   moc_qnetworkdiskcache.cpp \
   moc_qhttpthreaddelegate_p.cpp \
   moc_qhttpmultipart.cpp \
+  moc_qnetworkfile_p.cpp \
+  moc_qhttp2protocolhandler_p.cpp \
   moc_qnetworksession.cpp \
   moc_qnetworkconfigmanager.cpp \
   moc_qnetworkconfigmanager_p.cpp \

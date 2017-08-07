@@ -20,7 +20,6 @@ set config {
 <config>
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="PD"/>
 		<service name="RM"/>
 		<service name="CPU"/>
@@ -29,6 +28,7 @@ set config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 	<start name="ram_blk">
 		<resource name="RAM" quantum="2M"/>
 		<provides> <service name="Block"/> </provides>
@@ -74,7 +74,7 @@ install_config $config
 
 build_boot_image {
 	core init
-	ld.lib.so libc.lib.so libm.lib.so
+	ld.lib.so libc.lib.so libm.lib.so posix.lib.so
 	ram_blk test-libc_vfs_block
 }
 
@@ -82,6 +82,6 @@ build_boot_image {
 # Execute test case
 #
 
-append qemu_args " -m 128 -nographic "
+append qemu_args "  -nographic "
 run_genode_until {.*child "test-libc_vfs_block" exited with exit value 0.*} 60
 

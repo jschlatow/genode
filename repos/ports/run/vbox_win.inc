@@ -41,9 +41,14 @@ set boot_modules {
 	dynamic_rom
 }
 
-set virtualbox_binary "virtualbox-rem"
+set virtualbox_binary  "virtualbox-rem"
+set virtualbox5_binary "virtualbox5-rem"
+
 if {[have_spec muen]} { set virtualbox_binary "virtualbox-muen" }
-if {[have_spec nova]} { set virtualbox_binary "virtualbox-nova" }
+if {[have_spec nova]} {
+	set virtualbox_binary  "virtualbox-nova"
+	set virtualbox5_binary "virtualbox5-nova"
+}
 
 set config_of_app {
 
@@ -122,7 +127,7 @@ append config_of_app {
 	</start>
 
 	<start name="nitpicker" priority="-1">
-		<resource name="RAM" quantum="4M"/>
+		<resource name="RAM" quantum="12M"/>
 		<provides><service name="Nitpicker"/></provides>
 		<route>
 			<service name="Framebuffer"> <child name="fb_drv" /> </service>
@@ -144,7 +149,7 @@ append config_of_app {
 	</start>
 
 	<start name="vbox_pointer" priority="-1">
-		<resource name="RAM" quantum="1200K"/>
+		<resource name="RAM" quantum="2M"/>
 		<config>}
 
 for { set i 1} { $i <= $use_vms } { incr i} {
@@ -242,11 +247,11 @@ append config_of_app {
 
 for { set i 1} { $i <= $use_vms } { incr i} {
 	append config_of_app "
-	<start name=\"vbox${i}\" priority=\"-2\">"
+	<start name=\"vbox${i}\" priority=\"-2\" caps=\"600\">"
 	append_if [expr $use_vbox4] config_of_app "
 		<binary name=\"$virtualbox_binary\" />"
-	append_if [expr $use_vbox5] config_of_app {
-		<binary name="virtualbox5" />}
+	append_if [expr $use_vbox5] config_of_app "
+		<binary name=\"$virtualbox5_binary\" />"
 
 	append config_of_app {
 		<resource name="RAM" quantum="1280M"/>}
@@ -323,8 +328,11 @@ run_genode_until {\[init -\> vbox.*].*Guest Additions capability report:.*seamle
 if {$use_rumpfs} {
 	set wait_timeout 170
 	for { set i 1 } { $i <= $use_vms } { incr i } {
-		run_genode_until {\[init -\> vbox.*].*Guest Additions capability report:.*seamless: yes, hostWindowMapping: no, graphics: yes} $wait_timeout [output_spawn_id]
-		set wait_timeout 25
+		if { [string match "ubuntu*" $flavor] } {
+			run_genode_until {\[init -\> vbox.*].*Guest Additions capability report:.*seamless: yes, hostWindowMapping: no, graphics: no} $wait_timeout [output_spawn_id]
+		} else {
+			run_genode_until {\[init -\> vbox.*].*Guest Additions capability report:.*seamless: yes, hostWindowMapping: no, graphics: yes} $wait_timeout [output_spawn_id]
+		}
 	}
 } else {
 	run_genode_until {\[init\] child "vbox1" exited with exit value 0} 60 [output_spawn_id]

@@ -1,5 +1,5 @@
 proc binary_name_ld_lib_so { } { return "ld-hw.lib.so" }
-proc binary_name_core_o    { } { return "hw/core.o"    }
+proc binary_name_core_o    { } { return "core-hw.o"    }
 proc binary_name_timer     { } { return "hw_timer_drv" }
 
 
@@ -15,7 +15,7 @@ proc bootstrap_link_address { } {
 	if {[have_spec "arndale"]}    { return "0x80000000" }
 	if {[have_spec "panda"]}      { return "0x81000000" }
 	if {[have_spec "zynq"]}       { return "0x00100000" }
-	if {[have_spec "riscv"]}      { return "0x00000200" }
+	if {[have_spec "riscv"]}      { return "0x81000000" }
 	if {[have_spec "rpi"]}        { return "0x00800000" }
 
 	puts "unknown platform no linker address known"
@@ -41,30 +41,58 @@ proc run_boot_dir {binaries} {
 		close $fh
 	}
 
-	build { lib/ld/hw bootstrap }
+	#
+	# Build bootstrap, the core object, and the dynamic linker on demand
+	#
+	# If those parts were imported from the depot, the build step is skipped.
+	#
+	set bootstrap_arg ""
+	set core_arg      ""
+	set ld_arg        ""
 
-	# boot module list without core
+	if {![file exists [run_dir]/genode/ld.lib.so]}      { set ld_arg        lib/ld/hw    }
+	if {![file exists [run_dir]/genode/core-hw.o]}      { set core_arg      core/hw      }
+	if {![file exists [run_dir]/genode/bootstrap-hw.o]} { set bootstrap_arg bootstrap/hw }
+
+	set build_args "$bootstrap_arg $core_arg $ld_arg"
+	if {[llength $build_args]} { build $build_args }
+
+	if {$ld_arg        != ""} { file copy -force bin/ld-hw.lib.so   [run_dir]/genode/ld.lib.so }
+	if {$core_arg      != ""} { file copy -force bin/core-hw.o      [run_dir]/genode/core-hw.o }
+	if {$bootstrap_arg != ""} { file copy -force bin/bootstrap-hw.o [run_dir]/genode/bootstrap-hw.o }
+
+	#
+	# Copy specified modules to the run directory, excluding core.
+	#
 	set idx [lsearch $binaries "core"]
 	set modules [lreplace $binaries $idx $idx]
-
-	# strip binaries
-	copy_and_strip_genode_binaries_to_run_dir $modules
-	lappend modules "config"
+	copy_genode_binaries_to_run_dir $modules
 
 	puts "core link address is [core_link_address]"
 
-	set core_obj core/hw/core.o
-	set bootstrap_obj bootstrap/hw/bootstrap.o
+	set core_obj      core-hw.o
+	set bootstrap_obj bootstrap-hw.o
 
 	# create core and bootstrap binary without modules for debugging
-	build_core $core_obj      {} [run_dir].core      [core_link_address]
-	build_core $bootstrap_obj {} [run_dir].bootstrap [bootstrap_link_address]
+	build_core debug/$core_obj                 {} [run_dir].core      [core_link_address]
+	build_core [run_dir]/genode/$bootstrap_obj {} [run_dir].bootstrap [bootstrap_link_address]
+
+	# determine modules to be incorporated into the core image
+	set modules [glob -tails -directory [run_dir]/genode/ *]
+	set excluded_modules {}
+	lappend excluded_modules $core_obj $bootstrap_obj
+	foreach excluded $excluded_modules {
+		set modules [lsearch -inline -not -all $modules $excluded] }
+
+	# check syntax of all boot modules named *.config
+	foreach file [glob -nocomplain [run_dir]/genode/*.config] {
+		check_xml_syntax $file }
 
 	# create core binary containing the boot modules
-	build_core $core_obj $modules [run_dir]/genode/core.elf [core_link_address]
+	build_core [run_dir]/genode/$core_obj $modules [run_dir]/genode/core.elf [core_link_address]
 	exec [cross_dev_prefix]strip [run_dir]/genode/core.elf
-	build_core $bootstrap_obj { core.elf } [run_dir]/image.elf [bootstrap_link_address]
-	exec rm -f [run_dir]/genode/core.elf
+	build_core [run_dir]/genode/$bootstrap_obj { core.elf } [run_dir]/image.elf [bootstrap_link_address]
+	exec rm -fr [run_dir]/genode
 	exec [cross_dev_prefix]strip [run_dir]/image.elf
 
 	if {[have_include "image/iso"] || [have_include "image/disk"]} {
@@ -102,7 +130,7 @@ proc run_boot_dir {binaries} {
 		}
 	}
 
-	if {[have_spec x86] && ![have_spec muen] && [have_include "load/tftp"]} {
+	if {[have_spec x86] && [have_include "load/tftp"]} {
 		#
 		# Install PXE bootloader pulsar
 		#
@@ -112,8 +140,14 @@ proc run_boot_dir {binaries} {
 		# Generate pulsar config file
 		#
 		set fh [open "[run_dir]/config-52-54-00-12-34-56" "WRONLY CREAT TRUNC"]
-		puts $fh " exec /boot/bender"
-		puts $fh " load /image.elf"
+		if {[have_spec "muen"]} {
+			exec gzip [run_dir]/image.bin
+			puts $fh " exec /boot/unzip"
+			puts $fh " load /image.bin.gz"
+		} else {
+			puts $fh " exec /boot/bender"
+			puts $fh " load /image.elf"
+		}
 		close $fh
 
 		generate_tftp_config
@@ -129,17 +163,26 @@ proc run_boot_dir {binaries} {
 		if {[have_spec "muen"]} {
 			puts $fh "kernel image.bin"
 		} else {
+			install_pxe_bootloader_to_run_dir
 			puts $fh "kernel boot/bender"
 			puts $fh "module image.elf"
-
-			#
-			# Install bender
-			#
-			install_bender_to_run_dir
 		}
 		puts $fh "boot"
 		close $fh
 
 		update_ipxe_boot_dir
 	}
+}
+
+
+##
+# Base source archive within depot
+#
+proc base_src { } {
+
+	if {[have_spec x86_64]} { return base-hw-pc }
+	if {[have_spec pbxa9]}  { return base-hw-pbxa9 }
+
+	puts stderr "base-hw kernel does not support this build configuration"
+	exit 1
 }

@@ -81,10 +81,10 @@ class Regulator::Root :
 			size_t session_size = max((size_t)4096,
 			                          sizeof(Session_component));
 			if (ram_quota < session_size)
-				throw Root::Quota_exceeded();
+				throw Insufficient_ram_quota();
 
 			if (!strlen(reg_name))
-				throw Root::Invalid_args();
+				throw Service_denied();
 
 			return new (md_alloc())
 				Session_component(regulator_id_by_name(reg_name),

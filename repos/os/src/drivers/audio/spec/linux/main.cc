@@ -212,7 +212,7 @@ struct Audio_out::Root_policy
 		    (sizeof(Stream) > ram_quota - session_size)) {
 			Genode::error("insufficient 'ram_quota', got ", ram_quota,
 			              " need ", sizeof(Stream) + session_size);
-			throw ::Root::Quota_exceeded();
+			throw Genode::Insufficient_ram_quota();
 		}
 
 		char channel_name[16];
@@ -221,9 +221,9 @@ struct Audio_out::Root_policy
 		                                             sizeof(channel_name),
 		                                             "left");
 		if (!channel_number_from_string(channel_name, &channel_number))
-			throw ::Root::Invalid_args();
+			throw Genode::Service_denied();
 		if (Audio_out::channel_acquired[channel_number])
-			throw ::Root::Unavailable();
+			throw Genode::Service_denied();
 	}
 
 	void release() { }

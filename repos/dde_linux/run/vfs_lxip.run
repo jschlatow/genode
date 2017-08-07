@@ -16,15 +16,13 @@ build $build_components
 
 create_boot_directory
 
-set config {
+append config {
 <config verbose="yes">
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
-		<service name="CAP"/>
 		<service name="PD"/>
 		<service name="RM"/>
 		<service name="CPU"/>
@@ -34,12 +32,14 @@ set config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 	<start name="timer">
 		<resource name="RAM" quantum="1M"/>
 		<provides> <service name="Timer"/> </provides>
 	</start>
 	<start name="nic_drv">
-		<resource name="RAM" quantum="2M"/>
+		<binary name="} [nic_drv_binary] {"/>
+		<resource name="RAM" quantum="8M"/>
 		<provides> <service name="Nic"/> </provides>
 	</start>
 <!--
@@ -60,17 +60,16 @@ set config {
 	</start>
 -->
 	<!-- use telnet on the client to connect to the test component -->
-	<start name="test-vfs_lxip">
+	<start name="test-vfs_lxip" caps="200">
 		<resource name="RAM" quantum="48M"/>
 		<config>
-			<libc stdout="/dev/log" stderr="/dev/log">
-				<vfs>
-					<dir name="dev"> <log/> </dir>
-					<dir name="socket">
-						<lxip ip_addr="10.0.2.55" netmask="255.255.255.0" gateway="10.0.2.1" nameserver="8.8.8.8"/>
-					</dir>
-				</vfs>
-			</libc>
+			<vfs>
+				<dir name="dev"> <log/> </dir>
+				<dir name="socket">
+					<lxip ip_addr="10.0.2.55" netmask="255.255.255.0" gateway="10.0.2.1" nameserver="8.8.8.8"/>
+				</dir>
+			</vfs>
+			<libc stdout="/dev/log" stderr="/dev/log"/>
 		</config>
 	</start>
 <!--
@@ -88,10 +87,9 @@ append config {
 
 install_config $config
 
-set boot_modules {
-	core init timer
-	nic_drv
-	ld.lib.so libc.lib.so libc_lock_pipe.lib.so
+append boot_modules {
+	core init timer } [nic_drv_binary] {
+	ld.lib.so libc.lib.so libc_lock_pipe.lib.so posix.lib.so
 	libm.lib.so
 	vfs_lxip.lib.so lxip.lib.so
 	tcp_terminal

@@ -36,7 +36,8 @@ struct Test::Policy
 	Policy(Env &env, Name const &name)
 	:
 		Slave::Policy(name, name, *this, env.ep().rpc_ep(), env.rm(),
-		              env.ram_session_cap(), 1024*1024)
+		              env.pd(),  env.pd_session_cap(),
+		              Cap_quota{100}, Ram_quota{1024*1024})
 	{ }
 };
 

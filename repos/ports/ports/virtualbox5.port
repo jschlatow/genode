@@ -1,17 +1,17 @@
 LICENSE         := GPLv2
-VERSION         := 5.1.10
+VERSION         := 5.1.22
 DOWNLOADS       := virtualbox.archive virtualbox_sdk.archive
 
 VIRTUALBOX_TBZ2    := VirtualBox-$(VERSION).tar.bz2
-VIRTUALBOX_SDK_ZIP := VirtualBoxSDK-$(VERSION)-112026.zip
+VIRTUALBOX_SDK_ZIP := VirtualBoxSDK-$(VERSION)-115126.zip
 
 URL(virtualbox) := http://download.virtualbox.org/virtualbox/$(VERSION)/$(VIRTUALBOX_TBZ2)
 DIR(virtualbox) := src/app/virtualbox
-SHA(virtualbox) := 041b0cf8f7fe292da34fc520eaa2c8894e76c7fe
+SHA(virtualbox) := 57e6f73f62af7d5ddb670972ba0417b6fcb43950
 
 URL(virtualbox_sdk) := http://download.virtualbox.org/virtualbox/$(VERSION)/$(VIRTUALBOX_SDK_ZIP)
 DIR(virtualbox_sdk) := src/app/virtualbox_sdk
-SHA(virtualbox_sdk) := d6262eb7d897030ffdcd2622ec01535ed34db4dd
+SHA(virtualbox_sdk) := 21b45da69214b32cf7f7115ef53e0c1d77ae2434
 
 PATCHES_DIR       := src/virtualbox5/patches
 PATCHES_DIR_VBOX4 := src/virtualbox/patches
@@ -64,7 +64,7 @@ VBOX_MAIN_INC += MediumLock MouseImpl NATEngineImpl NATNetworkImpl
 VBOX_MAIN_INC += NetworkAdapterImpl NetworkServiceRunner
 VBOX_MAIN_INC += objectslist ObjectState
 VBOX_MAIN_INC += ParallelPortImpl PCIDeviceAttachmentImpl Performance
-VBOX_MAIN_INC += ProgressImpl ProgressProxyImpl SnapshotImpl
+VBOX_MAIN_INC += ProgressImpl ProgressProxyImpl QMTranslator SnapshotImpl
 VBOX_MAIN_INC += SecretKeyStore SerialPortImpl SessionImpl SharedFolderImpl
 VBOX_MAIN_INC += StorageControllerImpl SystemPropertiesImpl TokenImpl VMMDev
 VBOX_MAIN_INC += UsbWebcamInterface
@@ -79,6 +79,7 @@ VBOX_MAIN_INC += ThreadTask USBProxyBackend
 VBOX_SRC_VBOX := VMM Devices Runtime GuestHost/HGSMI Storage Disassembler
 VBOX_SRC_VBOX += HostServices/SharedFolders Main/xml/Settings.cpp
 VBOX_SRC_VBOX += HostServices/SharedClipboard
+VBOX_SRC_VBOX += HostServices/GuestProperties
 VBOX_SRC_VBOX += Main/xml/VirtualBox-settings.xsd Main/xml/SchemaDefs.xsl
 VBOX_SRC_VBOX += Main/idl/docstrip.xsl Main/idl/VirtualBox.xidl
 VBOX_SRC_VBOX += Main/idl/apiwrap-server.xsl
@@ -106,7 +107,7 @@ VBOX_CONTENT += $(addprefix include/VBox/, $(VBOX_INC))
 VBOX_CONTENT += $(addprefix include/VBox/com/, $(VBOX_INC_COM))
 VBOX_CONTENT += include/VBox/HostServices/
 
-VBOX_CONTENT += src/libs/zlib-1.2.8 src/libs/liblzf-3.4 src/libs/libxml2-2.9.2
+VBOX_CONTENT += src/libs/zlib-1.2.8 src/libs/liblzf-3.4 src/libs/libxml2-2.9.4
 VBOX_CONTENT += src/recompiler include/VBox/vmm include/iprt Config.kmk
 
 
@@ -119,41 +120,41 @@ UNZIP_OPT(virtualbox_sdk) := $(VIRTUALBOX_SDK_ZIP) sdk/bindings/xpcom/include/Vi
 
 default : additional_steps
 additional_steps : $(DOWNLOADS)
-	@xsltproc --stringparam mode declare \
+	$(VERBOSE)xsltproc --stringparam mode declare \
 	   -o src/app/virtualbox/src/VBox/Main/xml/SchemaDefs.h \
 	   src/app/virtualbox/src/VBox/Main/xml/SchemaDefs.xsl \
 	   src/app/virtualbox/src/VBox/Main/xml/VirtualBox-settings.xsd
-	xsltproc -o VirtualBox_stripped.xidl \
+	$(VERBOSE)xsltproc -o VirtualBox_stripped.xidl \
 	   src/app/virtualbox/src/VBox/Main/idl/docstrip.xsl \
 	   src/app/virtualbox/src/VBox/Main/idl/VirtualBox.xidl
-	xsltproc --stringparam KBUILD_HOST genode \
+	$(VERBOSE)xsltproc --stringparam KBUILD_HOST genode \
 	   --stringparam generating "headers" -o VBoxAPIWrap/apiwrappers-headers \
 	   src/app/virtualbox/src/VBox/Main/idl/apiwrap-server.xsl \
 	   VirtualBox_stripped.xidl
-	xsltproc --stringparam KBUILD_HOST genode \
+	$(VERBOSE)xsltproc --stringparam KBUILD_HOST genode \
 	   --stringparam generating "sources" --param reminder 0 \
 	   -o VBoxAPIWrap/apiwrappers-sources-even \
 	   src/app/virtualbox/src/VBox/Main/idl/apiwrap-server.xsl \
 	   VirtualBox_stripped.xidl
-	xsltproc --stringparam KBUILD_HOST genode \
+	$(VERBOSE)xsltproc --stringparam KBUILD_HOST genode \
 	   --stringparam generating "sources" --param reminder 1 \
 	   -o VBoxAPIWrap/apiwrappers-sources-odd \
 	   src/app/virtualbox/src/VBox/Main/idl/apiwrap-server.xsl \
 	   VirtualBox_stripped.xidl
-	mkdir -p src/app/virtualbox/VBoxAPIWrap
-	csplit -s -n 1 -f "VBoxAPIWrap/xx" VBoxAPIWrap/apiwrappers-headers '/##### ENDFILE.*$$/' '{*}' && \
+	$(VERBOSE)mkdir -p src/app/virtualbox/VBoxAPIWrap
+	$(VERBOSE)csplit -s -n 1 -f "VBoxAPIWrap/xx" VBoxAPIWrap/apiwrappers-headers '/##### ENDFILE.*$$/' '{*}' && \
 	i=0 && \
 	for f in $$(grep "BEGINFILE \"" VBoxAPIWrap/apiwrappers-headers | sed "s,//.*BEGINFILE \",,g" | sed "s,\",,g"); do \
 		mv "VBoxAPIWrap/xx$$((i++))" "src/app/virtualbox/VBoxAPIWrap/$$f"; \
 	done && \
 	rm "VBoxAPIWrap/xx$$((i))"
-	csplit -s -n 1 -f "VBoxAPIWrap/xx" VBoxAPIWrap/apiwrappers-sources-even '/##### ENDFILE.*$$/' '{*}' && \
+	$(VERBOSE)csplit -s -n 1 -f "VBoxAPIWrap/xx" VBoxAPIWrap/apiwrappers-sources-even '/##### ENDFILE.*$$/' '{*}' && \
 	i=0 && \
 	for f in $$(grep "BEGINFILE \"" VBoxAPIWrap/apiwrappers-sources-even | sed "s,//.*BEGINFILE \",,g" | sed "s,\",,g"); do \
 		mv "VBoxAPIWrap/xx$$((i++))" "src/app/virtualbox/VBoxAPIWrap/$$f"; \
 	done && \
 	rm "VBoxAPIWrap/xx$$((i))"
-	csplit -s -n 1 -f "VBoxAPIWrap/xx" VBoxAPIWrap/apiwrappers-sources-odd '/##### ENDFILE.*$$/' '{*}' && \
+	$(VERBOSE)csplit -s -n 1 -f "VBoxAPIWrap/xx" VBoxAPIWrap/apiwrappers-sources-odd '/##### ENDFILE.*$$/' '{*}' && \
 	i=0 && \
 	for f in $$(grep "BEGINFILE \"" VBoxAPIWrap/apiwrappers-sources-odd | sed "s,//.*BEGINFILE \",,g" | sed "s,\",,g"); do \
 		mv "VBoxAPIWrap/xx$$((i++))" "src/app/virtualbox/VBoxAPIWrap/$$f"; \

@@ -58,11 +58,17 @@ struct Main
 
 			/* announce at parent */
 			env.parent().announce(ep.manage(root));
-		} catch (Genode::Parent::Service_denied) {
+		} catch (Genode::Service_denied) {
 			Genode::error("Could not connect to uplink NIC");
 		}
 	}
 };
 
 
-void Component::construct(Genode::Env &env) { static Main nic_bridge(env); }
+void Component::construct(Genode::Env &env)
+{
+	/* XXX execute constructors of global statics */
+	env.exec_static_constructors();
+
+	static Main nic_bridge(env);
+}

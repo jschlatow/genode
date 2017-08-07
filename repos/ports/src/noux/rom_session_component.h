@@ -31,7 +31,7 @@ struct Noux::Rom_dataspace_info : Dataspace_info
 
 	~Rom_dataspace_info() { }
 
-	Dataspace_capability fork(Ram_session        &,
+	Dataspace_capability fork(Ram_allocator      &,
 	                          Region_map         &,
 	                          Allocator          &alloc,
 	                          Dataspace_registry &ds_registry,
@@ -61,16 +61,6 @@ class Noux::Rom_session_component : public Rpc_object<Rom_session>
 	public:
 
 		typedef Child_policy::Name Name;
-
-		/**
-		 * Label of ROM session requested for the binary of a forked process
-		 *
-		 * In this case, the loading of the binary must be omitted because the
-		 * address space is replayed by the fork operation. Hence, requests for
-		 * such ROM modules are answered by an invalid dataspace, which is
-		 * handled in 'Child::Process'.
-		 */
-		static Name forked_magic_binary_name() { return "(forked)"; }
 
 	private:
 
@@ -110,9 +100,6 @@ class Noux::Rom_session_component : public Rpc_object<Rom_session>
 				_rom_from_vfs.construct(_root_dir, name);
 				return _rom_from_vfs->ds;
 			}
-
-			if (name == forked_magic_binary_name())
-				return Dataspace_capability();
 
 			_rom_from_parent.construct(env, name.string());
 			Dataspace_capability ds = _rom_from_parent->dataspace();

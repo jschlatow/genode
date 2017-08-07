@@ -24,7 +24,17 @@ namespace Input { struct Session; }
 
 struct Input::Session : Genode::Session
 {
+	/**
+	 * \noapi
+	 */
 	static const char *service_name() { return "Input"; }
+
+	/*
+	 * An input session consumes a dataspace capability for the server's
+	 * session-object allocation, a dataspace capability for the input
+	 * buffer, and its session capability.
+	 */
+	enum { CAP_QUOTA = 3 };
 
 	virtual ~Session() { }
 

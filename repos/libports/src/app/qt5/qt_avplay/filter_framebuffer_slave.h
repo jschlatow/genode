@@ -33,7 +33,6 @@ class Filter_framebuffer_slave
 			private Genode::Static_parent_services<Genode::Cpu_session,
 			                                       Genode::Log_session,
 			                                       Genode::Pd_session,
-			                                       Genode::Ram_session,
 			                                       Genode::Rom_session,
 			                                       Timer::Session>,
 			public Genode::Slave::Policy
@@ -46,12 +45,17 @@ class Filter_framebuffer_slave
 
 				Policy(Genode::Rpc_entrypoint         &entrypoint,
 				       Genode::Region_map             &rm,
-				       Genode::Ram_session_capability  ram,
+				       Genode::Pd_session             &ref_pd,
+				       Genode::Pd_session_capability   ref_pd_cap,
 				       Name const                     &name,
-				       size_t                          quota,
+				       size_t                          caps,
+				       size_t                          ram_quota,
 				       Framebuffer_service_factory    &framebuffer_service_factory)
 				:
-					Genode::Slave::Policy(name, name, *this, entrypoint, rm, ram, quota),
+					Genode::Slave::Policy(name, name, *this, entrypoint, rm,
+					                      ref_pd, ref_pd_cap,
+					                      Genode::Cap_quota{caps},
+					                      Genode::Ram_quota{ram_quota}),
 					_framebuffer_service_factory(framebuffer_service_factory)
 				{ }
 
@@ -75,15 +79,17 @@ class Filter_framebuffer_slave
 		/**
 		 * Constructor
 		 */
-		Filter_framebuffer_slave(Genode::Pd_session                &pd,
-		                         Genode::Region_map                &rm,
-		                         Genode::Ram_session_capability     ram,
+		Filter_framebuffer_slave(Genode::Region_map                &rm,
+		                         Genode::Pd_session                &ref_pd,
+		                         Genode::Pd_session_capability      ref_pd_cap,
 		                         Genode::Slave::Policy::Name const &name,
-		                         size_t                             quota,
+		                         size_t                             caps,
+		                         size_t                             ram_quota,
 		                         Framebuffer_service_factory       &framebuffer_service_factory)
 		:
-			_ep(&pd, _ep_stack_size, "filter_framebuffer_ep"),
-			_policy(_ep, rm, ram, name, quota, framebuffer_service_factory),
+			_ep(&ref_pd, _ep_stack_size, "filter_framebuffer_ep"),
+			_policy(_ep, rm, ref_pd, ref_pd_cap, name, caps, ram_quota,
+			        framebuffer_service_factory),
 			_child(rm, _ep, _policy)
 		{ }
 

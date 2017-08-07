@@ -26,7 +26,6 @@ install_config {
 <config>
 	<parent-provides>
 		<service name="ROM"/>
-		<service name="RAM"/>
 		<service name="IRQ"/>
 		<service name="IO_MEM"/>
 		<service name="IO_PORT"/>
@@ -38,6 +37,7 @@ install_config {
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
 	</default-route>
+	<default caps="100"/>
 	<start name="timer">
 		<resource name="RAM" quantum="1M"/>
 		<provides><service name="Timer"/></provides>
@@ -49,17 +49,17 @@ install_config {
 			<archive name="archive.tar"/>
 		</config>
 	</start>
-	<start name="init">
+	<start name="init" caps="1000">
 		<resource name="RAM" quantum="2M"/>
 		<config verbose="yes">
 			<parent-provides>
 				<service name="ROM"/>
 				<service name="CPU"/>
 				<service name="PD"/>
-				<service name="RAM"/>
 				<service name="LOG"/>
 				<service name="Timer"/>
 			</parent-provides>
+			<default caps="100"/>
 			<start name="test-timer">
 				<resource name="RAM" quantum="1M"/>
 				<route> <any-service> <parent/> </any-service> </route>
@@ -77,7 +77,7 @@ exec sh -c "cd bin; tar cfh archive.tar test-timer"
 
 build_boot_image "core ld.lib.so init timer tar_rom archive.tar"
 
-append qemu_args "-nographic -m 96"
+append qemu_args "-nographic "
 
 run_genode_until "--- timer test ---" 10
 

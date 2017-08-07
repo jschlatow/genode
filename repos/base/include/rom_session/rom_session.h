@@ -36,7 +36,17 @@ struct Genode::Rom_dataspace : Dataspace { };
 
 struct Genode::Rom_session : Session
 {
+	/**
+	 * \noapi
+	 */
 	static const char *service_name() { return "ROM"; }
+
+	/*
+	 * A ROM session consumes a dataspace capability for the session-object
+	 * allocation, a dataspace capability for the ROM dataspace, and its
+	 * session capability.
+	 */
+	enum { CAP_QUOTA = 3 };
 
 	typedef Rom_session_client Client;
 

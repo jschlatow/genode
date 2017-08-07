@@ -24,7 +24,6 @@ install_config {
 	<config>
 		<parent-provides>
 			<service name="ROM"/>
-			<service name="RAM"/>
 			<service name="CPU"/>
 			<service name="PD"/>
 			<service name="LOG"/>
@@ -32,6 +31,7 @@ install_config {
 		<default-route>
 			<any-service> <parent/> <any-child/> </any-service>
 		</default-route>
+		<default caps="100"/>
 		<start name="test-lx_hybrid_ctors">
 			<resource name="RAM" quantum="1M"/>
 		</start>

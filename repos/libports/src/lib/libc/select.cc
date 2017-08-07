@@ -234,8 +234,8 @@ _select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
 
 	{
 		/*
-		 * We use the guard directly to atomically check is any descripor is
-		 * ready, and insert into select-callback list otherwise.
+		 * We use the guard directly to atomically check if any descripor is
+		 * ready, but insert into select-callback list otherwise.
 		 */
 		Libc::Select_cb_list::Guard guard(select_cb_list);
 
@@ -262,7 +262,8 @@ _select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
 	{
 		timeval const *_tv;
 		bool    const  valid    { _tv != nullptr };
-		unsigned long  duration { valid ? _tv->tv_sec*1000 + _tv->tv_usec/1000 : 0UL };
+		unsigned long  duration {
+			valid ? (unsigned long)_tv->tv_sec*1000 + _tv->tv_usec/1000 : 0UL };
 
 		bool expired() const { return valid && duration == 0; };
 
@@ -380,7 +381,7 @@ int Libc::Select_handler_base::select(int nfds, fd_set &readfds,
 
 		/* suspend as we don't have any immediate events */
 
-		_select_cb->construct(nfds, readfds, writefds, exceptfds);
+		_select_cb->construct(nfds, in_readfds, in_writefds, in_exceptfds);
 
 		select_cb_list.unsynchronized_insert(&(**_select_cb));
 	}
