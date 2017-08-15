@@ -260,6 +260,7 @@ Cpu_session_component::Cpu_session_component(Rpc_entrypoint         *session_ep,
 	_trace_sources(trace_sources), _quota(quota), _ref(0),
 	_native_cpu(*this, args)
 {
+
 	Arg a = Arg_string::find_arg(args, "priority");
 	if (a.valid()) {
 		_priority = a.ulong_value(0);

@@ -213,7 +213,7 @@ class Genode::Trace::Subject
 			if (!source->try_acquire(this))
 				throw Traced_by_other_session();
 
-			source->trace(_policy.dataspace(), _buffer.dataspace());
+			source->trace(_policy.dataspace(), _buffer.dataspace(), size);
 		}
 
 		void pause()

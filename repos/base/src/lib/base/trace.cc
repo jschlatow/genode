@@ -129,14 +129,7 @@ bool Trace::Logger::_evaluate_control()
 }
 
 
-__attribute__((optimize("-fno-delete-null-pointer-checks")))
-void Trace::Logger::log(char const *msg, size_t len)
-{
-	if (!this || !_evaluate_control()) return;
 
-	memcpy(buffer->reserve(len), msg, len);
-	buffer->commit(len);
-}
 
 
 void Trace::Logger::init(Thread_capability thread, Cpu_session *cpu_session,
@@ -160,7 +153,12 @@ void Trace::Logger::init(Thread_capability thread, Cpu_session *cpu_session,
 }
 
 
-Trace::Logger::Logger() { }
+Trace::Logger::Logger() : 
+	Trace::Logger_base::Logger_base(),
+	policy_module(0),
+	cpu(nullptr),
+	pending_init(false)
+{ }
 
 
 /************

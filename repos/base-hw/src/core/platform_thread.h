@@ -51,13 +51,13 @@ namespace Genode {
 
 		enum { LABEL_MAX_LEN = 32 };
 
-		Platform_pd *            _pd;
-		Weak_ptr<Address_space>  _address_space  { };
-		Pager_object *           _pager;
-		Native_utcb *            _utcb_core_addr { }; /* UTCB addr in core */
-		Native_utcb *            _utcb_pd_addr;       /* UTCB addr in pd   */
-		Ram_dataspace_capability _utcb           { }; /* UTCB dataspace    */
-		char                     _label[LABEL_MAX_LEN];
+		Platform_pd *                 _pd;
+		Weak_ptr<Address_space>       _address_space { };
+		Pager_object *                _pager;
+		Native_utcb *                 _utcb_core_addr { }; /* UTCB addr in core */
+		Native_utcb *                 _utcb_pd_addr;       /* UTCB addr in pd   */
+		Ram_dataspace_capability      _utcb           { }; /* UTCB dataspace    */
+		char                          _label[LABEL_MAX_LEN];
 
 		/*
 		 * Wether this thread is the main thread of a program.

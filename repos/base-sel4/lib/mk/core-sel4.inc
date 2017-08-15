@@ -40,6 +40,7 @@ INC_DIR     += $(REP_DIR)/src/core/include $(GEN_CORE_DIR)/include \
                $(REP_DIR)/src/include      $(BASE_DIR)/src/include
 
 include $(GEN_CORE_DIR)/version.inc
+include $(GEN_CORE_DIR)/trace_core/disabled.inc
 
 vpath main.cc                      $(GEN_CORE_DIR)
 vpath pd_session_component.cc      $(GEN_CORE_DIR)

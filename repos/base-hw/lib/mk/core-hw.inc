@@ -65,6 +65,8 @@ SRC_CC += init_main_thread.cc
 SRC_CC += capability.cc
 SRC_CC += stack_area_addr.cc
 
+include $(BASE_DIR)/src/core/trace_core/enabled.inc
+
 # provide Genode version information
 include $(BASE_DIR)/src/core/version.inc
 

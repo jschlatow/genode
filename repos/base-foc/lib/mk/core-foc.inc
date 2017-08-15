@@ -46,6 +46,7 @@ INC_DIR     += $(REP_DIR)/src/core/include \
                $(BASE_DIR)/src/include
 
 include $(GEN_CORE_DIR)/version.inc
+include $(GEN_CORE_DIR)/trace_core/disabled.inc
 
 vpath stack_area.cc               $(GEN_CORE_DIR)
 vpath core_log.cc                 $(GEN_CORE_DIR)

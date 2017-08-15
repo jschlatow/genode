@@ -46,6 +46,7 @@ LD_SCRIPT_STATIC  = $(BASE_DIR)/src/ld/genode.ld \
                     $(call select_from_repositories,src/ld/stack_area.ld)
 
 include $(GEN_CORE_DIR)/version.inc
+include $(GEN_CORE_DIR)/trace_core/disabled.inc
 
 vpath main.cc                     $(GEN_CORE_DIR)
 vpath pd_session_component.cc     $(GEN_CORE_DIR)

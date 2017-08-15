@@ -48,6 +48,7 @@ INC_DIR     += $(REP_DIR)/src/core/include \
 LIBS        += base-fiasco-common syscall-fiasco cxx
 
 include $(GEN_CORE_DIR)/version.inc
+include $(GEN_CORE_DIR)/trace_core/disabled.inc
 
 vpath main.cc                     $(GEN_CORE_DIR)
 vpath pd_session_component.cc     $(GEN_CORE_DIR)

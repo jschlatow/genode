@@ -21,27 +21,46 @@ namespace Genode { namespace Trace {
 
 	class Control;
 	class Policy_module;
+	class Logger_base;
 	class Logger;
+	class Core_Logger;
 } }
+
+
+
+
+struct Genode::Trace::Logger_base
+{
+	
+	protected:
+
+		Control    *control         { nullptr };
+		bool        enabled         { false };
+		unsigned    policy_version  { 0 };
+		Buffer     *buffer          { nullptr };
+		size_t      max_event_size  { 0 };
+
+	public:
+
+		Logger_base() { }
+
+		bool initialized() { return control != 0; }
+
+};
+
 
 
 /**
  * Facility for logging events to a thread-specific buffer
  */
-struct Genode::Trace::Logger
+struct Genode::Trace::Logger : Genode::Trace::Logger_base
 {
 	private:
 
-		Thread_capability  thread_cap     { };
-		Cpu_session       *cpu            { nullptr };
-		Control           *control        { nullptr };
-		bool               enabled        { false };
-		unsigned           policy_version { 0 };
-		Policy_module     *policy_module  { 0 };
-		Buffer            *buffer         { nullptr };
-		size_t             max_event_size { 0 };
-		bool               pending_init   { false };
-
+		Policy_module     *policy_module { nullptr };
+		Thread_capability  thread_cap    { };
+		Cpu_session       *cpu           { nullptr };
+		bool               pending_init  { false };
 		bool _evaluate_control();
 
 		/*
@@ -54,8 +73,6 @@ struct Genode::Trace::Logger
 
 		Logger();
 
-		bool initialized() { return control != 0; }
-
 		bool init_pending() { return pending_init; }
 
 		void init_pending(bool val) { pending_init = val; }
@@ -65,7 +82,17 @@ struct Genode::Trace::Logger
 		/**
 		 * Log binary data to trace buffer
 		 */
-		void log(char const *, size_t);
+		__attribute__((optimize("-fno-delete-null-pointer-checks")))
+		void log(char const *msg, size_t len)
+		{
+			
+			if (!this || !_evaluate_control()) return;
+
+			memcpy(buffer->reserve(len), msg, len);
+			buffer->commit(len);
+		}
+
+
 
 		/**
 		 * Log event to trace buffer
@@ -74,10 +101,12 @@ struct Genode::Trace::Logger
 		__attribute__((optimize("-fno-delete-null-pointer-checks")))
 		void log(EVENT const *event)
 		{
-			if (!this || !_evaluate_control()) return;
 
+			if (!this || !_evaluate_control()) return;
+			
 			buffer->commit(event->generate(*policy_module, buffer->reserve(max_event_size)));
 		}
+
 };
 
 #endif /* _INCLUDE__BASE__TRACE__LOGGER_H_ */

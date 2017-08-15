@@ -14,6 +14,7 @@
 #ifndef _CORE__INCLUDE__TRACE__SOURCE_REGISTRY_H_
 #define _CORE__INCLUDE__TRACE__SOURCE_REGISTRY_H_
 
+#include <dataspace/capability.h>
 #include <util/list.h>
 #include <util/string.h>
 #include <base/lock.h>
@@ -73,6 +74,7 @@ class Genode::Trace::Source
 		Control             &_control;
 		Dataspace_capability _policy { };
 		Dataspace_capability _buffer { };
+		size_t               _size { 0 };
 		Source_owner  const *_owner = nullptr;
 
 		static unsigned _alloc_unique_id();
@@ -102,10 +104,11 @@ class Genode::Trace::Source
 
 		Info const info() const { return _info.trace_source_info(); }
 
-		void trace(Dataspace_capability policy, Dataspace_capability buffer)
+		void trace(Dataspace_capability policy, Dataspace_capability buffer, size_t size=0)
 		{
 			_buffer = buffer;
 			_policy = policy;
+			_size = size;
 			_control.trace();
 		}
 
@@ -131,6 +134,8 @@ class Genode::Trace::Source
 
 		bool error()   const { return _control.has_error(); }
 		bool enabled() const { return _control.enabled(); }
+
+		size_t size() { return _size; }
 
 
 		/***********************************

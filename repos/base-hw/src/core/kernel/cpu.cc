@@ -20,6 +20,7 @@
 #include <kernel/pd.h>
 #include <pic.h>
 #include <hw/assert.h>
+#include <trace/trace_core.h>
 
 /* base-internal includes */
 #include <base/internal/unmanaged_singleton.h>
@@ -179,6 +180,8 @@ Cpu_job & Cpu::schedule()
 	_timer.set_timeout(this, quota);
 
 	_timer.schedule_timeout();
+
+	Genode::Trace::Job_process trace_event((unsigned int)&new_job, (unsigned int)&old_job);
 
 	/* return new job */
 	return new_job;

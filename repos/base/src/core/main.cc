@@ -40,6 +40,10 @@
 #include <trace/root.h>
 #include <platform_services.h>
 
+namespace Genode { namespace Trace {
+	void init();
+} }
+
 using namespace Genode;
 
 
@@ -220,6 +224,7 @@ namespace Genode {
 }
 
 
+
 int main()
 {
 	/**
@@ -306,6 +311,11 @@ int main()
 
 	log("", init_ram_quota.value / (1024*1024), " MiB RAM and ", init_cap_quota, " caps "
 	    "assigned to init");
+
+
+
+	/* Enable the core-tracing: Init the core tracing_unit */
+	Trace::init();
 
 	static Reconstructible<Core_child>
 		init(services, local_rm,  core_pd,  core_pd_cap, core_cpu, core_cpu_cap,

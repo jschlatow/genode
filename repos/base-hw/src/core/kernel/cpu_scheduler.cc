@@ -33,6 +33,7 @@ void Cpu_scheduler::_next_round()
 {
 	_residual = _quota;
 	_for_each_prio([&] (unsigned const p) { _reset_claims(p); });
+
 }
 
 

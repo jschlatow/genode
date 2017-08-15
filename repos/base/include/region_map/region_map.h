@@ -132,6 +132,10 @@ struct Genode::Region_map : Interface
 	                             size_t size = 0, off_t offset = 0) {
 		return attach(ds, size, offset, true, local_addr, true); }
 
+
+	Local_addr attach_non_local_address_executable(Dataspace_capability ds) {
+		return attach(ds, 0, 0, false, 0, true); }
+
 	/**
 	 * Remove region from local address space
 	 */
