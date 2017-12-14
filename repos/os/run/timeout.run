@@ -3,24 +3,67 @@
 #
 
 #
-# Do not run on QEMU as its time emulation is not precise enough
+# Wether the platform allows for timeouts that trigger with a precision < 50 milliseconds
 #
-if {[get_cmd_switch --autopilot] && [have_include "power_on/qemu"]} {
-	puts "\nRunning timeout test in autopilot on Qemu is not recommended.\n"
-	exit 0
+proc precise_timeouts { } {
+
+	#
+	# On QEMU, NOVA uses the pretty unstable TSC emulation as primary time source.
+	#
+	if {[have_include "power_on/qemu"] && [have_spec nova]} { return false }
+	return true
 }
 
 #
-# Do not run on ARM with kernels other than HW
+# Wether the platform allows for a timestamp that has a precision < 1 millisecond
 #
-# The ARM performance counter has no reliable frequency as the ARM idle command
-# (often called on idle) halts the counter. Only on the HW kernel we have a syscall
-# that enables us to avoid the use of the performance counter by reading the kernel
-# time instead.
+proc precise_time { } {
+
+	#
+	# On QEMU, timing is not stable enough for microseconds precision
+	#
+	if {[have_include "power_on/qemu"]} { return false }
+
+	#
+	# On ARM, we do not have a component-local time source in hardware. The ARM
+	# performance counter has no reliable frequency as the ARM idle command
+	# halts the counter. Thus, we do not use local time interpolation on ARM.
+	# Except we're on the HW kernel. In this case we can read out the kernel
+	# time instead.
+	#
+	if {[expr [have_spec arm] && ![have_spec hw]]} { return false }
+
+	#
+	# On x86 64 bit with SeL4, the test needs around 80MB that must be
+	# completely composed of 4KB-pages due to current limitations of the SeL4
+	# port. Thus, Core must flush the page table caches pretty often during
+	# the test which is an expensive high-prior operation and makes it
+	# impossible to provide a highly precise time.
+	#
+	if {[have_spec x86_64] && [have_spec sel4]} { return false }
+
+	#
+	# Older x86 machines do not have an invariant timestamp
+	#
+	if {[have_spec x86] && ![have_spec hw]} { return dynamic }
+
+	return true
+}
+
 #
-if {[expr [have_spec arm] && ![have_spec hw]]} {
-	puts "\n Run script is not supported on this platform.\n";
-	exit 0
+# Wether the platform allows for a 'Timer::Connection::elapsed_ms'
+# implementation that has a precision < 2 ms
+#
+proc precise_ref_time { } {
+
+	#
+	# On Fiasco and Fiasco.OC, that use kernel timing, 'elapsed_ms' is
+	# pretty inprecise/unsteady (up to 3 ms deviation) for a reason that
+	# is not clearly determined yet. So, on these platforms, our locally
+	# interpolated time seems to be fine but the reference time is bad.
+	#
+	if {[have_spec foc] || [have_spec fiasco]} { return false }
+	return true
 }
 
 build "core init drivers/platform drivers/timer test/timeout test/cpufreq"
@@ -31,8 +74,8 @@ build "core init drivers/platform drivers/timer test/timeout test/cpufreq"
 
 create_boot_directory
 
-install_config {
-	<config>
+append config {
+	<config prio_levels="2">
 		<parent-provides>
 			<service name="ROM"/>
 			<service name="IRQ"/>
@@ -51,12 +94,17 @@ install_config {
 			<resource name="RAM" quantum="10M"/>
 			<provides><service name="Timer"/></provides>
 		</start>
-		<start name="test">
+		<start name="test" priority="-1">
 			<binary name="test-timeout"/>
 			<resource name="RAM" quantum="250M"/>
+			<config precise_time="} [precise_time] {"
+			        precise_ref_time="} [precise_ref_time] {"
+			        precise_timeouts="} [precise_timeouts] {"/>
 		</start>
 	</config>
 }
+
+install_config $config
 
 build_boot_image "core ld.lib.so init timer test-timeout"
 

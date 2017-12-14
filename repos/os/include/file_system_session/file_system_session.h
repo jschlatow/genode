@@ -23,10 +23,39 @@
 
 namespace File_system {
 
-	struct Node_handle;
-	struct File_handle;
-	struct Dir_handle;
-	struct Symlink_handle;
+	struct Node
+	{
+		typedef Genode::Id_space<Node>::Id Id;
+	};
+
+	struct File : Node
+	{
+		struct Id : Node::Id
+		{
+			explicit Id(unsigned long value) : Node::Id { value } { };
+		};
+	};
+
+	struct Directory : Node
+	{
+		struct Id : Node::Id
+		{
+			explicit Id(unsigned long value) : Node::Id { value } { };
+		};
+	};
+
+	struct Symlink : Node
+	{
+		struct Id : Node::Id
+		{
+			explicit Id(unsigned long value) : Node::Id { value } { };
+		};
+	};
+
+	typedef Node::Id      Node_handle;
+	typedef File::Id      File_handle;
+	typedef Directory::Id Dir_handle;
+	typedef Symlink::Id   Symlink_handle;
 
 	using Genode::size_t;
 
@@ -76,60 +105,38 @@ namespace File_system {
 	class No_space            : Exception { };
 	class Not_empty           : Exception { };
 	class Permission_denied   : Exception { };
+	class Unavailable         : Exception { };
 
 	struct Session;
 }
-
-
-struct File_system::Node_handle
-{
-	unsigned long value;
-
-	Node_handle() : value(~0UL) { }
-	Node_handle(int v) : value(v) { }
-
-	bool valid() const { return value != ~0UL; }
-
-	bool operator == (Node_handle const &other) const { return other.value == value; }
-	bool operator != (Node_handle const &other) const { return other.value != value; }
-
-};
-
-
-struct File_system::File_handle : Node_handle
-{
-	File_handle() { }
-	File_handle(unsigned long v) : Node_handle(v) { }
-};
-
-
-struct File_system::Dir_handle : Node_handle
-{
-	Dir_handle() { }
-	Dir_handle(unsigned long v) : Node_handle(v) { }
-};
-
-
-struct File_system::Symlink_handle : Node_handle
-{
-	Symlink_handle() { }
-	Symlink_handle(unsigned long v) : Node_handle(v) { }
-};
 
 
 class File_system::Packet_descriptor : public Genode::Packet_descriptor
 {
 	public:
 
-		enum Opcode { READ, WRITE, CONTENT_CHANGED, READ_READY };
+		enum Opcode {
+			READ,
+			WRITE,
+			CONTENT_CHANGED,
+			READ_READY,
+
+			/**
+			 * Synchronize file system
+			 *
+			 * This is only needed by file systems that maintain an internal
+			 * cache, which needs to be flushed on certain occasions.
+			 */
+			SYNC
+		};
 
 	private:
 
-		Node_handle _handle;   /* node handle */
-		Opcode      _op;       /* requested operation */
-		seek_off_t  _position; /* file seek offset in bytes */
-		size_t      _length;   /* transaction length in bytes */
-		bool        _success;  /* indicates success of operation */
+		Node_handle _handle { 0 };   /* node handle */
+		Opcode      _op;             /* requested operation */
+		seek_off_t  _position;       /* file seek offset in bytes */
+		size_t      _length;         /* transaction length in bytes */
+		bool        _success;        /* indicates success of operation */
 
 	public:
 
@@ -139,7 +146,7 @@ class File_system::Packet_descriptor : public Genode::Packet_descriptor
 		Packet_descriptor(Genode::off_t  buf_offset = 0,
 		                  Genode::size_t buf_size   = 0)
 		:
-			Genode::Packet_descriptor(buf_offset, buf_size), _handle(-1),
+			Genode::Packet_descriptor(buf_offset, buf_size),
 			_op(READ), _position(0), _length(0), _success(false) { }
 
 		/**
@@ -261,7 +268,7 @@ struct File_system::Session : public Genode::Session
 	 */
 	static const char *service_name() { return "File_system"; }
 
-	enum { CAP_QUOTA = 5 };
+	enum { CAP_QUOTA = 12 };
 
 	virtual ~Session() { }
 
@@ -282,6 +289,7 @@ struct File_system::Session : public Genode::Session
 	 * \throw Out_of_ram           server cannot allocate metadata
 	 * \throw Out_of_caps
 	 * \throw Permission_denied
+	 * \throw Unavailable          directory vanished
 	 */
 	virtual File_handle file(Dir_handle, Name const &name, Mode, bool create) = 0;
 
@@ -297,6 +305,7 @@ struct File_system::Session : public Genode::Session
 	 * \throw Out_of_ram           server cannot allocate metadata
 	 * \throw Out_of_caps
 	 * \throw Permission_denied
+	 * \throw Unavailable          directory vanished
 	 */
 	virtual Symlink_handle symlink(Dir_handle, Name const &name, bool create) = 0;
 
@@ -330,16 +339,24 @@ struct File_system::Session : public Genode::Session
 
 	/**
 	 * Close file
+	 *
+	 * \throw Invalid_handle   node handle is invalid
 	 */
 	virtual void close(Node_handle) = 0;
 
 	/**
 	 * Request information about an open file or directory
+	 *
+	 * \throw Invalid_handle   node handle is invalid
+	 * \throw Unavailable      node vanished
 	 */
 	virtual Status status(Node_handle) = 0;
 
 	/**
 	 * Set information about an open file or directory
+	 *
+	 * \throw Invalid_handle   node handle is invalid
+	 * \throw Unavailable      node vanished
 	 */
 	virtual void control(Node_handle, Control) = 0;
 
@@ -352,6 +369,7 @@ struct File_system::Session : public Genode::Session
 	 * \throw Not_empty          argument is a non-empty directory and
 	 *                           the backend does not support recursion
 	 * \throw Permission_denied
+	 * \throw Unavailable        directory vanished
 	 */
 	virtual void unlink(Dir_handle dir, Name const &name) = 0;
 
@@ -361,6 +379,7 @@ struct File_system::Session : public Genode::Session
 	 * \throw Invalid_handle     node handle is invalid
 	 * \throw No_space           new size exceeds free space
 	 * \throw Permission_denied  node modification not allowed
+	 * \throw Unavailable        node vanished
 	 */
 	virtual void truncate(File_handle, file_size_t size) = 0;
 
@@ -371,17 +390,10 @@ struct File_system::Session : public Genode::Session
 	 * \throw Invalid_name       'to' contains invalid characters
 	 * \throw Lookup_failed      'from' not found
 	 * \throw Permission_denied  node modification not allowed
+	 * \throw Unavailable        a directory vanished
 	 */
 	virtual void move(Dir_handle, Name const &from,
 	                  Dir_handle, Name const &to) = 0;
-
-	/**
-	 * Synchronize file system
-	 *
-	 * This is only needed by file systems that maintain an internal
-	 * cache, which needs to be flushed on certain occasions.
-	 */
-	virtual void sync(Node_handle) { }
 
 
 	/*******************
@@ -393,13 +405,13 @@ struct File_system::Session : public Genode::Session
 	                 GENODE_TYPE_LIST(Invalid_handle, Invalid_name,
 	                                  Lookup_failed, Node_already_exists,
 	                                  No_space, Out_of_ram, Out_of_caps,
-	                                  Permission_denied),
+	                                  Permission_denied, Unavailable),
 	                 Dir_handle, Name const &, Mode, bool);
 	GENODE_RPC_THROW(Rpc_symlink, Symlink_handle, symlink,
 	                 GENODE_TYPE_LIST(Invalid_handle, Invalid_name,
 	                                  Lookup_failed,  Node_already_exists,
 	                                  No_space, Out_of_ram, Out_of_caps,
-	                                  Permission_denied),
+	                                  Permission_denied, Unavailable),
 	                 Dir_handle, Name const &, bool);
 	GENODE_RPC_THROW(Rpc_dir, Dir_handle, dir,
 	                 GENODE_TYPE_LIST(Lookup_failed, Name_too_long,
@@ -409,27 +421,32 @@ struct File_system::Session : public Genode::Session
 	GENODE_RPC_THROW(Rpc_node, Node_handle, node,
 	                 GENODE_TYPE_LIST(Lookup_failed, Out_of_ram, Out_of_caps),
 	                 Path const &);
-	GENODE_RPC(Rpc_close, void, close, Node_handle);
-	GENODE_RPC(Rpc_status, Status, status, Node_handle);
-	GENODE_RPC(Rpc_control, void, control, Node_handle, Control);
+	GENODE_RPC_THROW(Rpc_close, void, close,
+	                 GENODE_TYPE_LIST(Invalid_handle),
+	                 Node_handle);
+	GENODE_RPC_THROW(Rpc_status, Status, status,
+	                 GENODE_TYPE_LIST(Invalid_handle, Unavailable),
+	                 Node_handle);
+	GENODE_RPC_THROW(Rpc_control, void, control,
+	                 GENODE_TYPE_LIST(Invalid_handle, Unavailable),
+	                 Node_handle, Control);
 	GENODE_RPC_THROW(Rpc_unlink, void, unlink,
 	                 GENODE_TYPE_LIST(Invalid_handle, Invalid_name,
 	                                  Lookup_failed, Not_empty,
-	                                  Permission_denied),
+	                                  Permission_denied, Unavailable),
 	                 Dir_handle, Name const &);
 	GENODE_RPC_THROW(Rpc_truncate, void, truncate,
 	                 GENODE_TYPE_LIST(Invalid_handle, No_space,
-	                                  Permission_denied),
+	                                  Permission_denied, Unavailable),
 	                 File_handle, file_size_t);
 	GENODE_RPC_THROW(Rpc_move, void, move,
 	                 GENODE_TYPE_LIST(Invalid_handle, Invalid_name,
-	                                  Lookup_failed, Permission_denied),
+	                                  Lookup_failed, Permission_denied, Unavailable),
 	                 Dir_handle, Name const &, Dir_handle, Name const &);
-	GENODE_RPC(Rpc_sync, void, sync, Node_handle);
 
 	GENODE_RPC_INTERFACE(Rpc_tx_cap, Rpc_file, Rpc_symlink, Rpc_dir, Rpc_node,
 	                     Rpc_close, Rpc_status, Rpc_control, Rpc_unlink,
-	                     Rpc_truncate, Rpc_move, Rpc_sync);
+	                     Rpc_truncate, Rpc_move);
 };
 
 #endif /* _INCLUDE__FILE_SYSTEM_SESSION__FILE_SYSTEM_SESSION_H_ */

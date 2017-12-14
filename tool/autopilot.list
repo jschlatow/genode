@@ -7,11 +7,10 @@ rom_blk
 tar_rom
 noux
 noux_net_netcat
-libc_ffat
+libc_fatfs
 libc_getenv
 libc_pipe
 libc_vfs
-libc_vfs_ext2
 libc_vfs_fs
 libc_vfs_ram
 libc_vfs_block
@@ -64,6 +63,7 @@ vbox5_ubuntu_16_04_32
 vbox5_ubuntu_16_04_64
 vbox5_win7_32
 vbox5_win7_64
+vbox5_win7_64_raw
 vbox5_win7_64_share
 vbox5_win7_64_multiple
 vbox5_win10_64
@@ -104,3 +104,4 @@ init
 nic_dump
 slab
 ada
+fs_report

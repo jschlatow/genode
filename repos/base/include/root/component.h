@@ -142,12 +142,8 @@ class Genode::Root_component : public Rpc_object<Typed_root<SESSION_TYPE> >,
 
 			size_t needed = sizeof(SESSION_TYPE) + md_alloc()->overhead(sizeof(SESSION_TYPE));
 
-			if (needed > ram_quota.value) {
-				warning("insufficient ram quota "
-				        "for ", SESSION_TYPE::service_name(), " session, "
-				        "provided=", ram_quota, ", required=", needed);
+			if (needed > ram_quota.value)
 				throw Insufficient_ram_quota();
-			}
 
 			Ram_quota const remaining_ram_quota { ram_quota.value - needed };
 
@@ -192,7 +188,9 @@ class Genode::Root_component : public Rpc_object<Typed_root<SESSION_TYPE> >,
 			catch (Insufficient_ram_quota) { throw; }
 			catch (...) {
 				warning("unexpected exception during ",
-				        SESSION_TYPE::service_name(), "-session creation"); }
+				        SESSION_TYPE::service_name(), "-session creation");
+				throw Service_denied();
+			}
 
 			/*
 			 * Consider that the session-object constructor may already have

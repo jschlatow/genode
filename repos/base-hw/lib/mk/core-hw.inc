@@ -29,9 +29,11 @@ SRC_CC += io_mem_session_component.cc
 SRC_CC += io_mem_session_support.cc
 SRC_CC += irq_session_component.cc
 SRC_CC += main.cc
-SRC_CC += pd_upgrade_ram_quota.cc
-SRC_CC += pd_assign_pci.cc
+SRC_CC += native_pd_component.cc
+SRC_CC += native_utcb.cc
+SRC_CC += pd_session_support.cc
 SRC_CC += platform.cc
+SRC_CC += platform_rom_modules.cc
 SRC_CC += platform_pd.cc
 SRC_CC += platform_thread.cc
 SRC_CC += stack_area.cc
@@ -55,12 +57,12 @@ SRC_CC += kernel/thread.cc
 SRC_CC += kernel/signal_receiver.cc
 SRC_CC += kernel/ipc_node.cc
 SRC_CC += kernel/irq.cc
-SRC_CC += kernel/pd.cc
 SRC_CC += kernel/cpu.cc
 SRC_CC += kernel/timer.cc
 SRC_CC += kernel/object.cc
 SRC_CC += init_main_thread.cc
 SRC_CC += capability.cc
+SRC_CC += stack_area_addr.cc
 
 # provide Genode version information
 include $(BASE_DIR)/src/core/version.inc

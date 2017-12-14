@@ -19,12 +19,16 @@ set raw_image "${flavor}.vmdk"
 set vbox_file "vm_${flavor}.vbox"
 set overlay_image "overlay_${flavor}.vdi"
 
+if {[info exists flavor_extension]} {
+	set vbox_file "vm_${flavor}${flavor_extension}.vbox"
+}
+
 set build_components {
 	server/input_merger
 	drivers/nic
 	drivers/audio
 	server/nitpicker
-	app/vbox_pointer
+	app/pointer
 	server/nit_fb
 	server/report_rom
 	server/dynamic_rom
@@ -35,7 +39,7 @@ set boot_modules {
 	nic_drv
 	audio_drv
 	nitpicker
-	vbox_pointer
+	pointer
 	nit_fb
 	report_rom
 	dynamic_rom
@@ -107,14 +111,8 @@ append config_of_app {
 		<resource name="RAM" quantum="2M"/>
 		<provides> <service name="Report"/> <service name="ROM"/> </provides>
 		<config>
-			<policy label="vbox_pointer -> hover"               report="nitpicker -> hover"/>
-			<policy label="vbox_pointer -> xray"                report="nitpicker -> xray"/>}
-
-for { set i 1} { $i <= $use_vms } { incr i} {
-append config_of_app "
-			<policy label=\"vbox_pointer -> shape$i\"           report=\"vbox$i -> shape\"/>"
-}
-
+			<policy label="pointer -> hover"                    report="nitpicker -> hover"/>
+			<policy label="pointer -> xray"                     report="nitpicker -> xray"/>}
 append config_of_app {
 			<policy label="usb_report_filter -> devices"        report="usb_drv -> devices"/>
 			<policy label="usb_report_filter -> usb_drv_config" report="usb_drv -> config"/>
@@ -142,30 +140,18 @@ append config_of_app {
 			<domain name="cpu_load" layer="2" content="client" label="no" />
 			<domain name=""         layer="3" content="client" focus="click" hover="always" />
 
-			<policy label_prefix="vbox_pointer"     domain="pointer"/>
+			<policy label_prefix="pointer"          domain="pointer"/>
 			<policy label_prefix="cpu_load_display" domain="cpu_load"/>
 			<default-policy domain=""/>
 		</config>
 	</start>
 
-	<start name="vbox_pointer" priority="-1">
+	<start name="pointer" priority="-1">
 		<resource name="RAM" quantum="2M"/>
-		<config>}
-
-for { set i 1} { $i <= $use_vms } { incr i} {
-append config_of_app "
-			<policy label=\"nit_fb$i\" rom=\"shape$i\"/>"
-}
-
-append config_of_app {
-		</config>
+		<provides> <service name="Report"/> </provides>
+		<config shapes="yes"/>
 		<route>
 			<service name="Nitpicker"> <child name="nitpicker"/>  </service>}
-
-for { set i 1} { $i <= $use_vms } { incr i} {
-append config_of_app "
-			<service name=\"ROM\" label=\"shape$i\"> <child name=\"report_rom\"/> </service>"
-}
 
 append config_of_app {
 			<service name="ROM" label="hover"> <child name="report_rom"/> </service>
@@ -238,6 +224,16 @@ for { set i 1} { $i <= $use_vms } { incr i} {
 }
 
 append config_of_app {
+			<rom name="capslock">
+				<inline>
+					<capslock enabled="yes"/>
+				</inline>
+				<sleep milliseconds="5000"/>
+				<inline>
+					<capslock enabled="no"/>
+				</inline>
+				<sleep milliseconds="5000"/>
+			</rom>
 		</config>
 		<route>
 			<service name="Timer"> <child name="timer"/> </service>
@@ -247,21 +243,21 @@ append config_of_app {
 
 for { set i 1} { $i <= $use_vms } { incr i} {
 	append config_of_app "
-	<start name=\"vbox${i}\" priority=\"-2\" caps=\"600\">"
+	<start name=\"vbox${i}\" priority=\"-2\" caps=\"800\">"
 	append_if [expr $use_vbox4] config_of_app "
 		<binary name=\"$virtualbox_binary\" />"
 	append_if [expr $use_vbox5] config_of_app "
 		<binary name=\"$virtualbox5_binary\" />"
 
 	append config_of_app {
-		<resource name="RAM" quantum="1280M"/>}
+		<resource name="RAM" quantum="} $vm_ram {"/>}
 	if { $use_vms eq 1 } {
 		append config_of_app "
-		<config ld_verbose=\"yes\" vbox_file=\"${vbox_file}\" vm_name=\"${flavor}\" xhci=\"yes\">"
+		<config ld_verbose=\"yes\" vbox_file=\"${vbox_file}\" vm_name=\"${flavor}\" xhci=\"yes\" capslock=\"NOROM\">"
 	} else {
 		append config_of_app "
 		<affinity xpos=\"[expr $i]\" width=\"2\" />
-		<config ld_verbose=\"yes\" vbox_file=\"${vbox_file}\" vm_name=\"${flavor}\" xhci=\"no\">"
+		<config ld_verbose=\"yes\" vbox_file=\"${vbox_file}\" vm_name=\"${flavor}\" xhci=\"no\" capslock=\"NOROM\">"
 	}
 	append config_of_app {
 			<libc stdout="/dev/log" stderr="/dev/log" rtc="/dev/rtc"/>
@@ -299,10 +295,14 @@ for { set i 1} { $i <= $use_vms } { incr i} {
 				<service name="Block"> <child name="part_blk"/> </service>}
 	append config_of_app "
 			<service name=\"Framebuffer\"> <child name=\"nit_fb${i}\" /> </service>
-			<service name=\"Input\"> <child name=\"nit_fb${i}\" /> </service>"
+			<service name=\"Input\"> <child name=\"nit_fb${i}\" /> </service>
+			<service name=\"Report\" label=\"shape\">
+				<child name=\"pointer\" label=\"nit_fb${i} -> shape\"/>
+			</service>"
 	append config_of_app {
 			<service name="Report"><child name="report_rom" /></service>
 			<service name="ROM" label="usb_devices"> <child name="report_rom" /> </service>
+			<service name="ROM" label="capslock"> <child name="nit_fb-config"/> </service>
 			<any-service> <parent/> <any-child /> </any-service>
 		</route>
 	</start>}
@@ -328,7 +328,7 @@ run_genode_until {\[init -\> vbox.*].*Guest Additions capability report:.*seamle
 if {$use_rumpfs} {
 	set wait_timeout 170
 	for { set i 1 } { $i <= $use_vms } { incr i } {
-		if { [string match "ubuntu*" $flavor] } {
+		if { [string match "ubuntu*" $flavor] || [string match "win10*" $flavor] } {
 			run_genode_until {\[init -\> vbox.*].*Guest Additions capability report:.*seamless: yes, hostWindowMapping: no, graphics: no} $wait_timeout [output_spawn_id]
 		} else {
 			run_genode_until {\[init -\> vbox.*].*Guest Additions capability report:.*seamless: yes, hostWindowMapping: no, graphics: yes} $wait_timeout [output_spawn_id]

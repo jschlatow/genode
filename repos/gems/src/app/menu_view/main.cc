@@ -12,14 +12,24 @@
  */
 
 /* local includes */
-#include "widgets.h"
+#include "widget_factory.h"
+#include "button_widget.h"
+#include "label_widget.h"
+#include "box_layout_widget.h"
+#include "root_widget.h"
+#include "float_widget.h"
+#include "frame_widget.h"
+#include "depgraph_widget.h"
 
 /* Genode includes */
 #include <input/event.h>
 #include <os/reporter.h>
+#include <timer_session/connection.h>
 
 /* gems includes */
 #include <gems/nitpicker_buffer.h>
+
+namespace Menu_view { struct Main; }
 
 
 struct Menu_view::Main
@@ -119,7 +129,7 @@ struct Menu_view::Main
 	/**
 	 * Number of frames between two redraws
 	 */
-	enum { REDRAW_PERIOD = 4 };
+	enum { REDRAW_PERIOD = 2 };
 
 	/**
 	 * Counter used for triggering redraws. Incremented in each frame-timer
@@ -167,10 +177,16 @@ void Menu_view::Main::_handle_dialog_update()
 	 * processing immediately. This way, we avoid latencies when the dialog
 	 * model is updated sporadically.
 	 */
-	if (_timer.curr_frame() != _last_frame)
+	unsigned const curr_frame = _timer.curr_frame();
+	if (curr_frame != _last_frame) {
+
+		if (curr_frame - _last_frame > 10)
+			_last_frame = curr_frame;
+
 		_handle_frame_timer();
-	else
+	} else {
 		_timer.schedule();
+	}
 }
 
 
@@ -233,7 +249,7 @@ void Menu_view::Main::_handle_frame_timer()
 
 	if (_animator.active()) {
 
-		unsigned const passed_frames = curr_frame - _last_frame;
+		unsigned const passed_frames = max(curr_frame - _last_frame, 4U);
 
 		if (passed_frames > 0) {
 
@@ -253,7 +269,7 @@ void Menu_view::Main::_handle_frame_timer()
 		Area const old_size = _buffer.constructed() ? _buffer->size() : Area();
 		Area const size     = _root_widget.min_size();
 
-		if (!_buffer.constructed() || size != old_size)
+		if (!_buffer.constructed() || size.w() > old_size.w() || size.h() > old_size.h())
 			_buffer.construct(_nitpicker, size, _env.ram(), _env.rm());
 		else
 			_buffer->reset_surface();
@@ -283,6 +299,30 @@ void Menu_view::Main::_handle_frame_timer()
 
 	if (_animator.active() || redraw_pending)
 		_timer.schedule();
+}
+
+
+Menu_view::Widget *
+Menu_view::Widget_factory::create(Xml_node node)
+{
+	Widget *w = nullptr;
+
+	Widget::Unique_id const unique_id(++_unique_id_cnt);
+
+	if (node.has_type("label"))    w = new (alloc) Label_widget      (*this, node, unique_id);
+	if (node.has_type("button"))   w = new (alloc) Button_widget     (*this, node, unique_id);
+	if (node.has_type("vbox"))     w = new (alloc) Box_layout_widget (*this, node, unique_id);
+	if (node.has_type("hbox"))     w = new (alloc) Box_layout_widget (*this, node, unique_id);
+	if (node.has_type("frame"))    w = new (alloc) Frame_widget      (*this, node, unique_id);
+	if (node.has_type("float"))    w = new (alloc) Float_widget      (*this, node, unique_id);
+	if (node.has_type("depgraph")) w = new (alloc) Depgraph_widget   (*this, node, unique_id);
+
+	if (!w) {
+		Genode::error("unknown widget type '", node.type(), "'");
+		return 0;
+	}
+
+	return w;
 }
 
 

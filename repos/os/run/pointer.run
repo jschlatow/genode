@@ -1,0 +1,294 @@
+#
+# Build
+#
+# for ldso debugging: <config ld_verbose="yes"/>
+#
+
+assert_spec linux
+
+set build_components {
+	core init
+	drivers/timer
+	drivers/framebuffer
+	server/report_rom
+	server/dynamic_rom
+	server/nitpicker
+	app/pointer
+	test/pointer
+	test/nitpicker
+}
+
+build $build_components
+
+create_boot_directory
+
+#
+# Generate config
+#
+
+set config {
+<config>
+	<parent-provides>
+		<service name="ROM"/>
+		<service name="IRQ"/>
+		<service name="IO_MEM"/>
+		<service name="IO_PORT"/>
+		<service name="PD"/>
+		<service name="CPU"/>
+		<service name="LOG"/>
+	</parent-provides>
+
+	<default caps="100"/>
+
+	<start name="timer">
+		<resource name="RAM" quantum="1M"/>
+		<provides> <service name="Timer"/> </provides>
+		<route>
+			<service name="ROM"> <parent/> </service>
+			<service name="CPU"> <parent/> </service>
+			<service name="PD">  <parent/> </service>
+			<service name="LOG"> <parent/> </service>
+		</route>
+	</start>
+	<start name="fb_sdl">
+		<resource name="RAM" quantum="6M"/>
+		<provides>
+			<service name="Framebuffer"/>
+			<service name="Input"/>
+		</provides>
+		<config buffered="yes" width="1280" height="720" depth="16"/>
+		<route>
+			<service name="ROM">   <parent/>             </service>
+			<service name="CPU">   <parent/>             </service>
+			<service name="PD">    <parent/>             </service>
+			<service name="LOG">   <parent/>             </service>
+			<service name="Timer"> <child name="timer"/> </service>
+		</route>
+	</start>
+	<alias name="input_drv" child="fb_sdl"/>
+	<alias name="fb_drv"    child="fb_sdl"/>
+
+	<start name="report_rom_nitpicker">
+		<binary name="report_rom"/>
+		<resource name="RAM" quantum="1M"/>
+		<provides> <service name="Report"/> <service name="ROM"/> </provides>
+		<config>
+			<policy label="pointer -> hover" report="nitpicker -> hover"/>
+			<policy label="pointer -> xray"  report="null"/>
+		</config>
+		<route>
+			<service name="ROM"> <parent/> </service>
+			<service name="CPU"> <parent/> </service>
+			<service name="PD">  <parent/> </service>
+			<service name="PD">  <parent/> </service>
+			<service name="LOG"> <parent/> </service>
+		</route>
+	</start>
+	<start name="nitpicker">
+		<resource name="RAM" quantum="4M"/>
+		<provides><service name="Nitpicker"/></provides>
+		<config>
+			<report focus="yes" hover="yes" xray="yes"/>
+			<domain name="pointer" layer="1" content="client" label="no"  origin="pointer"/>
+			<domain name="default" layer="3" content="client" label="yes" hover="always" focus="click"/>
+
+			<policy label_prefix="pointer"            domain="pointer"/>
+			<default-policy                           domain="default"/>
+
+			<background color="#00426f"/> <!-- indigo -->
+		</config>
+		<route>
+			<service name="ROM">         <parent/>                        </service>
+			<service name="CPU">         <parent/>                        </service>
+			<service name="PD">          <parent/>                        </service>
+			<service name="LOG">         <parent/>                        </service>
+			<service name="Timer">       <child name="timer"/>            </service>
+			<service name="Framebuffer"> <child name="fb_drv"/>           </service>
+			<service name="Input">       <child name="input_drv"/>        </service>
+			<service name="Report">      <child name="report_rom_nitpicker"/> </service>
+		</route>
+	</start>
+
+	<start name="shape-arrow">
+		<binary name="test-pointer"/>
+		<resource name="RAM" quantum="2M"/>
+		<config shape="arrow"/>
+		<route>
+			<service name="PD">     <parent/> </service>
+			<service name="ROM">    <parent/> </service>
+			<service name="CPU">    <parent/> </service>
+			<service name="LOG">    <parent/> </service>
+			<service name="Report" label="shape">
+				<child name="pointer" label="test-label-arrow -> shape"/>
+			</service>
+		</route>
+	</start>
+	<start name="shape-blade">
+		<binary name="test-pointer"/>
+		<resource name="RAM" quantum="2M"/>
+		<config shape="blade"/>
+		<route>
+			<service name="PD">     <parent/> </service>
+			<service name="ROM">    <parent/> </service>
+			<service name="CPU">    <parent/> </service>
+			<service name="LOG">    <parent/> </service>
+			<service name="Report" label="shape">
+				<child name="pointer" label="test-label-blade -> shape"/>
+			</service>
+		</route>
+	</start>
+	<start name="shape-bladex">
+		<binary name="test-pointer"/>
+		<resource name="RAM" quantum="2M"/>
+		<config shape="bladex"/>
+		<route>
+			<service name="PD">     <parent/> </service>
+			<service name="ROM">    <parent/> </service>
+			<service name="CPU">    <parent/> </service>
+			<service name="LOG">    <parent/> </service>
+			<service name="Report" label="shape">
+				<child name="pointer" label="test-label-bladex -> shape"/>
+			</service>
+		</route>
+	</start>
+	<start name="shape-smiley-config">
+		<binary name="dynamic_rom"/>
+		<resource name="RAM" quantum="1M"/>
+		<provides> <service name="ROM"/> </provides>
+		<config>
+			<rom name="smiley.config">
+				<inline description="smiley">
+					<config shape="smiley"/>
+				</inline>
+				<sleep milliseconds="500" />
+				<inline description="yelims">
+					<config shape="yelims"/>
+				</inline>
+				<sleep milliseconds="500" />
+			</rom>
+		</config>
+		<route>
+			<service name="ROM">   <parent/> </service>
+			<service name="CPU">   <parent/> </service>
+			<service name="PD">    <parent/> </service>
+			<service name="LOG">   <parent/> </service>
+			<service name="Timer"> <child name="timer"/> </service>
+		</route>
+	</start>
+	<start name="shape-smiley">
+		<binary name="test-pointer"/>
+		<resource name="RAM" quantum="2M"/>
+		<configfile name="smiley.config"/>
+		<route>
+			<service name="ROM" label="smiley.config">
+				<child name="shape-smiley-config"/> </service>
+			<service name="Report" label="shape">
+				<child name="pointer" label="test-label-smiley -> shape"/>
+			</service>
+			<service name="ROM"> <parent/> </service>
+			<service name="CPU"> <parent/> </service>
+			<service name="PD">  <parent/> </service>
+			<service name="LOG"> <parent/> </service>
+		</route>
+	</start>
+
+	<start name="pointer">
+		<resource name="RAM" quantum="1M"/>
+		<provides> <service name="Report"/> </provides>
+		<config shapes="yes" verbose="no"/>
+		<route>
+			<service name="PD">        <parent/>                            </service>
+			<service name="LOG">       <parent/>                            </service>
+			<service name="Nitpicker"> <child name="nitpicker"/>            </service>
+			<service name="ROM" label="xray">   <child name="report_rom_nitpicker"/> </service>
+			<service name="ROM" label="hover">  <child name="report_rom_nitpicker"/> </service>
+			<service name="ROM"> <parent/> </service>
+			<service name="CPU"> <parent/> </service>
+		</route>
+	</start>
+
+	<start name="test-no-match">
+		<binary name="testnit"/>
+		<resource name="RAM" quantum="2M"/>
+		<route>
+			<service name="LOG">       <parent/>                 </service>
+			<service name="PD">        <parent/>                 </service>
+			<service name="CPU">       <parent/>                 </service>
+			<service name="ROM">       <parent/>                 </service>
+			<service name="Timer">     <child name="timer"/>     </service>
+			<service name="Nitpicker"> <child name="nitpicker"/> </service>
+		</route>
+	</start>
+	<start name="test-label-smiley">
+		<binary name="testnit"/>
+		<resource name="RAM" quantum="2M"/>
+		<route>
+			<service name="LOG">       <parent/>                 </service>
+			<service name="PD">        <parent/>                 </service>
+			<service name="CPU">       <parent/>                 </service>
+			<service name="ROM">       <parent/>                 </service>
+			<service name="Timer">     <child name="timer"/>     </service>
+			<service name="Nitpicker"> <child name="nitpicker"/> </service>
+		</route>
+	</start>
+	<start name="test-label-arrow">
+		<binary name="testnit"/>
+		<resource name="RAM" quantum="2M"/>
+		<route>
+			<service name="LOG">       <parent/>                 </service>
+			<service name="PD">        <parent/>                 </service>
+			<service name="CPU">       <parent/>                 </service>
+			<service name="ROM">       <parent/>                 </service>
+			<service name="Timer">     <child name="timer"/>     </service>
+			<service name="Nitpicker"> <child name="nitpicker"/> </service>
+		</route>
+	</start>
+	<start name="test-label-blade">
+		<binary name="testnit"/>
+		<resource name="RAM" quantum="2M"/>
+		<route>
+			<service name="PD">        <parent/>                 </service>
+			<service name="LOG">       <parent/>                 </service>
+			<service name="CPU">       <parent/>                 </service>
+			<service name="ROM">       <parent/>                 </service>
+			<service name="Timer">     <child name="timer"/>     </service>
+			<service name="Nitpicker"> <child name="nitpicker"/> </service>
+		</route>
+	</start>
+	<start name="test-label-bladex">
+		<binary name="testnit"/>
+		<resource name="RAM" quantum="2M"/>
+		<route>
+			<service name="PD">        <parent/>                 </service>
+			<service name="LOG">       <parent/>                 </service>
+			<service name="CPU">       <parent/>                 </service>
+			<service name="ROM">       <parent/>                 </service>
+			<service name="Timer">     <child name="timer"/>     </service>
+			<service name="Nitpicker"> <child name="nitpicker"/> </service>
+		</route>
+	</start>
+</config>}
+
+install_config $config
+
+#
+# Boot modules
+#
+
+# generic modules
+set boot_modules {
+	init ld.lib.so timer
+	fb_sdl
+	report_rom dynamic_rom
+	nitpicker
+	pointer
+	test-pointer
+	testnit
+}
+
+# "lsort -unique" removes duplicates but core must be first
+build_boot_image "core [lsort -unique $boot_modules]"
+
+run_genode_until forever
+
+# vi: set ft=tcl :

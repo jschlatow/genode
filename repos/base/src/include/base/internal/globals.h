@@ -36,9 +36,13 @@ namespace Genode {
 	void init_signal_thread(Env &);
 	void init_root_proxy(Env &);
 	void init_log();
+	void init_parent_resource_requests(Env &);
 	void exec_static_constructors();
 
 	void destroy_signal_thread();
+
+	void cxx_demangle(char const*, char*, size_t);
+	void cxx_current_exception(char *out, size_t size);
 
 	Id_space<Parent::Client> &env_session_id_space();
 	Env &internal_env();

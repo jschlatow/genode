@@ -36,12 +36,16 @@ class Input_filter::Source
 
 		Source(Registry<Source> &owner) : _owner_elem(owner, *this) { }
 
+		virtual ~Source() { }
+
 		static bool input_node(Xml_node node)
 		{
 			return node.type() == "input"
 			    || node.type() == "remap"
 			    || node.type() == "chargen"
-			    || node.type() == "merge";
+			    || node.type() == "merge"
+			    || node.type() == "button-scroll"
+			    || node.type() == "accelerate";
 
 			return false;
 		}
@@ -57,7 +61,7 @@ class Input_filter::Source
 			if (result.type() != "none")
 				return result;
 
-			error("missing <remap>/<chargen>/<merge> sub node in ", node);
+			warning("missing input-source sub node in ", node);
 			throw Invalid_config { };
 		}
 

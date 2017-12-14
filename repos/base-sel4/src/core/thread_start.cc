@@ -38,7 +38,7 @@ void Thread::_init_platform_thread(size_t, Type type)
 	}
 
 	Thread_info thread_info;
-	thread_info.init(utcb_virt_addr);
+	thread_info.init(utcb_virt_addr, CONFIG_NUM_PRIORITIES - 1);
 
 	if (!map_local(thread_info.ipc_buffer_phys, utcb_virt_addr, 1)) {
 		error(__func__, ": could not map IPC buffer "
@@ -52,9 +52,11 @@ void Thread::_init_platform_thread(size_t, Type type)
 
 	Platform &platform = *platform_specific();
 
+	seL4_CapData_t guard = seL4_CapData_Guard_new(0, CONFIG_WORD_SIZE - 32);
 	seL4_CapData_t no_cap_data = { { 0 } };
 	int const ret = seL4_TCB_SetSpace(native_thread().tcb_sel, 0,
-	                                  platform.top_cnode().sel().value(), no_cap_data,
+	                                  platform.top_cnode().sel().value(),
+	                                  guard,
 	                                  seL4_CapInitThreadPD, no_cap_data);
 	ASSERT(ret == seL4_NoError);
 
@@ -98,7 +100,7 @@ void Thread::_thread_start()
 void Thread::start()
 {
 	start_sel4_thread(Cap_sel(native_thread().tcb_sel), (addr_t)&_thread_start,
-	                  (addr_t)stack_top());
+	                  (addr_t)stack_top(), _affinity.xpos());
 }
 
 
@@ -107,3 +109,11 @@ void Thread::cancel_blocking()
 	warning(__func__, " not implemented");
 }
 
+
+Native_utcb *Thread::utcb()
+{
+	if (!_stack)
+		return nullptr;
+
+	return &_stack->utcb();
+}

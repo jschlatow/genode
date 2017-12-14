@@ -27,7 +27,7 @@
 #include <scan_code_set_1.h>
 
 /* repos/ports includes */
-#include <vbox_pointer/shape_report.h>
+#include <pointer/shape_report.h>
 
 #include "../vmm.h"
 
@@ -116,7 +116,8 @@ class GenodeConsole : public Console {
 		bool                                   _last_received_motion_event_was_absolute;
 		Report::Connection                     _shape_report_connection;
 		Genode::Attached_dataspace             _shape_report_ds;
-		Vbox_pointer::Shape_report            *_shape_report;
+		Genode::Constructible<Genode::Attached_rom_dataspace> _caps_lock;
+		Pointer::Shape_report                 *_shape_report;
 		Genode::Reporter                      *_clipboard_reporter;
 		Genode::Attached_rom_dataspace        *_clipboard_rom;
 		IKeyboard                             *_vbox_keyboard;
@@ -124,6 +125,7 @@ class GenodeConsole : public Console {
 		Genode::Signal_handler<GenodeConsole>  _input_signal_dispatcher;
 		Genode::Signal_handler<GenodeConsole>  _mode_change_signal_dispatcher;
 		Genode::Signal_handler<GenodeConsole>  _clipboard_signal_dispatcher;
+		Genode::Signal_handler<GenodeConsole>  _input_sticky_keys_dispatcher;
 
 		bool _key_status[Input::KEY_MAX + 1];
 
@@ -143,21 +145,31 @@ class GenodeConsole : public Console {
 			_ax(0), _ay(0),
 			_last_received_motion_event_was_absolute(false),
 			_shape_report_connection(genode_env(), "shape",
-			                         sizeof(Vbox_pointer::Shape_report)),
+			                         sizeof(Pointer::Shape_report)),
 			_shape_report_ds(genode_env().rm(), _shape_report_connection.dataspace()),
-			_shape_report(_shape_report_ds.local_addr<Vbox_pointer::Shape_report>()),
+			_shape_report(_shape_report_ds.local_addr<Pointer::Shape_report>()),
 			_clipboard_reporter(nullptr),
 			_clipboard_rom(nullptr),
 			_vbox_keyboard(0),
 			_vbox_mouse(0),
 			_input_signal_dispatcher(genode_env().ep(), *this, &GenodeConsole::handle_input),
 			_mode_change_signal_dispatcher(genode_env().ep(), *this, &GenodeConsole::handle_mode_change),
-			_clipboard_signal_dispatcher(genode_env().ep(), *this, &GenodeConsole::handle_cb_rom_change)
+			_clipboard_signal_dispatcher(genode_env().ep(), *this, &GenodeConsole::handle_cb_rom_change),
+			_input_sticky_keys_dispatcher(genode_env().ep(), *this, &GenodeConsole::handle_sticky_keys)
 		{
 			for (unsigned i = 0; i <= Input::KEY_MAX; i++)
 				_key_status[i] = 0;
 
 			_input.sigh(_input_signal_dispatcher);
+
+			Genode::Attached_rom_dataspace config(genode_env(), "config");
+
+			/* by default we take the capslock key from the input stream */
+			Genode::String<10> capslock("input");
+			if (config.xml().attribute_value("capslock", capslock) == "ROM") {
+				_caps_lock.construct(genode_env(), "capslock");
+				_caps_lock->sigh(_input_sticky_keys_dispatcher);
+			}
 		}
 
 		void init_clipboard();
@@ -192,15 +204,29 @@ class GenodeConsole : public Console {
 
 			size_t shape_size = cbShape - (shape - and_mask);
 
-			if (shape_size > Vbox_pointer::MAX_SHAPE_SIZE) {
+			if (shape_size > Pointer::MAX_SHAPE_SIZE) {
 				Genode::error(__func__, ": shape data buffer is too small for ",
 				              shape_size, " bytes");
 				return;
 			}
 
-			Genode::memcpy(_shape_report->shape,
-			               shape,
-			               shape_size);
+			/* convert the shape data from BGRA encoding to RGBA encoding */
+
+			unsigned char const *bgra_shape = shape; 
+			unsigned char       *rgba_shape = _shape_report->shape;
+
+			for (unsigned int y = 0; y < _shape_report->height; y++) {
+
+				unsigned char const *bgra_line = &bgra_shape[y * _shape_report->width * 4];
+				unsigned char *rgba_line       = &rgba_shape[y * _shape_report->width * 4];
+
+				for (unsigned int i = 0; i < _shape_report->width * 4; i += 4) {
+					rgba_line[i + 0] = bgra_line[i + 2];
+					rgba_line[i + 1] = bgra_line[i + 1];
+					rgba_line[i + 2] = bgra_line[i + 0];
+					rgba_line[i + 3] = bgra_line[i + 3];
+				}
+			}
 
 			if (fVisible && !fAlpha) {
 
@@ -223,7 +249,7 @@ class GenodeConsole : public Console {
 				}
 			}
 
-			_shape_report_connection.submit(sizeof(Vbox_pointer::Shape_report));
+			_shape_report_connection.submit(sizeof(Pointer::Shape_report));
 		}
 
 		void update_video_mode();
@@ -231,4 +257,5 @@ class GenodeConsole : public Console {
 		void handle_input();
 		void handle_mode_change();
 		void handle_cb_rom_change();
+		void handle_sticky_keys();
 };

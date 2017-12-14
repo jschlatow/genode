@@ -37,20 +37,34 @@ struct Lazy_test
 	Signal_handler<Lazy_test> faster_handler { env.ep(), *this,
 	                                           &Lazy_test::handle_faster_timer };
 
+	enum { RUN_TIME_US = 2 * 1000 * 1000, TIMEOUT_US = 50*1000, FACTOR = 2 };
+	unsigned fast = 0;
+	unsigned faster = 0;
+
 	void handle_slow_timer()
 	{
-		log("timeout fired");
+		log("timeout fired - ", fast, "/", faster, "/",
+		    RUN_TIME_US / TIMEOUT_US * FACTOR);
+
+		if (fast)
+			throw Faster_timer_too_slow();
+
 		done.submit();
 	}
 
-	void handle_fast_timer()   { throw Faster_timer_too_slow(); }
+	void handle_fast_timer()   {
+		fast ++;
+		if (faster <= fast)
+			throw Faster_timer_too_slow();
+	}
+
 	void handle_faster_timer() { set_fast_timers(); }
 
 	void set_fast_timers()
 	{
-		enum { TIMEOUT_US = 50*1000 };
 		fast_timer.trigger_once(TIMEOUT_US);
-		faster_timer.trigger_once(TIMEOUT_US/2);
+		faster_timer.trigger_once(TIMEOUT_US/FACTOR);
+		faster ++;
 	}
 
 	Lazy_test(Env &env, Signal_context_capability done) : env(env), done(done)
@@ -60,7 +74,7 @@ struct Lazy_test
 		faster_timer.sigh(faster_handler);
 
 		log("register two-seconds timeout...");
-		slow_timer.trigger_once(2*1000*1000);
+		slow_timer.trigger_once(RUN_TIME_US);
 		set_fast_timers();
 	}
 };
@@ -68,16 +82,29 @@ struct Lazy_test
 
 struct Stress_test
 {
+	enum { DURATION_SEC      = 10 };
+	enum { MAX_SLV_PERIOD_US = 33000 };
+
+	struct Starvation                    : Exception { };
+	struct Violation_of_timer_rate_limit : Exception { };
+
 	struct Slave
 	{
+		enum { DURATION_US         = DURATION_SEC * 1000 * 1000 };
+		enum { MIN_TIMER_PERIOD_US = 1000 };
+		enum { MAX_CNT_BASE        = DURATION_US / MIN_TIMER_PERIOD_US };
+		enum { MAX_CNT_TOLERANCE   = MAX_CNT_BASE / 9 };
+		enum { MAX_CNT             = MAX_CNT_BASE + MAX_CNT_TOLERANCE };
+		enum { MIN_CNT             = DURATION_US / MAX_SLV_PERIOD_US / 2 };
+
 		Signal_handler<Slave> timer_handler;
 		Timer::Connection     timer;
-		unsigned              us;
+		unsigned long         us;
 		unsigned              count { 0 };
 
-		Slave(Env &env, unsigned ms)
+		Slave(Env &env, unsigned us)
 		: timer_handler(env.ep(), *this, &Slave::handle_timer),
-		  timer(env), us(ms * 1000) { timer.sigh(timer_handler); }
+		  timer(env), us(us) { timer.sigh(timer_handler); }
 
 		virtual ~Slave() { }
 
@@ -87,9 +114,26 @@ struct Stress_test
 			timer.trigger_once(us);
 		}
 
-		void dump() {
-			log("timer (period ", us / 1000, " ms) triggered ", count,
-			    " times -> slept ", (us / 1000) * count, " ms"); }
+		void dump(unsigned &starvation, unsigned &rate_violation)
+		{
+			log("timer (period ", us, " us) triggered ", count,
+			    " times (min ", (unsigned)MIN_CNT,
+			           " max ", (unsigned)MAX_CNT, ") -> slept ",
+			    ((unsigned long)us * count) / 1000, " ms");
+
+			/* detect starvation of timeouts */
+			if (count < MIN_CNT) {
+				error("triggered less than ", (unsigned)MIN_CNT,
+				      " times");
+				starvation ++;
+			}
+			/* detect violation of timer rate limitation */
+			if (count > MAX_CNT) {
+				error("triggered more than ", (unsigned)MAX_CNT,
+				      " times");
+				rate_violation ++;
+			}
+		}
 
 		void start() { timer.trigger_once(us); }
 		void stop()  { timer.sigh(Signal_context_capability()); }
@@ -105,14 +149,24 @@ struct Stress_test
 
 	void handle()
 	{
-		enum { MAX_COUNT = 10 };
-		if (count < MAX_COUNT) {
+		if (count < DURATION_SEC) {
 			count++;
-			log("wait ", count, "/", (unsigned)MAX_COUNT);
-			timer.trigger_once(1000 * 1000);
+			log("wait ", count, "/", (unsigned)DURATION_SEC);
+			timer.trigger_once(1000UL * 1000);
 		} else {
+			unsigned starvation = 0;
+			unsigned rate_violation = 0;
+
 			slaves.for_each([&] (Slave &timer) { timer.stop(); });
-			slaves.for_each([&] (Slave &timer) { timer.dump(); });
+			slaves.for_each([&] (Slave &timer) {
+				timer.dump(starvation, rate_violation);
+			});
+
+			if (starvation)
+				throw Starvation();
+			if (rate_violation)
+				throw Violation_of_timer_rate_limit();
+
 			done.submit();
 		}
 	}
@@ -120,8 +174,12 @@ struct Stress_test
 	Stress_test(Env &env, Signal_context_capability done) : env(env), done(done)
 	{
 		timer.sigh(handler);
-		for (unsigned ms = 1; ms < 28; ms++) {
-			new (heap) Registered<Slave>(slaves, env, ms); }
+
+		for (unsigned long us_1 = 1; us_1 < MAX_SLV_PERIOD_US; us_1 *= 2) {
+			new (heap) Registered<Slave>(slaves, env, us_1 - us_1 / 3);
+			new (heap) Registered<Slave>(slaves, env, us_1);
+		}
+
 		slaves.for_each([&] (Slave &slv) { slv.start(); });
 		timer.trigger_once(1000 * 1000);
 	}

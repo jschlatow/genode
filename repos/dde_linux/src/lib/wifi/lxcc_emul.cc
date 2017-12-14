@@ -407,6 +407,17 @@ void *vmalloc(unsigned long size)
 }
 
 
+void *vzalloc(unsigned long size)
+{
+	void *addr = vmalloc(size);
+
+	if (addr)
+		memset(addr, 0, size);
+
+	return addr;
+}
+
+
 void vfree(const void *addr)
 {
 	if (!addr) return;
@@ -1426,7 +1437,7 @@ bool mod_delayed_work(struct workqueue_struct *wq, struct delayed_work *dwork,
 	if (delay == 0) {
 		execute_delayed_work((unsigned long)dwork);
 	} else {
-		mod_timer(&dwork->timer, delay);
+		mod_timer(&dwork->timer, jiffies + delay);
 	}
 	return true;
 }

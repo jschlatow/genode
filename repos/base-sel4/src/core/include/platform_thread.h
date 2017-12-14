@@ -21,7 +21,6 @@
 /* core includes */
 #include <pager.h>
 #include <ipc_pager.h>
-#include <address_space.h>
 #include <thread_sel4.h>
 #include <install_mapping.h>
 
@@ -66,6 +65,9 @@ class Genode::Platform_thread : public List<Platform_thread>::Element
 		Platform_pd *_pd = nullptr;
 
 		enum { INITIAL_IPC_BUFFER_VIRT = 0x1000 };
+
+		Affinity::Location _location;
+		uint16_t           _priority;
 
 	public:
 
@@ -127,14 +129,9 @@ class Genode::Platform_thread : public List<Platform_thread>::Element
 		Thread_state state();
 
 		/**
-		 * Return the address space to which the thread is bound
-		 */
-		Weak_ptr<Address_space> address_space();
-
-		/**
 		 * Return execution time consumed by the thread
 		 */
-		unsigned long long execution_time() const { return 0; }
+		unsigned long long execution_time() const;
 
 
 		/************************
@@ -156,12 +153,12 @@ class Genode::Platform_thread : public List<Platform_thread>::Element
 		/**
 		 * Set the executing CPU for this thread
 		 */
-		void affinity(Affinity::Location) { }
+		void affinity(Affinity::Location location);
 
 		/**
 		 * Get the executing CPU for this thread
 		 */
-		Affinity::Location affinity() const { return Affinity::Location(); }
+		Affinity::Location affinity() const { return _location; }
 
 		/**
 		 * Set CPU quota of the thread
@@ -180,7 +177,7 @@ class Genode::Platform_thread : public List<Platform_thread>::Element
 
 		Cap_sel tcb_sel() const { return _info.tcb_sel; }
 
-		void install_mapping(Mapping const &mapping);
+		bool install_mapping(Mapping const &mapping);
 };
 
 #endif /* _CORE__INCLUDE__PLATFORM_THREAD_H_ */

@@ -21,8 +21,62 @@
 #include <core_cspace.h>
 #include <initial_untyped_pool.h>
 
-namespace Genode { class Platform; }
+namespace Genode {
+	class Platform;
+	template <Genode::size_t> class Static_allocator;
+}
 
+
+/**
+ * Allocator operating on a static memory pool
+ *
+ * \param MAX   maximum number of 4096 blocks
+ *
+ * The size of a single ELEM must be a multiple of sizeof(long).
+ */
+template <Genode::size_t MAX>
+class Genode::Static_allocator : public Allocator
+{
+	private:
+
+		Bit_allocator<MAX> _used;
+
+		struct Elem_space { uint8_t space[4096]; };
+
+		Elem_space _elements[MAX];
+
+	public:
+
+		class Alloc_failed { };
+
+		bool alloc(size_t size, void **out_addr) override
+		{
+			*out_addr = nullptr;
+
+			if (size > sizeof(Elem_space)) {
+				error("unexpected allocation size of ", size);
+				return false;
+			}
+
+			try {
+				*out_addr = &_elements[_used.alloc()]; }
+			catch (typename Bit_allocator<MAX>::Out_of_indices) {
+				return false; }
+
+			return true;
+		}
+
+		size_t overhead(size_t) const override { return 0; }
+
+		void free(void *ptr, size_t) override
+		{
+			Elem_space *elem = reinterpret_cast<Elem_space *>(ptr);
+			unsigned const index = elem - &_elements[0];
+			_used.free(index);
+		}
+
+		bool need_size_for_free() const { return false; }
+};
 
 class Genode::Platform : public Platform_generic
 {
@@ -41,13 +95,18 @@ class Genode::Platform : public Platform_generic
 		 */
 		Phys_allocator _unused_phys_alloc;
 
+		/*
+		 * Allocator for tracking unused virtual addresses, which are not
+		 * backed by page tables.
+		 */
+		Phys_allocator _unused_virt_alloc;
+
 		void       _init_unused_phys_alloc();
 		bool const _init_unused_phys_alloc_done;
 
 		Rom_fs _rom_fs;  /* ROM file system */
 
-
-		/**
+		/*
 		 * Virtual address range usable by non-core processes
 		 */
 		addr_t _vm_base;
@@ -60,6 +119,7 @@ class Genode::Platform : public Platform_generic
 		 * need to initialize the TLS mechanism that is used to find the IPC
 		 * buffer for the calling thread.
 		 */
+		void init_sel4_ipc_buffer();
 		bool const _init_sel4_ipc_buffer_done;
 
 		/* allocate 1st-level CNode */
@@ -84,16 +144,21 @@ class Genode::Platform : public Platform_generic
 		                    Cnode_index(Core_cspace::phys_cnode_sel()),
 		                    Core_cspace::NUM_PHYS_SEL_LOG2, _initial_untyped_pool };
 
-		/* allocate 2nd-level CNode for storing cap selectors for untyped pages */
+		/* allocate 2nd-level CNode for storing cap selectors for untyped 4k objects */
 		Cnode _untyped_cnode { Cap_sel(seL4_CapInitThreadCNode),
-		                       Cnode_index(Core_cspace::untyped_cnode_sel()),
+		                       Cnode_index(Core_cspace::untyped_cnode_4k()),
 		                       Core_cspace::NUM_PHYS_SEL_LOG2, _initial_untyped_pool };
+
+		/* allocate 2nd-level CNode for storing cap selectors for untyped 16k objects */
+		Cnode _untyped_cnode_16k { Cap_sel(seL4_CapInitThreadCNode),
+		                           Cnode_index(Core_cspace::untyped_cnode_16k()),
+		                           Core_cspace::NUM_PHYS_SEL_LOG2, _initial_untyped_pool };
 
 		/*
 		 * XXX Consider making Bit_allocator::_reserve public so that we can
 		 *     turn the bit allocator into a private member of 'Core_sel_alloc'.
 		 */
-		typedef Bit_allocator<1 << Core_cspace::NUM_PHYS_SEL_LOG2> Core_sel_bit_alloc;
+		typedef Bit_allocator<1 << Core_cspace::NUM_CORE_SEL_LOG2> Core_sel_bit_alloc;
 
 		struct Core_sel_alloc : Cap_sel_alloc, private Core_sel_bit_alloc
 		{
@@ -126,6 +191,7 @@ class Genode::Platform : public Platform_generic
 		void       _switch_to_core_cspace();
 		bool const _switch_to_core_cspace_done;
 
+		Static_allocator<sizeof(void *) * 6> _core_page_table_registry_alloc;
 		Page_table_registry _core_page_table_registry;
 
 		/**
@@ -154,6 +220,11 @@ class Genode::Platform : public Platform_generic
 
 		void _init_rom_modules();
 
+		/**
+		 * Unmap page frame provided by kernel during early bootup.
+		 */
+		long _unmap_page_frame(Cap_sel const &);
+
 	public:
 
 		/**
@@ -175,6 +246,16 @@ class Genode::Platform : public Platform_generic
 		addr_t           vm_start() const { return _vm_base; }
 		size_t           vm_size()  const { return _vm_size;  }
 		Rom_fs          *rom_fs()         { return &_rom_fs; }
+
+		Affinity::Space affinity_space() const override {
+			return sel4_boot_info().numNodes; }
+
+		bool supports_unmap() override { return true; }
+		bool supports_direct_unmap() const override { return true; }
+
+		/*******************
+		 ** seL4 specific **
+		 *******************/
 
 		Cnode &phys_cnode() { return _phys_cnode; }
 		Cnode &top_cnode()  { return _top_cnode; }

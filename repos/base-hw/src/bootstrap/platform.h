@@ -45,6 +45,8 @@ class Bootstrap::Platform
 			Memory_region_array early_ram_regions;
 			Memory_region_array late_ram_regions;
 			Mmio_space const    core_mmio;
+			Hw::Acpi_rsdp       acpi_rsdp;
+			Hw::Framebuffer     framebuffer;
 
 			Board();
 		};
@@ -128,14 +130,14 @@ class Bootstrap::Platform
 		addr_t                    core_elf_addr;
 		Elf                       core_elf;
 
-		addr_t _load_elf();
+		Mapping _load_elf();
 
 	public:
 
 		Platform();
 
-		void enable_mmu();
-		void start_core() __attribute__((noreturn));
+		unsigned enable_mmu();
+		void start_core(unsigned) __attribute__((noreturn));
 };
 
 #endif /* _SRC__BOOTSTRAP__PLATFORM_H_ */

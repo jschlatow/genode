@@ -1,5 +1,5 @@
 /*
- * \brief  Test for timeout library
+ * \brief  Test for the timeout library
  * \author Martin Stein
  * \date   2016-11-24
  */
@@ -17,18 +17,48 @@
 #include <timer_session/connection.h>
 #include <util/fifo.h>
 #include <util/misc_math.h>
+#include <base/attached_rom_dataspace.h>
 
 using namespace Genode;
 
 
+/**
+ * FIXME
+ * This function and its use are a quickfix that avoid refactorization of the
+ * timeout framework respectively the timeout test for now. It should be
+ * replaced in the near future by a solution that is part of the base lib and
+ * thus can be implemented the clean way in platform specific files.
+ */
+static bool precise_time(Xml_node config)
+{
+	String<32> attr = config.attribute_value("precise_time", String<32>("false"));
+	if (attr == "true") { return true; }
+	if (attr == "false") { return false; }
+	if (attr == "dynamic") {
+#ifdef __x86_64__
+		unsigned long cpuid = 0x80000007, edx = 0;
+		asm volatile ("cpuid" : "+a" (cpuid), "=d" (edx) : : "rbx", "rcx");
+		return edx & 0x100;
+#elif __i386__
+		unsigned long cpuid = 0x80000007, edx = 0;
+		asm volatile ("push %%ebx  \n"
+		              "cpuid       \n"
+		              "pop  %%ebx" : "+a" (cpuid), "=d" (edx) : : "ecx");
+		return edx & 0x100;
+#endif
+	}
+	return false;
+}
+
+
 struct Test
 {
-	Env               &env;
-	unsigned          &error_cnt;
-	Signal_transmitter done;
-	unsigned           id;
-	Timer::Connection  timer_connection { env };
-	Timer::Connection  timer            { env };
+	Env                    &env;
+	unsigned               &error_cnt;
+	Signal_transmitter      done;
+	unsigned                id;
+	Attached_rom_dataspace  config { env, "config" };
+	Timer::Connection       timer  { env };
 
 	Test(Env                       &env,
 	     unsigned                  &error_cnt,
@@ -65,13 +95,155 @@ struct Test
 };
 
 
+struct Duration_test : Test
+{
+	static constexpr char const *brief = "Test operations on durations";
+
+	Duration_test(Env                       &env,
+	              unsigned                  &error_cnt,
+	              Signal_context_capability  done,
+	              unsigned                   id)
+	:
+		Test(env, error_cnt, done, id, brief)
+	{
+		log("tests with common duration values");
+		enum : unsigned long { US_PER_HOUR = 1000UL * 1000 * 60 * 60 };
+
+		/* create durations for corner cases */
+		Duration min (Microseconds(0UL));
+		Duration hour(Microseconds((unsigned long)US_PER_HOUR));
+		Duration max (Microseconds(~0UL));
+		{
+			/* create durations near the corner cases */
+			Duration min_plus_1  (Microseconds(1UL));
+			Duration hour_minus_1(Microseconds((unsigned long)US_PER_HOUR - 1));
+			Duration hour_plus_1 (Microseconds((unsigned long)US_PER_HOUR + 1));
+			Duration max_minus_1 (Microseconds(~0UL - 1));
+
+			/* all must be greater than the minimum */
+			if (min_plus_1  .less_than(min)) { error(__func__, ":", __LINE__); error_cnt++; }
+			if (hour_minus_1.less_than(min)) { error(__func__, ":", __LINE__); error_cnt++; }
+			if (hour        .less_than(min)) { error(__func__, ":", __LINE__); error_cnt++; }
+			if (hour_plus_1 .less_than(min)) { error(__func__, ":", __LINE__); error_cnt++; }
+			if (max         .less_than(min)) { error(__func__, ":", __LINE__); error_cnt++; }
+			if (max_minus_1 .less_than(min)) { error(__func__, ":", __LINE__); error_cnt++; }
+
+			/* all must be less than the maximum */
+			if (max.less_than(min         )) { error(__func__, ":", __LINE__); error_cnt++; }
+			if (max.less_than(min_plus_1  )) { error(__func__, ":", __LINE__); error_cnt++; }
+			if (max.less_than(hour_minus_1)) { error(__func__, ":", __LINE__); error_cnt++; }
+			if (max.less_than(hour        )) { error(__func__, ":", __LINE__); error_cnt++; }
+			if (max.less_than(hour_plus_1 )) { error(__func__, ":", __LINE__); error_cnt++; }
+			if (max.less_than(max_minus_1 )) { error(__func__, ":", __LINE__); error_cnt++; }
+
+			/* consistency around one hour */
+			if (hour       .less_than(hour_minus_1)) { error(__func__, ":", __LINE__); error_cnt++; }
+			if (hour_plus_1.less_than(hour        )) { error(__func__, ":", __LINE__); error_cnt++; }
+		}
+		/* consistency when we double the values */
+		Duration two_hours = hour;
+		Duration two_max   = max;
+		two_hours.add(Microseconds((unsigned long)US_PER_HOUR));
+		two_max  .add(Microseconds(~0UL));
+		if (two_hours.less_than(hour)) { error(__func__, ":", __LINE__); error_cnt++; }
+		if (two_max  .less_than(max )) { error(__func__, ":", __LINE__); error_cnt++; }
+
+		/* create durations near corner cases by increasing after construction */
+		Duration hour_minus_1(Microseconds((unsigned long)US_PER_HOUR - 2));
+		Duration hour_plus_1 (Microseconds((unsigned long)US_PER_HOUR));
+		Duration max_minus_1 (Microseconds(~0UL - 2));
+		Duration max_plus_1  (Microseconds(~0UL));
+		hour_minus_1.add(Microseconds(1));
+		hour_plus_1 .add(Microseconds(1));
+		max_minus_1 .add(Microseconds(1));
+		max_plus_1  .add(Microseconds(1));
+
+		/* consistency around corner cases */
+		if (hour       .less_than(hour_minus_1)) { error(__func__, ":", __LINE__); error_cnt++; }
+		if (hour_plus_1.less_than(hour        )) { error(__func__, ":", __LINE__); error_cnt++; }
+		if (max        .less_than(max_minus_1 )) { error(__func__, ":", __LINE__); error_cnt++; }
+		if (max_plus_1 .less_than(max         )) { error(__func__, ":", __LINE__); error_cnt++; }
+
+		log("tests near maximum duration value (may take a while)");
+
+		/*
+		 * This is a fast way to get the maximum possible duration
+		 */
+		enum { NR = 12 };
+		Duration duration[NR] = {
+			Duration(Microseconds(1UL)),
+			Duration(Microseconds(1UL)),
+			Duration(Microseconds(1UL)),
+			Duration(Microseconds(1UL)),
+			Duration(Microseconds(1UL)),
+			Duration(Microseconds(1UL)),
+			Duration(Microseconds(1UL)),
+			Duration(Microseconds(1UL)),
+			Duration(Microseconds(1UL)),
+			Duration(Microseconds(1UL)),
+			Duration(Microseconds(0UL)),
+			Duration(Microseconds(0UL))
+		};
+		for (unsigned volatile step = 0; NR - step > 2; step++) {
+
+			/*
+			 * We increase all left durations equally, beginning with a big
+			 * step width, until an overflow occurs. Then, we dismiss the
+			 * duration that had the overflow and decrease the step width for
+			 * the next round. With only 3 durations left, we decrease step
+			 * width to 1 and do one more round. So, finally we have only 2
+			 * durations left.
+			 */
+			unsigned volatile duration_id = step;
+			unsigned          nr_left     = NR - step;
+			try {
+				while (1) {
+					for (; duration_id < NR; duration_id++) {
+
+						if      (nr_left  > 4) { duration[duration_id].add(Milliseconds(~0UL / (step + 1))); }
+						else if (nr_left == 4) { duration[duration_id].add(Milliseconds(1000UL)); }
+						else if (nr_left  < 4) { duration[duration_id].add(Microseconds(1UL)); }
+					}
+					duration_id = step;
+				}
+			}
+			catch (Duration::Overflow) { }
+			log("  step ", step, " done: duration ", duration_id, " dismissed",
+			                          ", durations ", step, "..", NR - 1, " left");
+		}
+
+		/*
+		 * Now, both duration[NR - 2] and duration[NR - 1] contain one less
+		 * than the maximum possible duration value. So, test consistency at
+		 * this corner case.
+		 */
+		duration[NR - 2].add(Microseconds(1));
+		if (duration[NR - 2].less_than(duration[NR - 1]))        { error(__func__, ":", __LINE__); error_cnt++; }
+		if (duration[NR - 1].less_than(duration[NR - 2])) ; else { error(__func__, ":", __LINE__); error_cnt++; }
+
+		/* test if we really had the expected durations */
+		try {
+			duration[NR - 2].add(Microseconds(1));
+			error(__func__, ":", __LINE__); error_cnt++;
+		}
+		catch (Duration::Overflow) { }
+		try {
+			duration[NR - 1].add(Microseconds(2));
+			error(__func__, ":", __LINE__); error_cnt++;
+		}
+		catch (Duration::Overflow) { }
+
+		Test::done.submit();
+	}
+};
+
+
 struct Mixed_timeouts : Test
 {
 	static constexpr char const *brief = "schedule multiple timeouts simultaneously";
 
-	enum { NR_OF_EVENTS   = 20 };
-	enum { NR_OF_TIMEOUTS = 4 };
-	enum { MAX_ERROR_PC   = 10 };
+	enum { NR_OF_EVENTS   = 21 };
+	enum { NR_OF_TIMEOUTS = 6 };
 
 	struct Timeout
 	{
@@ -79,93 +251,128 @@ struct Mixed_timeouts : Test
 		Microseconds const        us;
 	};
 
-	struct Event
+	struct Timeout_event
 	{
 		Timeout  const *const timeout;
 		Duration const        time;
 	};
 
+	/*
+	 * Which timeouts we do install and with which configuration
+	 *
+	 * We mix in timeouts with the maximum duration to see if they trigger any
+	 * corner-case bugs. These timeouts are expected to be so big that they
+	 * do not trigger during the lifetime of the test.
+	 */
 	Timeout const timeouts[NR_OF_TIMEOUTS] {
-		{ "Periodic  700 ms", Microseconds( 700000) },
-		{ "Periodic 1000 ms", Microseconds(1000000) },
-		{ "One-shot 3250 ms", Microseconds(3250000) },
-		{ "One-shot 5200 ms", Microseconds(5200000) }
+		/* 0 */ { "Periodic  700 ms", Microseconds( 700000UL) },
+		/* 1 */ { "Periodic 1000 ms", Microseconds(1000000UL) },
+		/* 2 */ { "Periodic  max ms", Microseconds(     ~0UL) },
+		/* 3 */ { "One-shot 3250 ms", Microseconds(3250000UL) },
+		/* 4 */ { "One-shot 5200 ms", Microseconds(5200000UL) },
+		/* 5 */ { "One-shot  max ms", Microseconds(     ~0UL) },
 	};
 
 	/*
+	 * Our expectations which timeout should trigger at which point in time
+	 *
 	 * We want to check only timeouts that have a distance of at least
 	 * 200ms to each other timeout. Thus, the items in this array that
 	 * have an empty name are treated as wildcards and match any timeout.
 	 */
-	Event const events[NR_OF_EVENTS] {
-		{ nullptr,      Duration(Milliseconds(0))    },
-		{ nullptr,      Duration(Milliseconds(0))    },
-		{ &timeouts[0], Duration(Milliseconds(700))  },
-		{ &timeouts[1], Duration(Milliseconds(1000)) },
-		{ &timeouts[0], Duration(Milliseconds(1400)) },
-		{ nullptr,      Duration(Milliseconds(2000)) },
-		{ nullptr,      Duration(Milliseconds(2100)) },
-		{ &timeouts[0], Duration(Milliseconds(2800)) },
-		{ &timeouts[1], Duration(Milliseconds(3000)) },
-		{ &timeouts[2], Duration(Milliseconds(3250)) },
-		{ &timeouts[0], Duration(Milliseconds(3500)) },
-		{ &timeouts[1], Duration(Milliseconds(4000)) },
-		{ &timeouts[0], Duration(Milliseconds(4200)) },
-		{ nullptr,      Duration(Milliseconds(4900)) },
-		{ nullptr,      Duration(Milliseconds(5000)) },
-		{ &timeouts[3], Duration(Milliseconds(5200)) },
-		{ &timeouts[0], Duration(Milliseconds(5600)) },
-		{ &timeouts[1], Duration(Milliseconds(6000)) },
-		{ &timeouts[0], Duration(Milliseconds(6300)) },
-		{ &timeouts[2], Duration(Milliseconds(6500)) }
+	Timeout_event const events[NR_OF_EVENTS] {
+		/*  0 */ { nullptr,      Duration(Milliseconds(   0UL)) },
+		/*  1 */ { nullptr,      Duration(Milliseconds(   0UL)) },
+		/*  2 */ { nullptr,      Duration(Milliseconds(   0UL)) },
+		/*  3 */ { &timeouts[0], Duration(Milliseconds( 700UL)) },
+		/*  4 */ { &timeouts[1], Duration(Milliseconds(1000UL)) },
+		/*  5 */ { &timeouts[0], Duration(Milliseconds(1400UL)) },
+		/*  6 */ { nullptr,      Duration(Milliseconds(2000UL)) },
+		/*  7 */ { nullptr,      Duration(Milliseconds(2100UL)) },
+		/*  8 */ { &timeouts[0], Duration(Milliseconds(2800UL)) },
+		/*  9 */ { &timeouts[1], Duration(Milliseconds(3000UL)) },
+		/* 10 */ { &timeouts[3], Duration(Milliseconds(3250UL)) },
+		/* 11 */ { &timeouts[0], Duration(Milliseconds(3500UL)) },
+		/* 12 */ { &timeouts[1], Duration(Milliseconds(4000UL)) },
+		/* 13 */ { &timeouts[0], Duration(Milliseconds(4200UL)) },
+		/* 14 */ { nullptr,      Duration(Milliseconds(4900UL)) },
+		/* 15 */ { nullptr,      Duration(Milliseconds(5000UL)) },
+		/* 16 */ { &timeouts[4], Duration(Milliseconds(5200UL)) },
+		/* 17 */ { &timeouts[0], Duration(Milliseconds(5600UL)) },
+		/* 18 */ { &timeouts[1], Duration(Milliseconds(6000UL)) },
+		/* 19 */ { &timeouts[0], Duration(Milliseconds(6300UL)) },
+		/* 20 */ { &timeouts[3], Duration(Milliseconds(6500UL)) }
 	};
 
-	Duration init_time { Microseconds(0) };
-	unsigned event_id  { 0 };
+	struct {
+		unsigned long   event_time_us { 0 };
+		unsigned long   time_us { 0 };
+		Timeout const * timeout { nullptr };
+	} results [NR_OF_EVENTS];
+
+	Duration      init_time    { Microseconds(0) };
+	unsigned      event_id     { 0 };
+	unsigned long max_error_us { config.xml().attribute_value("precise_timeouts", true) ?
+	                             50000UL : 200000UL };
 
 	Timer::Periodic_timeout<Mixed_timeouts> pt1 { timer, *this, &Mixed_timeouts::handle_pt1, timeouts[0].us };
 	Timer::Periodic_timeout<Mixed_timeouts> pt2 { timer, *this, &Mixed_timeouts::handle_pt2, timeouts[1].us };
+	Timer::Periodic_timeout<Mixed_timeouts> pt3 { timer, *this, &Mixed_timeouts::handle_pt3, timeouts[2].us };
 	Timer::One_shot_timeout<Mixed_timeouts> ot1 { timer, *this, &Mixed_timeouts::handle_ot1 };
 	Timer::One_shot_timeout<Mixed_timeouts> ot2 { timer, *this, &Mixed_timeouts::handle_ot2 };
+	Timer::One_shot_timeout<Mixed_timeouts> ot3 { timer, *this, &Mixed_timeouts::handle_ot3 };
 
 	void handle_pt1(Duration time) { handle(time, timeouts[0]); }
 	void handle_pt2(Duration time) { handle(time, timeouts[1]); }
-	void handle_ot1(Duration time) { handle(time, timeouts[2]); ot1.schedule(timeouts[2].us); }
-	void handle_ot2(Duration time) { handle(time, timeouts[3]); }
+	void handle_pt3(Duration time) { handle(time, timeouts[2]); }
+	void handle_ot1(Duration time) { handle(time, timeouts[3]); ot1.schedule(timeouts[3].us); }
+	void handle_ot2(Duration time) { handle(time, timeouts[4]); }
+	void handle_ot3(Duration time) { handle(time, timeouts[5]); }
 
 	void handle(Duration time, Timeout const &timeout)
 	{
+		/* stop if we have received the expected number of events */
 		if (event_id == NR_OF_EVENTS) {
 			return; }
 
+		/* remember the time of the first event as offset for the others */
 		if (!event_id) {
 			init_time = time; }
 
-		Event const &event = events[event_id++];
-		unsigned long time_us = time.trunc_to_plain_us().value -
-		                        init_time.trunc_to_plain_us().value;
+		Timeout_event const &event      = events[event_id];
+		results[event_id].event_time_us = event.time.trunc_to_plain_us().value;
+		results[event_id].time_us       = time.trunc_to_plain_us().value -
+		                                  init_time.trunc_to_plain_us().value;
+		results[event_id].timeout       = &timeout;
 
-		unsigned long event_time_us = event.time.trunc_to_plain_us().value;
-		unsigned long error_us      = max(time_us, event_time_us) -
-		                              min(time_us, event_time_us);
-
-		float const error_pc = percentage(error_us, timeout.us.value);
-
-		log(time_us / 1000UL, " ms: ", timeout.name, " timeout triggered,"
-		    " error ", error_us, " us (", error_pc, " %)");
-
-		if (error_pc > MAX_ERROR_PC) {
-
-			error("absolute timeout error greater than ", (unsigned)MAX_ERROR_PC, " %");
-			error_cnt++;
-		}
 		if (event.timeout && event.timeout != &timeout) {
-
-			error("expected timeout ", timeout.name);
+			error("expected timeout ", event.timeout->name);
 			error_cnt++;
 		}
-		if (event_id == NR_OF_EVENTS) {
-			done.submit(); }
+
+		event_id++;
+
+		if (event_id != NR_OF_EVENTS) {
+			return; }
+
+		for (unsigned i = 0; i < NR_OF_EVENTS; i++) {
+			unsigned long const event_time_us = results[i].event_time_us;
+			unsigned long const time_us       = results[i].time_us;
+			unsigned long const error_us      = max(time_us, event_time_us) -
+			                                    min(time_us, event_time_us);
+			Timeout const *timeout            = results[i].timeout;
+
+			log(time_us / 1000UL, " ms: ", timeout->name, " timeout triggered,"
+			    " error ", error_us, " us (max ", max_error_us, " us)");
+
+			if (error_us > max_error_us) {
+				error("absolute timeout error greater than ", max_error_us,
+				      " us");
+				error_cnt++;
+			}
+		}
+
+		done.submit();
 	}
 
 	Mixed_timeouts(Env                       &env,
@@ -175,8 +382,9 @@ struct Mixed_timeouts : Test
 	:
 		Test(env, error_cnt, done, id, brief)
 	{
-		ot1.schedule(timeouts[2].us);
-		ot2.schedule(timeouts[3].us);
+		ot1.schedule(timeouts[3].us);
+		ot2.schedule(timeouts[4].us);
+		ot3.schedule(timeouts[5].us);
 	}
 };
 
@@ -192,26 +400,41 @@ struct Fast_polling : Test
 	enum { STACK_SIZE            = 4 * 1024 * sizeof(addr_t) };
 	enum { MIN_TIME_COMPARISONS  = 100 };
 	enum { MAX_TIME_ERR_US       = 10000 };
-	enum { MAX_AVG_TIME_ERR_US   = 1000 };
 	enum { MAX_DELAY_ERR_US      = 2000 };
 	enum { MAX_AVG_DELAY_ERR_US  = 20 };
 	enum { MAX_POLL_LATENCY_US   = 1000 };
 	enum { BUF_SIZE              = MAX_NR_OF_POLLS * sizeof(unsigned long) };
 
+	struct Result_buffer
+	{
+		Env                    &env;
+		Attached_ram_dataspace  ram   { env.ram(), env.rm(), BUF_SIZE };
+		unsigned long volatile *value { ram.local_addr<unsigned long>() };
+
+		Result_buffer(Env &env) : env(env) { }
+	};
+
 	Entrypoint                   main_ep;
 	Signal_handler<Fast_polling> main_handler;
 
-	Attached_ram_dataspace local_us_buf_1 { env.ram(), env.rm(), BUF_SIZE };
-	Attached_ram_dataspace local_us_buf_2 { env.ram(), env.rm(), BUF_SIZE };
-	Attached_ram_dataspace remote_ms_buf  { env.ram(), env.rm(), BUF_SIZE };
-	unsigned long volatile *local_us_1    { local_us_buf_1.local_addr<unsigned long>() };
-	unsigned long volatile *local_us_2    { local_us_buf_2.local_addr<unsigned long>() };
-	unsigned long volatile *remote_ms     { remote_ms_buf.local_addr<unsigned long>() };
+	Timer::Connection      timer_2         { env };
+	unsigned long const    timer_us        { timer.elapsed_us() };
+	unsigned long const    timer_2_us      { timer_2.elapsed_us() };
+	bool          const    timer_2_delayed { timer_us > timer_2_us };
+	unsigned long const    timer_diff_us   { timer_2_delayed ?
+	                                         timer_2_us - timer_us :
+	                                         timer_us - timer_2_us };
+	Result_buffer          local_us_1_buf  { env };
+	Result_buffer          local_us_2_buf  { env };
+	Result_buffer          remote_us_buf   { env };
 
-	unsigned const delay_loops_per_poll[NR_OF_ROUNDS] { 1,
-	                                                    1000,
-	                                                    10000,
-	                                                    100000 };
+	unsigned long max_avg_time_err_us { config.xml().attribute_value("precise_ref_time", true) ?
+	                                    1000UL : 2000UL };
+
+	unsigned const delay_loops_per_poll[NR_OF_ROUNDS] {      1,
+	                                                      1000,
+	                                                     10000,
+	                                                    100000  };
 
 	/*
 	 * Accumulates great amounts of integer values to one average value
@@ -267,9 +490,9 @@ struct Fast_polling : Test
 
 	unsigned long delay_us(unsigned poll)
 	{
-		return local_us_1[poll - 1] > local_us_1[poll] ?
-		       local_us_1[poll - 1] - local_us_1[poll] :
-		       local_us_1[poll]     - local_us_1[poll - 1];
+		return local_us_1_buf.value[poll - 1] > local_us_1_buf.value[poll] ?
+		       local_us_1_buf.value[poll - 1] - local_us_1_buf.value[poll] :
+		       local_us_1_buf.value[poll]     - local_us_1_buf.value[poll - 1];
 	}
 
 	unsigned long estimate_delay_loops_per_ms()
@@ -278,9 +501,9 @@ struct Fast_polling : Test
 		for (unsigned long max_cnt = 1000UL * 1000UL; ; max_cnt *= 2) {
 
 			/* measure consumed time of a limited busy loop */
-			unsigned long volatile start_ms = timer_connection.elapsed_ms();
+			unsigned long volatile start_ms = timer_2.elapsed_ms();
 			for (unsigned long volatile cnt = 0; cnt < max_cnt; cnt++) { }
-			unsigned long volatile end_ms = timer_connection.elapsed_ms();
+			unsigned long volatile end_ms = timer_2.elapsed_ms();
 
 			/*
 			 * We only return the result if the loop was time intensive enough
@@ -300,8 +523,8 @@ struct Fast_polling : Test
 		 *
 		 * The test delays must be done through busy spinning. If we would
 		 * use a timer session instead, we could not produce delays of only a
-		 * few microseconds. Thus, to get similar delays on each platform we
-		 * have to do this estimation.
+		 * few microseconds. Thus, to get nearly similar delays on each
+		 * platform we have to do this estimation.
 		 */
 		unsigned long volatile delay_loops_per_remote_poll =
 			estimate_delay_loops_per_ms() / 100;
@@ -319,8 +542,8 @@ struct Fast_polling : Test
 
 			unsigned long nr_of_polls           = MAX_NR_OF_POLLS;
 			unsigned long delay_loops_per_poll_ = delay_loops_per_poll[round];
-			unsigned long end_remote_ms         = timer_connection.elapsed_ms() +
-			                                      MIN_ROUND_DURATION_MS;
+			unsigned long end_remote_us         = timer_2.elapsed_us() +
+			                                      MIN_ROUND_DURATION_MS * 1000UL;
 
 			/* limit polling to our buffer capacity */
 			for (unsigned poll = 0; poll < nr_of_polls; poll++) {
@@ -336,28 +559,28 @@ struct Fast_polling : Test
 				 * access wont raise the delay between the reading of the
 				 * different time values.
 				 */
-				unsigned long volatile local_us_1_;
-				unsigned long volatile local_us_2_;
-				unsigned long volatile remote_ms_;
+				unsigned long volatile local_us_1;
+				unsigned long volatile local_us_2;
+				unsigned long volatile remote_us;
 
 				/* read local time before the remote time reading */
-				local_us_1_ = timer.curr_time().trunc_to_plain_us().value;
+				local_us_1 = timer.curr_time().trunc_to_plain_us().value;
 
 				/*
 				 * Limit frequency of remote-time reading
 				 *
-				 * If we would stress the timer connection to much, the
-				 * back-end functionality of the timeout framework would
-				 * remarkably slow down which causes a phase of adaption with
-				 * bigger errors. But the goal of the framework is to spare
-				 * calls to timer connections anyway. So, its fine to limit
-				 * the polling frequency here.
+				 * If we would stress the timer driver to much with the
+				 * 'elapsed_us' method, the back-end functionality of the
+				 * timeout framework would slow down too which causes a phase
+				 * of adaption with bigger errors. But the goal of the
+				 * framework is to spare calls to the timer driver anyway. So,
+				 * its fine to limit the polling frequency here.
 				 */
 				if (delay_loops > delay_loops_per_remote_poll) {
 
 					/* read remote time and second local time */
-					remote_ms_  = timer_connection.elapsed_ms();
-					local_us_2_ = timer.curr_time().trunc_to_plain_us().value;
+					remote_us  = timer_2.elapsed_us();
+					local_us_2 = timer.curr_time().trunc_to_plain_us().value;
 
 					/* reset delay counter for remote-time reading */
 					delay_loops = 0;
@@ -365,16 +588,16 @@ struct Fast_polling : Test
 				} else {
 
 					/* mark remote-time and second local-time value invalid */
-					remote_ms_  = 0;
-					local_us_2_ = 0;
+					remote_us  = 0;
+					local_us_2 = 0;
 				}
 				/* store results to the buffers */
-				remote_ms[poll]  = remote_ms_;
-				local_us_1[poll] = local_us_1_;
-				local_us_2[poll] = local_us_2_;
+				remote_us_buf.value[poll]  = remote_us;
+				local_us_1_buf.value[poll] = local_us_1;
+				local_us_2_buf.value[poll] = local_us_2;
 
 				/* if the minimum round duration is reached, end polling */
-				if (remote_ms_ > end_remote_ms) {
+				if (remote_us > end_remote_us) {
 					nr_of_polls = poll + 1;
 					break;
 				}
@@ -392,15 +615,25 @@ struct Fast_polling : Test
 			unsigned nr_of_bad_polls = 0;
 			for (unsigned poll = 0; poll < nr_of_polls; poll++) {
 
-				if (remote_ms[poll] &&
-				    local_us_2[poll] - local_us_1[poll] > MAX_POLL_LATENCY_US)
+				unsigned long const poll_latency_us =
+					local_us_2_buf.value[poll] - local_us_1_buf.value[poll];
+
+				if (remote_us_buf.value[poll] &&
+				    poll_latency_us > MAX_POLL_LATENCY_US)
 				{
-					local_us_1[poll] = 0;
+					local_us_1_buf.value[poll] = 0;
 					nr_of_bad_polls++;
 
 				} else {
 
-					nr_of_good_polls++; }
+					if (timer_2_delayed) {
+						local_us_1_buf.value[poll] += timer_diff_us;
+						local_us_2_buf.value[poll] += timer_diff_us;
+					} else {
+						remote_us_buf.value[poll] += timer_diff_us;
+					}
+					nr_of_good_polls++;
+				}
 			}
 
 			/*
@@ -411,12 +644,12 @@ struct Fast_polling : Test
 			for (unsigned poll = 1; poll < nr_of_polls; poll++) {
 
 				/* skip if this result was dismissed */
-				if (!local_us_1[poll]) {
+				if (!local_us_1_buf.value[poll]) {
 					poll++;
 					continue;
 				}
 				/* check if local time is monotone */
-				if (local_us_1[poll - 1] > local_us_1[poll]) {
+				if (local_us_1_buf.value[poll - 1] > local_us_1_buf.value[poll]) {
 
 					error("time is not monotone at poll #", poll);
 					error_cnt++;
@@ -436,22 +669,18 @@ struct Fast_polling : Test
 			for (unsigned poll = 0; poll < nr_of_polls; poll++) {
 
 				/* skip if this result was dismissed */
-				if (!local_us_1[poll]) {
+				if (!local_us_1_buf.value[poll]) {
 					continue; }
 
 				/* skip if this poll contains no remote time */
-				if (!remote_ms[poll]) {
+				if (!remote_us_buf.value[poll]) {
 					continue; }
 
-				/* scale-up remote time to microseconds and calculate error */
-				if (remote_ms[poll] > ~0UL / 1000UL) {
-					error("can not translate remote time to microseconds");
-					error_cnt++;
-				}
-				unsigned long const remote_us   = remote_ms[poll] * 1000UL;
-				unsigned long const time_err_us = remote_us > local_us_1[poll] ?
-				                                  remote_us - local_us_1[poll] :
-				                                  local_us_1[poll] - remote_us;
+				unsigned long const remote_us   = remote_us_buf.value[poll];
+				unsigned long const local_us    = local_us_1_buf.value[poll];
+				unsigned long const time_err_us = remote_us > local_us ?
+				                                  remote_us - local_us :
+				                                  local_us - remote_us;
 
 				/* update max time error */
 				if (time_err_us > max_time_err_us) {
@@ -472,7 +701,7 @@ struct Fast_polling : Test
 			for (unsigned poll = 1; poll < nr_of_polls; poll++) {
 
 				/* skip if this result was dismissed */
-				if (!local_us_1[poll]) {
+				if (!local_us_1_buf.value[poll]) {
 					poll++;
 					continue;
 				}
@@ -493,7 +722,7 @@ struct Fast_polling : Test
 
 			bool const error_nr_of_good_polls = (nr_of_good_polls          < MIN_NR_OF_POLLS);
 			bool const error_nr_of_time_cmprs = (avg_time_err_us.avg_cnt() < MIN_TIME_COMPARISONS);
-			bool const error_avg_time_err     = (avg_time_err_us.avg()     > MAX_AVG_TIME_ERR_US);
+			bool const error_avg_time_err     = (avg_time_err_us.avg()     > max_avg_time_err_us);
 			bool const error_max_time_err     = (max_time_err_us           > MAX_TIME_ERR_US);
 			bool const error_avg_delay_err    = (avg_delay_err_us.avg()    > max_avg_delay_err_us);
 
@@ -506,7 +735,7 @@ struct Fast_polling : Test
 			log(error_nr_of_good_polls ? "\033[31mbad:  " : "good: ", "nr of good polls       ", nr_of_good_polls,            " (min ", (unsigned)MIN_NR_OF_POLLS,              ")\033[0m");
 			log(                                            "      ", "nr of bad polls        ", nr_of_bad_polls                                                                          );
 			log(error_nr_of_time_cmprs ? "\033[31mbad:  " : "good: ", "nr of time comparisons ", avg_time_err_us.avg_cnt(),   " (min ", (unsigned)MIN_TIME_COMPARISONS,         ")\033[0m");
-			log(error_avg_time_err     ? "\033[31mbad:  " : "good: ", "average time error     ", avg_time_err_us.avg(),    " us (max ", (unsigned long)MAX_AVG_TIME_ERR_US,  " us)\033[0m");
+			log(error_avg_time_err     ? "\033[31mbad:  " : "good: ", "average time error     ", avg_time_err_us.avg(),    " us (max ", (unsigned long)max_avg_time_err_us,  " us)\033[0m");
 			log(error_max_time_err     ? "\033[31mbad:  " : "good: ", "maximum time error     ", max_time_err_us,          " us (max ", (unsigned long)MAX_TIME_ERR_US,      " us)\033[0m");
 			log(                                            "      ", "average delay          ", avg_delay_us.avg(),       " us"                                                          );
 			log(error_avg_delay_err    ? "\033[31mbad:  " : "good: ", "average delay error    ", avg_delay_err_us.avg(),   " us (max ", max_avg_delay_err_us,                " us)\033[0m");
@@ -525,7 +754,12 @@ struct Fast_polling : Test
 		main_ep(env, STACK_SIZE, "fast_polling_ep"),
 		main_handler(main_ep, *this, &Fast_polling::main)
 	{
-		Signal_transmitter(main_handler).submit();
+		if (precise_time(config.xml())) {
+			Signal_transmitter(main_handler).submit();
+		} else {
+			log("... skip test, requires the platform to support precise time");
+			Test::done.submit();
+		}
 	}
 };
 
@@ -534,10 +768,12 @@ struct Main
 {
 	Env                           &env;
 	unsigned                       error_cnt   { 0 };
-	Constructible<Fast_polling>    test_1;
-	Constructible<Mixed_timeouts>  test_2;
+	Constructible<Duration_test>   test_1;
+	Constructible<Fast_polling>    test_2;
+	Constructible<Mixed_timeouts>  test_3;
 	Signal_handler<Main>           test_1_done { env.ep(), *this, &Main::handle_test_1_done };
 	Signal_handler<Main>           test_2_done { env.ep(), *this, &Main::handle_test_2_done };
+	Signal_handler<Main>           test_3_done { env.ep(), *this, &Main::handle_test_3_done };
 
 	Main(Env &env) : env(env)
 	{
@@ -553,6 +789,12 @@ struct Main
 	void handle_test_2_done()
 	{
 		test_2.destruct();
+		test_3.construct(env, error_cnt, test_3_done, 2);
+	}
+
+	void handle_test_3_done()
+	{
+		test_3.destruct();
 		if (error_cnt) {
 			error("test failed because of ", error_cnt, " error(s)");
 			env.parent().exit(-1);

@@ -39,7 +39,7 @@ class Genode::Core_env : public Env_deprecated
 {
 	private:
 
-		enum { ENTRYPOINT_STACK_SIZE = 2048 * sizeof(Genode::addr_t) };
+		enum { ENTRYPOINT_STACK_SIZE = 20 * 1024 };
 
 		/*
 		 * Initialize the stack area before creating the first thread,
@@ -60,6 +60,7 @@ class Genode::Core_env : public Env_deprecated
 			_entrypoint(nullptr, ENTRYPOINT_STACK_SIZE, "entrypoint"),
 			_region_map(_entrypoint),
 			_pd_session(_entrypoint,
+			            _entrypoint,
 			            Session::Resources {
 			                Ram_quota { platform()->ram_alloc()->avail() },
 			                Cap_quota { platform()->max_caps() } },
@@ -67,9 +68,11 @@ class Genode::Core_env : public Env_deprecated
 			            Session::Diag{false},
 			            *platform()->ram_alloc(),
 			            Ram_dataspace_factory::any_phys_range(),
+			            Ram_dataspace_factory::Virt_range { platform()->vm_start(), platform()->vm_size() },
 			            _region_map,
 			            *((Pager_entrypoint *)nullptr),
-			            "" /* args to native PD */)
+			            "" /* args to native PD */,
+			            *platform_specific()->core_mem_alloc())
 		{
 			_pd_session.init_cap_and_ram_accounts();
 		}
@@ -80,6 +83,7 @@ class Genode::Core_env : public Env_deprecated
 		Ram_allocator  &ram_allocator() { return  _synced_ram_allocator; }
 		Region_map     &local_rm()      { return  _region_map; }
 
+		Rpc_entrypoint &signal_ep();
 
 		/******************************
 		 ** Env_deprecated interface **

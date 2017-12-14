@@ -1,5 +1,5 @@
 /*
- * \brief  Utilities fo thread creation on seL4
+ * \brief  Utilities for thread creation on seL4
  * \author Norman Feske
  * \date   2015-05-12
  *
@@ -39,7 +39,9 @@ namespace Genode {
 
 		Thread_info() { }
 
-		inline void init(addr_t const utcb_virt_addr);
+		inline void init_tcb(Platform &, Range_allocator &,
+		                     unsigned const prio, unsigned const cpu);
+		inline void init(addr_t const utcb_virt_addr, unsigned const prio);
 		inline void destruct();
 
 	};
@@ -48,13 +50,32 @@ namespace Genode {
 	 * Set register values for the instruction pointer and stack pointer and
 	 * start the seL4 thread
 	 */
-	static inline void start_sel4_thread(Cap_sel tcb_sel, addr_t ip, addr_t sp);
+	void start_sel4_thread(Cap_sel tcb_sel, addr_t ip, addr_t sp, unsigned cpu);
+	void affinity_sel4_thread(Cap_sel const &tcb_sel, unsigned cpu);
 };
 
-
-void Genode::Thread_info::init(addr_t const utcb_virt_addr)
+void Genode::Thread_info::init_tcb(Platform &platform,
+                                   Range_allocator &phys_alloc,
+                                   unsigned const prio, unsigned const cpu)
 {
-	Platform &platform = *platform_specific();
+	/* allocate TCB within core's CNode */
+	addr_t       const phys_addr = Untyped_memory::alloc_page(phys_alloc);
+	seL4_Untyped const service   = Untyped_memory::untyped_sel(phys_addr).value();
+
+	tcb_sel = platform.core_sel_alloc().alloc();
+	create<Tcb_kobj>(service, platform.core_cnode().sel(), tcb_sel);
+
+	/* set scheduling priority */
+	seL4_TCB_SetMCPriority(tcb_sel.value(), prio);
+	seL4_TCB_SetPriority(tcb_sel.value(), prio);
+
+	/* place at cpu */
+	affinity_sel4_thread(tcb_sel, cpu);
+}
+
+void Genode::Thread_info::init(addr_t const utcb_virt_addr, unsigned const prio)
+{
+	Platform        &platform   = *platform_specific();
 	Range_allocator &phys_alloc = *platform.ram_alloc();
 
 	/* create IPC buffer of one page */
@@ -62,16 +83,25 @@ void Genode::Thread_info::init(addr_t const utcb_virt_addr)
 	Untyped_memory::convert_to_page_frames(ipc_buffer_phys, 1);
 
 	/* allocate TCB within core's CNode */
-	tcb_sel = platform.core_sel_alloc().alloc();
-	create<Tcb_kobj>(phys_alloc, platform.core_cnode().sel(), tcb_sel);
+	init_tcb(platform, phys_alloc, prio, 0);
 
 	/* allocate synchronous endpoint within core's CNode */
-	ep_sel = platform.core_sel_alloc().alloc();
-	create<Endpoint_kobj>(phys_alloc, platform.core_cnode().sel(), ep_sel);
+	{
+		addr_t       const phys_addr = Untyped_memory::alloc_page(phys_alloc);
+		seL4_Untyped const service   = Untyped_memory::untyped_sel(phys_addr).value();
+
+		ep_sel = platform.core_sel_alloc().alloc();
+		create<Endpoint_kobj>(service, platform.core_cnode().sel(), ep_sel);
+	}
 
 	/* allocate asynchronous object within core's CSpace */
-	lock_sel = platform.core_sel_alloc().alloc();
-	create<Notification_kobj>(phys_alloc, platform.core_cnode().sel(), lock_sel);
+	{
+		addr_t       const phys_addr = Untyped_memory::alloc_page(phys_alloc);
+		seL4_Untyped const service   = Untyped_memory::untyped_sel(phys_addr).value();
+
+		lock_sel = platform.core_sel_alloc().alloc();
+		create<Notification_kobj>(service, platform.core_cnode().sel(), lock_sel);
+	}
 
 	/* assign IPC buffer to thread */
 	{
@@ -82,10 +112,6 @@ void Genode::Thread_info::init(addr_t const utcb_virt_addr)
 		                                      ipc_buffer_sel.value());
 		ASSERT(ret == 0);
 	}
-
-	/* set scheduling priority */
-	enum { PRIORITY_MAX = 0xff };
-	seL4_TCB_SetPriority(tcb_sel.value(), PRIORITY_MAX);
 }
 
 
@@ -113,21 +139,7 @@ void Genode::Thread_info::destruct()
 }
 
 
-void Genode::start_sel4_thread(Cap_sel tcb_sel, addr_t ip, addr_t sp)
-{
-	/* set register values for the instruction pointer and stack pointer */
-	seL4_UserContext regs;
-	Genode::memset(&regs, 0, sizeof(regs));
-	size_t const num_regs = sizeof(regs)/sizeof(seL4_Word);
-
-	regs.eip = ip;
-	regs.esp = sp;
-	regs.gs  = IPCBUF_GDT_SELECTOR;
-
-	int const ret = seL4_TCB_WriteRegisters(tcb_sel.value(), false, 0, num_regs, &regs);
-	ASSERT(ret == 0);
-
-	seL4_TCB_Resume(tcb_sel.value());
-}
+void Genode::start_sel4_thread(Cap_sel tcb_sel, addr_t ip, addr_t sp,
+                               unsigned cpu);
 
 #endif /* _CORE__INCLUDE__THREAD_SEL4_H_ */

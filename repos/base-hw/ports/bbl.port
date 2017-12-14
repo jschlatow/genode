@@ -2,7 +2,7 @@ LICENSE   := BSD-3-Clause
 VERSION   := git
 DOWNLOADS := bbl.git
 
-URL(bbl) = https://github.com/ssumpf/bbl-lite.git
-REV(bbl) = b24944dde265016ff9b3c8608fe5cc24994e360a
+URL(bbl) = https://github.com/skalk/bbl-lite.git
+REV(bbl) = 20e03dfa317747dd39175f9fc3c15c50b702ac04
 DIR(bbl) = src/lib/bbl
 

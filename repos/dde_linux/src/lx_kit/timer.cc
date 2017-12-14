@@ -44,7 +44,6 @@ class Lx_kit::Timer : public Lx::Timer
 			void              *timer;
 			bool               pending { false };
 			unsigned long      timeout { INVALID_TIMEOUT }; /* absolute in jiffies */
-			bool               programmed { false };
 
 			Context(struct timer_list *timer) : type(LIST), timer(timer) { }
 			Context(struct hrtimer    *timer) : type(HR),   timer(timer) { }
@@ -81,11 +80,11 @@ class Lx_kit::Timer : public Lx::Timer
 
 		unsigned long                               &_jiffies;
 		::Timer::Connection                          _timer_conn;
+		::Timer::Connection                          _timer_conn_modern;
 		Lx_kit::List<Context>                        _list;
 		Lx::Task                                     _timer_task;
 		Genode::Signal_handler<Lx_kit::Timer>        _dispatcher;
 		Genode::Tslab<Context, 32 * sizeof(Context)> _timer_alloc;
-		Lx::jiffies_update_func                      _jiffies_func = nullptr;
 
 		/**
 		 * Lookup local timer
@@ -101,11 +100,6 @@ class Lx_kit::Timer : public Lx::Timer
 
 		/**
 		 * Program the first timer in the list
-		 *
-		 * The first timer is programmed if the 'programmed' flag was not set
-		 * before. The second timer is flagged as not programmed as
-		 * 'Timer::trigger_once' invalidates former registered one-shot
-		 * timeouts.
 		 */
 		void _program_first_timer()
 		{
@@ -113,19 +107,10 @@ class Lx_kit::Timer : public Lx::Timer
 			if (!ctx)
 				return;
 
-			if (ctx->programmed)
-				return;
-
 			/* calculate relative microseconds for trigger */
 			unsigned long us = ctx->timeout > _jiffies ?
 			                   jiffies_to_msecs(ctx->timeout - _jiffies) * 1000 : 0;
 			_timer_conn.trigger_once(us);
-
-			ctx->programmed = true;
-
-			/* possibly programmed successor must be reprogrammed later */
-			if (Context *next = ctx->next())
-				next->programmed = false;
 		}
 
 		/**
@@ -140,10 +125,10 @@ class Lx_kit::Timer : public Lx::Timer
 
 			ctx->timeout    = expires;
 			ctx->pending    = true;
-			ctx->programmed = false;
+
 			/*
 			 * Also write the timeout value to the expires field in
-			 * struct timer_list because the wireless stack checks
+			 * struct timer_list because some code the checks
 			 * it directly.
 			 */
 			ctx->expires(expires);
@@ -177,6 +162,7 @@ class Lx_kit::Timer : public Lx::Timer
 		:
 			_jiffies(jiffies),
 			_timer_conn(env),
+			_timer_conn_modern(env),
 			_timer_task(Timer::run_timer, reinterpret_cast<void*>(this),
 			            "timer", Lx::Task::PRIORITY_2, Lx::scheduler()),
 			_dispatcher(ep, *this, &Lx_kit::Timer::_handle),
@@ -240,7 +226,7 @@ class Lx_kit::Timer : public Lx::Timer
 			if (!ctx)
 				return 0;
 
-			int rv = ctx->timeout != Context::INVALID_TIMEOUT ? 1 : 0;
+			int rv = ctx->pending ? 1 : 0;
 
 			_list.remove(ctx);
 			destroy(&_timer_alloc, ctx);
@@ -260,7 +246,7 @@ class Lx_kit::Timer : public Lx::Timer
 			 * If timer was already active return 1, otherwise 0. The return
 			 * value is needed by mod_timer().
 			 */
-			int rv = ctx->timeout != Context::INVALID_TIMEOUT ? 1 : 0;
+			int rv = ctx->pending ? 1 : 0;
 
 			_schedule_timer(ctx, expires);
 
@@ -292,10 +278,7 @@ class Lx_kit::Timer : public Lx::Timer
 		}
 
 		void update_jiffies() {
-			_jiffies = _jiffies_func ? _jiffies_func() : msecs_to_jiffies(_timer_conn.elapsed_ms()); }
-
-		void register_jiffies_func(Lx::jiffies_update_func func) {
-			_jiffies_func = func; }
+			_jiffies = usecs_to_jiffies(_timer_conn_modern.curr_time().trunc_to_plain_us().value); }
 
 		void usleep(unsigned us) {
 			_timer_conn.usleep(us); }
@@ -318,10 +301,4 @@ Lx::Timer &Lx::timer(Genode::Env *env, Genode::Entrypoint *ep,
 void Lx::timer_update_jiffies()
 {
 	timer().update_jiffies();
-}
-
-
-void Lx::register_jiffies_func(jiffies_update_func func)
-{
-	dynamic_cast<Lx_kit::Timer &>(timer()).register_jiffies_func(func);
 }

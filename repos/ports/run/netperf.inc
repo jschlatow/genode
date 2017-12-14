@@ -34,6 +34,14 @@ if {!$use_wifi_driver} {
 	set wifi_psk ""
 }
 
+set bridge_mac "02:02:02:02:02:00"
+
+# autopilot: configure disjoint mac-address ranges for x86_32, x86_64, and others
+if {[get_cmd_switch --autopilot]} {
+	if {[have_spec x86_32]} { set bridge_mac "02:02:02:02:32:00" }
+	if {[have_spec x86_64]} { set bridge_mac "02:02:02:02:64:00" }
+}
+
 #
 # Build
 #
@@ -134,7 +142,7 @@ append_if $use_nic_bridge config {
 	<start name="nic_bridge">
 		<resource name="RAM" quantum="5M"/>
 		<provides><service name="Nic"/></provides>
-		<config>}
+		<config mac="} $bridge_mac {">}
 append_if [expr $use_nic_bridge && [have_spec linux]] config "
 			<policy label_prefix=\"netserver_genode\" ip_addr=\"$lx_ip_addr\"/>"
 append_if $use_nic_bridge config {
@@ -155,7 +163,7 @@ proc usb_drv_ram_quota {} {
 }
 
 append_if $use_usb_driver config {
-	<start name="usb_drv">
+	<start name="usb_drv" caps="120">
 		<resource name="RAM" quantum="} [usb_drv_ram_quota] {"/>
 		<provides>
 			<service name="Nic"/>
@@ -206,7 +214,7 @@ append_if $use_wifi_driver config {
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
-	<start name="wifi_drv" caps="200">
+	<start name="wifi_drv" caps="250">
 		<resource name="RAM" quantum="32M"/>
 		<provides> <service name="Nic"/> </provides>
 		<config>
@@ -232,7 +240,7 @@ append_if $use_wifi_driver config {
 append_platform_drv_config
 
 append config {
-	<start name="netserver_genode" caps="200">
+	<start name="netserver_genode" caps="220">
 }
 append config "<binary name=\"$netperf_app\"/>"
 append config {

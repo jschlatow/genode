@@ -5,6 +5,13 @@
  * \date   2013-11-11
  */
 
+/*
+ * Copyright (C) 2013-2017 Genode Labs GmbH
+ *
+ * This file is part of the Genode OS framework, which is distributed
+ * under the terms of the GNU Affero General Public License version 3.
+ */
+
 #ifndef _DIRECTORY_H_
 #define _DIRECTORY_H_
 
@@ -19,13 +26,14 @@
 #include <lx_util.h>
 
 
-namespace File_system {
+namespace Lx_fs {
 	using namespace Genode;
+	using namespace File_system;
 	class Directory;
 }
 
 
-class File_system::Directory : public Node
+class Lx_fs::Directory : public Node
 {
 	private:
 
@@ -42,8 +50,16 @@ class File_system::Directory : public Node
 			if (create) {
 				mode_t ugo = S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH;
 				ret = mkdir(path, ugo);
-				if (ret == -1)
-					throw No_space();
+				if (ret == -1) {
+					switch (errno) {
+						case ENAMETOOLONG: throw Name_too_long();
+						case EACCES:       throw Permission_denied();
+						case ENOENT:       throw Lookup_failed();
+						case EEXIST:       throw Node_already_exists();
+						case ENOSPC:
+						default:           throw No_space();
+					}
+				}
 			}
 
 			struct stat s;
@@ -64,6 +80,16 @@ class File_system::Directory : public Node
 			return fd;
 		}
 
+		size_t _num_entries() const
+		{
+			unsigned num = 0;
+
+			rewinddir(_fd);
+			while (readdir(_fd)) ++num;
+
+			return num;
+		}
+
 	public:
 
 		Directory(Allocator &alloc, char const *path, bool create)
@@ -82,11 +108,10 @@ class File_system::Directory : public Node
 		}
 
 		/* FIXME returned file node must be locked */
-		File * file(char const *name, Mode mode, bool create)
+		File * file(char const *name, Mode mode, bool create) override
 		{
 			File *file = new (&_alloc) File(dirfd(_fd), name, mode, create);
 
-			file->lock();
 			return file;
 		}
 
@@ -97,7 +122,6 @@ class File_system::Directory : public Node
 
 			Directory *dir = new (&_alloc) Directory(_alloc, dir_path.base(), create);
 
-			dir->lock();
 			return dir;
 		}
 
@@ -126,11 +150,10 @@ class File_system::Directory : public Node
 			else
 				throw Lookup_failed();
 
-			node->lock();
 			return node;
 		}
 
-		size_t read(char *dst, size_t len, seek_off_t seek_offset)
+		size_t read(char *dst, size_t len, seek_off_t seek_offset) override
 		{
 			if (len < sizeof(Directory_entry)) {
 				Genode::error("read buffer too small for directory entry");
@@ -169,20 +192,19 @@ class File_system::Directory : public Node
 			return sizeof(Directory_entry);
 		}
 
-		size_t write(char const *src, size_t len, seek_off_t seek_offset)
+		size_t write(char const *src, size_t len, seek_off_t seek_offset) override
 		{
 			/* writing to directory nodes is not supported */
 			return 0;
 		}
 
-		size_t num_entries() const
+		Status status() override
 		{
-			unsigned num = 0;
-
-			rewinddir(_fd);
-			while (readdir(_fd)) ++num;
-
-			return num;
+			Status s;
+			s.inode = inode();
+			s.size = _num_entries() * sizeof(File_system::Directory_entry);
+			s.mode = File_system::Status::MODE_DIRECTORY;
+			return s;
 		}
 };
 

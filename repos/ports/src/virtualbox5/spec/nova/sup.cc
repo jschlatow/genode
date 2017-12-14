@@ -41,6 +41,9 @@
 /* libc memory allocator */
 #include <libc_mem_alloc.h>
 
+/* libc */
+#include <sched.h> /* sched_yield */
+
 #include "mm.h"
 
 
@@ -64,14 +67,22 @@ enum {
 };
 
 typedef Genode::Bit_allocator<HANDY_PAGES>   Page_ids;
-typedef Genode::Bit_allocator<MAX_CHUNK_IDS> Chunk_ids;
-typedef Genode::Bit_array<PAGES_SUPERPAGE>    Free_ids;
+typedef Genode::Bit_array<PAGES_SUPERPAGE>   Free_ids;
+
+class Chunk_ids: public Genode::Bit_allocator<MAX_CHUNK_IDS>
+{
+	public:
+
+		void reserve(Genode::addr_t bit_start, size_t const num) {
+			_reserve(bit_start, num); };
+};
 
 static Page_ids  page_ids;
 static Chunk_ids chunk_ids;
 
 
-static Sub_rm_connection &vm_memory(Genode::addr_t vm_size = 0)
+
+static Sub_rm_connection &vm_memory(Genode::uint64_t vm_size = 0)
 {
 	/* memory used by the VM in any order as the VMM asks for allocations */
 	static Sub_rm_connection vm_memory(genode_env(), vm_size);
@@ -97,11 +108,10 @@ static Sub_rm_connection &vm_memory(Genode::addr_t vm_size = 0)
 
 		while (allocated < memory_size) {
 			Ram_dataspace_capability ds = genode_env().ram().alloc(alloc_size);
-			enum { OFFSET_DS = 0, USE_LOCAL_ADDR = true };
-			addr_t to = vm_memory.attach(ds, alloc_size, OFFSET_DS,
-			                             USE_LOCAL_ADDR,
-			                             memory.addr + allocated - vmm_local);
 
+			addr_t to = vm_memory.attach_executable(ds, memory.addr +
+			                                            allocated - vmm_local,
+			                                        alloc_size);
 			Assert(to == vm_memory.local_addr(memory.addr + allocated - vmm_local));
 			allocated += alloc_size;
 
@@ -112,6 +122,12 @@ static Sub_rm_connection &vm_memory(Genode::addr_t vm_size = 0)
 		/* request next aligned memory range to be allocated and attached */
 		memory = fli.page();
 	}
+
+	/* reserve chunkids which are special or unused */
+	chunk_ids.reserve(0, CHUNKID_START);
+	addr_t const unused_id = CHUNKID_START + vm_size / GMM_CHUNK_SIZE;
+	addr_t const unused_count = MAX_CHUNK_IDS - unused_id - 1;
+	chunk_ids.reserve(unused_id, unused_count);
 
 	return vm_memory;
 }
@@ -156,7 +172,7 @@ HRESULT genode_setup_machine(ComObjPtr<Machine> machine)
 	HRESULT ret = genode_check_memory_config(machine);
 
 	if (ret == VINF_SUCCESS)
-		vm_memory(memory_vbox * 1024 * 1024 + (CHUNKID_START + 1) * GMM_CHUNK_SIZE);
+		vm_memory(1024ULL * 1024 * memory_vbox + (CHUNKID_START + 1) * GMM_CHUNK_SIZE);
 
 	return ret;
 };
@@ -301,21 +317,14 @@ int SUPR3CallVMMR0Ex(PVMR0 pVMR0, VMCPUID idCpu, unsigned uOperation,
 	switch (uOperation) {
 
 	case VMMR0_DO_GVMM_CREATE_VM:
+	{
 		genode_VMMR0_DO_GVMM_CREATE_VM(pReqHdr);
 
-		/* reserve lower chunk ids */
-		try {
-			for (unsigned i = 0; i < CHUNKID_START; i++) {
-				unsigned chunkid = chunk_ids.alloc();
-				AssertMsg(chunkid == i, ("chunkid %u != %u i\n", chunkid, i));
-			}
-		} catch (...) {
-			Genode::error(__func__," ", __LINE__, " allocation failed");
-			throw;
-		}
+		GVMMCREATEVMREQ &req = reinterpret_cast<GVMMCREATEVMREQ &>(*pReqHdr);
+		SUPR3QueryHWACCLonGenodeSupport(reinterpret_cast<VM *>(req.pVMR3));
 
 		return VINF_SUCCESS;
-
+	}
 	case VMMR0_DO_GVMM_REGISTER_VMCPU:
 		genode_VMMR0_DO_GVMM_REGISTER_VMCPU(pVMR0, idCpu);
 		return VINF_SUCCESS;
@@ -361,7 +370,6 @@ int SUPR3CallVMMR0Ex(PVMR0 pVMR0, VMCPUID idCpu, unsigned uOperation,
 		return VINF_SUCCESS;
 
 	case VMMR0_DO_VMMR0_INIT:
-		SUPR3QueryHWACCLonGenodeSupport(reinterpret_cast<VM *>(pVMR0));
 		return VINF_SUCCESS;
 
 	case VMMR0_DO_GVMM_DESTROY_VM:
@@ -440,7 +448,7 @@ int SUPR3CallVMMR0Ex(PVMR0 pVMR0, VMCPUID idCpu, unsigned uOperation,
 		Assert(req->idChunkUnmap == NIL_GMM_CHUNKID);
 		Assert(req->idChunkMap   != NIL_GMM_CHUNKID);
 
-		Genode::addr_t local_addr_offset = req->idChunkMap << GMM_CHUNK_SHIFT;
+		Genode::addr_t local_addr_offset = (uintptr_t)req->idChunkMap << GMM_CHUNK_SHIFT;
 		Genode::addr_t to = vm_memory().local_addr(local_addr_offset);
 
 		req->pvR3 = reinterpret_cast<RTR3PTR>(to);
@@ -498,7 +506,7 @@ int SUPR3CallVMMR0Ex(PVMR0 pVMR0, VMCPUID idCpu, unsigned uOperation,
 			AssertMsgReturn(pVM->pgm.s.aHandyPages[iFirst + iPage].idSharedPage == NIL_GMM_PAGEID, ("#%#x: %#x\n", iFirst + iPage, pVM->pgm.s.aHandyPages[iFirst + iPage].idSharedPage),  VERR_INVALID_PARAMETER);
 		}
 
-		unsigned chunkid = 0;
+		Genode::uint64_t chunkid = 0;
 
 		try {
 			chunkid = chunk_ids.alloc();
@@ -573,7 +581,7 @@ int SUPR3CallVMMR0Ex(PVMR0 pVMR0, VMCPUID idCpu, unsigned uOperation,
 		Assert(pVM->pgm.s.cLargeHandyPages == 0);
 
 		try {
-			unsigned chunkid = chunk_ids.alloc();
+			Genode::uint64_t chunkid = chunk_ids.alloc();
 
 			pVM->pgm.s.aLargeHandyPage[0].idPage = (chunkid << GMM_CHUNKID_SHIFT);
 			pVM->pgm.s.aLargeHandyPage[0].HCPhysGCPhys = vm_memory().local_addr(chunkid << GMM_CHUNK_SHIFT);
@@ -748,9 +756,9 @@ bool PGMUnmapMemoryGenode(void * vmm_local, ::size_t size)
 }
 
 
-extern "C" void pthread_yield(void)
+extern "C" int sched_yield(void)
 {
-	Nova::ec_ctrl(Nova::EC_YIELD);
+	return (Nova::ec_ctrl(Nova::EC_YIELD) == Nova::NOVA_OK) ? 0 : -1;
 }
 
 

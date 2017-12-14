@@ -50,7 +50,7 @@ install_config {
 		</config>
 	</start>
 	<start name="init" caps="1000">
-		<resource name="RAM" quantum="2M"/>
+		<resource name="RAM" quantum="3M"/>
 		<config verbose="yes">
 			<parent-provides>
 				<service name="ROM"/>
@@ -79,6 +79,6 @@ build_boot_image "core ld.lib.so init timer tar_rom archive.tar"
 
 append qemu_args "-nographic "
 
-run_genode_until "--- timer test ---" 10
+run_genode_until "--- timer test ---" 20
 
 exec rm bin/archive.tar

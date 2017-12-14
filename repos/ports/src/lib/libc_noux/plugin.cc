@@ -29,6 +29,9 @@
 #include <libc-plugin/plugin.h>
 #include <libc-plugin/fd_alloc.h>
 
+/* libc component includes */
+#include <libc/component.h>
+
 /* libc includes */
 #include <errno.h>
 #include <sys/disk.h>
@@ -79,6 +82,15 @@ namespace Libc {
 	 */
 	Genode::Xml_node config()     { return Xml_node("<libc/>"); }
 	Genode::Xml_node vfs_config() { return Xml_node("<vfs/>");  }
+
+	/*
+	 * Enhance main-thread stack
+	 *
+	 * This is done because we ran into a stack overflow while compiling
+	 * Genodes core with GCC in Noux.
+	 */
+	enum { STACK_SIZE = 64UL * 1024 * sizeof(Genode::addr_t) };
+	Genode::size_t Component::stack_size() { return STACK_SIZE; }
 }
 
 
@@ -1197,14 +1209,12 @@ namespace {
 		Genode::strncpy(sysio()->symlink_in.newpath, newpath, sizeof(sysio()->symlink_in.newpath));
 		if (!noux_syscall(Noux::Session::SYSCALL_SYMLINK)) {
 			warning("symlink syscall failed for path \"", newpath, "\"");
-			typedef Vfs::Directory_service::Symlink_result Result;
 			switch (sysio()->error.symlink) {
-			case Result::SYMLINK_ERR_NO_ENTRY:      errno = ENOENT;        return -1;
-			case Result::SYMLINK_ERR_EXISTS:        errno = EEXIST;        return -1;
-			case Result::SYMLINK_ERR_NO_SPACE:      errno = ENOSPC;        return -1;
-			case Result::SYMLINK_ERR_NO_PERM:       errno = EPERM;         return -1;
-			case Result::SYMLINK_ERR_NAME_TOO_LONG: errno = ENAMETOOLONG;  return -1;
-			case Result::SYMLINK_OK: break;
+			case Noux::Sysio::SYMLINK_ERR_NO_ENTRY:      errno = ENOENT;        return -1;
+			case Noux::Sysio::SYMLINK_ERR_EXISTS:        errno = EEXIST;        return -1;
+			case Noux::Sysio::SYMLINK_ERR_NO_SPACE:      errno = ENOSPC;        return -1;
+			case Noux::Sysio::SYMLINK_ERR_NO_PERM:       errno = EPERM;         return -1;
+			case Noux::Sysio::SYMLINK_ERR_NAME_TOO_LONG: errno = ENAMETOOLONG;  return -1;
 			}
 		}
 
@@ -1750,11 +1760,9 @@ namespace {
 
 		if (!noux_syscall(Noux::Session::SYSCALL_READLINK)) {
 			warning("readlink syscall failed for path \"", path, "\"");
-			typedef Vfs::Directory_service::Readlink_result Result;
 			switch (sysio()->error.readlink) {
-			case Result::READLINK_ERR_NO_ENTRY: errno = ENOENT; return -1;
-			case Result::READLINK_ERR_NO_PERM:  errno = EPERM;  return -1;
-			case Result::READLINK_OK: break;
+			case Noux::Sysio::READLINK_ERR_NO_ENTRY: errno = ENOENT; return -1;
+			case Noux::Sysio::READLINK_ERR_NO_PERM:  errno = EPERM;  return -1;
 			}
 		}
 
@@ -1796,12 +1804,12 @@ namespace {
 		if (!noux_syscall(Noux::Session::SYSCALL_MKDIR)) {
 			warning("mkdir syscall failed for \"", path, "\" mode=", Hex(mode));
 			switch (sysio()->error.mkdir) {
-			case Vfs::Directory_service::MKDIR_ERR_EXISTS:        errno = EEXIST;       break;
-			case Vfs::Directory_service::MKDIR_ERR_NO_ENTRY:      errno = ENOENT;       break;
-			case Vfs::Directory_service::MKDIR_ERR_NO_SPACE:      errno = ENOSPC;       break;
-			case Vfs::Directory_service::MKDIR_ERR_NAME_TOO_LONG: errno = ENAMETOOLONG; break;
-			case Vfs::Directory_service::MKDIR_ERR_NO_PERM:       errno = EPERM;        break;
-			default:                                              errno = EPERM;        break;
+			case Noux::Sysio::MKDIR_ERR_EXISTS:        errno = EEXIST;       break;
+			case Noux::Sysio::MKDIR_ERR_NO_ENTRY:      errno = ENOENT;       break;
+			case Noux::Sysio::MKDIR_ERR_NO_SPACE:      errno = ENOSPC;       break;
+			case Noux::Sysio::MKDIR_ERR_NAME_TOO_LONG: errno = ENAMETOOLONG; break;
+			case Noux::Sysio::MKDIR_ERR_NO_PERM:       errno = EPERM;        break;
+			default:                                   errno = EPERM;        break;
 			}
 			return -1;
 		}
@@ -2334,15 +2342,6 @@ void Plugin::init(Genode::Env &env)
 	genode_envp = environ;
 
 	chdir(noux_cwd.base());
-
-	/*
-	 * Enhance main-thread stack
-	 *
-	 * This is done because we ran into a stack overflow while compiling
-	 * Genodes core/main.cc with GCC in Noux.
-	 */
-	enum { STACK_SIZE = 32UL * 1024 * sizeof(Genode::addr_t) };
-	Genode::Thread::myself()->stack_size(STACK_SIZE);
 }
 
 

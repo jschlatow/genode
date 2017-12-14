@@ -66,17 +66,18 @@ struct Genode::Duration
 		unsigned long _microseconds { 0 };
 		unsigned long _hours        { 0 };
 
+		void _add_us_less_than_an_hour(unsigned long us);
 		void _raise_hours(unsigned long hours);
 
 	public:
 
-		void operator += (Microseconds us);
-		void operator += (Milliseconds ms);
+		void add(Microseconds us);
+		void add(Milliseconds ms);
 
-		bool operator < (Duration &other) const;
+		bool less_than(Duration &other) const;
 
-		explicit Duration(Milliseconds ms) { *this += ms; }
-		explicit Duration(Microseconds us) { *this += us; }
+		explicit Duration(Milliseconds ms) { add(ms); }
+		explicit Duration(Microseconds us) { add(us); }
 
 		Microseconds trunc_to_plain_us() const;
 };

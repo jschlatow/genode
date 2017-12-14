@@ -8,6 +8,21 @@ if {[have_include "power_on/qemu"]} {
 	exit
 }
 
+if {([have_spec muen] && [expr $use_vbox5])} {
+	puts "Run script does not support vbox5 on Muen."
+	exit 0
+}
+
+if {([have_spec muen] && $flavor != "win7")} {
+	puts "Run script does not support $flavor on Muen."
+	exit 0
+}
+
+if { [get_cmd_switch --autopilot] && [have_spec x86_32] } {
+	puts "Run script does not support autopilot mode on 32 bit"
+	exit 0
+}
+
 append build_components {
 	core init
 	server/part_blk
@@ -79,7 +94,7 @@ append config {
 		<resource name="RAM" quantum="10M"/>
 		<provides><service name="Block"/></provides>
 		<config>
-			<policy label_prefix="part_blk" device="0"/>
+			<policy label_prefix="part_blk" device="0" writeable="yes"/>
 		</config>
 	</start>
 	<start name="part_blk" priority="-1">
@@ -90,9 +105,9 @@ append config {
 		</route>
 		<config>}
 append_if [expr $use_rumpfs] config {
-			<policy label_prefix="rump_fs" partition="4"/>}
+			<policy label_prefix="rump_fs" partition="4" writeable="yes"/>}
 append_if [expr !$use_rumpfs] config {
-			<policy label_prefix="vbox1 -> raw" partition="3"/>}
+			<policy label_prefix="vbox1 -> raw" partition="3" writeable="yes"/>}
 append config {
 		</config>
 	</start>}
@@ -114,7 +129,7 @@ append_if [expr $use_rumpfs] config {
 	</start>}
 
 append_if [expr $use_ram_fs] config {
-	<start name="ram_fs" priority="-1" caps="400">}
+	<start name="ram_fs" priority="-1" caps="1800">}
 append_if [expr $use_ram_fs] config "
 		<resource name=\"RAM\" quantum=\"[expr $use_vms * 8 * 128]M\"/>"
 append_if [expr $use_ram_fs] config {
@@ -194,7 +209,7 @@ append_if [expr $use_cpu_load] config {
 		</route>
 	</start>
 
-	<start name="top" priorirty="-1">
+	<start name="top" priority="-1">
 		<resource name="RAM" quantum="2M"/>
 		<config period_ms="10000"/>
 		<route>
@@ -216,7 +231,7 @@ append_if [expr $use_usb] config {
 				<inline name="usb_drv.config">}
 
 append_if [expr $use_usb && ![have_spec muen]] config {
-<config uhci="yes" ehci="yes" xhci="yes">}
+<config uhci="yes" ohci="yes" ehci="yes" xhci="yes">}
 
 append_if [expr $use_usb && [have_spec muen]] config {
 <config uhci="no" ehci="no" xhci="yes">}
@@ -290,8 +305,8 @@ append_if [expr $use_usb] config {
 		</route>
 	</start>
 
-	<start name="usb_drv" priority="-1">
-		<resource name="RAM" quantum="16M"/>
+	<start name="usb_drv" priority="-1" caps="120">
+		<resource name="RAM" quantum="20M"/>
 		<provides>
 			<service name="Input"/>
 			<service name="Usb"/>

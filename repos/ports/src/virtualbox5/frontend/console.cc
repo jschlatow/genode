@@ -30,6 +30,7 @@
 #include "vmm.h"
 
 static const bool debug = false;
+static bool vm_down = false;
 
 static Genode::Attached_rom_dataspace *clipboard_rom = nullptr;
 static Genode::Reporter               *clipboard_reporter = nullptr;
@@ -73,6 +74,8 @@ void fireStateChangedEvent(IEventSource* aSource,
 {
 	if (a_state != MachineState_PoweredOff)
 		return;
+
+	vm_down = true;
 
 	genode_env().parent().exit(0);
 }
@@ -122,6 +125,13 @@ void GenodeConsole::update_video_mode()
 
 void GenodeConsole::handle_input()
 {
+	/* disable input processing if vm is powered down */
+	if (vm_down && (_vbox_mouse || _vbox_keyboard)) {
+		_vbox_mouse    = nullptr;
+		_vbox_keyboard = nullptr;
+		_input.sigh(Genode::Signal_context_capability());
+	}
+
 	static LONG64 mt_events [64];
 	unsigned      mt_number = 0;
 
@@ -508,4 +518,52 @@ int vboxClipboardSync (VBOXCLIPBOARDCLIENTDATA *pClient)
 	                           VBOX_SHARED_CLIPBOARD_FMT_UNICODETEXT);
 
 	return VINF_SUCCESS;
+}
+
+/**
+ * Sticky key handling
+ */
+static bool host_caps_lock = false;
+static bool guest_caps_lock = false;
+
+void fireKeyboardLedsChangedEvent(IEventSource *, bool num_lock,
+                                  bool caps_lock, bool scroll_lock)
+{
+	guest_caps_lock = caps_lock;
+}
+
+void GenodeConsole::handle_sticky_keys()
+{
+	/* no keyboard - no sticky key handling */
+	if (!_vbox_keyboard || !_caps_lock.constructed())
+		return;
+
+	_caps_lock->update();
+
+	if (!_caps_lock->valid())
+		return;
+
+	bool const caps_lock = _caps_lock->xml().attribute_value("enabled",
+	                                                         guest_caps_lock);
+
+	bool trigger_caps_lock = false;
+
+	/*
+	 * If guest didn't respond with led change last time, we have to
+	 * trigger caps_lock change - mainly assuming that guest don't use the
+	 * led to externalize its internal caps_lock state.
+	 */
+	if (caps_lock != host_caps_lock && host_caps_lock != guest_caps_lock)
+		trigger_caps_lock = true;
+
+	if (caps_lock != guest_caps_lock)
+		trigger_caps_lock = true;
+
+	/* remember last seen host caps lock state */
+	host_caps_lock = caps_lock;
+
+	if (trigger_caps_lock) {
+		_vbox_keyboard->PutScancode(Input::KEY_CAPSLOCK);
+		_vbox_keyboard->PutScancode(Input::KEY_CAPSLOCK | 0x80);
+	}
 }

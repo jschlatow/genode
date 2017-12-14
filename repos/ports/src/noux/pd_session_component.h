@@ -202,7 +202,7 @@ class Noux::Pd_session_component : public Rpc_object<Pd_session>
 			dst_address_space.attach(dst_linker_area.dataspace(),
 			                         Dataspace_client(dst_linker_area.dataspace()).size(),
 			                         0, true,
-			                         _address_space.lookup_region_base(_linker_area.dataspace()));
+			                         _address_space.lookup_region_base(_linker_area.dataspace()), true);
 		}
 
 
@@ -215,6 +215,9 @@ class Noux::Pd_session_component : public Rpc_object<Pd_session>
 
 		bool assign_pci(addr_t addr, uint16_t bdf) override {
 			return _pd.assign_pci(addr, bdf); }
+
+		void map(addr_t virt, addr_t size) override {
+			return _pd.map(virt, size); }
 
 		Signal_source_capability alloc_signal_source() override
 		{

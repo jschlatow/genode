@@ -25,6 +25,11 @@ STRICT_HASH ?= no
 #
 check_tool = $(if $(shell which $(1)),,$(error Need to have '$(1)' installed.))
 
+#
+# Utility to check if a python module is installed
+#
+check_python_module = $(if $(shell python -c "import $(1)" 2>&1),$(error Need to have python module '$(1)' installed.),)
+
 default:
 
 .NOTPARALLEL: default
@@ -235,13 +240,14 @@ _unzip_opt = $(call _prefer,$(UNZIP_OPT($1)),$(UNZIP_OPT))
 #
 # Archive extraction functions for various archive types
 #
+_extract_function(tar)     = tar xf  $(ARCHIVE) -C $(DIR) $(call _tar_opt,$1)
 _extract_function(tgz)     = tar xfz $(ARCHIVE) -C $(DIR) $(call _tar_opt,$1)
 _extract_function(tar.gz)  = tar xfz $(ARCHIVE) -C $(DIR) $(call _tar_opt,$1)
 _extract_function(tar.xz)  = tar xfJ $(ARCHIVE) -C $(DIR) $(call _tar_opt,$1)
 _extract_function(tar.bz2) = tar xfj $(ARCHIVE) -C $(DIR) $(call _tar_opt,$1)
 _extract_function(zip)     = unzip -o -q -d $(DIR) $(call _unzip_opt,$1) $(ARCHIVE)
 
-_ARCHIVE_EXTS := tar.gz tar.xz tgz tar.bz2 zip
+_ARCHIVE_EXTS := tar tar.gz tar.xz tgz tar.bz2 zip
 
 #
 # Function that returns the matching extraction function for a given archive

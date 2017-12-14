@@ -11,15 +11,9 @@ else
 all:
 endif
 
-LINKER_OPT_PREFIX := -Wl,
-
 build_kernel:
 	$(VERBOSE)$(MAKE) \
 	          TOOLPREFIX=$(CROSS_DEV_PREFIX) \
-	          ARCH=x86 SEL4_ARCH=ia32 PLAT=pc99 DEBUG=1 \
-	          LDFLAGS+=-nostdlib LDFLAGS+=-Wl,-nostdlib \
-	          $(addprefix LDFLAGS+=$(LINKER_OPT_PREFIX),$(LD_MARCH)) \
-	          CFLAGS+="-fno-builtin-printf -O3" \
-	          $(addprefix CFLAGS+=,$(CC_MARCH)) \
+	          BOARD=ia32 ARCH=x86 SEL4_ARCH=ia32 PLAT=pc99 DEBUG=1 \
 	          SOURCE_ROOT=$(SEL4_DIR) -f$(SEL4_DIR)/Makefile
 

@@ -22,13 +22,13 @@
         <HardwareVirtEx enabled="true"/>
         <HardwareVirtExNestedPaging enabled="true"/>
         <HardwareVirtExVPID enabled="true"/>
-        <HardwareVirtExUX enabled="false"/>
+        <HardwareVirtExUX enabled="true"/>
         <PAE enabled="true"/>
         <LongMode enabled="true"/>
         <HardwareVirtExLargePages enabled="false"/>
         <HardwareVirtForce enabled="false"/>
       </CPU>
-      <Memory RAMSize="1024" PageFusion="false"/>
+      <Memory RAMSize="9216" PageFusion="false"/>
       <HID Pointing="USBTablet" Keyboard="PS2Keyboard"/>
       <HPET enabled="false"/>
       <Chipset type="PIIX3"/>

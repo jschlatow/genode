@@ -160,31 +160,24 @@ Signal Signal_receiver::wait_for_signal()
 
 Signal Signal_receiver::pending_signal()
 {
-	Lock::Guard list_lock_guard(_contexts_lock);
+	Lock::Guard contexts_lock_guard(_contexts_lock);
+	Signal::Data result;
+	_contexts.for_each_locked([&] (Signal_context &context) {
 
-	/* look up the contexts for the pending signal */
-	for (List_element<Signal_context> *le = _contexts.first(); le; le = le->next()) {
+		if (!context._pending) return;
 
-		Signal_context *context = le->object();
+		_contexts.head(context._next);
+		context._pending     = false;
+		result               = context._curr_signal;
+		context._curr_signal = Signal::Data(0, 0);
 
-		Lock::Guard lock_guard(context->_lock);
-
-		/* check if context has a pending signal */
-		if (!context->_pending)
-			continue;
-
-		context->_pending = false;
-		Signal::Data result = context->_curr_signal;
-
-		/* invalidate current signal in context */
-		context->_curr_signal = Signal::Data(0, 0);
-
+		Trace::Signal_received trace_event(context, result.num);
+		throw Context_ring::Break_for_each();
+	});
+	if (result.context) {
 		if (result.num == 0)
 			warning("returning signal with num == 0");
 
-		Trace::Signal_received trace_event(*context, result.num);
-
-		/* return last received signal */
 		return result;
 	}
 
@@ -203,11 +196,11 @@ Signal Signal_receiver::pending_signal()
 
 Signal_receiver::~Signal_receiver()
 {
-	Lock::Guard list_lock_guard(_contexts_lock);
+	Lock::Guard contexts_lock_guard(_contexts_lock);
 
 	/* disassociate contexts from the receiver */
-	for (List_element<Signal_context> *le; (le = _contexts.first()); )
-		_unsynchronized_dissolve(le->object());
+	while (_contexts.head())
+		_unsynchronized_dissolve(_contexts.head());
 
 	_platform_destructor();
 }
@@ -225,7 +218,7 @@ void Signal_receiver::_unsynchronized_dissolve(Signal_context * const context)
 	context->_cap      = Signal_context_capability();
 
 	/* remove context from context list */
-	_contexts.remove(&context->_receiver_le);
+	_contexts.remove(context);
 
 	_platform_finish_dissolve(context);
 }
@@ -236,7 +229,7 @@ void Signal_receiver::dissolve(Signal_context *context)
 	if (context->_receiver != this)
 		throw Context_not_associated();
 
-	Lock::Guard list_lock_guard(_contexts_lock);
+	Lock::Guard contexts_lock_guard(_contexts_lock);
 
 	_unsynchronized_dissolve(context);
 
@@ -244,20 +237,38 @@ void Signal_receiver::dissolve(Signal_context *context)
 }
 
 
-
 bool Signal_receiver::pending()
 {
-	Lock::Guard list_lock_guard(_contexts_lock);
+	Lock::Guard contexts_lock_guard(_contexts_lock);
+	bool result = false;
+	_contexts.for_each_locked([&] (Signal_context &context) {
+		if (context._pending) {
+			result = true;
+			throw Context_ring::Break_for_each();
+		}
+	});
+	return result;
+}
 
-	/* look up the contexts for the pending signal */
-	for (List_element<Signal_context> *le = _contexts.first(); le; le = le->next()) {
 
-		Signal_context *context = le->object();
-
-		Lock::Guard lock_guard(context->_lock);
-
-		if (context->_pending)
-			return true;
+void Signal_receiver::Context_ring::insert_as_tail(Signal_context *re)
+{
+	if (_head) {
+		re->_prev = _head->_prev;
+		re->_next = _head;
+		_head->_prev = _head->_prev->_next = re;
+	} else {
+		_head = re->_prev = re->_next = re;
 	}
-	return false;
+}
+
+
+void Signal_receiver::Context_ring::remove(Signal_context const *re)
+{
+	if (re->_next != re) {
+		if (re == _head) { _head = re->_next; }
+		re->_prev->_next = re->_next;
+		re->_next->_prev = re->_prev;
+	}
+	else { _head = nullptr; }
 }

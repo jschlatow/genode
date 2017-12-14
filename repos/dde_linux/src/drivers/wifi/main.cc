@@ -206,7 +206,10 @@ struct Wlan_configration
 			_activate_configuration();
 	}
 
-	void _handle_update() { _update_configuration(); }
+	void _handle_update()
+	{
+		Libc::with_libc([&] () { _update_configuration(); });
+	}
 
 	Wlan_configration(Genode::Env &env)
 	:
@@ -255,4 +258,7 @@ struct Main
 };
 
 
-void Libc::Component::construct(Libc::Env &env) { static Main server(env); }
+void Libc::Component::construct(Libc::Env &env)
+{
+	Libc::with_libc([&] () { static Main server(env); });
+}

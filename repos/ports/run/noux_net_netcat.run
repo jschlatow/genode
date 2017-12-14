@@ -4,6 +4,15 @@ set use_nic_driver   [expr !$use_usb_driver && ![have_spec imx53] && ![have_spec
 if {[expr !$use_usb_driver && !$use_nic_driver || [expr [have_include "power_on/qemu"] && [have_spec zynq]]]} {
 	puts "\n Run script is not supported on this platform. \n"; exit 0 }
 
+
+set bridge_mac "02:02:02:02:02:00"
+
+# autopilot: configure disjoint mac-address ranges for x86_32, x86_64, and others
+if {[get_cmd_switch --autopilot]} {
+       if {[have_spec x86_32]} { set bridge_mac "02:02:02:02:32:00" }
+       if {[have_spec x86_64]} { set bridge_mac "02:02:02:02:64:00" }
+}
+
 set build_components {
 	core init
 	drivers/timer
@@ -92,7 +101,7 @@ append config {
 	<start name="nic_bridge" caps="200">
 		<resource name="RAM" quantum="6M"/>
 		<provides><service name="Nic"/></provides>
-		<config/>
+		<config mac="} $bridge_mac {"/>
 		<route>}
 append_if $use_nic_driver config {
 			<service name="Nic"> <child name="nic_drv"/></service>}
@@ -118,7 +127,7 @@ append_if [have_spec gpio] config "
 	</start>"
 
 append_if $use_usb_driver config {
-	<start name="usb_drv">
+	<start name="usb_drv" caps="120">
 		<resource name="RAM" quantum="14M"/>
 		<provides>
 			<service name="Nic"/>
@@ -163,7 +172,7 @@ install_config $config
 set boot_modules {
 	core init timer tcp_terminal nic_bridge
 	ld.lib.so noux_net libc.lib.so libm.lib.so libc_pipe.lib.so pthread.lib.so
-	libc_resolv.lib.so libc_noux.lib.so lwip.lib.so netcat.tar posix.lib.so
+	libc_noux.lib.so lwip.lib.so netcat.tar posix.lib.so
 }
 
 # platform-specific modules

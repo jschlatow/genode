@@ -156,8 +156,9 @@ static void print_page_fault(char const *msg,
                              Pager_object const &obj)
 {
 	log(msg, " (",
-	    pf_type == Region_map::State::WRITE_FAULT ? "WRITE" : "READ",
-	    " pf_addr=", Hex(pf_addr), " pf_ip=", Hex(pf_ip), " from ", obj, ")");
+	    pf_type == Region_map::State::WRITE_FAULT ? "WRITE" :
+	    pf_type == Region_map::State::READ_FAULT ? "READ" : "EXEC",
+	    " pf_addr=", Hex(pf_addr), " pf_ip=", Hex(pf_ip), " from ", obj, ") ");
 }
 
 
@@ -171,10 +172,11 @@ static void print_page_fault(char const *msg,
 
 int Rm_client::pager(Ipc_pager &pager)
 {
-	using Fault_area = Region_map_component::Fault_area;
-
 	Region_map::State::Fault_type pf_type = pager.write_fault() ? Region_map::State::WRITE_FAULT
 	                                                            : Region_map::State::READ_FAULT;
+	if (pager.exec_fault())
+		pf_type = Region_map::State::EXEC_FAULT;
+
 	addr_t pf_addr = pager.fault_addr();
 	addr_t pf_ip   = pager.fault_ip();
 
@@ -208,42 +210,36 @@ int Rm_client::pager(Ipc_pager &pager)
 			return 1;
 		}
 
-		addr_t ds_base = dsc->map_src_addr();
-		Fault_area src_fault_area(ds_base + ds_offset);
-		Fault_area dst_fault_area(pf_addr);
-		src_fault_area.constrain(ds_base, dsc->size());
-		dst_fault_area.constrain(region_offset + region->base(), region->size());
-
-		/*
-		 * Determine mapping size compatible with source and destination,
-		 * and apply platform-specific constraint of mapping sizes.
-		 */
-		size_t map_size_log2 = dst_fault_area.common_size_log2(dst_fault_area,
-		                                                       src_fault_area);
-		map_size_log2 = constrain_map_size_log2(map_size_log2);
-
-		src_fault_area.constrain(map_size_log2);
-		dst_fault_area.constrain(map_size_log2);
-		if (!src_fault_area.valid() || !dst_fault_area.valid())
-			error("invalid mapping");
-
 		/*
 		 * Check if dataspace is compatible with page-fault type
 		 */
 		if (pf_type == Region_map::State::WRITE_FAULT && !dsc->writable()) {
 
-			/* attempted there is no attachment return an error condition */
 			print_page_fault("attempted write at read-only memory",
 			                 pf_addr, pf_ip, pf_type, *this);
 
 			/* register fault at responsible region map */
-			region_map->fault(this, src_fault_area.fault_addr(), pf_type);
+			if (region_map)
+				region_map->fault(this, pf_addr - region_offset, pf_type);
 			return 2;
 		}
 
-		Mapping mapping(dst_fault_area.base(), src_fault_area.base(),
-		                dsc->cacheability(), dsc->io_mem(),
-		                map_size_log2, dsc->writable());
+		if (pf_type == Region_map::State::EXEC_FAULT) {
+
+			print_page_fault("attempted exec at non-executable memory",
+			                 pf_addr, pf_ip, pf_type, *this);
+
+			/* register fault at responsible region map */
+			if (region_map)
+				region_map->fault(this, pf_addr - region_offset, pf_type);
+			return 3;
+		}
+
+		Mapping mapping = Region_map_component::create_map_item(region_map,
+		                                                        region,
+		                                                        ds_offset,
+		                                                        region_offset,
+		                                                        dsc, pf_addr);
 
 		/*
 		 * On kernels with a mapping database, the 'dsc' dataspace is a leaf
@@ -313,6 +309,38 @@ void Rm_faulter::continue_after_resolved_fault()
  ** Region-map component **
  **************************/
 
+Mapping Region_map_component::create_map_item(Region_map_component *region_map,
+                                              Rm_region            *region,
+                                              addr_t                ds_offset,
+                                              addr_t                region_offset,
+                                              Dataspace_component  *dsc,
+                                              addr_t                page_addr)
+{
+	addr_t ds_base = dsc->map_src_addr();
+	Fault_area src_fault_area(ds_base + ds_offset);
+	Fault_area dst_fault_area(page_addr);
+	src_fault_area.constrain(ds_base, dsc->size());
+	dst_fault_area.constrain(region_offset + region->base(), region->size());
+
+	/*
+	 * Determine mapping size compatible with source and destination,
+	 * and apply platform-specific constraint of mapping sizes.
+	 */
+	size_t map_size_log2 = dst_fault_area.common_size_log2(dst_fault_area,
+	                                                       src_fault_area);
+	map_size_log2 = constrain_map_size_log2(map_size_log2);
+
+	src_fault_area.constrain(map_size_log2);
+	dst_fault_area.constrain(map_size_log2);
+	if (!src_fault_area.valid() || !dst_fault_area.valid())
+		error("invalid mapping");
+
+	return Mapping(dst_fault_area.base(), src_fault_area.base(),
+	               dsc->cacheability(), dsc->io_mem(),
+	               map_size_log2, dsc->writable(), region->executable());
+};
+
+
 Region_map::Local_addr
 Region_map_component::attach(Dataspace_capability ds_cap, size_t size,
                              off_t offset, bool use_local_addr,
@@ -341,7 +369,7 @@ Region_map_component::attach(Dataspace_capability ds_cap, size_t size,
 			throw Region_conflict();
 
 		/* allocate region for attachment */
-		void *r = 0;
+		void *attach_at = 0;
 		if (use_local_addr) {
 			switch (_map.alloc_addr(size, local_addr).value) {
 
@@ -352,7 +380,7 @@ Region_map_component::attach(Dataspace_capability ds_cap, size_t size,
 				throw Region_conflict();
 
 			case Range_allocator::Alloc_return::OK:
-				r = local_addr;
+				attach_at = local_addr;
 				break;
 			}
 		} else {
@@ -375,10 +403,10 @@ Region_map_component::attach(Dataspace_capability ds_cap, size_t size,
 
 				/* try allocating the align region */
 				Range_allocator::Alloc_return alloc_return =
-					_map.alloc_aligned(size, &r, align_log2);
+					_map.alloc_aligned(size, &attach_at, align_log2);
 
 				if (!alloc_return.ok())
-					_map.free(r);
+					_map.free(attach_at);
 
 				typedef Range_allocator::Alloc_return Alloc_return;
 
@@ -392,14 +420,22 @@ Region_map_component::attach(Dataspace_capability ds_cap, size_t size,
 			}
 
 			if (align_log2 < get_page_size_log2()) {
-				_map.free(r);
+				_map.free(attach_at);
 				throw Region_conflict();
 			}
 		}
 
 		/* store attachment info in meta data */
-		_map.metadata(r, Rm_region((addr_t)r, size, true, dsc, offset, this));
-		Rm_region *region = _map.metadata(r);
+		try {
+			_map.metadata(attach_at, Rm_region((addr_t)attach_at, size, true,
+			                                   dsc, offset, this, executable));
+
+		} catch (Allocator_avl_tpl<Rm_region>::Assign_metadata_failed) {
+
+			error("failed to store attachment info");
+			throw Invalid_dataspace();
+		}
+		Rm_region *region = _map.metadata(attach_at);
 
 		/* inform dataspace about attachment */
 		dsc->attached_to(region);
@@ -410,7 +446,7 @@ Region_map_component::attach(Dataspace_capability ds_cap, size_t size,
 			/* remember next pointer before possibly removing current list element */
 			Rm_faulter *next = faulter->next();
 
-			if (faulter->fault_in_addr_range((addr_t)r, size)) {
+			if (faulter->fault_in_addr_range((addr_t)attach_at, size)) {
 				_faulters.remove(faulter);
 				faulter->continue_after_resolved_fault();
 			}
@@ -418,7 +454,7 @@ Region_map_component::attach(Dataspace_capability ds_cap, size_t size,
 			faulter = next;
 		}
 
-		return r;
+		return attach_at;
 	};
 
 	return _ds_ep->apply(ds_cap, lambda);
@@ -436,12 +472,16 @@ static void unmap_managed(Region_map_component *rm, Rm_region *region, int level
 		       <= region->base() - region->offset() + region->size())
 			unmap_managed(managed->rm(), managed, level + 1);
 
+		if (!managed->rm()->address_space())
+			continue;
+
 		/* found a leaf node (here a leaf is an Region_map whose dataspace has no regions) */
-		if (!managed->rm()->dataspace_component()->regions()->first())
-			for (Rm_client *rc = managed->rm()->clients()->first();
-			     rc; rc = rc->List<Rm_client>::Element::next())
-				rc->unmap(region->dataspace()->core_local_addr() + region->offset(),
-				          managed->base() + region->base() - managed->offset(), region->size());
+
+		Address_space::Core_local_addr core_local
+			= { region->dataspace()->core_local_addr() + region->offset() };
+		managed->rm()->address_space()->flush(managed->base() + region->base() -
+		                                      managed->offset(),
+		                                      region->size(), core_local);
 	}
 }
 
@@ -505,49 +545,15 @@ void Region_map_component::detach(Local_addr local_addr)
 	 * function 'managed'.
 	 */
 
-	/*
-	 * Go through all RM clients using the region map. For each RM client, we
-	 * need to unmap the referred region from its virtual address space.
-	 */
-	Rm_client *prev_rc = 0;
-	Rm_client *rc = _clients.first();
-	for (; rc; rc = rc->List<Rm_client>::Element::next(), prev_rc = rc) {
-
-		/*
-		 * XXX Unmapping managed dataspaces on kernels, which take a core-
-		 *     local virtual address as unmap argument is not supported yet.
-		 *     This is the case for Fiasco and Pistachio. On those
-		 *     kernels, the unmap operation must be issued for each leaf
-		 *     dataspace the managed dataspace is composed of. For kernels with
-		 *     support for directed unmap (OKL4), unmap can be
-		 *     simply applied for the contiguous virtual address region in the
-		 *     client.
-		 */
-		if (!platform()->supports_direct_unmap()
-		 && dsc->managed() && dsc->core_local_addr() == 0) {
+	if (_address_space) {
+		if (!platform()->supports_direct_unmap() && dsc->managed() &&
+		    dsc->core_local_addr() == 0) {
 			warning("unmapping of managed dataspaces not yet supported");
-			break;
+		} else {
+			Address_space::Core_local_addr core_local
+				= { dsc->core_local_addr() + region.offset() };
+			_address_space->flush(region.base(), region.size(), core_local);
 		}
-
-		/*
-		 * Don't unmap from the same address space twice. If multiple threads
-		 * reside in one PD, each thread will have a corresponding 'Rm_client'
-		 * object. Consequenlty, an unmap operation referring to the PD is
-		 * issued multiple times, one time for each thread. By comparing the
-		 * membership to the thread's respective address spaces, we reduce
-		 * superfluous unmap operations.
-		 *
-		 * Note that the list of 'Rm_client' object may contain threads of
-		 * different address spaces in any order. So superfluous unmap
-		 * operations can still happen if 'Rm_client' objects of one PD are
-		 * interleaved with 'Rm_client' objects of another PD. In practice,
-		 * however, this corner case is rare.
-		 */
-		if (prev_rc && prev_rc->has_same_address_space(*rc))
-			continue;
-
-		rc->unmap(dsc->core_local_addr() + region.offset(),
-		          region.base(), region.size());
 	}
 
 	/*

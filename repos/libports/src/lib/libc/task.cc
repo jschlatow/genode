@@ -97,7 +97,7 @@ class Libc::Env_implementation : public Libc::Env
 		:
 			_env(env), _file_system_factory(alloc),
 			_vfs(_env, alloc, _vfs_config(), io_response_handler,
-			     _file_system_factory)
+			     _file_system_factory, Vfs::Dir_file_system::Root())
 		{ }
 
 
@@ -267,13 +267,28 @@ struct Libc::Pthreads
 		Genode::Lock  lock { Genode::Lock::LOCKED };
 		Pthread      *next { nullptr };
 
-		Timeout _timeout;
+		Timer_accessor         &_timer_accessor;
+		Constructible<Timeout>  _timeout;
+
+		void _construct_timeout_once()
+		{
+			if (!_timeout.constructed())
+				_timeout.construct(_timer_accessor, *this);
+		}
 
 		Pthread(Timer_accessor &timer_accessor, unsigned long timeout_ms)
-		: _timeout(timer_accessor, *this)
+		: _timer_accessor(timer_accessor)
 		{
-			if (timeout_ms > 0)
-				_timeout.start(timeout_ms);
+			if (timeout_ms > 0) {
+				_construct_timeout_once();
+				_timeout->start(timeout_ms);
+			}
+		}
+
+		unsigned long duration_left()
+		{
+			_construct_timeout_once();
+			return _timeout->duration_left();
 		}
 
 		void handle_timeout() override
@@ -323,7 +338,7 @@ struct Libc::Pthreads
 			}
 		}
 
-		return timeout_ms > 0 ? myself._timeout.duration_left() : 0;
+		return timeout_ms > 0 ? myself.duration_left() : 0;
 	}
 };
 
@@ -374,7 +389,8 @@ struct Libc::Kernel
 
 		jmp_buf _kernel_context;
 		jmp_buf _user_context;
-		bool    _valid_user_context = false;
+		bool    _valid_user_context          = false;
+		bool    _dispatch_pending_io_signals = false;
 
 		Genode::Thread &_myself { *Genode::Thread::myself() };
 
@@ -551,7 +567,7 @@ struct Libc::Kernel
 			}
 
 			/*
-			 * During the supension of the application code a nested
+			 * During the suspension of the application code a nested
 			 * Libc::with_libc() call took place, which will be executed
 			 * before returning to the first Libc::with_libc() call.
 			 */
@@ -609,7 +625,13 @@ struct Libc::Kernel
 			/* _setjmp() returned after _longjmp() - user context suspended */
 
 			while ((!_app_returned) && (!_suspend_scheduled)) {
-				_env.ep().wait_and_dispatch_one_io_signal();
+				if (_dispatch_pending_io_signals) {
+					/* dispatch pending signals but don't block */
+					while (_env.ep().dispatch_pending_io_signal()) ;
+				} else {
+					/* block for signals */
+					_env.ep().wait_and_dispatch_one_io_signal();
+				}
 
 				if (_resume_main_once && !_setjmp(_kernel_context))
 					_switch_to_user();
@@ -669,6 +691,21 @@ struct Libc::Kernel
 
 			return _main_context() ? _suspend_main(check, timeout_ms)
 			                       : _pthreads.suspend_myself(check, timeout_ms);
+		}
+
+		void dispatch_pending_io_signals()
+		{
+			if (!_main_context()) return;
+
+			if (!_setjmp(_user_context)) {
+				_valid_user_context          = true;
+				_dispatch_pending_io_signals = true;
+				_resume_main_once            = true; /* afterwards resume main */
+				_switch_to_kernel();
+			} else {
+				_valid_user_context          = false;
+				_dispatch_pending_io_signals = false;
+			}
 		}
 
 		unsigned long current_time()
@@ -796,6 +833,13 @@ unsigned long Libc::suspend(Suspend_functor &s, unsigned long timeout_ms)
 	}
 	return kernel->suspend(s, timeout_ms);
 }
+
+
+void Libc::dispatch_pending_io_signals()
+{
+	kernel->dispatch_pending_io_signals();
+}
+
 
 unsigned long Libc::current_time()
 {

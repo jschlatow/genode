@@ -69,7 +69,7 @@ Core_env * Genode::core_env()
 
 	if (!signal_transmitter_initialized)
 		signal_transmitter_initialized =
-			(init_core_signal_transmitter(*_env.entrypoint()), true);
+			(init_core_signal_transmitter(_env.signal_ep()), true);
 
 	return &_env;
 }
@@ -92,6 +92,12 @@ Platform_generic *Genode::platform() { return platform_specific(); }
 Thread_capability Genode::main_thread_cap() { return Thread_capability(); }
 
 
+/**
+ * Dummy implementation for core that has no parent to ask for resources
+ */
+void Genode::init_parent_resource_requests(Genode::Env & env) {};
+
+
 /****************
  ** Core child **
  ****************/
@@ -99,12 +105,6 @@ Thread_capability Genode::main_thread_cap() { return Thread_capability(); }
 class Core_child : public Child_policy
 {
 	private:
-
-		/*
-		 * Entry point used for serving the parent interface
-		 */
-		Rpc_entrypoint _entrypoint;
-		enum { STACK_SIZE = 4 * 1024 * sizeof(Genode::addr_t)};
 
 		Registry<Service> &_services;
 
@@ -127,18 +127,16 @@ class Core_child : public Child_policy
 		Core_child(Registry<Service> &services, Region_map &local_rm,
 		           Pd_session  &core_pd,  Capability<Pd_session>  core_pd_cap,
 		           Cpu_session &core_cpu, Capability<Cpu_session> core_cpu_cap,
-		           Cap_quota cap_quota, Ram_quota ram_quota)
+		           Cap_quota cap_quota, Ram_quota ram_quota,
+		           Rpc_entrypoint &ep)
 		:
-			_entrypoint(nullptr, STACK_SIZE, "init_child", false),
 			_services(services),
 			_core_pd_cap (core_pd_cap),  _core_pd (core_pd),
 			_core_cpu_cap(core_cpu_cap), _core_cpu(core_cpu),
 			_cap_quota(Child::effective_quota(cap_quota)),
 			_ram_quota(Child::effective_quota(ram_quota)),
-			_child(local_rm, _entrypoint, *this)
-		{
-			_entrypoint.activate();
-		}
+			_child(local_rm, ep, *this)
+		{ }
 
 
 		/****************************
@@ -258,7 +256,10 @@ int main()
 	static Rm_root     rm_root     (&ep, &sliced_heap, pager_ep);
 	static Cpu_root    cpu_root    (&ep, &ep, &pager_ep, &sliced_heap,
 	                                Trace::sources());
-	static Pd_root     pd_root     (ep, pager_ep, *platform()->ram_alloc(), local_rm, sliced_heap);
+	static Pd_root     pd_root     (ep, core_env()->signal_ep(), pager_ep,
+	                                *platform()->ram_alloc(),
+	                                local_rm, sliced_heap,
+	                                *platform_specific()->core_mem_alloc());
 	static Log_root    log_root    (&ep, &sliced_heap);
 	static Io_mem_root io_mem_root (&ep, &ep, platform()->io_mem_alloc(),
 	                                platform()->ram_alloc(), &sliced_heap);
@@ -308,7 +309,7 @@ int main()
 
 	static Reconstructible<Core_child>
 		init(services, local_rm,  core_pd,  core_pd_cap, core_cpu, core_cpu_cap,
-		     init_cap_quota, init_ram_quota);
+		     init_cap_quota, init_ram_quota, ep);
 
 	platform()->wait_for_exit();
 

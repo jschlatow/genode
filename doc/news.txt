@@ -4,6 +4,75 @@
                                ===========
 
 
+Genode OS Framework release 17.11 | 2017-11-30
+##############################################
+
+| Most of the many improvements of version 17.11 are geared towards the
+| practical use of Genode as day-to-day OS. They include a reworked GUI
+| stack, new user-input features, and the packaging of many components.
+| The new version also revises the boot concept on x86, updates the seL4
+| kernel, and enhances Genode's user-level networking facilities.
+
+Whereas each Genode release is usually focused on one or two flagship
+features, version 17.11 accumulated countless improvements made during the
+practical use of Genode on a day-to-day basis. The topics range from
+convenience features like scroll-wheel emulation for Lenovo trackpoints, over
+the proper handling of keyboard modes (numlock and capslock), to a reworked
+GUI stack that takes new usage patterns into account. Since the forthcoming
+general-purpose scenario is entirely based on Genode's recently introduced
+custom package-management concept, it prompted us to package all ingredients
+of the scenario.
+
+On the platform level, the new version streamlines the boot concept on x86
+among all supported kernels. All x86 microkernels consistently use GRUB2 now.
+Modern kernels like seL4, NOVA, or our custom kernel are able to boot via UEFI
+and legacy boot. Speaking of our custom kernel, the current release wraps up a
+long-term internal redesign that simplifies the kernel while improving its
+performance.
+
+Feature-wise, the new release further cultivates the use of the Nim
+programming language for native Genode components, includes a port of
+libretro-based emulators for game consoles, and enables the resizing of
+libSDL-based applications like avplay.
+
+The complete picture is presented in the official
+[https:/documentation/release-notes/17.11 - release documentation of version 17.11...]
+
+
+Genode OS Framework release 17.08 | 2017-08-30
+##############################################
+
+| Version 17.08 enables hardware-accelerated graphics on Intel-Gen8 GPUs
+| and expands Genode's seL4-kernel support to the ARM and 64-bit x86
+| architectures. Further topics are UEFI boot, VFS enhancements such as a
+| new FatFS plugin, and the use of Genode as Xen DomU.
+
+The new release bears the fruit of our long-term investigation of
+hardware-accelerated graphics on modern Intel platforms that we conducted over
+the past year. The result is a brand new low-complexity GPU multiplexer that
+is designed after microkernel principles. With far less than 10K lines of
+code, it paves the ground for leveraging the power of GPUs at an extremely
+tiny footprint on the trusted computing base. The GPU multiplexer is
+accompanied with the matching application-side library infrastructure such as
+Mesa, libdrm, Qt5 bindings, SDL bindings. This allows Genode components to use
+the GPU with standard APIs like OpenGL.
+
+The seL4 microkernel is becoming more and more popular. Since about one year,
+most Genode scenarios are able to use this kernel on the 32-bit x86
+architecture. The growing interest in the combination of seL4 with Genode
+prompted us to expand the architecture support to ARM and 64-bit x86 now.
+Additionally, we enabled SMP on x86, priority support, and Genode's CPU-time
+monitoring facility on this kernel.
+
+Speaking of Genode's underlying kernels, the current release equips NOVA,
+seL4, and our custom base-hw kernel with UEFI-boot support. It updates the
+Muen separation kernel to a current version, and adds the ability to run
+Genode as Xen DomU domains.
+
+These and the many more topics of the new version are covered by the
+[https:/documentation/release-notes/17.08 - release documentation of version 17.08...]
+
+
 Genode OS Framework release 17.05 | 2017-05-31
 ##############################################
 

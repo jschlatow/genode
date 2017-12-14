@@ -16,7 +16,7 @@
 #include <os/session_policy.h>
 
 /* local includes */
-#include <server.h>
+#include "server.h"
 
 
 /***************************
@@ -109,7 +109,7 @@ Init::Server::_resolve_session_request(Service::Name const &service_name,
 			matching_service = &service; });
 
 	if (!matching_service)
-		throw Service_denied();
+		throw Service_not_present();
 
 	return matching_service->resolve_session_request(label);
 }
@@ -142,10 +142,20 @@ void Init::Server::session_ready(Session_state &session)
 		_env.parent().deliver_session_cap(id, session.cap);
 		session.phase = Session_state::CAP_HANDED_OUT;
 	}
+
+	if (session.phase == Session_state::SERVICE_DENIED)
+		_close_session(session, Parent::SERVICE_DENIED);
+
+	if (session.phase == Session_state::INSUFFICIENT_RAM_QUOTA)
+		_close_session(session, Parent::INSUFFICIENT_RAM_QUOTA);
+
+	if (session.phase == Session_state::INSUFFICIENT_CAP_QUOTA)
+		_close_session(session, Parent::INSUFFICIENT_CAP_QUOTA);
 }
 
 
-void Init::Server::session_closed(Session_state &session)
+void Init::Server::_close_session(Session_state &session,
+                                  Parent::Session_response response)
 {
 	_report_update_trigger.trigger_report_update();
 
@@ -162,13 +172,29 @@ void Init::Server::session_closed(Session_state &session)
 
 	session.destroy();
 
-	_env.parent().session_response(id, Parent::SESSION_CLOSED);
+	_env.parent().session_response(id, response);
+}
+
+
+void Init::Server::session_closed(Session_state &session)
+{
+	_close_session(session, Parent::SESSION_CLOSED);
 }
 
 
 void Init::Server::_handle_create_session_request(Xml_node request,
                                                   Parent::Client::Id id)
 {
+	/*
+	 * Ignore requests that are already successfully forwarded (by a prior call
+	 * of '_handle_create_session_request') but still remain present in the
+	 *  'session_requests' ROM because the server child has not responded yet.
+	 */
+	try {
+		_client_id_space.apply<Parent::Client>(id, [&] (Parent::Client const &) { });
+		return;
+	} catch (Id_space<Parent::Client>::Unknown_id) { /* normal case */ }
+
 	if (!request.has_sub_node("args"))
 		return;
 
@@ -257,6 +283,7 @@ void Init::Server::_handle_create_session_request(Xml_node request,
 	catch (Insufficient_cap_quota) {
 		_env.parent().session_response(Parent::Server::Id { id.value },
 		                               Parent::INSUFFICIENT_CAP_QUOTA); }
+	catch (Service_not_present) { /* keep request pending */ }
 }
 
 
@@ -331,7 +358,7 @@ void Init::Server::_handle_session_requests()
 	Xml_node const requests = _session_requests->xml();
 
 	requests.for_each_sub_node([&] (Xml_node request) {
-	 _handle_session_request(request); });
+		_handle_session_request(request); });
 
 	_report_update_trigger.trigger_report_update();
 }
@@ -356,10 +383,14 @@ void Init::Server::apply_config(Xml_node config)
 		_session_request_handler.construct(_env.ep(), *this,
 		                                   &Server::_handle_session_requests);
 		_session_requests->sigh(*_session_request_handler);
-
-		if (_session_requests.constructed())
-			_handle_session_requests();
 	}
+
+	/*
+	 * Try to resolve pending session requests that may become serviceable with
+	 * the new configuration.
+	 */
+	if (services_provided && _session_requests.constructed())
+		_handle_session_requests();
 
 	/*
 	 * Re-validate routes of existing sessions, close sessions whose routes
@@ -375,6 +406,7 @@ void Init::Server::apply_config(Xml_node config)
 			if (!route_unchanged)
 				throw Service_denied();
 		}
-		catch (Service_denied) { close_session(session); }
+		catch (Service_denied)      { close_session(session); }
+		catch (Service_not_present) { close_session(session); }
 	});
 }

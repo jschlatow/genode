@@ -29,6 +29,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -36,6 +37,7 @@
 #include "libc_file.h"
 #include "libc_mem_alloc.h"
 #include "libc_mmap_registry.h"
+#include "libc_errno.h"
 
 using namespace Libc;
 
@@ -218,9 +220,16 @@ extern "C" int chdir(const char *path)
 }
 
 
+/**
+ * Close is called incorrectly enough to justify a silent failure
+ */
 extern "C" int _close(int libc_fd)
 {
-	FD_FUNC_WRAPPER(close, libc_fd);
+	Libc::File_descriptor *fd =
+		Libc::file_descriptor_allocator()->find_by_libc_fd(libc_fd);
+	return (!fd || !fd->plugin)
+		? Libc::Errno(EBADF)
+		: fd->plugin->close(fd);
 }
 
 
@@ -419,7 +428,8 @@ extern "C" void *mmap(void *addr, ::size_t length, int prot, int flags,
 
 	/* handle requests for anonymous memory */
 	if (!addr && libc_fd == -1) {
-		void *start = Libc::mem_alloc()->alloc(length, PAGE_SHIFT);
+		bool const executable = prot & PROT_EXEC;
+		void *start = Libc::mem_alloc(executable)->alloc(length, PAGE_SHIFT);
 		mmap_registry()->insert(start, length, 0);
 		return start;
 	}
@@ -456,12 +466,40 @@ extern "C" int munmap(void *start, ::size_t length)
 	int ret = 0;
 	if (plugin)
 		ret = plugin->munmap(start, length);
-	else
-		Libc::mem_alloc()->free(start);
+	else {
+		bool const executable = true;
+		/* XXX another metadata handling required to track anonymous memory */
+		Libc::mem_alloc(!executable)->free(start);
+		Libc::mem_alloc(executable)->free(start);
+	}
 
 	mmap_registry()->remove(start);
 	return ret;
 }
+
+
+extern "C" int msync(void *start, ::size_t len, int flags)
+{
+	if (!mmap_registry()->registered(start)) {
+		Genode::warning("munmap: could not lookup plugin for address ", start);
+		errno = EINVAL;
+		return -1;
+	}
+
+	/*
+	 * Lookup plugin that was used for mmap
+	 *
+	 * If the pointer is NULL, 'start' refers to an anonymous mmap.
+	 */
+	Plugin *plugin = mmap_registry()->lookup_plugin_by_addr(start);
+
+	int ret = 0;
+	if (plugin)
+		ret = plugin->msync(start, len, flags);
+
+	return ret;
+}
+
 
 
 extern "C" int _open(const char *pathname, int flags, ::mode_t mode)

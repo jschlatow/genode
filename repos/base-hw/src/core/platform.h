@@ -51,7 +51,7 @@ class Genode::Platform : public Genode::Platform_generic
 		/**
 		 * Initialize I/O port allocator
 		 */
-		 void _init_io_port_alloc();
+		void _init_io_port_alloc();
 
 		/**
 		 * Initialize IO memory allocator
@@ -61,12 +61,16 @@ class Genode::Platform : public Genode::Platform_generic
 		 * driven outside of core. Using byte granularity allows handing
 		 * out the MMIO page to trusted user-level device drivers.
 		 */
-		 void _init_io_mem_alloc();
+		void _init_io_mem_alloc();
 
 		 /**
 		  * Perform additional platform-specific initialization.
 		  */
-		 void _init_additional();
+		void _init_additional();
+
+		void _init_rom_modules();
+
+		addr_t _rom_module_phys(addr_t virt);
 
 	public:
 
@@ -105,7 +109,7 @@ class Genode::Platform : public Genode::Platform_generic
 
 		static addr_t core_phys_addr(addr_t virt);
 
-		static Hw::Page_table            & core_page_table();
+		static addr_t                      core_page_table();
 		static Hw::Page_table::Allocator & core_page_table_allocator();
 
 
@@ -128,9 +132,9 @@ class Genode::Platform : public Genode::Platform_generic
 
 		Range_allocator * irq_alloc() { return &_irq_alloc; }
 
-		addr_t vm_start() const { return VIRT_ADDR_SPACE_START; }
+		addr_t vm_start() const { return Hw::Mm::user().base; }
 
-		size_t vm_size() const { return VIRT_ADDR_SPACE_SIZE; }
+		size_t vm_size() const { return Hw::Mm::user().size; }
 
 		Rom_fs *rom_fs() { return &_rom_fs; }
 

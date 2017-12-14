@@ -21,15 +21,28 @@ SRC_C += vars.c
 # b64_ntop
 SRC_C += base64.c
 
-SRC_C += rcmd.c rcmdsh.c
-
 include $(REP_DIR)/lib/mk/libc-common.inc
 
-INC_DIR += $(REP_DIR)/include/libc
-INC_DIR += $(REP_DIR)/include/libc/sys
+INC_DIR += $(LIBC_REP_DIR)/include/libc
+INC_DIR += $(LIBC_REP_DIR)/include/libc/sys
 INC_DIR += $(LIBC_PORT_DIR)/include/libc/sys
 
 # needed for name6.c, contains res_private.h
 INC_DIR += $(LIBC_DIR)/lib/libc/resolv
 
 vpath %.c $(LIBC_NET_DIR)
+
+nslexer.o: nsparser.c nsparser.c
+
+nslexer.c: nslexer.l
+	$(MSG_CONVERT)$(notdir $@)
+	$(VERBOSE)flex -P_nsyy -t $< | sed -e '/YY_BUF_SIZE/s/16384/1024/' > $@
+
+vpath nslexer.l $(LIBC_NET_DIR)
+
+nsparser.c: nsparser.y
+	$(MSG_CONVERT)$(notdir $@)
+	$(VERBOSE)bison -d -p_nsyy $< \
+		--defines=nsparser.h --output=$@
+
+vpath nsparser.y $(LIBC_NET_DIR)

@@ -15,6 +15,9 @@
 
 #include <hw/spec/x86_64/x86_64.h>
 
+/* Genode includes */
+#include <drivers/timer/util.h>
+
 /* core includes */
 #include <kernel/timer.h>
 #include <platform.h>
@@ -53,17 +56,25 @@ uint32_t Timer_driver::pit_calc_timer_freq(void)
 Timer_driver::Timer_driver(unsigned)
 : Mmio(Platform::mmio_to_virt(Hw::Cpu_memory_map::MMIO_LAPIC_BASE))
 {
-	write<Divide_configuration::Divide_value>(
-		Divide_configuration::Divide_value::MAX);
-
 	/* Enable LAPIC timer in one-shot mode */
 	write<Tmr_lvt::Vector>(Board::TIMER_VECTOR_KERNEL);
 	write<Tmr_lvt::Delivery>(0);
 	write<Tmr_lvt::Mask>(0);
 	write<Tmr_lvt::Timer_mode>(0);
 
-	/* Calculate timer frequency */
-	ticks_per_ms = pit_calc_timer_freq();
+	/* calibrate LAPIC frequency to fullfill our requirements */
+	for (Divide_configuration::access_t div = Divide_configuration::Divide_value::MAX;
+	     div && ticks_per_ms < TIMER_MIN_TICKS_PER_MS; div--)
+	{
+		if (!div){
+			error("Failed to calibrate timer frequency");
+			throw Calibration_failed();
+		}
+		write<Divide_configuration::Divide_value>(div);
+
+		/* Calculate timer frequency */
+		ticks_per_ms = pit_calc_timer_freq();
+	}
 }
 
 
@@ -84,7 +95,7 @@ void Timer::_start_one_shot(time_t const ticks) {
 
 
 time_t Timer::_ticks_to_us(time_t const ticks) const {
-	return (ticks / _driver.ticks_per_ms) * 1000; }
+	return timer_ticks_to_us(ticks, _driver.ticks_per_ms); }
 
 
 time_t Timer::us_to_ticks(time_t const us) const {

@@ -32,7 +32,7 @@ set build_components {
 # specified using an '<inline>' node but it is no valid XML. I.e., xmllint
 # complains about the sequence '&&'.
 #
-proc check_xml_syntax {xml_file} { }
+proc check_xml_with_schema {xml_file} { }
 
 source ${genode_dir}/repos/base/run/platform_drv.inc
 append_platform_drv_build_components
@@ -126,7 +126,7 @@ append_if [have_spec ps2] config {
 	</start> }
 
 append_if $use_usb_input config {
-	<start name="usb_drv">
+	<start name="usb_drv" caps="120">
 		<resource name="RAM" quantum="12M"/>
 		<provides><service name="Input"/></provides>
 		<config uhci="yes" ehci="no" xhci="no"> <hid/> </config>
@@ -140,7 +140,7 @@ append config {
 			<keyboard layout="de"/>
 		</config>
 	</start>
-	<start name="ram_fs">
+	<start name="ram_fs" caps="200">
 		<resource name="RAM" quantum="124M"/>
 		<provides><service name="File_system"/></provides>
 		<config>
@@ -180,7 +180,7 @@ append config {
 }
 
 append config {
-	<start name="noux" caps="1000">
+	<start name="noux" caps="2000">
 		<resource name="RAM" quantum="1G" />
 }
 

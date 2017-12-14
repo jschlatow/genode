@@ -39,10 +39,6 @@ ARCHIVES(pkg) := $(sort ${ARCHIVES(pkg)} $(call _pkg_deps,${ARCHIVES(pkg)}))
 # return list of source archives needed by a given binary package
 _binpkg_src_archives = $(call pkg_src_archives,$(call pkg_of_binpkg,$1))
 
-# return list of binary archives contained in a binary package
-_binpkg_bin_archives = $(foreach S,$(call _binpkg_src_archives,$1),\
-                          $(call bin_for_src,$(call bin_archive_spec,$1),$S))
-
 # return list of package archives contained in a binary package
 _binpkg_pkg_archives = $(foreach P,$(call pkg_pkg_archives,$(call pkg_of_binpkg,$1)),\
                           $(call binpkg_for_pkg,$(call bin_archive_spec,$1),$P))
@@ -63,6 +59,19 @@ ARCHIVES(pkg) := $(sort ${ARCHIVES(pkg)} $(foreach P,${ARCHIVES(binpkg)},\
 #
 # Extend ARCHIVES(bin) with binary-package dependencies
 #
+
+# return non-empty result if source archive exists
+_src_exists = $(wildcard $(dir $(call used_apis_file,$1)))
+
+# return binary-archive path for architecture $1 and source archive $2
+_bin_for_src = $(strip \
+                  $(if $(call _src_exists,$2),\
+                     $(call archive_user,$2)/bin/$1/$(call archive_recipe,$2)))
+
+# return list of binary archives contained in a binary package
+_binpkg_bin_archives = $(foreach S,$(call _binpkg_src_archives,$1),\
+                          $(call _bin_for_src,$(call bin_archive_spec,$1),$S))
+
 
 ARCHIVES(bin) := $(sort ${ARCHIVES(bin)} $(foreach P,${ARCHIVES(binpkg)},\
                                             $(call _binpkg_bin_archives,$P)))

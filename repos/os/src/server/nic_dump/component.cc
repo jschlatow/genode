@@ -56,42 +56,48 @@ Session_component_base(Allocator    &guarded_alloc_backing,
 
 Net::Session_component::Session_component(Allocator         &alloc,
                                           size_t const       amount,
-                                          Ram_session       &buf_ram,
                                           size_t const       tx_buf_size,
                                           size_t const       rx_buf_size,
-                                          Region_map        &region_map,
-                                          Uplink            &uplink,
                                           Xml_node           config,
                                           Timer::Connection &timer,
-                                          unsigned          &curr_time,
-                                          Entrypoint        &ep)
+                                          Duration          &curr_time,
+                                          Env               &env)
 :
-	Session_component_base(alloc, amount, buf_ram, tx_buf_size, rx_buf_size),
-	Session_rpc_object(region_map, _tx_buf, _rx_buf, &_range_alloc, ep.rpc_ep()),
-	Interface(ep, config.attribute_value("downlink", Interface_label()),
+	Session_component_base(alloc, amount, env.ram(), tx_buf_size, rx_buf_size),
+	Session_rpc_object(env.rm(), _tx_buf, _rx_buf, &_range_alloc,
+	                   env.ep().rpc_ep()),
+	Interface(env.ep(), config.attribute_value("downlink", Interface_label()),
 	          timer, curr_time, config.attribute_value("time", false),
 	          _guarded_alloc),
-	_mac(uplink.mac_address())
+	_uplink(env, config, timer, curr_time, alloc),
+	_link_state_handler(env.ep(), *this, &Session_component::_handle_link_state)
 {
 	_tx.sigh_ready_to_ack(_sink_ack);
 	_tx.sigh_packet_avail(_sink_submit);
 	_rx.sigh_ack_avail(_source_ack);
 	_rx.sigh_ready_to_submit(_source_submit);
-	Interface::remote(uplink);
-	uplink.Interface::remote(*this);
+	Interface::remote(_uplink);
+	_uplink.Interface::remote(*this);
+	_uplink.link_state_sigh(_link_state_handler);
+	_print_state();
 }
 
 
-bool Session_component::link_state()
+void Session_component::_print_state()
 {
-	warning("Session_component::link_state not implemented");
-	return false;
+	log("\033[33m(new state)\033[0m \033[32mMAC address\033[0m ", mac_address(),
+	                              " \033[32mlink state\033[0m ",  link_state());
 }
 
 
-void Session_component::link_state_sigh(Signal_context_capability sigh)
+void Session_component::_handle_link_state()
 {
-	warning("Session_component::link_state_sigh not implemented");
+	_print_state();
+	if (!_link_state_sigh.valid()) {
+		warning("failed to forward signal");
+		return;
+	}
+	Signal_transmitter(_link_state_sigh).submit();
 }
 
 
@@ -99,20 +105,15 @@ void Session_component::link_state_sigh(Signal_context_capability sigh)
  ** Root **
  **********/
 
-Net::Root::Root(Entrypoint        &ep,
+Net::Root::Root(Env               &env,
                 Allocator         &alloc,
-                Uplink            &uplink,
-                Ram_session       &buf_ram,
                 Xml_node           config,
                 Timer::Connection &timer,
-                unsigned          &curr_time,
-                Region_map        &region_map)
+                Duration          &curr_time)
 :
-	Root_component<Session_component, Genode::Single_client>(&ep.rpc_ep(),
+	Root_component<Session_component, Genode::Single_client>(&env.ep().rpc_ep(),
 	                                                         &alloc),
-	_ep(ep), _uplink(uplink), _buf_ram(buf_ram),
-	_region_map(region_map), _config(config), _timer(timer),
-	_curr_time(curr_time)
+	_env(env), _config(config), _timer(timer), _curr_time(curr_time)
 { }
 
 
@@ -143,8 +144,8 @@ Session_component *Net::Root::_create_session(char const *args)
 		}
 		return new (md_alloc())
 			Session_component(*md_alloc(), ram_quota - session_size,
-			                  _buf_ram, tx_buf_size, rx_buf_size, _region_map,
-			                  _uplink, _config, _timer, _curr_time, _ep);
+			                  tx_buf_size, rx_buf_size, _config, _timer,
+			                  _curr_time, _env);
 	}
 	catch (...) { throw Service_denied(); }
 }

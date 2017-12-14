@@ -182,13 +182,13 @@ Package archive
 A package archive contains an 'archives' file with a list of archive names
 that belong together at runtime. Each listed archive appears on a separate line.
 For example, the 'archives' file of the package archive for the window
-manager 'wm-2017-05-15' may look as follows:
+manager 'wm-2017-05-31' looks as follows:
 
-! genodelabs/raw/wm-2017-05-13
-! genodelabs/src/wm-2017-05-15
-! genodelabs/src/report_rom-2017-05-14
-! genodelabs/src/decorator-2017-05-15
-! genodelabs/src/floating_window_layouter-2017-05-15
+! genodelabs/raw/wm-2017-05-31
+! genodelabs/src/wm-2017-05-31
+! genodelabs/src/report_rom-2017-05-31
+! genodelabs/src/decorator-2017-05-31
+! genodelabs/src/floating_window_layouter-2017-05-31
 
 In contrast to the list of 'used_apis' of a source archive, the content of
 the 'archives' file denotes the origin of the respective archives
@@ -221,7 +221,6 @@ is structured as follows:
 ! <user>/raw/<name>-<version>/
 ! <user>/pkg/<name>-<version>/
 ! <user>/bin/<arch>/<src-name>-<src-version>/
-! <user>/bin/<arch>/<api-name>-<api-version>/<src-name>-<src-version>/
 
 The <user> stands for the origin of the contained archives. For example, the
 official archives provided by Genode Labs reside in a _genodelabs/_
@@ -243,10 +242,7 @@ easily combined.
 The actual archives are stored in the subdirectories named after the archive
 types ('raw', 'api', 'src', 'bin', 'pkg'). Archives contained in the _bin/_
 subdirectories are further subdivided in the various architectures (like
-'x86_64', or 'arm_v7'). Note that for binaries created for source archives
-that implement an API (libraries), there exists a further nesting level with
-API version. Therefore, multiple library implementations (or versions) that
-implement the same API are located in the same API subdirectory.
+'x86_64', or 'arm_v7').
 
 
 Depot management
@@ -286,7 +282,7 @@ corresponding user subdirectory must contain two files:
 If both the public key and the download locations are defined, the download
 tool can be used as follows:
 
-! ./tool/depot/download nfeske/src/zlib-2017-05-30
+! ./tool/depot/download genodelabs/src/zlib-2017-05-31
 
 The tool automatically downloads the specified archives and their
 dependencies. For example, as the zlib depends on the libc API, the libc API
@@ -298,7 +294,7 @@ all binary archives for the 32-bit x86 architecture. Downloaded binary
 archives are always accompanied with their corresponding source and used API
 archives.
 
-! ./tool/depot/download nfeske/pkg/x86_32/wm-2017-05-30
+! ./tool/depot/download genodelabs/pkg/x86_32/wm-2017-05-31
 
 Archive content is not downloaded directly to the depot. Instead, the
 individual archives and signature files are downloaded to a quarantine area in
@@ -325,18 +321,16 @@ CPU architecture. For example, the following command builds the 'zlib'
 library for the 64-bit x86 architecture. It executes four concurrent jobs
 during the build process.
 
-! ./tool/depot/build nfeske/bin/x86_64/zlib-2017-05-30 -j4
+! ./tool/depot/build genodelabs/bin/x86_64/zlib-2017-05-31 -j4
 
 Note that the command expects a specific version of the source archive as
 argument. The depot may contain several versions. So the user has to decide,
 which one to build.
 
-After the tool is finished, the freshly built binary archive can be found in the
-depot within the _genodelabs/bin/_ subdirectory. If the source archive
-implements an API (if it is a library), the result is stored at
-_bin/<arch>/<api>-<version>/<src>-<version>/_. Otherwise, the result is stored
-at _bin/<arch>/<src>-<version>/_. Only the final result of the built process
-is preserved. In the example above, that would be the _zlib.lib.so_ library.
+After the tool is finished, the freshly built binary archive can be found in
+the depot within the _genodelabs/bin/<arch>/<src>-<version>/_ subdirectory.
+Only the final result of the built process is preserved. In the example above,
+that would be the _zlib.lib.so_ library.
 
 For debugging purposes, it might be interesting to inspect the intermediate
 state of the build. This is possible by adding 'KEEP_BUILD_DIR=1' as argument
@@ -364,7 +358,7 @@ be present in the key ring of your GNU privacy guard.
 To publish archives, one needs to specify the specific version to publish.
 For example:
 
-! ./tool/depot/publish <you>/pkg/wm-2017-05-30
+! ./tool/depot/publish <you>/pkg/wm-2017-05-31
 
 The command checks that the specified archive and all dependencies are present
 in the depot. It then proceeds with the archiving and signing operations. For

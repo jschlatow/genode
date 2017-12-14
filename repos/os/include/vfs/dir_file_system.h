@@ -16,6 +16,7 @@
 #ifndef _INCLUDE__VFS__DIR_FILE_SYSTEM_H_
 #define _INCLUDE__VFS__DIR_FILE_SYSTEM_H_
 
+#include <base/registry.h>
 #include <vfs/file_system_factory.h>
 #include <vfs/vfs_handle.h>
 
@@ -29,7 +30,53 @@ class Vfs::Dir_file_system : public File_system
 
 		enum { MAX_NAME_LEN = 128 };
 
+		struct Root { };
+
 	private:
+
+		/**
+		 * This instance is the root of VFS
+		 *
+		 * Additionally, the root has an empty _name.
+		 */
+		bool _vfs_root;
+
+		struct Dir_vfs_handle : Vfs_handle
+		{
+			struct Subdir_handle_element;
+
+			typedef Genode::Registry<Subdir_handle_element> Subdir_handle_registry;
+
+			struct Subdir_handle_element : Subdir_handle_registry::Element
+			{
+				Vfs_handle &vfs_handle;
+				Subdir_handle_element(Subdir_handle_registry &registry,
+				                      Vfs_handle &vfs_handle)
+				: Subdir_handle_registry::Element(registry, *this),
+				  vfs_handle(vfs_handle) { }
+			};
+
+			Absolute_path             path;
+			Vfs_handle               *queued_read_handle { nullptr };
+			Subdir_handle_registry    subdir_handle_registry;
+
+			Dir_vfs_handle(Directory_service &ds,
+			               File_io_service   &fs,
+			               Genode::Allocator &alloc,
+			               char const *path)
+			: Vfs_handle(ds, fs, alloc, 0),
+			  path(path) { }
+
+			~Dir_vfs_handle()
+			{
+				/* close all sub-handles */
+				auto f = [&] (Subdir_handle_element &e) {
+					e.vfs_handle.ds().close(&e.vfs_handle);
+					destroy(alloc(), &e);
+				};
+				subdir_handle_registry.for_each(f);
+			}
+		};
 
 		/* pointer to first child file system */
 		File_system *_first_file_system;
@@ -54,7 +101,10 @@ class Vfs::Dir_file_system : public File_system
 		 */
 		char _name[MAX_NAME_LEN];
 
-		bool _root() const { return _name[0] == 0; }
+		/**
+		 * Returns if path corresponds to top directory of file system
+		 */
+		bool _top_dir(char const *path) const {	return strcmp(path, "/") == 0; }
 
 		/**
 		 * Perform operation on a file system
@@ -127,7 +177,10 @@ class Vfs::Dir_file_system : public File_system
 		char const *_sub_path(char const *path) const
 		{
 			/* do not strip anything from the path when we are root */
-			if (_root())
+			if (_vfs_root)
+				return path;
+
+			if (_top_dir(path))
 				return path;
 
 			/* skip heading slash in path if present */
@@ -150,49 +203,6 @@ class Vfs::Dir_file_system : public File_system
 			return path;
 		}
 
-		/**
-		 * The 'path' is relative to the child file systems.
-		 */
-		Dirent_result _dirent_of_file_systems(char const *path, file_offset index, Dirent &out)
-		{
-			int base = 0;
-			for (File_system *fs = _first_file_system; fs; fs = fs->next) {
-
-				/*
-				 * Determine number of matching directory entries within
-				 * the current file system.
-				 */
-				int const fs_num_dirent = fs->num_dirent(path);
-
-				/*
-				 * Query directory entry if index lies with the file
-				 * system.
-				 */
-				if (index - base < fs_num_dirent) {
-					index = index - base;
-					return fs->dirent(path, index, out);;
-				}
-
-				/* adjust base index for next file system */
-				base += fs_num_dirent;
-			}
-
-			out.type = DIRENT_TYPE_END;
-			return DIRENT_OK;
-		}
-
-		void _dirent_of_this_dir_node(file_offset index, Dirent &out)
-		{
-			if (index == 0) {
-				strncpy(out.name, _name, sizeof(out.name));
-
-				out.type = DIRENT_TYPE_DIRECTORY;
-				out.fileno = 1;
-			} else {
-				out.type = DIRENT_TYPE_END;
-			}
-		}
-
 		/*
 		 * Accumulate number of directory entries that match in any of
 		 * our sub file systems.
@@ -206,6 +216,94 @@ class Vfs::Dir_file_system : public File_system
 			return cnt;
 		}
 
+		bool _queue_read_of_file_systems(Dir_vfs_handle *dir_vfs_handle)
+		{
+			bool result = true;
+
+			dir_vfs_handle->queued_read_handle = nullptr;
+
+			file_offset index = dir_vfs_handle->seek() / sizeof(Dirent);
+
+			char const *sub_path = _sub_path(dir_vfs_handle->path.base());
+
+			if (strlen(sub_path) == 0)
+				sub_path = "/";
+
+			/* base of composite directory index */
+			int base = 0;
+
+			auto f = [&] (Dir_vfs_handle::Subdir_handle_element &handle_element) {
+				if (dir_vfs_handle->queued_read_handle) return; /* skip through */
+
+				Vfs_handle &vfs_handle = handle_element.vfs_handle;
+
+				/*
+				 * Determine number of matching directory entries within
+				 * the current file system.
+				 */
+				int const fs_num_dirent = vfs_handle.ds().num_dirent(sub_path);
+
+				/*
+				 * Query directory entry if index lies with the file
+				 * system.
+				 */
+				if (index - base < fs_num_dirent) {
+					/* set this handle to be used for read completion */
+					dir_vfs_handle->queued_read_handle = &vfs_handle;
+
+					/* seek to file-system local index */
+					index = index - base;
+					vfs_handle.seek(index * sizeof(Dirent));
+
+					/* forward the handle context */
+					vfs_handle.context = dir_vfs_handle->context;
+
+					result = vfs_handle.fs().queue_read(&vfs_handle, sizeof(Dirent));
+				}
+
+				/* adjust base index for next file system */
+				base += fs_num_dirent;
+			};
+
+			dir_vfs_handle->subdir_handle_registry.for_each(f);
+
+			return result;
+		}
+
+		Read_result _complete_read_of_file_systems(Dir_vfs_handle *dir_vfs_handle,
+		                                           char *dst, file_size count,
+		                                           file_size &out_count)
+		{
+			if (!dir_vfs_handle->queued_read_handle) {
+
+				/*
+				 * no fs was found for the given index or
+				 * fs->opendir() failed
+				 */
+
+				if (count < sizeof(Dirent))
+					return READ_ERR_INVALID;
+
+				Dirent *dirent = (Dirent*)dst;
+				*dirent = Dirent();
+
+				out_count = sizeof(Dirent);
+
+				return READ_OK;
+			}
+
+			Read_result result = dir_vfs_handle->queued_read_handle->fs().
+			                     complete_read(dir_vfs_handle->queued_read_handle,
+			                                   dst, count, out_count);
+
+			if (result == READ_QUEUED)
+				return result;
+
+			dir_vfs_handle->queued_read_handle = nullptr;
+
+			return result;
+		}
+
 	public:
 
 		Dir_file_system(Genode::Env         &env,
@@ -214,6 +312,7 @@ class Vfs::Dir_file_system : public File_system
 		                Io_response_handler &io_handler,
 		                File_system_factory &fs_factory)
 		:
+			_vfs_root(false),
 			_first_file_system(0)
 		{
 			using namespace Genode;
@@ -254,6 +353,15 @@ class Vfs::Dir_file_system : public File_system
 			}
 		}
 
+		Dir_file_system(Genode::Env         &env,
+		                Genode::Allocator   &alloc,
+		                Genode::Xml_node     node,
+		                Io_response_handler &io_handler,
+		                File_system_factory &fs_factory,
+		                Dir_file_system::Root)
+		:
+			Dir_file_system(env, alloc, node, io_handler, fs_factory)
+			{ _vfs_root = true; }
 
 		/*********************************
 		 ** Directory-service interface **
@@ -301,7 +409,7 @@ class Vfs::Dir_file_system : public File_system
 			 * If path equals directory name, return information about the
 			 * current directory.
 			 */
-			if (strlen(path) == 0 || (strcmp(path, "/") == 0)) {
+			if (strlen(path) == 0 || _top_dir(path)) {
 				out.size   = 0;
 				out.mode   = STAT_MODE_DIRECTORY | 0755;
 				out.uid    = 0;
@@ -330,36 +438,14 @@ class Vfs::Dir_file_system : public File_system
 			return STAT_ERR_NO_ENTRY;
 		}
 
-		Dirent_result dirent(char const *path, file_offset index, Dirent &out) override
-		{
-			if (_root())
-				return _dirent_of_file_systems(path, index, out);
-
-			if (strcmp(path, "/") == 0) {
-				_dirent_of_this_dir_node(index, out);
-				return DIRENT_OK;
-			}
-
-			/* path contains at least one element */
-
-			/* remove current element from path */
-			path = _sub_path(path);
-
-			/* path does not lie within our tree */
-			if (!path)
-				return DIRENT_ERR_INVALID_PATH;
-
-			return _dirent_of_file_systems(*path ? path : "/", index, out);
-		}
-
 		file_size num_dirent(char const *path) override
 		{
-			if (_root()) {
+			if (_vfs_root) {
 				return _sum_dirents_of_file_systems(path);
 
 			} else {
 
-				if (strcmp(path, "/") == 0)
+				if (_top_dir(path))
 					return 1;
 
 				/*
@@ -383,7 +469,11 @@ class Vfs::Dir_file_system : public File_system
 		 */
 		bool directory(char const *path) override
 		{
+			if (_top_dir(path))
+				return true;
+
 			path = _sub_path(path);
+
 			if (!path)
 				return false;
 
@@ -472,6 +562,127 @@ class Vfs::Dir_file_system : public File_system
 			return OPEN_ERR_UNACCESSIBLE;
 		}
 
+		/**
+		 * Call 'opendir()' on each file system and store handles in
+		 * a registry.
+		 */
+		Opendir_result open_composite_dirs(char const *sub_path,
+		                                   Dir_vfs_handle &dir_vfs_handle)
+		{
+			try {
+				for (File_system *fs = _first_file_system; fs; fs = fs->next) {
+					Vfs_handle *sub_dir_handle = nullptr;
+
+					Opendir_result r = fs->opendir(
+						sub_path, false, &sub_dir_handle, dir_vfs_handle.alloc());
+
+					switch (r) {
+					case OPENDIR_OK:
+						break;
+					case OPENDIR_ERR_LOOKUP_FAILED:
+					default:
+						continue;
+					}
+
+					new (dir_vfs_handle.alloc())
+						Dir_vfs_handle::Subdir_handle_element(
+							dir_vfs_handle.subdir_handle_registry, *sub_dir_handle);
+				}
+			}
+			catch (Genode::Out_of_ram)  { return OPENDIR_ERR_OUT_OF_RAM; }
+			catch (Genode::Out_of_caps) { return OPENDIR_ERR_OUT_OF_CAPS; }
+
+			return OPENDIR_OK;
+		}
+
+		Opendir_result opendir(char const *path, bool create,
+		                       Vfs_handle **out_handle, Allocator &alloc) override
+		{
+			Opendir_result result = OPENDIR_OK;
+
+			if (_top_dir(path)) {
+				if (create)
+					return OPENDIR_ERR_PERMISSION_DENIED;
+
+				/*
+				 * opendir with '/' (called from 'open_composite_dirs' returns handle
+				 * only, VFS root additionally calls 'open_composite_dirs' in order to
+				 * open its file systems
+				 */
+				Dir_vfs_handle *root_handle = new (alloc)
+					Dir_vfs_handle(*this, *this, alloc, path);
+
+				/* the VFS root may contain more file systems */
+				if (_vfs_root)
+					result = open_composite_dirs("/", *root_handle);
+
+				if (result == OPENDIR_OK) {
+					*out_handle = root_handle;
+				} else {
+					/* close the root handle and the rest will follow */
+					close(root_handle);
+				}
+				return result;
+			}
+
+			char const *sub_path = _sub_path(path);
+
+			if (!sub_path)
+				return OPENDIR_ERR_LOOKUP_FAILED;
+
+			if (create) {
+				auto opendir_fn = [&] (File_system &fs, char const *path)
+				{
+					Vfs_handle *tmp_handle;
+					Opendir_result opendir_result =
+						fs.opendir(path, true, &tmp_handle, alloc);
+					if (opendir_result == OPENDIR_OK)
+						fs.close(tmp_handle);
+					return opendir_result; /* return from lambda */
+				};
+
+				Opendir_result opendir_result =
+					_dir_op(OPENDIR_ERR_LOOKUP_FAILED,
+				            OPENDIR_ERR_PERMISSION_DENIED,
+				            OPENDIR_OK,
+				            path, opendir_fn);
+
+				if (opendir_result != OPENDIR_OK)
+					return opendir_result;
+			}
+
+			Dir_vfs_handle *dir_vfs_handle = new (alloc)
+				Dir_vfs_handle(*this, *this, alloc, path);
+
+			/* path equals "/" (for reading the name of this directory) */
+			if (strlen(sub_path) == 0)
+				sub_path = "/";
+
+			result = open_composite_dirs(sub_path, *dir_vfs_handle);
+			if (result == OPENDIR_OK) {
+				*out_handle = dir_vfs_handle;
+			} else {
+				/* close the master handle and the rest will follow */
+				close(dir_vfs_handle);
+			}
+			return result;
+		}
+
+		Openlink_result openlink(char const *path, bool create,
+		                         Vfs_handle **out_handle,
+		                         Allocator &alloc) override
+		{
+			auto openlink_fn = [&] (File_system &fs, char const *path)
+			{
+				return fs.openlink(path, create, out_handle, alloc);
+			};
+
+			return _dir_op(OPENLINK_ERR_LOOKUP_FAILED,
+			               OPENLINK_ERR_PERMISSION_DENIED,
+			               OPENLINK_OK,
+			               path, openlink_fn);
+		}
+
 		void close(Vfs_handle *handle) override
 		{
 			if (handle && (&handle->ds() == this))
@@ -487,18 +698,6 @@ class Vfs::Dir_file_system : public File_system
 
 			return _dir_op(UNLINK_ERR_NO_ENTRY, UNLINK_ERR_NO_PERM, UNLINK_OK,
 			               path, unlink_fn);
-		}
-
-		Readlink_result readlink(char const *path, char *buf, file_size buf_size,
-		                         file_size &out_len) override
-		{
-			auto readlink_fn = [&] (File_system &fs, char const *path)
-			{
-				return fs.readlink(path, buf, buf_size, out_len);
-			};
-
-			return _dir_op(READLINK_ERR_NO_ENTRY, READLINK_ERR_NO_ENTRY, READLINK_OK,
-			               path, readlink_fn);
 		}
 
 		Rename_result rename(char const *from_path, char const *to_path) override
@@ -535,54 +734,12 @@ class Vfs::Dir_file_system : public File_system
 			return final;
 		}
 
-		Symlink_result symlink(char const *from, char const *to) override
-		{
-			auto symlink_fn = [&] (File_system &fs, char const *to)
-			{
-				return fs.symlink(from, to);
-			};
-
-			return _dir_op(SYMLINK_ERR_NO_ENTRY, SYMLINK_ERR_NO_PERM, SYMLINK_OK,
-			               to, symlink_fn);
-		}
-
-		Mkdir_result mkdir(char const *path, unsigned mode) override
-		{
-			auto mkdir_fn = [&] (File_system &fs, char const *path)
-			{
-				return fs.mkdir(path, mode);
-			};
-
-			return _dir_op(MKDIR_ERR_NO_ENTRY, MKDIR_ERR_NO_PERM, MKDIR_OK,
-			               path, mkdir_fn);
-		}
-
-
 		/***************************
 		 ** File_system interface **
 		 ***************************/
 
 		char const *name() const    { return "dir"; }
 		char const *type() override { return "dir"; }
-
-		/**
-		 * Synchronize all file systems
-		 */
-		void sync(char const *path) override
-		{
-			if (strcmp("/", path, 2) == 0) {
-				for (File_system *fs = _first_file_system; fs; fs = fs->next)
-					fs->sync("/");
-				return;
-			}
-
-			path = _sub_path(path);
-			if (!path)
-				return;
-
-			for (File_system *fs = _first_file_system; fs; fs = fs->next)
-				fs->sync(path);
-		}
 
 		void apply_config(Genode::Xml_node const &node) override
 		{
@@ -614,9 +771,54 @@ class Vfs::Dir_file_system : public File_system
 			return WRITE_ERR_INVALID;
 		}
 
-		Read_result read(Vfs_handle *, char *, file_size, file_size &) override
+		bool queue_read(Vfs_handle *vfs_handle, file_size count) override
 		{
-			return READ_ERR_INVALID;
+			Dir_vfs_handle *dir_vfs_handle =
+				static_cast<Dir_vfs_handle*>(vfs_handle);
+
+			if (_vfs_root)
+				return _queue_read_of_file_systems(dir_vfs_handle);
+
+			if (_top_dir(dir_vfs_handle->path.base()))
+				return true;
+
+			return _queue_read_of_file_systems(dir_vfs_handle);
+		}
+
+		Read_result complete_read(Vfs_handle *vfs_handle,
+		                          char *dst, file_size count,
+		                          file_size &out_count) override
+		{
+			out_count = 0;
+
+			if (count < sizeof(Dirent))
+				return READ_ERR_INVALID;
+
+			Dir_vfs_handle *dir_vfs_handle =
+				static_cast<Dir_vfs_handle*>(vfs_handle);
+
+			if (_vfs_root)
+				return _complete_read_of_file_systems(dir_vfs_handle, dst, count, out_count);
+
+			if (_top_dir(dir_vfs_handle->path.base())) {
+				Dirent *dirent = (Dirent*)dst;
+				file_offset index = vfs_handle->seek() / sizeof(Dirent);
+
+				if (index == 0) {
+					strncpy(dirent->name, _name, sizeof(dirent->name));
+
+					dirent->type = DIRENT_TYPE_DIRECTORY;
+					dirent->fileno = 1;
+				} else {
+					dirent->type = DIRENT_TYPE_END;
+				}
+
+				out_count = sizeof(Dirent);
+
+				return READ_OK;
+			}
+
+			return _complete_read_of_file_systems(dir_vfs_handle, dst, count, out_count);
 		}
 
 		Ftruncate_result ftruncate(Vfs_handle *, file_size) override
@@ -638,6 +840,45 @@ class Vfs::Dir_file_system : public File_system
 				return true;
 
 			return handle->fs().notify_read_ready(handle);
+		}
+
+		bool queue_sync(Vfs_handle *vfs_handle) override
+		{
+			bool result = true;
+
+			Dir_vfs_handle *dir_vfs_handle =
+				static_cast<Dir_vfs_handle*>(vfs_handle);
+
+			auto f = [&result, dir_vfs_handle] (Dir_vfs_handle::Subdir_handle_element &e) {
+				/* forward the handle context */
+				e.vfs_handle.context = dir_vfs_handle->context;
+
+				if (!e.vfs_handle.fs().queue_sync(&e.vfs_handle)) {
+					result = false;
+				}
+			};
+
+			dir_vfs_handle->subdir_handle_registry.for_each(f);
+
+			return result;
+		}
+
+		Sync_result complete_sync(Vfs_handle *vfs_handle) override
+		{
+			Sync_result result = SYNC_OK;
+
+			Dir_vfs_handle *dir_vfs_handle =
+				static_cast<Dir_vfs_handle*>(vfs_handle);
+
+			auto f = [&result, dir_vfs_handle] (Dir_vfs_handle::Subdir_handle_element &e) {
+				Sync_result r = e.vfs_handle.fs().complete_sync(&e.vfs_handle);
+				if (r != SYNC_OK)
+					result = r;
+			};
+
+			dir_vfs_handle->subdir_handle_registry.for_each(f);
+
+			return result;
 		}
 };
 

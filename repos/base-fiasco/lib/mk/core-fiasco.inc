@@ -23,16 +23,15 @@ SRC_CC      += stack_area.cc \
                pager_object.cc \
                rpc_cap_factory_l4.cc \
                ram_dataspace_factory.cc \
-               pd_assign_pci.cc \
-               pd_upgrade_ram_quota.cc \
+               pd_session_support.cc \
                platform.cc \
+               platform_rom_modules.cc \
                platform_pd.cc \
                platform_services.cc \
                platform_thread.cc \
                pd_session_component.cc \
                ram_dataspace_support.cc \
                region_map_component.cc \
-               region_map_support.cc \
                rom_session_component.cc \
                signal_source_component.cc \
                signal_transmitter_proxy.cc \
@@ -61,7 +60,7 @@ vpath rpc_cap_factory_l4.cc       $(GEN_CORE_DIR)
 vpath ram_dataspace_factory.cc    $(GEN_CORE_DIR)
 vpath core_rpc_cap_alloc.cc       $(GEN_CORE_DIR)
 vpath core_region_map.cc          $(GEN_CORE_DIR)
-vpath pd_assign_pci.cc            $(GEN_CORE_DIR)
+vpath pd_session_support.cc       $(GEN_CORE_DIR)
 vpath pd_upgrade_ram_quota.cc     $(GEN_CORE_DIR)
 vpath region_map_component.cc     $(GEN_CORE_DIR)
 vpath io_mem_session_component.cc $(GEN_CORE_DIR)
@@ -75,3 +74,4 @@ vpath default_log.cc              $(GEN_CORE_DIR)
 vpath dump_alloc.cc               $(GEN_CORE_DIR)
 vpath stack_area.cc               $(GEN_CORE_DIR)
 vpath pager_ep.cc                 $(GEN_CORE_DIR)
+vpath platform_rom_modules.cc     $(GEN_CORE_DIR)

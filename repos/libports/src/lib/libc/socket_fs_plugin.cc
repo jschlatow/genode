@@ -499,11 +499,15 @@ extern "C" int socket_fs_bind(int libc_fd, sockaddr const *addr, socklen_t addrl
 	Sockaddr_string addr_string(host_string(*(sockaddr_in *)addr),
 	                            port_string(*(sockaddr_in *)addr));
 
-	int const len = strlen(addr_string.base());
-	int const n   = write(context->bind_fd(), addr_string.base(), len);
-	if (n != len) return Errno(EACCES);
-
-	return 0;
+	try {
+		int const len = strlen(addr_string.base());
+		int const n   = write(context->bind_fd(), addr_string.base(), len);
+		if (n != len) return Errno(EACCES);
+		fsync(context->bind_fd());
+		return 0;
+	} catch (Socket_fs::Context::Inaccessible) {
+		return Errno(EINVAL);
+	}
 }
 
 
@@ -619,18 +623,24 @@ static ssize_t do_sendto(Libc::File_descriptor *fd,
 	/* TODO ENOTCONN, EISCONN, EDESTADDRREQ */
 	/* TODO ECONNRESET */
 
-	if (dest_addr) {
-		Sockaddr_string addr_string(host_string(*(sockaddr_in const *)dest_addr),
-		                            port_string(*(sockaddr_in const *)dest_addr));
-
-		int const len = strlen(addr_string.base());
-		int const n   = write(context->remote_fd(), addr_string.base(), len);
-		if (n != len) return Errno(EIO);
-	}
-
 	try {
+		if (dest_addr) {
+			Sockaddr_string addr_string(host_string(*(sockaddr_in const *)dest_addr),
+			                            port_string(*(sockaddr_in const *)dest_addr));
+
+			int const len = strlen(addr_string.base());
+			int const n   = write(context->remote_fd(), addr_string.base(), len);
+			if (n != len) return Errno(EIO);
+		}
+
 		lseek(context->data_fd(), 0, 0);
 		ssize_t out_len = write(context->data_fd(), buf, len);
+		if (out_len == 0) {
+			switch (context->proto()) {
+				case Socket_fs::Context::Proto::UDP: return Errno(ENETDOWN);
+				case Socket_fs::Context::Proto::TCP: return Errno(EAGAIN);
+			}
+		}
 		return out_len;
 	} catch (Socket_fs::Context::Inaccessible) {
 		return Errno(EINVAL);
@@ -676,6 +686,12 @@ extern "C" int socket_fs_getsockopt(int libc_fd, int level, int optname,
 		case SO_ERROR:
 			Genode::log("getsockopt: SO_ERROR not yet implemented - return true");
 			*(int *)optval = 0;
+			return 0;
+		case SO_TYPE:
+			switch (context->proto()) {
+			case Socket_fs::Context::Proto::UDP: *(int *)optval = SOCK_DGRAM;  break;
+			case Socket_fs::Context::Proto::TCP: *(int *)optval = SOCK_STREAM; break;
+			}
 			return 0;
 		default: return Errno(ENOPROTOOPT);
 		}

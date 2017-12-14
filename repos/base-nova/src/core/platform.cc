@@ -16,7 +16,9 @@
 /* Genode includes */
 #include <base/sleep.h>
 #include <base/thread.h>
-#include <base/snprintf.h>
+#include <util/mmio.h>
+#include <util/string.h>
+#include <util/xml_generator.h>
 #include <trace/source_registry.h>
 
 /* core includes */
@@ -82,7 +84,7 @@ addr_t Platform::_map_pages(addr_t phys_page, addr_t const pages)
 	addr_t const core_local_addr = reinterpret_cast<addr_t>(core_local_ptr);
 
 	int res = map_local(__main_thread_utcb, phys_addr, core_local_addr, pages,
-	                    Nova::Rights(true, true, true), true);
+	                    Nova::Rights(true, true, false), true);
 
 	return res ? 0 : core_local_addr;
 }
@@ -255,6 +257,14 @@ static bool cpuid_invariant_tsc()
 	return edx & 0x100;
 }
 
+/* boot framebuffer resolution */
+struct Resolution : Register<64>
+{
+	struct Bpp    : Bitfield<0, 8> { };
+	struct Type   : Bitfield<8, 8> { };
+	struct Height : Bitfield<16, 24> { };
+	struct Width  : Bitfield<40, 24> { };
+};
 
 /**************
  ** Platform **
@@ -473,11 +483,15 @@ Platform::Platform() :
 	_io_mem_alloc.add_range(0, ~0xfffUL);
 	Hip::Mem_desc *mem_desc = (Hip::Mem_desc *)mem_desc_base;
 
+	Hip::Mem_desc *boot_fb = nullptr;
+
 	/*
 	 * All "available" ram must be added to our physical allocator before all
 	 * non "available" regions that overlaps with ram get removed.
 	 */
 	for (unsigned i = 0; i < num_mem_desc; i++, mem_desc++) {
+		if (mem_desc->type == Hip::Mem_desc::FRAMEBUFFER)
+			boot_fb = mem_desc;
 		if (mem_desc->type != Hip::Mem_desc::AVAILABLE_MEMORY) continue;
 
 		if (verbose_boot_info) {
@@ -523,6 +537,14 @@ Platform::Platform() :
 		addr_t base = trunc_page(mem_desc->addr);
 		size_t size = mem_desc->size;
 
+		/* remove framebuffer from available memory */
+		if (mem_desc->type == Hip::Mem_desc::FRAMEBUFFER) {
+			uint32_t const height = Resolution::Height::get(mem_desc->size);
+			uint32_t const pitch  = mem_desc->aux;
+			/* calculate size of framebuffer */
+			size = pitch * height;
+		}
+
 		/* truncate size if base+size larger then natural 32/64 bit boundary */
 		if (mem_desc->addr + size < mem_desc->addr)
 			size = 0UL - base;
@@ -564,10 +586,16 @@ Platform::Platform() :
 	for (unsigned i = 0; i < num_mem_desc; i++, mem_desc++) {
 
 		if (mem_desc->type == Hip::Mem_desc::AVAILABLE_MEMORY) continue;
+		if (mem_desc->type == Hip::Mem_desc::ACPI_RSDT) continue;
+		if (mem_desc->type == Hip::Mem_desc::ACPI_XSDT) continue;
+		if (mem_desc->type == Hip::Mem_desc::FRAMEBUFFER) continue;
 
 		Hip::Mem_desc * mem_d = (Hip::Mem_desc *)mem_desc_base;
 		for (unsigned j = 0; j < num_mem_desc; j++, mem_d++) {
 			if (mem_d->type == Hip::Mem_desc::AVAILABLE_MEMORY) continue;
+			if (mem_d->type == Hip::Mem_desc::ACPI_RSDT) continue;
+			if (mem_d->type == Hip::Mem_desc::ACPI_XSDT) continue;
+			if (mem_d->type == Hip::Mem_desc::FRAMEBUFFER) continue;
 			if (mem_d == mem_desc) continue;
 
 			/* if regions are disjunct all is fine */
@@ -588,24 +616,67 @@ Platform::Platform() :
 	 * From now on, it is save to use the core allocators...
 	 */
 
-	/* build ROM file system */
+	uint64_t rsdt = 0UL;
+	uint64_t xsdt = 0UL;
+
 	mem_desc = (Hip::Mem_desc *)mem_desc_base;
 	for (unsigned i = 0; i < num_mem_desc; i++, mem_desc++) {
+		if (mem_desc->type == Hip::Mem_desc::ACPI_RSDT) rsdt = mem_desc->addr;
+		if (mem_desc->type == Hip::Mem_desc::ACPI_XSDT) xsdt = mem_desc->addr;
 		if (mem_desc->type != Hip::Mem_desc::MULTIBOOT_MODULE) continue;
-		if (!mem_desc->addr || !mem_desc->size || !mem_desc->aux) continue;
+		if (!mem_desc->addr || !mem_desc->size) continue;
 
 		/* assume core's ELF image has one-page header */
-		addr_t const core_phys_start = trunc_page(mem_desc->addr + get_page_size());
-		addr_t const core_virt_start = (addr_t) &_prog_img_beg;
+		_core_phys_start = trunc_page(mem_desc->addr + get_page_size());
+	}
 
-		/* add boot modules to ROM FS */
-		Boot_modules_header * header = &_boot_modules_headers_begin;
-		for (; header < &_boot_modules_headers_end; header++) {
-			Rom_module * rom_module = new (core_mem_alloc())
-				Rom_module(header->base - core_virt_start + core_phys_start,
-				           header->size, (const char*)header->name);
-			_rom_fs.insert(rom_module);
-		}
+	_init_rom_modules();
+
+	{
+		/* export x86 platform specific infos */
+
+		unsigned const pages = 1;
+		void * phys_ptr = 0;
+		ram_alloc()->alloc(get_page_size(), &phys_ptr);
+		addr_t const phys_addr = reinterpret_cast<addr_t>(phys_ptr);
+		addr_t const core_local_addr = _map_pages(phys_addr >> get_page_size_log2(),
+		                                          pages);
+
+		Genode::Xml_generator xml(reinterpret_cast<char *>(core_local_addr),
+		                          pages << get_page_size_log2(),
+		                          "platform_info", [&] ()
+		{
+			xml.node("acpi", [&] () {
+
+				xml.attribute("revision", 2); /* XXX */
+
+				if (rsdt)
+					xml.attribute("rsdt", String<32>(Hex(rsdt)));
+
+				if (xsdt)
+					xml.attribute("xsdt", String<32>(Hex(xsdt)));
+			});
+			xml.node("boot", [&] () {
+				if (!boot_fb)
+					return;
+
+				xml.node("framebuffer", [&] () {
+					xml.attribute("phys",   String<32>(Hex(boot_fb->addr)));
+					xml.attribute("width",  Resolution::Width::get(boot_fb->size));
+					xml.attribute("height", Resolution::Height::get(boot_fb->size));
+					xml.attribute("bpp",    Resolution::Bpp::get(boot_fb->size));
+					xml.attribute("type",   Resolution::Type::get(boot_fb->size));
+					xml.attribute("pitch",  boot_fb->aux);
+				});
+			});
+		});
+
+		unmap_local(__main_thread_utcb, core_local_addr, pages);
+		region_alloc()->free(reinterpret_cast<void *>(core_local_addr), pages * get_page_size());
+
+		_rom_fs.insert(new (core_mem_alloc())
+		               Rom_module(phys_addr, pages * get_page_size(),
+		               "platform_info"));
 	}
 
 	/* export hypervisor info page as ROM module */
@@ -679,8 +750,7 @@ Platform::Platform() :
 			 */
 			Info trace_source_info() const override
 			{
-				char name[32];
-				snprintf(name, sizeof(name), "idle%d", affinity.xpos());
+				Genode::String<8> name("idle", affinity.xpos());
 
 				uint64_t execution_time = 0;
 				Nova::sc_ctrl(sc_sel, execution_time);
@@ -696,12 +766,18 @@ Platform::Platform() :
 		};
 
 		Idle_trace_source *source = new (core_mem_alloc())
-			Idle_trace_source(Affinity::Location(kernel_cpu_id, 0,
+			Idle_trace_source(Affinity::Location(genode_cpu_id, 0,
 			                                     _cpus.width(), 1),
 			                  sc_idle_base + kernel_cpu_id);
 
 		Trace::sources().insert(source);
 	}
+}
+
+
+addr_t Platform::_rom_module_phys(addr_t virt)
+{
+	return virt - (addr_t)&_prog_img_beg + _core_phys_start;
 }
 
 
@@ -724,7 +800,7 @@ bool Mapped_mem_allocator::_map_local(addr_t virt_addr, addr_t phys_addr,
 {
 	map_local((Utcb *)Thread::myself()->utcb(), phys_addr,
 	          virt_addr, size / get_page_size(),
-	          Rights(true, true, true), true);
+	          Rights(true, true, false), true);
 	return true;
 }
 

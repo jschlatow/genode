@@ -23,6 +23,9 @@
 #include <base/internal/capability_space_sel4.h>
 #include <base/internal/native_utcb.h>
 
+/* seL4 includes */
+#include <sel4/benchmark_utilisation_types.h>
+
 using namespace Genode;
 
 
@@ -51,14 +54,29 @@ class Platform_thread_registry : Noncopyable
 			_threads.remove(&thread);
 		}
 
-		void install_mapping(Mapping const &mapping, unsigned long pager_object_badge)
+		bool install_mapping(Mapping const &mapping, unsigned long pager_object_badge)
 		{
+			unsigned installed = 0;
+			bool     result    = true;
+
 			Lock::Guard guard(_lock);
 
 			for (Platform_thread *t = _threads.first(); t; t = t->next()) {
-				if (t->pager_object_badge() == pager_object_badge)
-					t->install_mapping(mapping);
+				if (t->pager_object_badge() == pager_object_badge) {
+					bool ok = t->install_mapping(mapping);
+					if (!ok)
+						result = false;
+					installed ++;
+				}
 			}
+
+			if (installed != 1) {
+				Genode::error("install mapping is wrong ", installed,
+				              " result=", result);
+				result = false;
+			}
+
+			return result;
 		}
 };
 
@@ -70,9 +88,9 @@ Platform_thread_registry &platform_thread_registry()
 }
 
 
-void Genode::install_mapping(Mapping const &mapping, unsigned long pager_object_badge)
+bool Genode::install_mapping(Mapping const &mapping, unsigned long pager_object_badge)
 {
-	platform_thread_registry().install_mapping(mapping, pager_object_badge);
+	return platform_thread_registry().install_mapping(mapping, pager_object_badge);
 }
 
 
@@ -103,7 +121,11 @@ static void prepopulate_ipc_buffer(addr_t ipc_buffer_phys, Cap_sel ep_sel,
 	utcb.lock_sel = lock_sel.value();
 
 	/* unmap IPC buffer from core */
-	unmap_local((addr_t)virt_addr, 1);
+	if (!unmap_local((addr_t)virt_addr, 1)) {
+		Genode::error("could not unmap core virtual address ",
+		              virt_addr, " in ", __PRETTY_FUNCTION__);
+		return;
+	}
 
 	/* free core's virtual address space */
 	platform()->region_alloc()->free(virt_addr, page_rounded_size);
@@ -143,7 +165,7 @@ int Platform_thread::start(void *ip, void *sp, unsigned int cpu_no)
 
 	/* bind thread to PD and CSpace */
 	seL4_CapData_t const guard_cap_data =
-		seL4_CapData_Guard_new(0, 32 - _pd->cspace_size_log2());
+		seL4_CapData_Guard_new(0, CONFIG_WORD_SIZE - _pd->cspace_size_log2());
 
 	seL4_CapData_t const no_cap_data = { { 0 } };
 
@@ -152,7 +174,7 @@ int Platform_thread::start(void *ip, void *sp, unsigned int cpu_no)
 	                                  _pd->page_directory_sel().value(), no_cap_data);
 	ASSERT(ret == 0);
 
-	start_sel4_thread(_info.tcb_sel, (addr_t)ip, (addr_t)(sp));
+	start_sel4_thread(_info.tcb_sel, (addr_t)ip, (addr_t)(sp), _location.xpos());
 	return 0;
 }
 
@@ -180,69 +202,34 @@ void Platform_thread::state(Thread_state s)
 }
 
 
-Thread_state Platform_thread::state()
-{
-	seL4_TCB   const thread         = _info.tcb_sel.value();
-	seL4_Bool  const suspend_source = false;
-	seL4_Uint8 const arch_flags     = 0;
-	seL4_UserContext registers;
-	seL4_Word  const register_count = sizeof(registers) / sizeof(registers.eip);
-
-	int const ret = seL4_TCB_ReadRegisters(thread, suspend_source, arch_flags,
-	                                       register_count, &registers);
-	if (ret != seL4_NoError) {
-		error("reading thread state ", ret);
-		throw Cpu_thread::State_access_failed();
-	}
-
-	Thread_state state;
-	state.ip     = registers.eip;
-	state.sp     = registers.esp;
-	state.edi    = registers.edi;
-	state.esi    = registers.esi;
-	state.ebp    = registers.ebp;
-	state.ebx    = registers.ebx;
-	state.edx    = registers.edx;
-	state.ecx    = registers.ecx;
-	state.eax    = registers.eax;
-	state.gs     = registers.gs;
-	state.fs     = registers.fs;
-	state.eflags = registers.eflags;
-	state.trapno = 0; /* XXX detect/track if in exception and report here */
-	/* registers.tls_base unused */
-
-	return state;
-}
-
-
 void Platform_thread::cancel_blocking()
 {
 	seL4_Signal(_info.lock_sel.value());
 }
 
 
-Weak_ptr<Address_space> Platform_thread::address_space()
+bool Platform_thread::install_mapping(Mapping const &mapping)
 {
-	ASSERT(_pd);
-	return _pd->weak_ptr();
-}
-
-
-void Platform_thread::install_mapping(Mapping const &mapping)
-{
-	_pd->install_mapping(mapping);
+	return _pd->install_mapping(mapping, name());
 }
 
 
 Platform_thread::Platform_thread(size_t, const char *name, unsigned priority,
-                                 Affinity::Location, addr_t utcb)
+                                 Affinity::Location location, addr_t utcb)
 :
 	_name(name),
 	_utcb(utcb),
-	_pager_obj_sel(platform_specific()->core_sel_alloc().alloc())
+	_pager_obj_sel(platform_specific()->core_sel_alloc().alloc()),
+	_location(location),
+	_priority(Cpu_session::scale_priority(CONFIG_NUM_PRIORITIES, priority))
 
 {
-	_info.init(_utcb ? _utcb : INITIAL_IPC_BUFFER_VIRT);
+	static_assert(CONFIG_NUM_PRIORITIES == 256, " unknown priority configuration");
+
+	if (_priority > 0)
+		_priority -= 1;
+
+	_info.init(_utcb ? _utcb : INITIAL_IPC_BUFFER_VIRT, _priority);
 	platform_thread_registry().insert(*this);
 }
 
@@ -268,4 +255,21 @@ Platform_thread::~Platform_thread()
 	platform_specific()->core_sel_alloc().free(_pager_obj_sel);
 }
 
+unsigned long long Platform_thread::execution_time() const
+{
+	Genode::Thread * me = Genode::Thread::myself();
 
+	if (!me || !me->utcb()) {
+		Genode::error("don't know myself");
+		return 0;
+	}
+
+	seL4_IPCBuffer * ipcbuffer = reinterpret_cast<seL4_IPCBuffer *>(me->utcb());
+	uint64_t const * values = reinterpret_cast<uint64_t *>(ipcbuffer->msg);
+
+	/* kernel puts execution time on ipc buffer of calling thread */
+	seL4_BenchmarkGetThreadUtilisation(_info.tcb_sel.value());
+
+	uint64_t const execution_time = values[BENCHMARK_TCB_UTILISATION];
+	return execution_time;
+}

@@ -13,6 +13,7 @@
 #
 CUSTOM_CC       ?= $(CROSS_DEV_PREFIX)gcc
 CUSTOM_CXX      ?= $(CROSS_DEV_PREFIX)g++
+CUSTOM_CPP      ?= $(CROSS_DEV_PREFIX)cpp
 CUSTOM_CXX_LIB  ?= $(CUSTOM_CXX)
 CUSTOM_LD       ?= $(CROSS_DEV_PREFIX)ld
 CUSTOM_AS       ?= $(CROSS_DEV_PREFIX)as
@@ -40,6 +41,7 @@ ECHO      ?= echo -e
 #
 CC       = $(CUSTOM_CC)
 CXX      = $(CUSTOM_CXX)
+CPP      = $(CUSTOM_CPP)
 LD       = $(CUSTOM_LD)
 AS       = $(CUSTOM_AS)
 AR       = $(CUSTOM_AR)
@@ -53,7 +55,7 @@ HOST_CC  = $(CUSTOM_HOST_CC)
 #
 # Nim toolchain
 #
-NIM ?= nim
+NIM ?= /usr/local/genode-nim/bin/nim
 
 #
 # JSON parsing utility
@@ -205,16 +207,16 @@ ALL_INC_DIR += $(HOST_INC_DIR)
 VERBOSE     ?= @
 VERBOSE_DIR ?= --no-print-directory
 
-MSG_LINK     = @$(ECHO) "    LINK     "
-MSG_COMP     = @$(ECHO) "    COMPILE  "
-MSG_BUILD    = @$(ECHO) "    BUILD    "
-MSG_RENAME   = @$(ECHO) "    RENAME   "
-MSG_MERGE    = @$(ECHO) "    MERGE    "
-MSG_CONVERT  = @$(ECHO) "    CONVERT  "
-MSG_CONFIG   = @$(ECHO) "    CONFIG   "
-MSG_CLEAN    = @$(ECHO) "  CLEAN "
-MSG_ASSEM    = @$(ECHO) "    ASSEMBLE "
-MSG_INST     = @$(ECHO) "    INSTALL  "
-MSG_PRG      = @$(ECHO) "$(BRIGHT_COL)  Program $(DEFAULT_COL)"
-MSG_LIB      = @$(ECHO) "$(DARK_COL)  Library $(DEFAULT_COL)"
+MSG_LINK     ?= @$(ECHO) "    LINK     "
+MSG_COMP     ?= @$(ECHO) "    COMPILE  "
+MSG_BUILD    ?= @$(ECHO) "    BUILD    "
+MSG_RENAME   ?= @$(ECHO) "    RENAME   "
+MSG_MERGE    ?= @$(ECHO) "    MERGE    "
+MSG_CONVERT  ?= @$(ECHO) "    CONVERT  "
+MSG_CONFIG   ?= @$(ECHO) "    CONFIG   "
+MSG_CLEAN    ?= @$(ECHO) "  CLEAN "
+MSG_ASSEM    ?= @$(ECHO) "    ASSEMBLE "
+MSG_INST     ?= @$(ECHO) "    INSTALL  "
+MSG_PRG      ?= @$(ECHO) "$(BRIGHT_COL)  Program $(DEFAULT_COL)"
+MSG_LIB      ?= @$(ECHO) "$(DARK_COL)  Library $(DEFAULT_COL)"
 

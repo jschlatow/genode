@@ -27,15 +27,22 @@ namespace Genode {
 	 * \param from_phys  physical source address
 	 * \param to_virt    core-local destination address
 	 * \param num_pages  number of pages to map
+	 * \param platform   pointer to platform object (to avoid deadlocks during
+	 *                   early Platform() construction caused by nested calls
+	 *                   of platform_specific())
 	 *
 	 * \return true on success
 	 */
-	inline bool map_local(addr_t from_phys, addr_t to_virt, size_t num_pages)
+	inline bool map_local(addr_t from_phys, addr_t to_virt, size_t num_pages,
+	                      Platform * platform = nullptr)
 	{
-		enum { DONT_FLUSH = false };
+		enum { DONT_FLUSH = false, WRITEABLE = true, NON_EXECUTABLE = false };
 		try {
-			platform_specific()->core_vm_space().map(from_phys, to_virt,
-			                                         num_pages, DONT_FLUSH);
+			platform = platform ? platform : platform_specific();
+			platform->core_vm_space().map(from_phys, to_virt, num_pages,
+			                              Cache_attribute::CACHED,
+			                              WRITEABLE, NON_EXECUTABLE,
+			                              DONT_FLUSH);
 		} catch (Page_table_registry::Mapping_cache_full) {
 			return false;
 		}
@@ -46,10 +53,11 @@ namespace Genode {
 	/**
 	 * Flush memory mappings from core-local virtual address range
 	 */
-	inline bool unmap_local(addr_t virt_addr, size_t num_pages)
+	inline bool unmap_local(addr_t virt_addr, size_t num_pages,
+	                        Platform * platform = nullptr)
 	{
-		platform_specific()->core_vm_space().unmap(virt_addr, num_pages);
-		return true;
+		platform = platform ? platform : platform_specific();
+		return platform->core_vm_space().unmap(virt_addr, num_pages);
 	}
 }
 

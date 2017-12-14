@@ -181,7 +181,7 @@ append_if $use_block_sata config {
 		<resource name="RAM" quantum="1M" />
 		<provides><service name="Block"/></provides>
 		<config>
-			<policy label="seoul -> VirtualDisk 0" device="0" />
+			<policy label="seoul -> VirtualDisk 0" device="0" writeable="yes"/>
 		</config>
 	</start>}
 
@@ -230,7 +230,7 @@ append_if [expr $use_nic_session && $use_nic_bridge] config {
 }
 
 append_if $use_framebuffer config {
-	<start name="fb_drv" priority="-1">
+	<start name="fb_drv" priority="-1" caps="120">
 		<resource name="RAM" quantum="8M"/>
 		<provides><service name="Framebuffer"/></provides>
 		<route>
@@ -271,7 +271,7 @@ append config {
 }
 
 append_if $use_usb config {
-	<start name="usb_drv" priority="-1">
+	<start name="usb_drv" priority="-1" caps="120">
 		<resource name="RAM" quantum="7M"/>
 		<provides><service name="Input"/></provides>
 		<config uhci="yes" ehci="yes" xhci="yes">

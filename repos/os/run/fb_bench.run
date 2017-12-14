@@ -72,7 +72,7 @@ append_if [have_spec sdl] config {
 append_platform_drv_config
 
 append_if [have_spec framebuffer] config {
-	<start name="fb_drv">
+	<start name="fb_drv" caps="150">
 		<resource name="RAM" quantum="20M"/>
 		<provides><service name="Framebuffer"/></provides>
 	</start>}
@@ -107,4 +107,4 @@ build_boot_image $boot_modules
 # disable QEMU graphic to enable testing on our machines without SDL and X
 append qemu_args "-nographic "
 
-run_genode_until {.*--- Framebuffer benchmark finished ---.*\n} 30
+run_genode_until {.*--- Framebuffer benchmark finished ---.*\n} 40

@@ -37,8 +37,7 @@ class Genode::Platform_pd : public Address_space
 		Page_table_registry _page_table_registry;
 
 		Cap_sel const _page_directory_sel;
-		addr_t        _init_page_directory();
-		addr_t  const _page_directory = _init_page_directory();
+		addr_t  const _page_directory;
 
 		Vm_space _vm_space;
 
@@ -63,6 +62,9 @@ class Genode::Platform_pd : public Address_space
 
 		Cap_sel alloc_sel();
 		void free_sel(Cap_sel sel);
+
+		addr_t _init_page_directory() const;
+		void   _deinit_page_directory(addr_t) const;
 
 	public:
 
@@ -99,7 +101,7 @@ class Genode::Platform_pd : public Address_space
 		 ** Address-space interface **
 		 *****************************/
 
-		void flush(addr_t, size_t);
+		void flush(addr_t, size_t, Core_local_addr) override;
 
 
 		/*****************************
@@ -121,7 +123,7 @@ class Genode::Platform_pd : public Address_space
 
 		size_t cspace_size_log2() { return CSPACE_SIZE_LOG2; }
 
-		void install_mapping(Mapping const &mapping);
+		bool install_mapping(Mapping const &mapping, const char * thread_name);
 };
 
 #endif /* _CORE__INCLUDE__PLATFORM_PD_H_ */

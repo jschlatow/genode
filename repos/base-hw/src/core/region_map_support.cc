@@ -14,8 +14,6 @@
 
 /* core includes */
 #include <pager.h>
-#include <rm_session_component.h>
-#include <platform.h>
 #include <platform_pd.h>
 #include <platform_thread.h>
 #include <translation_table.h>
@@ -23,19 +21,6 @@
 /* base-internal includes */
 
 using namespace Genode;
-
-
-/***************
- ** Rm_client **
- ***************/
-
-void Rm_client::unmap(addr_t, addr_t virt_base, size_t size)
-{
-	Locked_ptr<Address_space> locked_address_space(_address_space);
-
-	if (locked_address_space.valid())
-		locked_address_space->flush(virt_base, size);
-}
 
 
 /**********************
@@ -65,9 +50,7 @@ void Pager_entrypoint::entry()
 			continue;
 		}
 
-		_fault.ip     = pt->kernel_object()->ip;
-		_fault.addr   = pt->kernel_object()->fault_addr();
-		_fault.writes = pt->kernel_object()->fault_writes();
+		_fault = pt->kernel_object()->fault();
 
 		/* try to resolve fault directly via local region managers */
 		if (po->pager(*this)) continue;

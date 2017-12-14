@@ -15,6 +15,7 @@
 #include <util/reconstructible.h>
 #include <util/arg_string.h>
 #include <util/xml_generator.h>
+#include <util/retry.h>
 #include <base/heap.h>
 #include <base/component.h>
 #include <base/attached_ram_dataspace.h>
@@ -282,10 +283,31 @@ void Rom_filter::Main::_evaluate_node(Xml_node node, Xml_generator &xml)
 		} else
 
 		if (node.has_type("attribute")) {
+
 			typedef Genode::String<128> String;
-			xml.attribute(
-				node.attribute_value("name", String()).string(),
-				node.attribute_value("value", String()).string());
+
+			/* assign input value to attribute value */
+			if (node.has_attribute("input")) {
+
+				Input_name const input_name =
+					node.attribute_value("input", Input_name());
+				try {
+					Input_value const input_value =
+						_input_rom_registry.query_value(_config.xml(), input_name);
+
+					xml.attribute(node.attribute_value("name", String()).string(),
+					              input_value);
+				}
+				catch (Input_rom_registry::Nonexistent_input_value) {
+					Genode::warning("could not obtain input value for input ", input_name);
+				}
+			}
+
+			/* assign fixed attribute value */
+			else {
+				xml.attribute(node.attribute_value("name",  String()).string(),
+				              node.attribute_value("value", String()).string());
+			}
 		} else
 
 		if (node.has_type("inline")) {
@@ -309,6 +331,26 @@ void Rom_filter::Main::_evaluate_node(Xml_node node, Xml_generator &xml)
 			for (; src_len > 0 && Genode::is_whitespace(src[src_len - 1]); src_len--);
 
 			xml.append(src, src_len);
+		} else
+
+		if (node.has_type("input")) {
+			typedef Genode::String<128> String;
+
+			Input_name const input_name =
+				node.attribute_value("name", Input_name());
+
+			String const sub_node =
+				node.attribute_value("sub_node", String());
+
+			if (!sub_node.valid())
+				return;
+
+			try {
+				Xml_node input_node = _input_rom_registry.xml(input_name);
+
+				input_node.for_each_sub_node(sub_node.string(),
+				[&] (Xml_node node) { xml.append(node.addr(), node.size()); });
+			} catch (...) { }
 		}
 	};
 
@@ -329,12 +371,22 @@ void Rom_filter::Main::_evaluate()
 		Node_type_name const node_type =
 			output.attribute_value("node", Node_type_name(""));
 
-		/* generate output */
-		Xml_generator xml(_xml_ds->local_addr<char>(),
-		                  _xml_ds->size(), node_type.string(),
-		                  [&] () { _evaluate_node(output, xml); });
-
-		_xml_output_len = xml.used();
+		/*
+		 * Generate output, expand dataspace on demand
+		 */
+		enum { UPGRADE = 4096, NUM_ATTEMPTS = ~0L };
+		Genode::retry<Xml_generator::Buffer_exceeded>(
+			[&] () {
+				Xml_generator xml(_xml_ds->local_addr<char>(),
+				                  _xml_ds->size(), node_type.string(),
+				                  [&] () { _evaluate_node(output, xml); });
+				_xml_output_len = xml.used();
+			},
+			[&] () {
+				Genode::log("UPGRADING XML DATASPACE");
+				_xml_ds.construct(_env.ram(), _env.rm(), _xml_ds->size() + UPGRADE);
+			},
+			NUM_ATTEMPTS);
 
 	} catch (Xml_node::Nonexistent_sub_node) { }
 

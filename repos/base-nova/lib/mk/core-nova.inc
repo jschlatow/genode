@@ -24,18 +24,17 @@ SRC_CC      += stack_area.cc \
                pager.cc \
                native_cpu_component.cc \
                native_pd_component.cc \
-               pd_upgrade_ram_quota.cc \
-               pd_assign_pci.cc \
+               pd_session_support.cc \
                rpc_cap_factory.cc \
                ram_dataspace_factory.cc \
                platform.cc \
+               platform_rom_modules.cc \
                platform_pd.cc \
                platform_services.cc \
                platform_thread.cc \
                pd_session_component.cc \
                ram_dataspace_support.cc \
                region_map_component.cc \
-               region_map_support.cc \
                rom_session_component.cc \
                thread_start.cc \
                bios_data_area.cc \
@@ -70,6 +69,7 @@ vpath dataspace_component.cc       $(GEN_CORE_DIR)
 vpath core_mem_alloc.cc            $(GEN_CORE_DIR)
 vpath default_log.cc               $(GEN_CORE_DIR)
 vpath dump_alloc.cc                $(GEN_CORE_DIR)
+vpath platform_rom_modules.cc      $(GEN_CORE_DIR)
 vpath platform_services.cc         $(GEN_CORE_DIR)/spec/x86
 vpath stack_area.cc                $(GEN_CORE_DIR)
 vpath core_printf.cc               $(BASE_DIR)/src/lib/base

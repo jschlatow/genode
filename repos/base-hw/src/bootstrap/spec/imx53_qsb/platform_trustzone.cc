@@ -20,10 +20,12 @@ using namespace Board;
 
 bool Board::secure_irq(unsigned i)
 {
-	if (i == EPIT_1_IRQ)                           return true;
-	if (i == EPIT_2_IRQ)                           return true;
-	if (i == I2C_2_IRQ)                            return true;
-	if (i == I2C_3_IRQ)                            return true;
+	if (i == EPIT_1_IRQ) return true;
+	if (i == EPIT_2_IRQ) return true;
+	if (i == I2C_2_IRQ)  return true;
+	if (i == I2C_3_IRQ)  return true;
+	if (i == SDHC_IRQ)   return true;
+
 	if (i >= GPIO1_IRQL && i <= GPIO4_IRQH) return true;
 	if (i >= GPIO5_IRQL && i <= GPIO7_IRQH) return true;
 	return false;
@@ -42,7 +44,7 @@ Bootstrap::Platform::Board::Board()
 	Aipstz aipstz_2(AIPS_2_MMIO_BASE);
 
 	/* set exception vector entry */
-	Cpu::Mvbar::write(0xfff00000);
+	Cpu::Mvbar::write(Hw::Mm::system_exception_vector().base);
 
 	/* enable coprocessor 10 + 11 access for TZ VMs */
 	Cpu::Nsacr::access_t v = 0;

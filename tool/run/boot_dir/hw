@@ -6,14 +6,14 @@ proc binary_name_timer     { } { return "hw_timer_drv" }
 proc run_boot_string { } { return "\nkernel initialized" }
 
 proc bootstrap_link_address { } {
-	if {[have_spec "odroid_xu"]}  { return "0x80000000" }
+	if {[have_spec "odroid_xu"]}  { return "0x88000000" }
 	if {[have_spec "pbxa9"]}      { return "0x70000000" }
 	if {[have_spec "usb_armory"]} { return "0x72000000" }
 	if {[have_spec "x86_64"]}     { return "0x00200000" }
 	if {[have_spec "wand_quad"]}  { return "0x10001000" }
 	if {[have_spec "imx53_qsb"]}  { return "0x70010000" }
-	if {[have_spec "arndale"]}    { return "0x80000000" }
-	if {[have_spec "panda"]}      { return "0x81000000" }
+	if {[have_spec "arndale"]}    { return "0x88000000" }
+	if {[have_spec "panda"]}      { return "0x88000000" }
 	if {[have_spec "zynq"]}       { return "0x00100000" }
 	if {[have_spec "riscv"]}      { return "0x81000000" }
 	if {[have_spec "rpi"]}        { return "0x00800000" }
@@ -23,9 +23,9 @@ proc bootstrap_link_address { } {
 }
 
 proc core_link_address { } {
-	if {[have_spec "riscv"]}      { return "0x1000000" }
-	scan [bootstrap_link_address] 0x%x link_address
-	return [format 0x%08x [expr {$link_address + 0x10000000}]]
+	if {[have_spec "64bit"]} { return "0xffffffc000000000" }
+	if {[have_spec "32bit"]} { return "0x80000000" }
+	return 0;
 }
 
 
@@ -95,27 +95,47 @@ proc run_boot_dir {binaries} {
 	exec rm -fr [run_dir]/genode
 	exec [cross_dev_prefix]strip [run_dir]/image.elf
 
-	if {[have_include "image/iso"] || [have_include "image/disk"]} {
+	if {[have_include "image/iso"] || [have_include "image/disk"] || [have_include image/uefi]} {
 		#
-		# Install isolinux/GRUB files and bender
+		# Compress Genode image, to be uncompressed by GRUB
 		#
-		install_iso_bootloader_to_run_dir
+		exec gzip [run_dir]/image.elf
 
-		#
-		# Generate GRUB config file
-		#
-		set fh [open "[run_dir]/boot/grub/menu.lst" "WRONLY CREAT TRUNC"]
-		puts $fh "timeout 0"
-		puts $fh "default 0"
+		set serial_bender_opt ""
 
-		if {[have_spec "muen"]} {
-			puts $fh "\ntitle Genode on base-hw/Muen SK"
-			puts $fh " kernel /image.bin"
-		} else {
-			puts $fh "\ntitle Genode on base-hw"
-			puts $fh " kernel /boot/bender"
-			puts $fh " module /image.elf"
+		if {[have_include "image/disk"]} {
+			exec mkdir -p [run_dir]/boot/grub
+			exec cp [genode_dir]/tool/boot/bender [run_dir]/boot/bender
 		}
+
+		if {[have_include "image/iso"]} {
+			install_iso_bootloader_to_run_dir
+		}
+
+		if {[have_include image/uefi]} {
+			set grub2_path [get_grub2_dir]
+
+			exec mkdir -p [run_dir]/efi/boot
+			exec cp $grub2_path/boot/grub2/grub2_32.efi [run_dir]/efi/boot/bootia32.efi
+			exec cp $grub2_path/boot/grub2/grub2_64.efi [run_dir]/efi/boot/bootx64.efi
+			exec mkdir -p [run_dir]/boot/grub
+			exec cp [genode_dir]/tool/boot/bender [run_dir]/boot/bender
+
+			set serial_bender_opt "serial_fallback"
+		}
+
+		#
+		# Generate GRUB2 config file
+		#
+		set fh [open "[run_dir]/boot/grub/grub.cfg" "WRONLY CREAT TRUNC"]
+		puts $fh "set timeout=0"
+		# tell grub2 to prefer 32bit framebuffer resolution
+		puts $fh "set gfxpayload=\"0x0x32\""
+		puts $fh "menuentry 'Genode on base-hw' {"
+		puts $fh " insmod multiboot2"
+		puts $fh " multiboot2 /boot/bender $serial_bender_opt"
+		puts $fh " module2 /image.elf.gz image.elf"
+		puts $fh "}"
 		close $fh
 	}
 

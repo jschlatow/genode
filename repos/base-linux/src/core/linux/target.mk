@@ -14,8 +14,7 @@ SRC_CC        = main.cc \
                 cpu_session_component.cc \
                 cpu_session_support.cc \
                 cpu_thread_component.cc \
-                pd_upgrade_ram_quota.cc \
-                pd_assign_pci.cc \
+                pd_session_support.cc \
                 dataspace_component.cc \
                 native_pd_component.cc \
                 native_cpu_component.cc \
@@ -43,7 +42,7 @@ INC_DIR      += $(REP_DIR)/src/core/include \
 
 LD_TEXT_ADDR     ?= 0x01000000
 LD_SCRIPT_STATIC  = $(BASE_DIR)/src/ld/genode.ld \
-                    $(call select_from_repositories,src/ld/stack_area.nostdlib.ld)
+                    $(call select_from_repositories,src/ld/stack_area.ld)
 
 include $(GEN_CORE_DIR)/version.inc
 
@@ -53,7 +52,7 @@ vpath cpu_session_component.cc    $(GEN_CORE_DIR)
 vpath cpu_session_support.cc      $(GEN_CORE_DIR)
 vpath cpu_thread_component.cc     $(GEN_CORE_DIR)
 vpath pd_upgrade_ram_quota.cc     $(GEN_CORE_DIR)
-vpath pd_assign_pci.cc            $(GEN_CORE_DIR)
+vpath pd_session_support.cc       $(GEN_CORE_DIR)
 vpath capability_space.cc         $(GEN_CORE_DIR)
 vpath rpc_cap_factory_l4.cc       $(GEN_CORE_DIR)
 vpath ram_dataspace_factory.cc    $(GEN_CORE_DIR)

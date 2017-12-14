@@ -187,37 +187,34 @@ class Timer::Connection : public  Genode::Connection<Session>,
 		 ** Time_source helpers **
 		 *************************/
 
-		/*
-		 * The higher the factor shift, the more precise is the time
-		 * interpolation but the more likely it becomes that an overflow
-		 * would occur during calculations. In this case, the timer
-		 * down-scales the values live which is avoidable overhead.
-		 */
-		enum { TS_TO_US_RATIO_SHIFT       = 4 };
 		enum { MIN_TIMEOUT_US             = 5000 };
 		enum { REAL_TIME_UPDATE_PERIOD_US = 500000 };
-		enum { MAX_TS                     = ~(Timestamp)0ULL >> TS_TO_US_RATIO_SHIFT };
 		enum { MAX_INTERPOLATION_QUALITY  = 3 };
 		enum { MAX_REMOTE_TIME_LATENCY_US = 500 };
 		enum { MAX_REMOTE_TIME_TRIALS     = 5 };
+		enum { NR_OF_INITIAL_CALIBRATIONS = 3 * MAX_INTERPOLATION_QUALITY };
+		enum { MIN_FACTOR_LOG2            = 8 };
 
 		Genode::Io_signal_handler<Connection> _signal_handler;
 
 		Timeout_handler *_handler               { nullptr };
 		Lock             _real_time_lock        { Lock::UNLOCKED };
-		unsigned long    _ms                    { elapsed_ms() };
+		unsigned long    _us                    { elapsed_us() };
 		Timestamp        _ts                    { _timestamp() };
-		Duration         _real_time             { Milliseconds(_ms) };
+		Duration         _real_time             { Microseconds(_us) };
 		Duration         _interpolated_time     { _real_time };
 		unsigned         _interpolation_quality { 0 };
-		unsigned long    _us_to_ts_factor       { 1UL << TS_TO_US_RATIO_SHIFT };
+		unsigned long    _us_to_ts_factor       { 1UL };
+		unsigned         _us_to_ts_factor_shift { 0 };
 
 		Timestamp _timestamp();
 
 		void _update_interpolation_quality(unsigned long min_factor,
 		                                   unsigned long max_factor);
 
-		unsigned long _ts_to_us_ratio(Timestamp ts, unsigned long us);
+		unsigned long _ts_to_us_ratio(Timestamp     ts,
+		                              unsigned long us,
+		                              unsigned      shift);
 
 		void _update_real_time();
 
