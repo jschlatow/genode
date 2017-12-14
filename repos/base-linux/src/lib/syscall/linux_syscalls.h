@@ -53,6 +53,17 @@
 #include <sys/socket.h>
 #include <sys/mman.h>
 
+#ifndef __sigmask
+/* Return a mask that includes the bit for SIG only.  */
+# define __sigmask(sig) \
+  (((unsigned long int) 1) << (((sig) - 1) % (8 * sizeof (unsigned long int))))
+#endif
+
+#ifndef __sigword
+/* Return the word index for SIG.  */
+# define __sigword(sig) (((sig) - 1) / (8 * sizeof (unsigned long int)))
+#endif
+
 #undef size_t
 
 
