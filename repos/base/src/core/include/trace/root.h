@@ -29,6 +29,7 @@ class Genode::Trace::Root : public Genode::Root_component<Session_component>
 
 		Source_registry &_sources;
 		Policy_registry &_policies;
+		Core_info_registry &_core_info;
 
 	protected:
 
@@ -43,7 +44,7 @@ class Genode::Trace::Root : public Genode::Root_component<Session_component>
 
 			return new (md_alloc())
 			       Session_component(*md_alloc(), ram_quota, arg_buffer_size,
-			                         parent_levels, label_from_args(args).string(), _sources, _policies);
+			                         parent_levels, label_from_args(args).string(), _sources, _policies, _core_info);
 		}
 
 		void _upgrade_session(Session_component *s, const char *args)
@@ -63,10 +64,10 @@ class Genode::Trace::Root : public Genode::Root_component<Session_component>
 		 * \param arg_buffer_size  session argument-buffer size
 		 */
 		Root(Rpc_entrypoint *session_ep, Allocator *md_alloc,
-		     Source_registry &sources, Policy_registry &policies)
+		     Source_registry &sources, Policy_registry &policies, Core_info_registry &core_info)
 		:
 			Root_component<Session_component>(session_ep, md_alloc),
-			_sources(sources), _policies(policies)
+			_sources(sources), _policies(policies), _core_info(core_info)
 		{ }
 };
 

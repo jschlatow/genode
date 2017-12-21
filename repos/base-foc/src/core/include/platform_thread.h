@@ -181,6 +181,10 @@ namespace Genode {
 			 */
 			unsigned long long execution_time() const { return 0; }
 
+			/**
+			 * Return core-internal thread id
+			 */
+			unsigned id() const { return 0; }
 
 			/*******************************
 			 ** Fiasco-specific Accessors **

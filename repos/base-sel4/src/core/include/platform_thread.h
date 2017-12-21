@@ -139,6 +139,11 @@ class Genode::Platform_thread : public List<Platform_thread>::Element
 		 */
 		unsigned long long execution_time() const;
 
+		/**
+		 * Return core-internal thread id
+		 */
+		unsigned id() const { return 0; }
+
 
 		/************************
 		 ** Accessor functions **

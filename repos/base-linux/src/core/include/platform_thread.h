@@ -177,6 +177,8 @@ namespace Genode {
 			 */
 			unsigned long long execution_time() const { return 0; }
 
+			unsigned id() const { return _tid; }
+
 			unsigned long pager_object_badge() const { return 0; }
 	};
 }

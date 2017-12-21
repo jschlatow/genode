@@ -245,18 +245,20 @@ class Genode::Trace::Subject
 		{
 			Execution_time execution_time;
 			Affinity::Location affinity;
+			Thread_id id;
 
 			{
 				Locked_ptr<Source> source(_source);
 
 				if (source.valid()) {
 					Trace::Source::Info const info = source->info();
+					id             = info.id;
 					execution_time = info.execution_time;
 					affinity       = info.affinity;
 				}
 			}
 
-			return Subject_info(_label, _name, _state(), _policy_id,
+			return Subject_info(_label, _name, _state(), _policy_id, id,
 			                    execution_time, affinity);
 		}
 

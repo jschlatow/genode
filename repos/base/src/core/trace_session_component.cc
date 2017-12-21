@@ -35,6 +35,10 @@ size_t Session_component::subjects()
 	                          _argument_buffer.size/sizeof(Subject_id));
 }
 
+size_t Session_component::core_info()
+{
+	return _core_info.export_info(_argument_buffer.base, _argument_buffer.size);
+}
 
 Policy_id Session_component::alloc_policy(size_t size)
 {
@@ -142,7 +146,7 @@ void Session_component::free(Subject_id subject_id)
 Session_component::Session_component(Allocator &md_alloc, size_t ram_quota,
                                      size_t arg_buffer_size, unsigned parent_levels,
                                      char const *label, Source_registry &sources,
-                                     Policy_registry &policies)
+                                     Policy_registry &policies, Core_info_registry &core_info)
 :
 	_ram(*env_deprecated()->ram_session()),
 	_md_alloc(&md_alloc, ram_quota),
@@ -153,6 +157,7 @@ Session_component::Session_component(Allocator &md_alloc, size_t ram_quota,
 	_sources(sources),
 	_policies(policies),
 	_subjects(_subjects_slab, _ram, _sources),
+	_core_info(core_info),
 	_argument_buffer(_ram, arg_buffer_size)
 {
 	_md_alloc.withdraw(_argument_buffer.size);

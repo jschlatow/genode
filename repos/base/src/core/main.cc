@@ -40,6 +40,8 @@
 #include <trace/root.h>
 #include <platform_services.h>
 
+#include <trace/core_info.h>
+
 namespace Genode { namespace Trace {
 	void init();
 } }
@@ -213,6 +215,12 @@ Trace::Source_registry &Trace::sources()
 	return inst;
 }
 
+Trace::Core_info_registry &Trace::core_info()
+{
+	static Trace::Core_info_registry inst(sources());
+	return inst;
+}
+
 
 /***************
  ** Core main **
@@ -270,7 +278,8 @@ int main()
 	                                platform()->ram_alloc(), &sliced_heap);
 	static Irq_root    irq_root    (core_env()->pd_session(),
 	                                platform()->irq_alloc(), &sliced_heap);
-	static Trace::Root trace_root  (&ep, &sliced_heap, Trace::sources(), trace_policies);
+	static Trace::Root trace_root  (&ep, &sliced_heap, Trace::sources(), trace_policies,
+	                                Trace::core_info());
 
 	static Core_service<Rom_session_component>    rom_service    (services, rom_root);
 	static Core_service<Rm_session_component>     rm_service     (services, rm_root);

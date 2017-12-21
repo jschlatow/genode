@@ -23,6 +23,7 @@
 /* core-local includes */
 #include <trace/subject_registry.h>
 #include <trace/policy_registry.h>
+#include <trace/core_info.h>
 
 namespace Genode { namespace Trace { class Session_component; } }
 
@@ -44,6 +45,7 @@ class Genode::Trace::Session_component
 		Source_registry             &_sources;
 		Policy_registry             &_policies;
 		Subject_registry             _subjects;
+		Core_info_registry          &_core_info;
 		unsigned                     _policy_cnt { 0 };
 
 		class Argument_buffer
@@ -86,7 +88,7 @@ class Genode::Trace::Session_component
 		Session_component(Allocator &md_alloc, size_t ram_quota,
 		                 size_t arg_buffer_size, unsigned parent_levels,
 		                 char const *label, Source_registry &sources,
-		                 Policy_registry &policies);
+		                 Policy_registry &policies, Core_info_registry &core_info);
 
 		~Session_component();
 
@@ -102,6 +104,7 @@ class Genode::Trace::Session_component
 
 		Dataspace_capability dataspace();
 		size_t subjects();
+		size_t core_info();
 
 		Policy_id alloc_policy(size_t);
 		Dataspace_capability policy(Policy_id);

@@ -86,6 +86,13 @@ struct Genode::Trace::Session_client : Genode::Rpc_client<Genode::Trace::Session
 			return num_subjects;
 		}
 
+		Xml_node core_info()
+		{
+			size_t const size = call<Rpc_core_info>();
+
+			return Xml_node(_argument_buffer.base, size);
+		}
+
 		Policy_id alloc_policy(size_t size) override {
 			return call<Rpc_alloc_policy>(size); }
 

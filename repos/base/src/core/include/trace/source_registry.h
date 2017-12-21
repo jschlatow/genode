@@ -55,6 +55,7 @@ class Genode::Trace::Source
 		{
 			Session_label      label;
 			Thread_name        name;
+			Thread_id          id;
 			Execution_time     execution_time;
 			Affinity::Location affinity;
 		};
@@ -192,6 +193,15 @@ class Genode::Trace::Source_registry
 					Source::Info const info = s->info();
 					insert(s->unique_id(), s->weak_ptr(), info.label, info.name);
 				}
+		}
+
+		template <typename WRITER>
+		void export_info(WRITER &writer)
+		{
+			for (Source *s = _entries.first(); s; s = s->next()) {
+				Source::Info const info = s->info();
+				writer(info.id, info.label, info.name);
+			}
 		}
 
 };

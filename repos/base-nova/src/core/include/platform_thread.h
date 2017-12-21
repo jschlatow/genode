@@ -205,6 +205,11 @@ namespace Genode {
 			 * Return execution time consumed by the thread
 			 */
 			unsigned long long execution_time() const;
+
+			/**
+			 * Return core-internal thread id
+			 */
+			unsigned id() const { return 0; }
 	};
 }
 

@@ -124,7 +124,7 @@ class Genode::Trace::Core_tracing_unit : public Trace::Source::Info_accessor
 		/* To implement the Trace::Source::Info_accessor */
 		Trace::Source::Info trace_source_info() const
 		{
-			return { _session_label, _name,
+			return { _session_label, _name, 0,
 			        0,
 			        _location };
 		}

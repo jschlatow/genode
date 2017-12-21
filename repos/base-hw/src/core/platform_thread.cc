@@ -62,6 +62,7 @@ Platform_thread::Platform_thread(const char * const label,
   _pager(nullptr),
   _utcb_core_addr(utcb),
   _utcb_pd_addr(utcb),
+  _id(kernel_object()->id()),
   _main_thread(false)
 {
 	strncpy(_label, label, LABEL_MAX_LEN);
@@ -74,6 +75,8 @@ Platform_thread::Platform_thread(const char * const label,
 	}
 	map_local((addr_t)utcb_phys, (addr_t)_utcb_core_addr,
 	          sizeof(Native_utcb) / get_page_size());
+
+	Trace::core_info().insert(&_core_thread);
 }
 
 
@@ -86,6 +89,7 @@ Platform_thread::Platform_thread(size_t const quota,
   _pd(nullptr),
   _pager(nullptr),
   _utcb_pd_addr((Native_utcb *)utcb),
+  _id(kernel_object()->id()),
   _main_thread(false)
 {
 	strncpy(_label, label, LABEL_MAX_LEN);

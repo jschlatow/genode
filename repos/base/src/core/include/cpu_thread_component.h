@@ -188,6 +188,7 @@ class Genode::Cpu_thread_component : public  Rpc_object<Cpu_thread>,
 		Trace::Source::Info trace_source_info() const
 		{
 			return { _session_label, _name,
+			         _platform_thread.id(),
 			         _platform_thread.execution_time(),
 			         _platform_thread.affinity() };
 		}

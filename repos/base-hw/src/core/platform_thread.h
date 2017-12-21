@@ -30,6 +30,9 @@
 #include <kernel/core_interface.h>
 #include <kernel/thread.h>
 
+/* trace includes */
+#include <trace/core_info.h>
+
 namespace Genode {
 
 	class Pager_object;
@@ -58,6 +61,8 @@ namespace Genode {
 		Native_utcb *                 _utcb_pd_addr;       /* UTCB addr in pd   */
 		Ram_dataspace_capability      _utcb           { }; /* UTCB dataspace    */
 		char                          _label[LABEL_MAX_LEN];
+		unsigned                      _id;
+		Trace::Core_thread            _core_thread = { _id, _label };
 
 		/*
 		 * Wether this thread is the main thread of a program.
@@ -199,6 +204,8 @@ namespace Genode {
 			 * Return execution time consumed by the thread
 			 */
 			unsigned long long execution_time() const { return 0; }
+
+			unsigned id() const { return _id; }
 
 
 			/***************

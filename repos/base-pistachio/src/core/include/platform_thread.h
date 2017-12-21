@@ -173,6 +173,11 @@ namespace Genode {
 			 */
 			unsigned long long execution_time() const { return 0; }
 
+			/**
+			 * Return core-internal thread id
+			 */
+			unsigned id() const { return _l4_thread_id.raw; }
+
 
 			/**********************************
 			 ** Pistachio-specific Accessors **

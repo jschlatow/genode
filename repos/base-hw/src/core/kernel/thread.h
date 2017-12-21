@@ -342,6 +342,7 @@ class Kernel::Thread
 		 ***************/
 
 		char const * label() const { return _label; }
+		unsigned     id()    const { return (unsigned)((Cpu_job*)this); }
 		Thread_fault fault() const { return _fault; }
 };
 

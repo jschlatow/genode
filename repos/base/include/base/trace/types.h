@@ -37,6 +37,7 @@ namespace Genode { namespace Trace {
 
 	struct Policy_id;
 	struct Subject_id;
+	struct Thread_id;
 	struct Execution_time;
 	struct Subject_info;
 } }
@@ -67,6 +68,19 @@ struct Genode::Trace::Subject_id
 	Subject_id(unsigned id) : id(id) { }
 
 	bool operator == (Subject_id const &other) const { return id == other.id; }
+};
+
+/**
+ * Global thread identifier (only for core tracing)
+ */
+struct Genode::Trace::Thread_id
+{
+	unsigned id;
+
+	Thread_id() : id(0) { }
+	Thread_id(unsigned id) : id(id) { }
+
+	bool operator == (Thread_id const &other) const { return id == other.id; }
 };
 
 
@@ -112,6 +126,7 @@ class Genode::Trace::Subject_info
 		Thread_name        _thread_name    { };
 		State              _state          { INVALID };
 		Policy_id          _policy_id      { 0 };
+		Thread_id          _thread_id      { 0 };
 		Execution_time     _execution_time { 0 };
 		Affinity::Location _affinity       { };
 
@@ -122,11 +137,12 @@ class Genode::Trace::Subject_info
 		Subject_info(Session_label const &session_label,
 		             Thread_name   const &thread_name,
 		             State state, Policy_id policy_id,
+						 Thread_id thread_id,
 		             Execution_time execution_time,
 		             Affinity::Location affinity)
 		:
 			_session_label(session_label), _thread_name(thread_name),
-			_state(state), _policy_id(policy_id),
+			_state(state), _policy_id(policy_id), _thread_id(thread_id),
 			_execution_time(execution_time), _affinity(affinity)
 		{ }
 
@@ -134,6 +150,7 @@ class Genode::Trace::Subject_info
 		Thread_name   const &thread_name()    const { return _thread_name; }
 		State                state()          const { return _state; }
 		Policy_id            policy_id()      const { return _policy_id; }
+		Thread_id            thread_id()      const { return _thread_id; }
 		Execution_time       execution_time() const { return _execution_time; }
 		Affinity::Location   affinity()       const { return _affinity; }
 };
