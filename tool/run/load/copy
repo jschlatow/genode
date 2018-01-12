@@ -14,23 +14,22 @@ proc run_load { } {
 	global load_spawn_id
 	set load_spawn_id -1
 
-	set tftp_base_dir [load_base_dir]
+	set base_dir [load_base_dir]
+	set image_name [load_image_name]
 
-	if {[string length $tftp_base_dir] > 0} {
-		exec cp "[run_dir]/uImage" "$tftp_base_dir/uImage"
+	if {[string length $base_dir] > 0} {
+		exec cp "[run_dir]/$image_name" "$base_dir/$image_name"
 	} else {
-		puts "Warning, TFTP base directory or TFTP offset directory not set."
+		puts "Warning, base directory not set."
 		return false
 	}
 
 	return true
 }
 
+proc load_base_dir { } {
+	global default_image_name
+	return [get_cmd_arg --load-base-dir "/tmp" ] 
+}
 
-proc load_base_dir { } { return [get_cmd_arg --load-base-dir ""] }
-
-
-proc load_offset_dir { } { return [get_cmd_arg --load-offset-dir ""] }
-
-
-proc load_use_absolute { } { return [get_cmd_switch --load-absolute] }
+proc load_image_name { } { return [get_cmd_arg --load-image-name "image.elf"] }

@@ -1,0 +1,36 @@
+##
+# Reset the target machine via TRACE 32 remote API
+#
+# \param --power-on-t32-host       T32 host
+# \param --power-on-t32-port       T32 port
+# \param --power-on-t32-cmd        T32 command
+# \param --power-on-t32-script     T32 script
+#
+
+
+proc power_on_t32_host { } {
+	return [get_cmd_arg_first --power-on-t32-host "localhost"]
+}
+
+proc power_on_t32_port { } {
+	return [get_cmd_arg_first --power-on-t32-port "20000"]
+}
+
+proc power_on_t32_cmd { } {
+	return [get_cmd_arg_first --power-on-t32-cmd "do zc706_remote.cmm"]
+}
+
+proc power_on_t32_script { } {
+	return [get_cmd_arg_first --power-on-t32-script "/home/johanness/bin/restart_zc706.sh"]
+}
+
+proc run_power_on { } {
+	set host [power_on_t32_host]
+	set port [power_on_t32_port]
+	set cmd  [power_on_t32_cmd]
+	set script [power_on_t32_script]
+
+	exec $script $host $port "$cmd"
+
+	return true
+}
