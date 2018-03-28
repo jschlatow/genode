@@ -45,6 +45,8 @@ class Genode::Trace::Buffer
 		{
 			_head_offset = 0;
 			_wrapped++;
+			/* mark old entry with len 0 */
+			_head_entry()->len = 0;
 		}
 
 		/*
@@ -96,6 +98,9 @@ class Genode::Trace::Buffer
 			_head_offset += sizeof(_Entry) + len;
 			if (_head_offset == _size)
 				_buffer_wrapped();
+			/* mark next entry with len 0 */
+			else if (_head_offset + sizeof(_Entry) <= _size)
+				_head_entry()->len = 0;
 		}
 
 		unsigned wrapped() const { return _wrapped; }

@@ -82,7 +82,7 @@ append config {
 
 			<policy label="init -> test-trace_logger"
 			        thread="ep"
-			        buffer="1M"
+			        buffer="4K"
 			        policy="rpc_name"/>
 		</config>
 	</start>
@@ -169,4 +169,4 @@ build_boot_image $boot_modules
 
 append qemu_args " -smp 4,cores=4 "
 
-run_genode_until forever
+run_genode_until {.*trace_logger\] 100.*} 60
