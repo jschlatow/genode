@@ -1,11 +1,10 @@
 LICENSE   := MIT
-VERSION   := 0.17.2
+VERSION   := 0.18.0
 DOWNLOADS := nim.archive
 
-OWNER := ehmry
-REPO  := nim
-REV := c129528e8eff8ec8b84664d0b64e8ca89745df2a
-
-URL(nim) := https://github.com/$(OWNER)/$(REPO)/archive/$(REV).tar.gz
-SHA(nim) := 5350686dfb42a871f6bdbbd634e30b68b39b9d46
+URL(nim) := https://nim-lang.org/download/nim-$(VERSION).tar.xz
+SHA(nim) := 45c74adb35f08dfa9add1112ae17330e5d902ebb4a36e7046caee8b79e6f3bd0
 DIR(nim) := .
+
+PATCHES := $(wildcard $(REP_DIR)/src/app/nim/*.patch)
+PATCH_OPT := -p1

@@ -28,8 +28,8 @@ class Vfs::Log_file_system : public Single_file_system
 		typedef Genode::String<64> Label;
 		Label _label;
 
-		Genode::Constructible<Genode::Log_connection>     _log_connection;
-		Genode::Constructible<Genode::Log_session_client> _log_client;
+		Genode::Constructible<Genode::Log_connection>     _log_connection { };
+		Genode::Constructible<Genode::Log_session_client> _log_client     { };
 
 		Genode::Log_session & _log_session(Genode::Env &env)
 		{
@@ -61,8 +61,7 @@ class Vfs::Log_file_system : public Single_file_system
 				: Single_vfs_handle(ds, fs, alloc, 0),
 				  _log(log) { }
 
-				Read_result read(char *dst, file_size count,
-				                 file_size &out_count) override
+				Read_result read(char *, file_size, file_size &out_count) override
 				{
 					out_count = 0;
 					return READ_OK;
@@ -92,14 +91,12 @@ class Vfs::Log_file_system : public Single_file_system
 
 	public:
 
-		Log_file_system(Genode::Env &env,
-		                Genode::Allocator&,
-		                Genode::Xml_node config,
-		                Io_response_handler &)
+		Log_file_system(Vfs::Env &env,
+		                Genode::Xml_node config)
 		:
 			Single_file_system(NODE_TYPE_CHAR_DEVICE, name(), config),
 			_label(config.attribute_value("label", Label())),
-			_log(_log_session(env))
+			_log(_log_session(env.env()))
 		{ }
 
 		static const char *name()   { return "log"; }
@@ -116,9 +113,13 @@ class Vfs::Log_file_system : public Single_file_system
 			if (!_single_file(path))
 				return OPEN_ERR_UNACCESSIBLE;
 
-			*out_handle = new (alloc) Log_vfs_handle(*this, *this, alloc,
-			                                         _log);
-			return OPEN_OK;
+			try {
+				*out_handle = new (alloc)
+					Log_vfs_handle(*this, *this, alloc, _log);
+				return OPEN_OK;
+			}
+			catch (Genode::Out_of_ram)  { return OPEN_ERR_OUT_OF_RAM; }
+			catch (Genode::Out_of_caps) { return OPEN_ERR_OUT_OF_CAPS; }
 		}
 };
 

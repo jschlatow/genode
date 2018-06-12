@@ -1,0 +1,13 @@
+_/pkg/noux-system
+_/pkg/wifi
+_/pkg/ipxe_nic_drv
+_/pkg/chroot
+_/pkg/nit_focus
+_/pkg/rom_filter
+_/pkg/rom_reporter
+_/pkg/nic_router-nat
+_/pkg/vbox5-nova-sculpt
+_/pkg/themed_wm
+_/pkg/sticks_blue_backdrop
+_/pkg/nano3d
+_/pkg/fonts_fs

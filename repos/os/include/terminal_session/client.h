@@ -30,7 +30,7 @@ class Terminal::Session_client : public Genode::Rpc_client<Session>
 {
 	private:
 
-		Genode::Lock _lock;
+		Genode::Lock _lock { };
 
 		/**
 		 * Shared-memory buffer used for carrying the payload
@@ -105,6 +105,11 @@ class Terminal::Session_client : public Genode::Rpc_client<Session>
 		void read_avail_sigh(Genode::Signal_context_capability cap)
 		{
 			call<Rpc_read_avail_sigh>(cap);
+		}
+
+		void size_changed_sigh(Genode::Signal_context_capability cap)
+		{
+			call<Rpc_size_changed_sigh>(cap);
 		}
 
 		Genode::size_t io_buffer_size() const { return _io_buffer.size(); }

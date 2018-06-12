@@ -127,7 +127,7 @@ proc run_boot_dir {binaries} {
 	puts $fh {<!DOCTYPE image SYSTEM "weaver-1.1.dtd">}
 	puts $fh {<image>}
 	regsub okl4_kernel $weaver_xml_template "[run_dir]/genode/okl4" weaver_xml_template
-	regsub core $weaver_xml_template "[run_dir].image" weaver_xml_template
+	regsub \"core\" $weaver_xml_template "\"[run_dir].image\"" weaver_xml_template
 	puts $fh $weaver_xml_template
 	puts $fh {</image>}
 	close $fh
@@ -146,6 +146,9 @@ proc run_boot_dir {binaries} {
 	# Keep only the ELF boot image, but remove stripped binaries
 	#
 	exec rm -rf [run_dir]/genode
+
+	exec mkdir -p [run_dir]/boot
+	exec mv [run_dir]/image.elf [run_dir]/boot/image.elf
 
 	if {[have_include "image/iso"] || [have_include "image/disk"]} {
 
@@ -169,7 +172,7 @@ proc run_boot_dir {binaries} {
 		puts $fh "menuentry 'Genode on OKL4' {"
 		puts $fh " insmod multiboot"
 		puts $fh " multiboot /boot/bender"
-		puts $fh " module /image.elf"
+		puts $fh " module /boot/image.elf"
 		puts $fh "}"
 		close $fh
 	}
@@ -192,7 +195,7 @@ proc run_boot_dir {binaries} {
 		# load okl4 at 256M to avoid overwritting binary, adjust by need
 		puts $fh " addr 0x10000000"
 		puts $fh " exec /boot/bender"
-		puts $fh " load /image.elf"
+		puts $fh " load /boot/image.elf"
 		close $fh
 
 		generate_tftp_config
@@ -203,5 +206,13 @@ proc run_boot_dir {binaries} {
 ##
 # Base source archive within depot
 #
-proc base_src { } { return base-okl4 }
+proc base_src { } {
 
+	if {[have_spec x86_32]} { return base-okl4 }
+
+	global specs
+
+	puts stderr "Test requires base-okl4 kernel archive, which is missing for this build configuration"
+	puts stderr "  SPECS=\"$specs\""
+	exit 0
+}

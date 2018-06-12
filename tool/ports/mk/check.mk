@@ -12,11 +12,6 @@
 
 check:
 
-#
-# Utility to check if a tool is installed
-#
-check_tool = $(if $(shell which $(1)),,$(error Need to have '$(1)' installed.))
-
 $(call check_tool,curl)
 $(call check_tool,git)
 $(call check_tool,svn)
@@ -54,11 +49,14 @@ check: $(DOWNLOADS)
 #
 # Check plain remote file
 #
+# Try to download first kilobytes at maximum, which succeeds with return code 0
+# on small files or "(63) Maximum file size exceeded" if the file is larger.
 # We call curl a second time if the first check fails. This gives download
 # sites time to reconsider their response and helps, for example, to check the
 # qemu-usb port.
 #
-CURL_CMD = curl -f -L -k -r -2 --max-time 15 --retry 2 $(URL($*)) > /dev/null 2>&1
+CURL_CMD = curl -s -f -L -k --max-filesize 200000 \
+           --max-time 15 --retry 1 $(URL($*)) > /dev/null || [ $$? -eq 63 ]
 %.file:
 	$(VERBOSE)$(CURL_CMD) || (sleep 1; $(CURL_CMD))
 

@@ -6,7 +6,7 @@
  */
 
 /*
- * Copyright (C) 2016-2017 Genode Labs GmbH
+ * Copyright (C) 2016-2018 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU Affero General Public License version 3.
@@ -40,6 +40,7 @@ extern char **environ;
 
 namespace Libc {
 	class Env_implementation;
+	class Vfs_env;
 	class Kernel;
 	class Pthreads;
 	class Timer;
@@ -50,6 +51,47 @@ namespace Libc {
 
 	using Genode::Microseconds;
 }
+
+
+class Libc::Vfs_env : public Vfs::Env
+{
+	private:
+
+		Genode::Env       &_env;
+		Genode::Allocator &_alloc;
+
+		Vfs::Io_response_handler &_io_handler;
+
+		struct Watch_response_stub : Vfs::Watch_response_handler {
+			void handle_watch_response(Vfs::Vfs_watch_handle::Context*) override { };
+		} _watch_stub { };
+
+		Vfs::Global_file_system_factory _global_file_system_factory { _alloc };
+
+		Vfs::Dir_file_system _root_dir;
+
+	public:
+
+		Vfs_env(Genode::Env &env,
+		        Genode::Allocator &alloc,
+		        Genode::Xml_node config,
+		        Vfs::Io_response_handler &io_handler)
+		: _env(env), _alloc(alloc), _io_handler(io_handler),
+		  _root_dir(*this, config, _global_file_system_factory)
+		{ }
+
+		Genode::Env &env() override { return _env; }
+
+		Genode::Allocator &alloc() override { return _alloc; }
+
+		Vfs::File_system &root_dir() override { return _root_dir; }
+
+		Vfs::Io_response_handler &io_handler() override {
+			return _io_handler; }
+
+		Vfs::Watch_response_handler &watch_handler() override {
+			return _watch_stub; }
+};
 
 
 class Libc::Env_implementation : public Libc::Env
@@ -85,7 +127,7 @@ class Libc::Env_implementation : public Libc::Env
 		}
 
 		Vfs::Global_file_system_factory _file_system_factory;
-		Vfs::Dir_file_system            _vfs;
+		Vfs_env _vfs_env;
 
 		Genode::Xml_node _config_xml() const override {
 			return _config.xml(); };
@@ -96,8 +138,7 @@ class Libc::Env_implementation : public Libc::Env
 		                   Vfs::Io_response_handler &io_response_handler)
 		:
 			_env(env), _file_system_factory(alloc),
-			_vfs(_env, alloc, _vfs_config(), io_response_handler,
-			     _file_system_factory, Vfs::Dir_file_system::Root())
+			_vfs_env(_env, alloc, _vfs_config(), io_response_handler)
 		{ }
 
 
@@ -106,7 +147,7 @@ class Libc::Env_implementation : public Libc::Env
 		 *************************/
 
 		Vfs::File_system &vfs() override {
-			return _vfs; }
+			return _vfs_env.root_dir(); }
 
 		Genode::Xml_node libc_config() override {
 			return _libc_config(); }
@@ -394,6 +435,8 @@ struct Libc::Kernel
 
 		Genode::Thread &_myself { *Genode::Thread::myself() };
 
+		addr_t _kernel_stack = Thread::mystack().top;
+
 		void *_user_stack = {
 			_myself.alloc_secondary_stack(_myself.name().string(),
 			                              Component::stack_size()) };
@@ -546,8 +589,8 @@ struct Libc::Kernel
 		unsigned long _suspend_main(Suspend_functor &check,
 		                            unsigned long timeout_ms)
 		{
-			/* check if we're running on the user context */
-			if (Thread::myself()->mystack().top != (Genode::addr_t)_user_stack) {
+			/* check that we're not running on libc kernel context */
+			if (Thread::mystack().top == _kernel_stack) {
 				error("libc suspend() called from non-user context (",
 				      __builtin_return_address(0), ") - aborting");
 				exit(1);
@@ -778,6 +821,11 @@ struct Libc::Kernel
 		bool main_suspended() { return _state == KERNEL; }
 
 		/**
+		 * Public alias for _main_context()
+		 */
+		bool main_context() const { return _main_context(); }
+
+		/**
 		 * Execute application code while already executing in run()
 		 */
 		void nested_execution(Libc::Application_code &app_code)
@@ -869,14 +917,20 @@ void Libc::schedule_select(Libc::Select_handler_base *h)
 
 void Libc::execute_in_application_context(Libc::Application_code &app_code)
 {
-	/*
-	 * XXX We don't support a second entrypoint - pthreads should work as they
-	 *     don't use this code.
-	 */
-
 	if (!kernel) {
 		error("libc kernel not initialized, needed for with_libc()");
 		exit(1);
+	}
+
+	/*
+	 * The libc execution model builds on the main entrypoint, which handles
+	 * all relevant signals (e.g., timing and VFS). Additional component
+	 * entrypoints or pthreads should never call with_libc() but we catch this
+	 * here and just execute the application code directly.
+	 */
+	if (!kernel->main_context()) {
+		app_code.execute();
+		return;
 	}
 
 	static bool nested = false;

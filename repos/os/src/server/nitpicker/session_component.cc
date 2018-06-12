@@ -48,6 +48,36 @@ bool Session_component::_views_are_equal(View_handle v1, View_handle v2)
 }
 
 
+View_owner &Session_component::forwarded_focus()
+{
+	Session_component *next_focus = this;
+
+	/* helper used for detecting cycles */
+	Session_component *next_focus_slow = next_focus;
+
+	for (bool odd = false; ; odd = !odd) {
+
+		/* we found the final focus once the forwarding stops */
+		if (!next_focus->_forwarded_focus)
+			break;
+
+		next_focus = next_focus->_forwarded_focus;
+
+		/* advance 'next_focus_slow' every odd iteration only */
+		if (odd)
+			next_focus_slow = next_focus_slow->_forwarded_focus;
+
+		/* a cycle is detected if 'next_focus' laps 'next_focus_slow' */
+		if (next_focus == next_focus_slow) {
+			error("cyclic focus forwarding by ", next_focus->label());
+			break;
+		}
+	}
+
+	return *next_focus;
+}
+
+
 void Session_component::_execute_command(Command const &command)
 {
 	switch (command.opcode) {
@@ -167,7 +197,7 @@ void Session_component::_execute_command(Command const &command)
 			Locked_ptr<View_component> view(_view_handle_registry.lookup(cmd.view));
 
 			if (view.valid())
-				_view_stack.title(*view, cmd.title.string());
+				_view_stack.title(*view, _font, cmd.title.string());
 
 			return;
 		}
@@ -208,14 +238,14 @@ void Session_component::submit_input_event(Input::Event e)
 	Point const origin_offset = _phys_pos(Point(0, 0), _view_stack.size());
 
 	/*
-	 * Transpose absolute coordinates by session-specific vertical
-	 * offset.
+	 * Transpose absolute coordinates by session-specific vertical offset.
 	 */
-	if (e.ax() || e.ay())
-		e = Event(e.type(), e.code(),
-		          max(0, e.ax() - origin_offset.x()),
-		          max(0, e.ay() - origin_offset.y()),
-		          e.rx(), e.ry());
+	e.handle_absolute_motion([&] (int x, int y) {
+		e = Absolute_motion{max(0, x - origin_offset.x()),
+		                    max(0, y - origin_offset.y())}; });
+	e.handle_touch([&] (Touch_id id, float x, float y) {
+		e = Touch{ id, max(0.0f, x - origin_offset.x()),
+		               max(0.0f, y - origin_offset.y())}; });
 
 	_input_session_component.submit(&e);
 }
@@ -259,6 +289,7 @@ Session_component::View_handle Session_component::create_view(View_handle parent
 		catch (Allocator::Out_of_memory) { throw Out_of_ram(); }
 	}
 
+	view->title(_font, "");
 	view->apply_origin_policy(_pointer_origin);
 
 	_view_list.insert(view);
@@ -406,11 +437,13 @@ void Session_component::focus(Capability<Nitpicker::Session> session_cap)
 	if (this->cap() == session_cap)
 		return;
 
-	Session_component const &caller = *this;
+	_forwarded_focus = nullptr;
 
 	_env.ep().rpc_ep().apply(session_cap, [&] (Session_component *session) {
 		if (session)
-			_focus_controller.focus_view_owner(caller, *session); });
+			_forwarded_focus = session; });
+
+	_focus_updater.update_focus();
 }
 
 

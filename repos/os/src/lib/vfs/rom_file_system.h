@@ -102,7 +102,7 @@ class Vfs::Rom_file_system : public Single_file_system
 					return READ_OK;
 				}
 
-				Write_result write(char const *src, file_size count,
+				Write_result write(char const *, file_size,
 				                   file_size &out_count) override
 				{
 					out_count = 0;
@@ -114,15 +114,13 @@ class Vfs::Rom_file_system : public Single_file_system
 
 	public:
 
-		Rom_file_system(Genode::Env &env,
-		                Genode::Allocator&,
-		                Genode::Xml_node config,
-		                Io_response_handler &)
+		Rom_file_system(Vfs::Env &env,
+		                Genode::Xml_node config)
 		:
 			Single_file_system(NODE_TYPE_FILE, name(), config),
 			_label(config),
 			_size(config),
-			_rom(env, _label.string)
+			_rom(env.env(), _label.string)
 		{ }
 
 		static char const *name()   { return "rom"; }
@@ -141,11 +139,16 @@ class Vfs::Rom_file_system : public Single_file_system
 
 			_rom.update();
 
-			*out_handle = new (alloc) Rom_vfs_handle(*this, *this, alloc, _rom);
-			return OPEN_OK;
+			try {
+				*out_handle = new (alloc)
+					Rom_vfs_handle(*this, *this, alloc, _rom);
+				return OPEN_OK;
+			}
+			catch (Genode::Out_of_ram)  { return OPEN_ERR_OUT_OF_RAM; }
+			catch (Genode::Out_of_caps) { return OPEN_ERR_OUT_OF_CAPS; }
 		}
 
-		Dataspace_capability dataspace(char const *path) override
+		Dataspace_capability dataspace(char const *) override
 		{
 			return _rom.cap();
 		}
@@ -156,10 +159,18 @@ class Vfs::Rom_file_system : public Single_file_system
 
 		Stat_result stat(char const *path, Stat &out) override
 		{
-			Stat_result result = Single_file_system::stat(path, out);
+			Stat_result const result = Single_file_system::stat(path, out);
 
-			_rom.update();
-			out.size = (_size.value == 0) ? (_rom.is_valid() ? _rom.size() : 0) : _size.value;
+			/*
+			 * If the stat call refers to our node ('Single_file_system::stat'
+			 * found a file), obtain the size of the most current ROM module
+			 * version.
+			 */
+			if (out.mode == STAT_MODE_FILE) {
+				_rom.update();
+				out.size = _rom.valid() ? _rom.size() : 0;
+				out.mode |= 0555;
+			}
 
 			return result;
 		}

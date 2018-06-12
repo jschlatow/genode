@@ -88,6 +88,17 @@ struct Generic
 	uint8_t  creator[4];
 	uint32_t creator_rev;
 
+	void print(Genode::Output &out) const
+	{
+		Genode::String<7> s_oem((const char *)oemid);
+		Genode::String<9> s_oemtabid((const char *)oemtabid);
+		Genode::String<5> s_creator((const char *)creator);
+
+		Genode::print(out, "OEM '", s_oem, "', table id '", s_oemtabid, "', "
+		              "revision ", oemrev, ", creator '", s_creator, "' (",
+		              creator_rev, ")");
+	}
+
 	uint8_t const *data() { return reinterpret_cast<uint8_t *>(this); }
 
 	/* MADT ACPI structure */
@@ -166,6 +177,10 @@ struct Device_scope : Genode::Mmio
 	};
 
 	unsigned count() const {
+		unsigned const length = read<Length>();
+		if (length < 6)
+			return 0;
+
 		unsigned paths = (read<Length>() - 6) / 2;
 		if (paths > MAX_PATHS) {
 			Genode::error("Device_scope: more paths (", paths, ") than"
@@ -176,6 +191,29 @@ struct Device_scope : Genode::Mmio
 	}
 };
 
+/* DMA Remapping Hardware Definition - Intel VT-d IO Spec - 8.3. */
+struct Dmar_drhd : Genode::Mmio
+{
+	struct Length  : Register<0x2, 16> { };
+	struct Flags   : Register<0x4,  8> { };
+	struct Segment : Register<0x6, 16> { };
+	struct Phys    : Register<0x8, 64> { };
+
+	Dmar_drhd(addr_t a) : Genode::Mmio(a) { }
+
+	template <typename FUNC>
+	void apply(FUNC const &func = [] () { } )
+	{
+		addr_t addr = base() + 16;
+		do {
+			Device_scope scope(addr);
+
+			func(scope);
+
+			addr = scope.base() + scope.read<Device_scope::Length>();
+		} while (addr < base() + read<Length>());
+	}
+};
 
 /* DMA Remapping Reporting structure - Intel VT-d IO Spec - 8.3. */
 struct Dmar_rmrr : Genode::Mmio
@@ -348,6 +386,8 @@ class Table_wrapper
 			return sum;
 		}
 
+		bool valid() { return !checksum((uint8_t *)_table, _table->size); }
+
 		/**
 		 * Is this the FACP table
 		 */
@@ -446,11 +486,6 @@ class Table_wrapper
 				Genode::log("table mapped '", Genode::Cstring(_name), "' at ", _table, " "
 				            "(from ", Genode::Hex(_base), ") "
 				            "size ",  Genode::Hex(_table->size));
-
-			if (checksum((uint8_t *)_table, _table->size)) {
-			Genode::error("checksum mismatch for ", Genode::Cstring(_name));
-				throw -1;
-			}
 		}
 };
 
@@ -498,25 +533,34 @@ class Pci_routing : public List<Pci_routing>::Element
 		}
 };
 
+/* set during ACPI Table walk to valid value */
+enum { INVALID_ROOT_BRIDGE = 0x10000U };
+static unsigned root_bridge_bdf = INVALID_ROOT_BRIDGE;
 
 /**
  * A table element (method, device, scope or name)
  */
-class Element : public List<Element>::Element
+class Element : private List<Element>::Element
 {
 	private:
 
-		uint8_t            _type;     /* the type of this element */
-		uint32_t           _size;     /* size in bytes */
-		uint32_t           _size_len; /* length of size in bytes */
-		char               _name[64]; /* name of element */
-		uint32_t           _name_len; /* length of name in bytes */
-		uint32_t           _bdf;      /* bus device function */
-		uint8_t const     *_data;     /* pointer to the data section */
-		uint32_t           _para_len; /* parameters to be skipped */
-		bool               _valid;    /* true if this is a valid element */
-		bool               _routed;   /* has the PCI information been read */
-		List<Pci_routing>  _pci;      /* list of PCI routing elements for this element */
+		friend class List<Element>;
+
+		Element &operator = (Element const &);
+
+		uint8_t        _type     = 0;       /* the type of this element */
+		uint32_t       _size     = 0;       /* size in bytes */
+		uint32_t       _size_len = 0;       /* length of size in bytes */
+		char           _name[64];           /* name of element */
+		uint32_t       _name_len = 0;       /* length of name in bytes */
+		uint32_t       _bdf      = 0;       /* bus device function */
+		uint8_t const *_data     = nullptr; /* pointer to the data section */
+		uint32_t       _para_len = 0;       /* parameters to be skipped */
+		bool           _valid    = false;   /* true if this is a valid element */
+		bool           _routed   = false;   /* has the PCI information been read */
+
+		/* list of PCI routing elements for this element */
+		List<Pci_routing> _pci { };
 
 		/* packages we are looking for */
 		enum { DEVICE = 0x5b, SUB_DEVICE = 0x82, DEVICE_NAME = 0x8, SCOPE = 0x10, METHOD = 0x14, PACKAGE_OP = 0x12 };
@@ -957,6 +1001,8 @@ class Element : public List<Element>::Element
 
 	public:
 
+		using List<Element>::Element::next;
+
 		virtual ~Element() { }
 
 		/**
@@ -1076,6 +1122,13 @@ class Element : public List<Element>::Element
 				if (prt) prt->dump();
 
 				if (prt) {
+					uint32_t const hid= e->_value("_HID");
+					uint32_t const cid= e->_value("_CID");
+					if (hid == 0x80ad041 || cid == 0x80ad041 || // "PNP0A08" PCI Express root bridge
+					    hid == 0x30ad041 || cid == 0x30ad041) { // "PNP0A03" PCI root bridge
+						root_bridge_bdf = e->_bdf;
+					}
+
 					if (verbose)
 						Genode::log("Scanning device ", Genode::Hex(e->_bdf));
 
@@ -1085,31 +1138,6 @@ class Element : public List<Element>::Element
 
 				e->_routed = true;
 			}
-		}
-
-		/**
-		 * Search for GSI of given device, bridge, and pin
-		 */
-		static uint32_t search_gsi(uint32_t device_bdf, uint32_t bridge_bdf, uint32_t pin)
-		{
-			Element *e = list()->first();
-
-			for (; e; e = e->next()) {
-				if (!e->is_device() || e->_bdf != bridge_bdf)
-					continue;
-
-				Pci_routing *r = e->pci_list().first();
-				for (; r; r = r->next()) {
-					if (r->match_bdf(device_bdf) && r->pin() == pin) {
-						if (verbose)
-							Genode::log("Found GSI: ", r->gsi(), " "
-							            "device : ", Genode::Hex(device_bdf), " ",
-							            "pin ", pin);
-						return r->gsi();
-					}
-				}
-			}
-			throw -1;
 		}
 };
 
@@ -1128,7 +1156,7 @@ class Acpi_table
 		/* BIOS range to scan for RSDP */
 		enum { BIOS_BASE = 0xe0000, BIOS_SIZE = 0x20000 };
 
-		Genode::Constructible<Genode::Attached_io_mem_dataspace> _mmio;
+		Genode::Constructible<Genode::Attached_io_mem_dataspace> _mmio { };
 
 		/**
 		 * Search for RSDP pointer signature in area
@@ -1183,6 +1211,13 @@ class Acpi_table
 				uint32_t dsdt = 0;
 				{
 					Table_wrapper table(_memory, entries[i]);
+
+					if (!table.valid()) {
+						Genode::error("ignoring table '", table.name(),
+						              "' - checksum error");
+						continue;
+					}
+
 					if (table.is_facp()) {
 						Fadt fadt(reinterpret_cast<Genode::addr_t>(table->signature));
 						dsdt = fadt.read<Fadt::Dsdt>();
@@ -1213,14 +1248,21 @@ class Acpi_table
 					}
 				}
 
-				if (dsdt) {
-					Table_wrapper table(_memory, dsdt);
-					if (table.is_searched()) {
-						if (verbose)
-							Genode::log("Found dsdt ", table.name());
+				if (!dsdt)
+					continue;
 
-						Element::parse(alloc, table.table());
-					}
+				Table_wrapper table(_memory, dsdt);
+
+				if (!table.valid()) {
+					Genode::error("ignoring table '", table.name(),
+					              "' - checksum error");
+					continue;
+				}
+				if (table.is_searched()) {
+					if (verbose)
+						Genode::log("Found dsdt ", table.name());
+
+					Element::parse(alloc, table.table());
 				}
 			}
 
@@ -1268,16 +1310,6 @@ class Acpi_table
 					return;
 				}
 
-				if (verbose) {
-					uint8_t oem[7];
-					memcpy(oem, rsdp->oemid, 6);
-					oem[6] = 0;
-					Genode::log("ACPI revision ", rsdp->revision, " of "
-					            "OEM '", oem, "', "
-					            "rsdt:", Genode::Hex(rsdp->rsdt), " "
-					            "xsdt:", Genode::Hex(rsdp->xsdt));
-				}
-
 				rsdt = rsdp->rsdt;
 				xsdt = rsdp->xsdt;
 				acpi_revision = rsdp->revision;
@@ -1288,13 +1320,21 @@ class Acpi_table
 			if (acpi_revision != 0 && xsdt && sizeof(addr_t) != sizeof(uint32_t)) {
 				/* running 64bit and xsdt is valid */
 				Table_wrapper table(_memory, xsdt);
+				if (!table.valid()) throw -1;
+
 				uint64_t * entries = reinterpret_cast<uint64_t *>(table.table() + 1);
 				_parse_tables(alloc, entries, table.entry_count(entries));
+
+				Genode::log("XSDT ", *table.table());
 			} else {
 				/* running (32bit) or (64bit and xsdt isn't valid) */
 				Table_wrapper table(_memory, rsdt);
+				if (!table.valid()) throw -1;
+
 				uint32_t * entries = reinterpret_cast<uint32_t *>(table.table() + 1);
 				_parse_tables(alloc, entries, table.entry_count(entries));
+
+				Genode::log("RSDT ", *table.table());
 			}
 
 			/* free up memory of elements not of any use */
@@ -1325,14 +1365,11 @@ void Acpi::generate_report(Genode::Env &env, Genode::Allocator &alloc)
 	acpi.enabled(true);
 
 	Genode::Reporter::Xml_generator xml(acpi, [&] () {
-		if (!(!Fadt::features && !Fadt::reset_type &&
-		      !Fadt::reset_addr && !Fadt::reset_value))
-			xml.node("fadt", [&] () {
-				attribute_hex(xml, "features"   , Fadt::features);
-				attribute_hex(xml, "reset_type" , Fadt::reset_type);
-				attribute_hex(xml, "reset_addr" , Fadt::reset_addr);
-				attribute_hex(xml, "reset_value", Fadt::reset_value);
+		if (root_bridge_bdf != INVALID_ROOT_BRIDGE) {
+			xml.node("root_bridge", [&] () {
+				attribute_hex(xml, "bdf", root_bridge_bdf);
 			});
+		}
 
 		for (Pci_config_space *e = Pci_config_space::list()->first(); e;
 		     e = e->next())
@@ -1356,8 +1393,12 @@ void Acpi::generate_report(Genode::Env &env, Genode::Allocator &alloc)
 		/* lambda definition for scope evaluation in rmrr */
 		auto func_scope = [&] (Device_scope const &scope)
 		{
+			if (!scope.count())
+				return;
+
 			xml.node("scope", [&] () {
 				xml.attribute("bus_start", scope.read<Device_scope::Bus>());
+				xml.attribute("type", scope.read<Device_scope::Type>());
 				for (unsigned j = 0 ; j < scope.count(); j++) {
 					xml.node("path", [&] () {
 						attribute_hex(xml, "dev",
@@ -1373,6 +1414,17 @@ void Acpi::generate_report(Genode::Env &env, Genode::Allocator &alloc)
 		     entry; entry = entry->next()) {
 
 			entry->apply([&] (Dmar_common const &dmar) {
+				if (dmar.read<Dmar_common::Type>() == Dmar_common::Type::DRHD) {
+					Dmar_drhd drhd(dmar.base());
+
+					xml.node("drhd", [&] () {
+						attribute_hex(xml, "phys", drhd.read<Dmar_drhd::Phys>());
+						attribute_hex(xml, "flags", drhd.read<Dmar_drhd::Flags>());
+						attribute_hex(xml, "segment", drhd.read<Dmar_drhd::Segment>());
+						drhd.apply(func_scope);
+					});
+				}
+
 				if (dmar.read<Dmar_common::Type>() != Dmar_common::Type::RMRR)
 					return;
 

@@ -36,11 +36,11 @@ class Net::Dhcp_client
 			INIT = 0, SELECT = 1, REQUEST = 2, BOUND = 3, RENEW = 4, REBIND = 5
 		};
 
-		Genode::Allocator                  &_alloc;
-		Interface                          &_interface;
-		State                                _state { State::INIT };
-		Timer::One_shot_timeout<Dhcp_client> _timeout;
-		unsigned long                        _lease_time_sec;
+		Genode::Allocator                    &_alloc;
+		Interface                            &_interface;
+		State                                 _state { State::INIT };
+		Timer::One_shot_timeout<Dhcp_client>  _timeout;
+		unsigned long                         _lease_time_sec = 0;
 
 		void _handle_dhcp_reply(Dhcp_packet &dhcp);
 
@@ -54,7 +54,8 @@ class Net::Dhcp_client
 
 		void _send(Dhcp_packet::Message_type msg_type,
 		           Ipv4_address              client_ip,
-		           Ipv4_address              server_ip);
+		           Ipv4_address              server_ip,
+		           Ipv4_address              requested_ip);
 
 		Configuration &_config();
 
@@ -66,7 +67,8 @@ class Net::Dhcp_client
 		            Timer::Connection &timer,
 		            Interface         &interface);
 
-		void handle_ip(Ethernet_frame &eth, Genode::size_t eth_size);
+		void handle_ip(Ethernet_frame &eth,
+		               Size_guard     &size_guard);
 
 		void discover();
 };

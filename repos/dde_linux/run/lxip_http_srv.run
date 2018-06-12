@@ -81,9 +81,9 @@ append_if $use_usb_driver config {
 append_platform_drv_config
 
 append_if $use_nic_driver config {
-	<start name="nic_drv">
+	<start name="nic_drv" caps="120">
 		<binary name="} [nic_drv_binary] {"/>
-		<resource name="RAM" quantum="8M"/>
+		<resource name="RAM" quantum="20M"/>
 		<provides><service name="Nic"/></provides>
 	</start>}
 
@@ -100,7 +100,7 @@ install_config $config
 # generic modules
 set boot_modules {
 	core ld.lib.so init timer posix.lib.so
-	libc.lib.so libm.lib.so lxip.lib.so test-lxip_http_srv
+	libc.lib.so vfs.lib.so libm.lib.so lxip.lib.so test-lxip_http_srv
 }
 
 # platform-specific modules

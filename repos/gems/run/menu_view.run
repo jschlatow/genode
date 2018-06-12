@@ -2,6 +2,7 @@ create_boot_directory
 
 import_from_depot genodelabs/src/[base_src] \
                   genodelabs/pkg/[drivers_interactive_pkg] \
+                  genodelabs/pkg/fonts_fs \
                   genodelabs/src/init \
                   genodelabs/src/dynamic_rom \
                   genodelabs/src/report_rom \
@@ -157,20 +158,44 @@ install_config {
 				<inline description="example menu">
 					<dialog>
 						<frame>
-							<vbox>
-								<button name="virtualbox">
-									<label text="VirtualBox"/>
-								</button>
-								<button name="toolchain" hovered="yes">
-									<label text="Tool chain"/>
-								</button>
-								<button name="log" hovered="yes" selected="yes">
-									<label text="Log window"/>
-								</button>
-								<button name="config" selected="yes">
-									<label text="Configuration"/>
-								</button>
-							</vbox>
+							<hbox>
+								<vbox name="x">
+									<button name="virtualbox">
+										<label text="VirtualBox"/>
+									</button>
+									<button name="toolchain" hovered="yes">
+										<label text="Tool chain"
+										       font="monospace/regular"/>
+									</button>
+									<button name="log" hovered="yes" selected="yes">
+										<label text="Log window"
+										       font="title/regular"/>
+									</button>
+									<button name="config" selected="yes">
+										<label text="Configuration Configuration Configuration"
+										       font="annotation/regular"/>
+									</button>
+									<hbox>
+										<button name="x1"> <label text="x1"/> </button>
+										<button name="x2"> <label text="x2"/> </button>
+										<button name="x3"> <label text="x3"/> </button>
+									</hbox>
+									<frame>
+										<label text="A single line" font="annotation/regular"/>
+									</frame>
+								</vbox>
+								<float north="yes">
+									<vbox>
+										<button name="virtualbox">
+											<label text="VirtualBox"/>
+										</button>
+										<button name="toolchain" hovered="yes">
+											<label text="Tool chain"
+											       font="monospace/regular"/>
+										</button>
+									</vbox>
+								</float>
+							</hbox>
 						</frame>
 					</dialog>
 				</inline>
@@ -204,19 +229,31 @@ install_config {
 		<config verbose="yes"/>
 	</start>
 
+	<start name="fonts_fs" caps="300">
+		<resource name="RAM" quantum="8M"/>
+		<binary name="vfs"/>
+		<route>
+			<service name="ROM" label="config"> <parent label="fonts_fs.config"/> </service>
+			<any-service> <parent/> </any-service>
+		</route>
+		<provides> <service name="File_system"/> </provides>
+	</start>
+
 	<start name="menu_view" caps="200">
-		<resource name="RAM" quantum="5M"/>
+		<resource name="RAM" quantum="8M"/>
 		<config xpos="200" ypos="100">
 			<report hover="yes"/>
 			<libc stderr="/dev/log"/>
 			<vfs>
 				<tar name="menu_view_styles.tar" />
 				<dir name="dev"> <log/> </dir>
+				<dir name="fonts"> <fs label="fonts"/> </dir>
 			</vfs>
 		</config>
 		<route>
 			<service name="ROM" label="dialog"> <child name="dynamic_rom" /> </service>
 			<service name="Report" label="hover"> <child name="report_rom"/> </service>
+			<service name="File_system" label="fonts"> <child name="fonts_fs"/> </service>
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>

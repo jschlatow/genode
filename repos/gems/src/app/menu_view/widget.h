@@ -16,10 +16,10 @@
 
 /* Genode includes */
 #include <util/xml_generator.h>
+#include <util/list_model.h>
 
 /* local includes */
 #include <widget_factory.h>
-#include <list_model_from_xml.h>
 #include <animated_geometry.h>
 
 namespace Menu_view {
@@ -45,14 +45,15 @@ struct Menu_view::Margin
 };
 
 
-class Menu_view::Widget : public List<Widget>::Element
+class Menu_view::Widget : public List_model<Widget>::Element
 {
 	public:
 
 		enum { NAME_MAX_LEN = 32 };
 		typedef String<NAME_MAX_LEN> Name;
 
-		typedef Name Type_name;
+		typedef Name       Type_name;
+		typedef String<10> Version;
 
 		struct Unique_id
 		{
@@ -92,6 +93,7 @@ class Menu_view::Widget : public List<Widget>::Element
 
 		Type_name const _type_name;
 		Name      const _name;
+		Version   const _version;
 
 		Unique_id const _unique_id;
 
@@ -99,9 +101,9 @@ class Menu_view::Widget : public List<Widget>::Element
 
 		Widget_factory &_factory;
 
-		List<Widget> _children;
+		List_model<Widget> _children;
 
-		struct Model_update_policy : List_model_update_policy<Widget>
+		struct Model_update_policy : List_model<Widget>::Update_policy
 		{
 			Widget_factory &_factory;
 
@@ -122,22 +124,23 @@ class Menu_view::Widget : public List<Widget>::Element
 			static bool element_matches_xml_node(Widget const &w, Xml_node node)
 			{
 				return node.has_type(w._type_name.string())
-				    && Widget::node_name(node) == w._name;
+				    && Widget::node_name(node) == w._name
+				    && node.attribute_value("version", Version()) == w._version;
 			}
 
 		} _model_update_policy { _factory };
 
 		inline void _update_children(Xml_node node)
 		{
-			update_list_model_from_xml(_model_update_policy, _children, node);
+			_children.update_from_xml(_model_update_policy, node);
 		}
 
 		void _draw_children(Surface<Pixel_rgb888> &pixel_surface,
 		                    Surface<Pixel_alpha8> &alpha_surface,
 		                    Point at) const
 		{
-			for (Widget const *w = _children.first(); w; w = w->next())
-				w->draw(pixel_surface, alpha_surface, at + w->_animated_geometry.p1());
+			_children.for_each([&] (Widget const &w) {
+				w.draw(pixel_surface, alpha_surface, at + w._animated_geometry.p1()); });
 		}
 
 		virtual void _layout() { }
@@ -157,6 +160,16 @@ class Menu_view::Widget : public List<Widget>::Element
 
 		Animated_rect _animated_geometry { _factory.animator };
 
+		void _trigger_geometry_animation()
+		{
+			if (_animated_geometry.animated())
+				return;
+
+			if (_geometry.p1() != _animated_geometry.p1()
+			 || _geometry.p2() != _animated_geometry.p2())
+				_animated_geometry.move_to(_geometry, Animated_rect::Steps{60});
+		}
+
 	public:
 
 		Margin margin { 0, 0, 0, 0 };
@@ -164,7 +177,7 @@ class Menu_view::Widget : public List<Widget>::Element
 		void geometry(Rect geometry)
 		{
 			_geometry = geometry;
-			_animated_geometry.move_to(_geometry, Animated_rect::Steps{60});
+			_trigger_geometry_animation();
 		}
 
 		Rect geometry() const { return _geometry; }
@@ -192,10 +205,7 @@ class Menu_view::Widget : public List<Widget>::Element
 
 		virtual ~Widget()
 		{
-			while (Widget *w = _children.first()) {
-				_children.remove(w);
-				_model_update_policy.destroy_element(*w);
-			}
+			_children.destroy_all_elements(_model_update_policy);
 		}
 
 		bool has_name(Name const &name) const { return name == _name; }
@@ -213,6 +223,8 @@ class Menu_view::Widget : public List<Widget>::Element
 			_geometry = Rect(_geometry.p1(), size);
 
 			_layout();
+
+			_trigger_geometry_animation();
 		}
 
 		void position(Point position)
@@ -230,13 +242,14 @@ class Menu_view::Widget : public List<Widget>::Element
 			if (!_inner_geometry().contains(at))
 				return Unique_id();
 
-			for (Widget const *w = _children.first(); w; w = w->next()) {
-				Unique_id res = w->hovered(at - w->geometry().p1());
-				if (res.valid())
-					return res;
-			}
+			Unique_id result = _unique_id;
+			_children.for_each([&] (Widget const &w) {
+				Unique_id const id = w.hovered(at - w.geometry().p1());
+				if (id.valid())
+					result = id;
+			});
 
-			return _unique_id;
+			return result;
 		}
 
 		void print(Output &out) const
@@ -256,9 +269,8 @@ class Menu_view::Widget : public List<Widget>::Element
 					xml.attribute("width",  geometry().w());
 					xml.attribute("height", geometry().h());
 
-					for (Widget const *w = _children.first(); w; w = w->next()) {
-						w->gen_hover_model(xml, at - w->geometry().p1());
-					}
+					_children.for_each([&] (Widget const &w) {
+						w.gen_hover_model(xml, at - w.geometry().p1()); });
 				});
 			}
 		}

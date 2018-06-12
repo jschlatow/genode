@@ -3,7 +3,7 @@ VERSION   := 5.9
 DOWNLOADS := ncurses.archive
 
 URL(ncurses) := http://ftp.gnu.org/pub/gnu/ncurses/ncurses-$(VERSION).tar.gz
-SHA(ncurses) := 3e042e5f2c7223bffdaac9646a533b8c758b65b5
+SHA(ncurses) := 9046298fb440324c9d4135ecea7879ffed8546dd1b58e59430ea07a4633f563b
 SIG(ncurses) := ${URL(ncurses)}.sig
 DIR(ncurses) := src/lib/ncurses
 
@@ -146,7 +146,7 @@ src/lib/ncurses/codes.c:
 
 src/lib/ncurses/fallback.c: $(ncurses_src_dir)/tinfo/MKfallback.sh
 	@$(MSG_GENERATE)$@
-	$(VERBOSE)sh -e $< x src/lib/ncurses/misc/terminfo.src tic linux vt102 > $@ 2> /dev/null
+	$(VERBOSE)sh -e $< x src/lib/ncurses/misc/terminfo.src tic screen vt102 > $@ 2> /dev/null
 	$(VERBOSE)#sh -e $< /usr/share/terminfo $(ncurses_src_dir)/misc/terminfo.src /usr/bin/tic > $@
 
 src/lib/ncurses/unctrl.c:

@@ -30,11 +30,17 @@ class Cell_array
 {
 	private:
 
+		/*
+		 * Noncopyable
+		 */
+		Cell_array(Cell_array const &);
+		Cell_array &operator = (Cell_array const &);
+
 		unsigned           _num_cols;
 		unsigned           _num_lines;
-		Genode::Allocator *_alloc;
-		CELL             **_array;
-		bool              *_line_dirty;
+		Genode::Allocator &_alloc;
+		CELL             **_array      = nullptr;
+		bool              *_line_dirty = nullptr;
 
 		typedef CELL *Char_cell_line;
 
@@ -73,7 +79,7 @@ class Cell_array
 	public:
 
 		Cell_array(unsigned num_cols, unsigned num_lines,
-		           Genode::Allocator *alloc)
+		           Genode::Allocator &alloc)
 		:
 			_num_cols(num_cols),
 			_num_lines(num_lines),
@@ -82,11 +88,17 @@ class Cell_array
 			_array = new (alloc) Char_cell_line[num_lines];
 
 			_line_dirty = new (alloc) bool[num_lines];
-			for (unsigned i = 0; i < num_lines; i++)
-				_line_dirty[i] = false;
+			mark_all_lines_as_dirty();
 
 			for (unsigned i = 0; i < num_lines; i++)
 				_array[i] = new (alloc) CELL[num_cols];
+		}
+
+		static Genode::size_t bytes_needed(unsigned num_cols, unsigned num_lines)
+		{
+			return sizeof(Char_cell_line[num_lines])
+			     + sizeof(bool[num_lines])
+			     + sizeof(CELL[num_cols])*num_lines;
 		}
 
 		~Cell_array()
@@ -98,15 +110,33 @@ class Cell_array
 			Genode::destroy(_alloc, _array);
 		}
 
+		void mark_all_lines_as_dirty()
+		{
+			for (unsigned i = 0; i < _num_lines; i++)
+				_line_dirty[i] = true;
+		}
+
 		void set_cell(int column, int line, CELL cell)
 		{
 			_array[line][column] = cell;
 			_line_dirty[line] = true;
 		}
 
-		CELL get_cell(int column, int line)
+		CELL get_cell(int column, int line) const
 		{
 			return _array[line][column];
+		}
+
+		void import_from(Cell_array const &other)
+		{
+			unsigned const num_cols  = Genode::min(_num_cols,  other._num_cols),
+			               num_lines = Genode::min(_num_lines, other._num_lines);
+
+			for (unsigned line = 0; line < num_lines; line++)
+				for (unsigned column = 0; column < num_cols; column++)
+					_array[line][column] = other.get_cell(column, line);
+
+			mark_all_lines_as_dirty();
 		}
 
 		bool line_dirty(int line) { return _line_dirty[line]; }
@@ -156,8 +186,8 @@ class Cell_array
 				_line_dirty[pos.y] = true;
 		}
 
-		unsigned num_cols()  { return _num_cols; }
-		unsigned num_lines() { return _num_lines; }
+		unsigned num_cols()  const { return _num_cols; }
+		unsigned num_lines() const { return _num_lines; }
 };
 
 #endif /* _TERMINAL__CELL_ARRAY_H_ */

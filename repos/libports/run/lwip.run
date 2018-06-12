@@ -21,9 +21,10 @@
 #
 
 set use_usb_driver [expr [have_spec omap4] || [have_spec arndale] || [have_spec rpi]]
-set use_nic_driver [expr !$use_usb_driver && ![have_spec imx53] && ![have_spec odroid_xu] && ![have_spec linux] && ![have_spec wand_quad]]
+set use_nic_driver [expr !$use_usb_driver && ![have_spec odroid_xu] && ![have_spec linux]]
 
-if {[expr !$use_usb_driver && !$use_nic_driver]} {
+if {[expr !$use_usb_driver && !$use_nic_driver] ||
+    [expr [have_spec imx53] && [have_spec trustzone]]} {
 	puts "\n Run script is not supported on this platform. \n"; exit 0 }
 
 requires_installation_of lynx
@@ -105,9 +106,10 @@ append_if $use_usb_driver config {
 append_platform_drv_config
 
 append_if $use_nic_driver config {
-	<start name="nic_drv">
-		<resource name="RAM" quantum="6M"/>
+	<start name="nic_drv" caps="130">
+		<resource name="RAM" quantum="20M"/>
 		<provides><service name="Nic"/></provides>
+		} [nic_drv_config] {
 	</start>}
 
 append config {
@@ -123,7 +125,7 @@ install_config $config
 # generic modules
 set boot_modules {
 	core init timer
-	ld.lib.so libc.lib.so libm.lib.so lwip.lib.so test-lwip_httpsrv posix.lib.so
+	ld.lib.so libc.lib.so vfs.lib.so libm.lib.so lwip_legacy.lib.so test-lwip_httpsrv posix.lib.so
 }
 
 # platform-specific modules

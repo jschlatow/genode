@@ -31,10 +31,7 @@ class Vfs::Symlink_file_system : public Single_file_system
 
 	public:
 
-		Symlink_file_system(Genode::Env&,
-		                    Genode::Allocator&,
-		                    Genode::Xml_node config,
-		                    Io_response_handler&)
+		Symlink_file_system(Vfs::Env&, Genode::Xml_node config)
 		:
 			Single_file_system(NODE_TYPE_SYMLINK, "symlink", config),
 			_target(config.attribute_value("target", Target()))
@@ -47,8 +44,7 @@ class Vfs::Symlink_file_system : public Single_file_system
 		 ** Directory-service interface **
 		 *********************************/
 
-		Open_result open(char const *, unsigned, Vfs_handle **out_handle,
-		                 Allocator&) override {
+		Open_result open(char const *, unsigned, Vfs_handle **, Allocator&) override {
 			return OPEN_ERR_UNACCESSIBLE; }
 
 		Openlink_result openlink(char const *path, bool create,
@@ -60,8 +56,12 @@ class Vfs::Symlink_file_system : public Single_file_system
 			if (create)
 				return OPENLINK_ERR_NODE_ALREADY_EXISTS;
 
-			*out_handle = new (alloc) Vfs_handle(*this, *this, alloc, 0);
-			return OPENLINK_OK;
+			try {
+				*out_handle = new (alloc) Vfs_handle(*this, *this, alloc, 0);
+				return OPENLINK_OK;
+			}
+			catch (Genode::Out_of_ram)  { return OPENLINK_ERR_OUT_OF_RAM; }
+			catch (Genode::Out_of_caps) { return OPENLINK_ERR_OUT_OF_CAPS; }
 		}
 
 		void close(Vfs_handle *vfs_handle) override
@@ -77,8 +77,8 @@ class Vfs::Symlink_file_system : public Single_file_system
 		 ** File I/O service interface **
 		 ********************************/
 
-		Write_result write(Vfs_handle *handle, char const *, file_size,
-		                   file_size &) override {
+		Write_result write(Vfs_handle *, char const *,
+		                   file_size, file_size &) override {
 			return WRITE_ERR_INVALID; }
 
 		Read_result complete_read(Vfs_handle *, char *buf, file_size buf_len,

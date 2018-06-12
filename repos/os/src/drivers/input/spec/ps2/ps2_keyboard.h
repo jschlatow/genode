@@ -30,6 +30,12 @@ class Ps2::Keyboard : public Input_driver
 {
 	private:
 
+		/*
+		 * Noncopyable
+		 */
+		Keyboard(Keyboard const &);
+		Keyboard &operator = (Keyboard const &);
+
 		Serial_interface   &_kbd;
 		Input::Event_queue &_ev_queue;
 		bool         const  _xlate_mode;
@@ -91,12 +97,12 @@ class Ps2::Keyboard : public Input_driver
 				PAUSE_READ_ADDITIONAL_VALUE
 			};
 
-			enum Type { NORMAL, EXT_E0, EXT_E1, PAUSE } _type;
+			enum Type { NORMAL, EXT_E0, EXT_E1, PAUSE } _type { NORMAL };
 
-			State    _state;     /* current state of packet processing */
-			bool     _press;     /* true if key-press event            */
-			bool     _ready;     /* packet complete                    */
-			unsigned _key_code;  /* key code of complete packet        */
+			State    _state    = READ_FIRST;  /* current state of packet processing */
+			bool     _press    = false;       /* true if key-press event            */
+			bool     _ready    = false;       /* packet complete                    */
+			unsigned _key_code = 0;           /* key code of complete packet        */
 
 			public:
 
@@ -208,10 +214,10 @@ class Ps2::Keyboard : public Input_driver
 
 				unsigned int key_code() const
 				{
-					return ready() ? _key_code : Input::KEY_UNKNOWN;
+					return ready() ? _key_code : (unsigned)Input::KEY_UNKNOWN;
 				}
 
-		} _scan_code_set_1_state_machine;
+		} _scan_code_set_1_state_machine { };
 
 
 		/**
@@ -224,12 +230,12 @@ class Ps2::Keyboard : public Input_driver
 				READ_PAUSE, READ_RELEASE_PAUSE,
 			};
 
-			State    _state;     /* current state of packet processing */
-			bool     _press;     /* true if key-press event            */
-			bool     _extended;  /* true if extended packet            */
-			bool     _pause;     /* true if pause key packet           */
-			bool     _ready;     /* packet complete                    */
-			unsigned _key_code;  /* key code of complete packet        */
+			State    _state    = READ_FIRST;  /* current state of packet processing */
+			bool     _press    = false;       /* true if key-press event            */
+			bool     _extended = false;       /* true if extended packet            */
+			bool     _pause    = false;       /* true if pause key packet           */
+			bool     _ready    = false;       /* packet complete                    */
+			unsigned _key_code = 0;           /* key code of complete packet        */
 
 			public:
 
@@ -346,10 +352,10 @@ class Ps2::Keyboard : public Input_driver
 
 				unsigned int key_code() const
 				{
-					return ready() ? _key_code : Input::KEY_UNKNOWN;
+					return ready() ? _key_code : (unsigned)Input::KEY_UNKNOWN;
 				}
 
-		} _scan_code_set_2_state_machine;
+		} _scan_code_set_2_state_machine { };
 
 		/* acknowledge code from keyboard */
 		enum { ACK = 0xfa };
@@ -357,7 +363,7 @@ class Ps2::Keyboard : public Input_driver
 		/**
 		 * Used keyboard-packet state machine
 		 */
-		Scan_code_state_machine *_state_machine;
+		Scan_code_state_machine *_state_machine = nullptr;
 
 		bool _capslock = false;
 		bool _numlock  = false;
@@ -461,8 +467,8 @@ class Ps2::Keyboard : public Input_driver
 			if (!_state_machine->ready())
 				return;
 
-			bool     press    = _state_machine->press();
-			unsigned key_code = _state_machine->key_code();
+			bool           press    = _state_machine->press();
+			Input::Keycode key_code = Input::Keycode(_state_machine->key_code());
 
 			/*
 			 * The old key state should not equal the state after the event.
@@ -478,7 +484,7 @@ class Ps2::Keyboard : public Input_driver
 
 			if (_verbose.keyboard)
 				Genode::log("post ", press ? "PRESS" : "RELEASE", ", "
-				            "key_code = ", key_code);
+				            "key_code = ", Input::key_name(key_code));
 
 			if (_ev_queue.avail_capacity() == 0) {
 				Genode::warning("event queue overflow - dropping events");
@@ -486,9 +492,10 @@ class Ps2::Keyboard : public Input_driver
 			}
 
 			/* post event to event queue */
-			_ev_queue.add(Input::Event(press ? Input::Event::PRESS
-			                                 : Input::Event::RELEASE,
-			                           key_code, 0, 0, 0, 0));
+			if (press)
+				_ev_queue.add(Input::Press{key_code});
+			else
+				_ev_queue.add(Input::Release{key_code});
 
 			/* start with new packet */
 			_state_machine->reset();

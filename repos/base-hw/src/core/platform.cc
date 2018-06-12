@@ -17,6 +17,7 @@
 
 /* core includes */
 #include <boot_modules.h>
+#include <core_log.h>
 #include <hw/memory_region.h>
 #include <map_local.h>
 #include <platform.h>
@@ -134,13 +135,30 @@ Platform::Platform()
 	_init_rom_modules();
 	_init_additional();
 
-	/* print ressource summary */
-	log(":virt_alloc: ",   *_core_mem_alloc.virt_alloc());
-	log(":phys_alloc: ",   *_core_mem_alloc.phys_alloc());
-	log(":io_mem_alloc: ",  _io_mem_alloc);
-	log(":io_port_alloc: ", _io_port_alloc);
-	log(":irq_alloc: ",     _irq_alloc);
-	log(":rom_fs: ",        _rom_fs);
+	/* core log as ROM module */
+	{
+		void * core_local_ptr = nullptr;
+		void * phys_ptr       = nullptr;
+		unsigned const pages  = 1;
+		size_t const log_size = pages << get_page_size_log2();
+
+		ram_alloc()->alloc_aligned(log_size, &phys_ptr, get_page_size_log2());
+		addr_t const phys_addr = reinterpret_cast<addr_t>(phys_ptr);
+
+		/* let one page free after the log buffer */
+		region_alloc()->alloc_aligned(log_size, &core_local_ptr, get_page_size_log2());
+		addr_t const core_local_addr = reinterpret_cast<addr_t>(core_local_ptr);
+
+		map_local(phys_addr, core_local_addr, pages);
+		memset(core_local_ptr, 0, log_size);
+
+		_rom_fs.insert(new (core_mem_alloc()) Rom_module(phys_addr, log_size,
+		                                                 "core_log"));
+
+		init_core_log(Core_log_range { core_local_addr, log_size } );
+	}
+
+	log(_rom_fs);
 }
 
 
@@ -170,6 +188,6 @@ bool Mapped_mem_allocator::_map_local(addr_t virt_addr, addr_t phys_addr,
 	return ::map_local(phys_addr, virt_addr, size / get_page_size()); }
 
 
-bool Mapped_mem_allocator::_unmap_local(addr_t virt_addr, addr_t phys_addr,
+bool Mapped_mem_allocator::_unmap_local(addr_t virt_addr, addr_t,
                                         unsigned size) {
 	return ::unmap_local(virt_addr, size / get_page_size()); }

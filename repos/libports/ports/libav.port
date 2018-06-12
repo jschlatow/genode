@@ -3,14 +3,14 @@ VERSION   := 11.6
 DOWNLOADS := libav.archive
 
 URL(libav) := https://www.libav.org/releases/libav-$(VERSION).tar.gz
-SHA(libav) := 4f65d7474a45330ec2d51ad80ab00159515229eb
+SHA(libav) := 4df17921e3b87170d54b738f09241833c618d2173415adf398207b43d27e4b28
 DIR(libav) := src/lib/libav
 SIG(libav) := ${URL(libav)}.asc
 
 PATCHES := src/app/avplay/avplay.patch \
            src/lib/libav/avcodec.patch
 
-include_subdirs := . libavcodec libavfilter libavutil libavformat libswscale \
+include_subdirs := . libavcodec libavdevice libavfilter libavutil libavformat libswscale \
                    libavutil/x86 libavutil/arm libavutil/ppc libavcodec/x86 \
                    libavcodec/arm libavresample
 

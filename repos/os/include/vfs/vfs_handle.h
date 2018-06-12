@@ -19,6 +19,8 @@
 namespace Vfs{
 	class Vfs_handle;
 	class File_io_service;
+	class File_system;
+	class Vfs_watch_handle;
 }
 
 
@@ -32,6 +34,12 @@ class Vfs::Vfs_handle
 		int                _status_flags;
 		file_size          _seek = 0;
 
+		/*
+		 * Noncopyable
+		 */
+		Vfs_handle(Vfs_handle const &);
+		Vfs_handle &operator = (Vfs_handle const &);
+
 	public:
 
 		/**
@@ -41,17 +49,27 @@ class Vfs::Vfs_handle
 
 		Context *context = nullptr;
 
-		struct Guard
+		class Guard
 		{
-			Vfs_handle *handle;
+			private:
 
-			Guard(Vfs_handle *handle) : handle(handle) { }
+				/*
+				 * Noncopyable
+				 */
+				Guard(Guard const &);
+				Guard &operator = (Guard const &);
 
-			~Guard()
-			{
-				if (handle)
-					handle->_ds.close(handle);
-			}
+				Vfs_handle * const _handle;
+
+			public:
+
+				Guard(Vfs_handle *handle) : _handle(handle) { }
+
+				~Guard()
+				{
+					if (_handle)
+						_handle->close();
+				}
 		};
 
 		enum { STATUS_RDONLY = 0, STATUS_WRONLY = 1, STATUS_RDWR = 2 };
@@ -90,7 +108,58 @@ class Vfs::Vfs_handle
 		 * Advance seek offset by 'incr' bytes
 		 */
 		void advance_seek(file_size incr) { _seek += incr; }
+
+		/**
+		 * Close handle at backing file-system.
+		 *
+		 * This leaves the handle pointer in an invalid and unsafe state.
+		 */
+		inline void close() { ds().close(this); }
 };
 
+
+class Vfs::Vfs_watch_handle
+{
+	public:
+
+		/**
+		 * Opaque handle context
+		 */
+		struct Context : List<Context>::Element { };
+
+	private:
+
+		Directory_service &_fs;
+		Genode::Allocator &_alloc;
+		Context           *_context = nullptr;
+
+		/*
+		 * Noncopyable
+		 */
+		Vfs_watch_handle(Vfs_watch_handle const &);
+		Vfs_watch_handle &operator = (Vfs_watch_handle const &);
+
+	public:
+
+		Vfs_watch_handle(Directory_service &fs,
+		                 Genode::Allocator &alloc)
+		:
+			_fs(fs), _alloc(alloc)
+		{ }
+
+		virtual ~Vfs_watch_handle() { }
+
+		Directory_service &fs() { return _fs; }
+		Allocator &alloc() { return _alloc; }
+		virtual void context(Context *context) { _context = context; }
+		Context *context() const { return _context; }
+
+		/**
+		 * Close handle at backing file-system.
+		 *
+		 * This leaves the handle pointer in an invalid and unsafe state.
+		 */
+		inline void close() { fs().close(this); }
+};
 
 #endif /* _INCLUDE__VFS__VFS_HANDLE_H_ */

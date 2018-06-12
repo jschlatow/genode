@@ -35,7 +35,7 @@ class Genode::Region_map_client : public Rpc_client<Region_map>
 		 *
 		 * On all other base platforms, this member variable remains unused.
 		 */
-		Dataspace_capability _rm_ds_cap;
+		Dataspace_capability _rm_ds_cap { };
 
 	public:
 
@@ -44,7 +44,8 @@ class Genode::Region_map_client : public Rpc_client<Region_map>
 		Local_addr attach(Dataspace_capability ds, size_t size = 0,
 		                  off_t offset = 0, bool use_local_addr = false,
 		                  Local_addr local_addr = (void *)0,
-		                  bool executable = false) override;
+		                  bool executable = false,
+		                  bool writeable = true) override;
 
 		void                 detach(Local_addr)                       override;
 		void                 fault_handler(Signal_context_capability) override;

@@ -18,7 +18,7 @@ long Genode::Vm_space::_map_page(Genode::Cap_sel const &idx,
                                  Genode::addr_t const virt,
                                  Cache_attribute const cacheability,
                                  bool            const writable,
-                                 bool            const executable)
+                                 bool            const)
 {
 	seL4_X86_Page          const service = _idx_to_sel(idx.value());
 	seL4_X86_PageDirectory const pd      = _pd_sel.value();
@@ -38,4 +38,10 @@ long Genode::Vm_space::_unmap_page(Genode::Cap_sel const &idx)
 {
 	seL4_X86_Page const service = _idx_to_sel(idx.value());
 	return seL4_X86_Page_Unmap(service);
+}
+
+long Genode::Vm_space::_invalidate_page(Genode::Cap_sel const &,
+                                        seL4_Word const, seL4_Word const)
+{
+	return seL4_NoError;
 }

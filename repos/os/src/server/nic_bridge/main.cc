@@ -31,27 +31,13 @@ struct Main
 	Genode::Entrypoint             &ep     { env.ep() };
 	Genode::Heap                    heap   { env.ram(), env.rm() };
 	Genode::Attached_rom_dataspace  config { env, "config" };
-	Net::Vlan                       vlan;
+	Net::Vlan                       vlan   { };
 	Net::Nic                        nic    { env, heap, vlan };
 	Net::Root                       root   { env, nic, heap, config.xml() };
-
-	void handle_config()
-	{
-		/* read MAC address prefix from config file */
-		try {
-			Nic::Mac_address mac;
-			config.xml().attribute("mac").value(&mac);
-			Genode::memcpy(&Net::Mac_allocator::mac_addr_base, &mac,
-			               sizeof(Net::Mac_allocator::mac_addr_base));
-		} catch(...) {}
-	}
 
 	Main(Genode::Env &e) : env(e)
 	{
 		try {
-			/* read configuration file */
-			handle_config();
-
 			/* show MAC address to use */
 			Net::Mac_address mac(nic.mac());
 			Genode::log("--- NIC bridge started (mac=", mac, ") ---");
@@ -65,10 +51,4 @@ struct Main
 };
 
 
-void Component::construct(Genode::Env &env)
-{
-	/* XXX execute constructors of global statics */
-	env.exec_static_constructors();
-
-	static Main nic_bridge(env);
-}
+void Component::construct(Genode::Env &env) { static Main nic_bridge(env); }

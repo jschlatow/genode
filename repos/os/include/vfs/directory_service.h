@@ -18,13 +18,14 @@
 
 namespace Vfs {
 	class Vfs_handle;
+	class Vfs_watch_handle;
 	struct Directory_service;
 
 	using Genode::Allocator;
 }
 
 
-struct Vfs::Directory_service
+struct Vfs::Directory_service : Interface
 {
 	virtual Dataspace_capability dataspace(char const *path) = 0;
 	virtual void release(char const *path, Dataspace_capability) = 0;
@@ -77,8 +78,8 @@ struct Vfs::Directory_service
 		OPENDIR_OK
 	};
 
-	virtual Opendir_result opendir(char const *path, bool create,
-	                               Vfs_handle **handle, Allocator &alloc)
+	virtual Opendir_result opendir(char const * /* path */, bool /* create */,
+	                               Vfs_handle **, Allocator &)
 	{
 		return OPENDIR_ERR_LOOKUP_FAILED;
 	}
@@ -95,8 +96,8 @@ struct Vfs::Directory_service
 		OPENLINK_OK
 	};
 
-	virtual Openlink_result openlink(char const *path, bool create,
-	                                 Vfs_handle **handle, Allocator &alloc)
+	virtual Openlink_result openlink(char const * /* path */, bool /* create */,
+	                                 Vfs_handle **, Allocator &)
 	{
 		return OPENLINK_ERR_PERMISSION_DENIED;
 	}
@@ -110,6 +111,31 @@ struct Vfs::Directory_service
 	 */
 	virtual void close(Vfs_handle *handle) = 0;
 
+	enum Watch_result
+	{
+		WATCH_ERR_UNACCESSIBLE,
+		WATCH_ERR_STATIC,
+		WATCH_ERR_OUT_OF_RAM,
+		WATCH_ERR_OUT_OF_CAPS,
+		WATCH_OK
+	};
+
+	/**
+	 * Watch a file-system node for changes.
+	 */
+	virtual Watch_result watch(char const *path,
+	                           Vfs_watch_handle**,
+	                           Allocator&)
+	{
+		/* default implementation for static file-systems */
+		return (leaf_path(path)) ? WATCH_ERR_STATIC : WATCH_ERR_UNACCESSIBLE;
+	}
+
+	virtual void close(Vfs_watch_handle *)
+	{
+		Genode::error("watch handle closed at invalid file-system");
+		throw ~0;
+	};
 
 	/**********
 	 ** Stat **

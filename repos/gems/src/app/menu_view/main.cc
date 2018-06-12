@@ -28,6 +28,7 @@
 
 /* gems includes */
 #include <gems/nitpicker_buffer.h>
+#include <gems/vfs.h>
 
 namespace Menu_view { struct Main; }
 
@@ -43,6 +44,15 @@ struct Menu_view::Main
 	Nitpicker::Session::View_handle _view_handle = _nitpicker.create_view();
 
 	Point _position;
+
+	Area _configured_size;
+
+	Area _root_widget_size() const
+	{
+		Area const min_size = _root_widget.min_size();
+		return Area(max(_configured_size.w(), min_size.w()),
+		            max(_configured_size.h(), min_size.h()));
+	}
 
 	Rect _view_geometry;
 
@@ -69,9 +79,34 @@ struct Menu_view::Main
 	Signal_handler<Main> _dialog_update_handler = {
 		_env.ep(), *this, &Main::_handle_dialog_update};
 
+	Attached_rom_dataspace _config { _env, "config" };
+
 	Heap _heap { _env.ram(), _env.rm() };
 
-	Style_database _styles { _env.ram(), _env.rm(), _heap };
+	struct Vfs_env : Vfs::Env, Vfs::Io_response_handler, Vfs::Watch_response_handler
+	{
+		Genode::Env      &_env;
+		Allocator        &_alloc;
+		Vfs::File_system &_vfs;
+
+		Vfs_env(Genode::Env &env, Allocator &alloc, Vfs::File_system &vfs)
+		: _env(env), _alloc(alloc), _vfs(vfs) { }
+
+		void handle_io_response   (Vfs::Vfs_handle::Context      *) override { }
+		void handle_watch_response(Vfs::Vfs_watch_handle::Context*) override { }
+
+		Genode::Env            &env()           override { return _env;   }
+		Allocator              &alloc()         override { return _alloc; }
+		Vfs::File_system       &root_dir()      override { return _vfs;   }
+		Io_response_handler    &io_handler()    override { return *this;  }
+		Watch_response_handler &watch_handler() override { return *this;  }
+
+	} _vfs_env;
+
+	Directory _root_dir  { _vfs_env };
+	Directory _fonts_dir { _root_dir, "fonts" };
+
+	Style_database _styles { _env.ram(), _env.rm(), _heap, _fonts_dir };
 
 	Animator _animator;
 
@@ -84,8 +119,6 @@ struct Menu_view::Main
 	Attached_dataspace _input_ds { _env.rm(), _nitpicker.input()->dataspace() };
 
 	Widget::Unique_id _hovered;
-
-	Attached_rom_dataspace _config { _env, "config" };
 
 	void _handle_config();
 
@@ -138,7 +171,9 @@ struct Menu_view::Main
 	 */
 	unsigned _frame_cnt = 0;
 
-	Main(Env &env) : _env(env)
+	Main(Env &env, Vfs::File_system &libc_vfs)
+	:
+		_env(env), _vfs_env(_env, _heap, libc_vfs)
 	{
 		_dialog_rom.sigh(_dialog_update_handler);
 		_config.sigh(_config_handler);
@@ -156,7 +191,12 @@ struct Menu_view::Main
 void Menu_view::Main::_handle_dialog_update()
 {
 	try {
-		_position = Decorator::point_attribute(_config.xml());
+		Xml_node const config = _config.xml();
+
+		_position = Decorator::point_attribute(config);
+
+		_configured_size = Area(config.attribute_value("width",  0UL),
+		                        config.attribute_value("height", 0UL));
 	} catch (...) { }
 
 	_dialog_rom.update();
@@ -165,7 +205,8 @@ void Menu_view::Main::_handle_dialog_update()
 		Xml_node dialog_xml(_dialog_rom.local_addr<char>());
 
 		_root_widget.update(dialog_xml);
-		_root_widget.size(_root_widget.min_size());
+
+		_root_widget.size(_root_widget_size());
 	} catch (...) {
 		Genode::error("failed to construct widget tree");
 	}
@@ -208,9 +249,9 @@ void Menu_view::Main::_handle_config()
 void Menu_view::Main::_handle_input()
 {
 	_nitpicker.input()->for_each_event([&] (Input::Event const &ev) {
-		if (ev.absolute_motion()) {
+		ev.handle_absolute_motion([&] (int x, int y) {
 
-			Point const at = Point(ev.ax(), ev.ay()) - _position;
+			Point const at = Point(x, y) - _position;
 			Widget::Unique_id const new_hovered = _root_widget.hovered(at);
 
 			if (_hovered != new_hovered) {
@@ -223,14 +264,12 @@ void Menu_view::Main::_handle_input()
 
 				_hovered = new_hovered;
 			}
-		}
+		});
 
 		/*
 		 * Reset hover model when losing the focus
 		 */
-		if ((ev.type() == Input::Event::FOCUS && ev.code() == 0)
-		 || (ev.type() == Input::Event::LEAVE)) {
-
+		if (ev.focus_leave() || ev.hover_leave()) {
 			_hovered = Widget::Unique_id();
 
 			if (_hover_reporter.enabled()) {
@@ -267,7 +306,7 @@ void Menu_view::Main::_handle_frame_timer()
 		_frame_cnt = 0;
 
 		Area const old_size = _buffer.constructed() ? _buffer->size() : Area();
-		Area const size     = _root_widget.min_size();
+		Area const size     = _root_widget_size();
 
 		if (!_buffer.constructed() || size.w() > old_size.w() || size.h() > old_size.h())
 			_buffer.construct(_nitpicker, size, _env.ram(), _env.rm());
@@ -277,12 +316,12 @@ void Menu_view::Main::_handle_frame_timer()
 		_root_widget.size(size);
 		_root_widget.position(Point(0, 0));
 
-		Surface<Pixel_rgb888> pixel_surface = _buffer->pixel_surface();
-		Surface<Pixel_alpha8> alpha_surface = _buffer->alpha_surface();
-
 		// XXX restrict redraw to dirty regions
 		//     don't perform a full dialog update
-		_root_widget.draw(pixel_surface, alpha_surface, Point(0, 0));
+		_buffer->apply_to_surface([&] (Surface<Pixel_rgb888> &pixel,
+		                               Surface<Pixel_alpha8> &alpha) {
+			_root_widget.draw(pixel, alpha, Point(0, 0));
+		});
 
 		_buffer->flush_surface();
 		_nitpicker.framebuffer()->refresh(0, 0, _buffer->size().w(), _buffer->size().h());
@@ -332,5 +371,8 @@ Menu_view::Widget_factory::create(Xml_node node)
 extern "C" void _sigprocmask() { }
 
 
-void Libc::Component::construct(Libc::Env &env) { static Menu_view::Main main(env); }
+void Libc::Component::construct(Libc::Env &env)
+{
+	static Menu_view::Main main(env, env.vfs());
+}
 

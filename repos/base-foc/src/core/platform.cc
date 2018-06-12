@@ -25,6 +25,8 @@
 
 /* core includes */
 #include <boot_modules.h>
+#include <core_log.h>
+#include <map_local.h>
 #include <platform.h>
 #include <platform_thread.h>
 #include <platform_pd.h>
@@ -332,7 +334,7 @@ void Platform::_setup_irq_alloc()
 {
 	using namespace Fiasco;
 
-	l4_icu_info_t info { .features = 0 };
+	l4_icu_info_t info { .features = 0, .nr_irqs = 0, .nr_msis = 0 };
 	l4_msgtag_t res = l4_icu_info(Fiasco::L4_BASE_ICU_CAP, &info);
 	if (l4_error(res))
 		panic("could not determine number of IRQs");
@@ -414,7 +416,7 @@ Platform::Platform() :
 	_ram_alloc(nullptr), _io_mem_alloc(core_mem_alloc()),
 	_io_port_alloc(core_mem_alloc()), _irq_alloc(core_mem_alloc()),
 	_region_alloc(core_mem_alloc()), _cap_id_alloc(core_mem_alloc()),
-	_kip_rom(Rom_module((addr_t)sigma0_map_kip(), L4_PAGESIZE, "l4v2_kip")),
+	_kip_rom((addr_t)sigma0_map_kip(), L4_PAGESIZE, "l4v2_kip"),
 	_sigma0(cap_map()->insert(_cap_id_alloc.alloc(), Fiasco::L4_BASE_PAGER_CAP))
 {
 	/*
@@ -430,13 +432,7 @@ Platform::Platform() :
 	_setup_irq_alloc();
 	_init_rom_modules();
 
-	log(":ram_alloc: ",    _ram_alloc);
-	log(":region_alloc: ", _region_alloc);
-	log(":io_mem: ",       _io_mem_alloc);
-	log(":io_port: ",      _io_port_alloc);
-	log(":irq: ",          _irq_alloc);
-	log(":rom_fs: ",       _rom_fs);
-	log(":core ranges: ",  _core_address_ranges());
+	log(_rom_fs);
 
 	Core_cap_index* pdi =
 		reinterpret_cast<Core_cap_index*>(cap_map()->insert(_cap_id_alloc.alloc(), Fiasco::L4_BASE_TASK_CAP));
@@ -457,6 +453,42 @@ Platform::Platform() :
 
 	core_thread->pager(&_sigma0);
 	_core_pd->bind_thread(core_thread);
+
+	{
+		/* export x86 platform specific infos */
+		void * phys_ptr = nullptr;
+		if (ram_alloc()->alloc_aligned(get_page_size(), &phys_ptr,
+		                               get_page_size_log2()).ok()) {
+			addr_t const phys_addr = reinterpret_cast<addr_t>(phys_ptr);
+			/* empty for now */
+			_rom_fs.insert(new (core_mem_alloc()) Rom_module(phys_addr,
+			                                                 get_page_size(),
+			                                                 "platform_info"));
+		}
+	}
+
+	/* core log as ROM module */
+	{
+		void * core_local_ptr = nullptr;
+		void * phys_ptr       = nullptr;
+		unsigned const pages  = 1;
+		size_t const log_size = pages << get_page_size_log2();
+
+		ram_alloc()->alloc_aligned(log_size, &phys_ptr, get_page_size_log2());
+		addr_t const phys_addr = reinterpret_cast<addr_t>(phys_ptr);
+
+		/* let one page free after the log buffer */
+		region_alloc()->alloc_aligned(log_size, &core_local_ptr, get_page_size_log2());
+		addr_t const core_local_addr = reinterpret_cast<addr_t>(core_local_ptr);
+
+		map_local(phys_addr, core_local_addr, pages);
+		memset(core_local_ptr, 0, log_size);
+
+		_rom_fs.insert(new (core_mem_alloc()) Rom_module(phys_addr, log_size,
+		                                                 "core_log"));
+
+		init_core_log(Core_log_range { core_local_addr, log_size } );
+	}
 }
 
 

@@ -35,23 +35,26 @@ namespace Genode {
 
 
 class Genode::Region_map_component : public Rpc_object<Region_map>,
-                                     public List<Region_map_component>::Element
+                                     private List<Region_map_component>::Element
 {
 	private:
+
+		friend class List<Region_map_component>;
 
 		struct Rm_dataspace_component { void sub_rm(Native_capability) { } };
 
 	public:
 
 		Region_map_component(Rpc_entrypoint &, Allocator &, Pager_entrypoint &,
-		                     addr_t, size_t) { }
+		                     addr_t, size_t, Session::Diag) { }
 
-		void upgrade_ram_quota(size_t ram_quota) { }
+		void upgrade_ram_quota(size_t) { }
 
 		void add_client(Rm_client &) { }
 		void remove_client(Rm_client &) { }
 
-		Local_addr attach(Dataspace_capability, size_t, off_t, bool, Local_addr, bool) {
+		Local_addr attach(Dataspace_capability, size_t, off_t, bool,
+		                  Local_addr, bool, bool) {
 			return (addr_t)0; }
 
 		void detach(Local_addr) { }
@@ -68,14 +71,17 @@ class Genode::Region_map_component : public Rpc_object<Region_map>,
 };
 
 
-struct Genode::Rm_member { Region_map_component *member_rm() { return 0; } };
+struct Genode::Rm_member : Interface
+{
+	Region_map_component *member_rm() { return 0; }
+};
 
 
 struct Genode::Rm_client : Pager_object, Rm_member
 {
 	Rm_client(Cpu_session_capability, Thread_capability, 
-	          Region_map_component *rm, unsigned long badge,
-	          Affinity::Location location, Cpu_session::Name const&,
+	          Region_map_component *, unsigned long,
+	          Affinity::Location, Cpu_session::Name const&,
 	          Session_label const&)
 	{ }
 };

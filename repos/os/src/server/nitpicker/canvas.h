@@ -24,13 +24,15 @@
 namespace Nitpicker {
 	struct Canvas_base;
 	template <typename PT> class Canvas;
+
+	typedef Text_painter::Font Font;
 }
 
 
 /**
  * Pixel-type-independent interface of nitpicker's graphics backend
  */
-struct Nitpicker::Canvas_base
+struct Nitpicker::Canvas_base : Interface
 {
 	virtual Area size() const = 0;
 
@@ -92,10 +94,11 @@ class Nitpicker::Canvas : public Canvas_base, public Surface_base::Flusher
 			                       allow_alpha);
 		}
 
-		void draw_text(Point pos, Text_painter::Font const &font,
+		void draw_text(Point pos, Font const &font,
 		               Color color, char const *string)
 		{
-			Text_painter::paint(_surface, pos, font, color, string);
+			Text_painter::paint(_surface, Text_painter::Position(pos.x(), pos.y()),
+			                    font, color, string);
 		}
 };
 

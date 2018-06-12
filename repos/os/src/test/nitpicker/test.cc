@@ -29,7 +29,7 @@ class Test_view : public List<Test_view>::Element
 		typedef Nitpicker::Session::Command     Command;
 
 		Nitpicker::Session_client &_nitpicker;
-		View_handle                _handle;
+		View_handle                _handle { };
 		int                        _x, _y, _w, _h;
 		const char                *_title;
 		Test_view                 *_parent_view;
@@ -58,7 +58,7 @@ class Test_view : public List<Test_view>::Element
 
 			Nitpicker::Rect rect(Nitpicker::Point(_x, _y), Nitpicker::Area(_w, _h));
 			_nitpicker.enqueue<Command::Geometry>(_handle, rect);
-			_nitpicker.enqueue<Command::To_front>(_handle);
+			_nitpicker.enqueue<Command::To_front>(_handle, View_handle());
 			_nitpicker.enqueue<Command::Title>(_handle, _title);
 			_nitpicker.execute();
 		}
@@ -70,7 +70,7 @@ class Test_view : public List<Test_view>::Element
 
 		void top()
 		{
-			_nitpicker.enqueue<Command::To_front>(_handle);
+			_nitpicker.enqueue<Command::To_front>(_handle, View_handle());
 			_nitpicker.execute();
 		}
 
@@ -203,30 +203,32 @@ void Component::construct(Genode::Env &env)
 	/*
 	 * Handle input events
 	 */
-	int omx = 0, omy = 0, key_cnt = 0;
-	Test_view *tv = 0;
+	int mx = 0, my = 0, key_cnt = 0;
+	Test_view *tv = nullptr;
 	while (1) {
 
 		while (!nitpicker.input()->pending()) timer.msleep(20);
 
 		nitpicker.input()->for_each_event([&] (Input::Event const &ev) {
-			if (ev.type() == Input::Event::PRESS)   key_cnt++;
-			if (ev.type() == Input::Event::RELEASE) key_cnt--;
 
-			/* move selected view */
-			if (ev.type() == Input::Event::MOTION && key_cnt > 0 && tv)
-				tv->move(tv->x() + ev.ax() - omx, tv->y() + ev.ay() - omy);
+			if (ev.press())   key_cnt++;
+			if (ev.release()) key_cnt--;
+
+			ev.handle_absolute_motion([&] (int x, int y) {
+
+				/* move selected view */
+				if (key_cnt > 0 && tv)
+					tv->move(tv->x() + x - mx, tv->y() + y - my);
+
+				mx = x; my = y;
+			});
 
 			/* find selected view and bring it to front */
-			if (ev.type() == Input::Event::PRESS && key_cnt == 1) {
-
-				tv = tvs.find(ev.ax(), ev.ay());
-
+			if (ev.press() && key_cnt == 1) {
+				tv = tvs.find(mx, my);
 				if (tv)
 					tvs.top(tv);
 			}
-
-			omx = ev.ax(); omy = ev.ay();
 		});
 	}
 

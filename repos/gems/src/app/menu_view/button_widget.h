@@ -83,19 +83,18 @@ struct Menu_view::Button_widget : Widget, Animator::Item
 
 		_update_children(node);
 
-		bool const dy = selected ? 1 : 0;
-
-		if (Widget *child = _children.first())
-			child->geometry(Rect(Point(margin.left + padding.left,
-			                           margin.top  + padding.top + dy),
-			                     child->min_size()));
+		_children.for_each([&] (Widget &child) {
+			child.geometry(Rect(Point(margin.left + padding.left,
+			                          margin.top  + padding.top),
+			                    child.min_size())); });
 	}
 
 	Area min_size() const override
 	{
 		/* determine minimum child size */
-		Widget const * const child = _children.first();
-		Area const child_min_size = child ? child->min_size() : Area(300, 10);
+		Area child_min_size(300, 10);
+		_children.for_each([&] (Widget const &child) {
+			child_min_size = child.min_size(); });
 
 		/* don't get smaller than the background texture */
 		Area const texture_size = default_texture->size();
@@ -118,14 +117,13 @@ struct Menu_view::Button_widget : Widget, Animator::Item
 		 */
 		scratch.reset(texture_size);
 
-		Surface<Pixel_rgb888> scratch_pixel_surface = scratch.pixel_surface();
-		Surface<Pixel_alpha8> scratch_alpha_surface = scratch.alpha_surface();
+		scratch.apply([&] (Surface<Pixel_rgb888> &pixel, Surface<Pixel_alpha8> &alpha) {
+			Icon_painter::paint(pixel, texture_rect, *default_texture, 255);
+			Icon_painter::paint(alpha, texture_rect, *default_texture, 255);
 
-		Icon_painter::paint(scratch_pixel_surface, texture_rect, *default_texture, 255);
-		Icon_painter::paint(scratch_alpha_surface, texture_rect, *default_texture, 255);
-
-		Icon_painter::paint(scratch_pixel_surface, texture_rect, *hovered_texture, blend >> 8);
-		Icon_painter::paint(scratch_alpha_surface, texture_rect, *hovered_texture, blend >> 8);
+			Icon_painter::paint(pixel, texture_rect, *hovered_texture, blend >> 8);
+			Icon_painter::paint(alpha, texture_rect, *hovered_texture, blend >> 8);
+		});
 
 		/*
 		 * Apply blended texture to target surface
@@ -136,14 +134,17 @@ struct Menu_view::Button_widget : Widget, Animator::Item
 		Icon_painter::paint(alpha_surface, Rect(at, _animated_geometry.area()),
 		                    scratch.texture(), 255);
 
+		if (selected)
+			at = at + Point(0, 1);
+
 		_draw_children(pixel_surface, alpha_surface, at);
 	}
 
 	void _layout() override
 	{
-		for (Widget *w = _children.first(); w; w = w->next())
-			w->size(Area(geometry().w() - _space().w(),
-			             geometry().h() - _space().h()));
+		_children.for_each([&] (Widget &w) {
+			w.size(Area(geometry().w() - _space().w(),
+			            geometry().h() - _space().h())); });
 	}
 
 

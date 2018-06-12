@@ -39,8 +39,9 @@ struct Noux::Sysio
 {
     /* signal numbers must match with libc signal numbers */
 	enum Signal {
-		SIG_INT = 2,
-		SIG_CHLD = 20,
+		SIG_INT   = 2,
+		SIG_CHLD  = 20,
+		SIG_WINCH = 28
 	};
 
 	enum { SIGNAL_QUEUE_SIZE = 32 };
@@ -50,7 +51,7 @@ struct Noux::Sysio
 	enum { MAX_PATH_LEN = 512 };
 	typedef char Path[MAX_PATH_LEN];
 
-	enum { CHUNK_SIZE = 11*1024 };
+	enum { CHUNK_SIZE = 64*1024 };
 	typedef char Chunk[CHUNK_SIZE];
 
 	enum { ARGS_MAX_LEN = 5*1024 };
@@ -155,7 +156,8 @@ struct Noux::Sysio
 	enum Fcntl_cmd {
 		FCNTL_CMD_GET_FILE_STATUS_FLAGS,
 		FCNTL_CMD_SET_FILE_STATUS_FLAGS,
-		FCNTL_CMD_SET_FD_FLAGS
+		FCNTL_CMD_SET_FD_FLAGS,
+		FCNTL_CMD_GET_FD_FLAGS
 	};
 
 	/**
@@ -317,7 +319,10 @@ struct Noux::Sysio
 	                       SYMLINK_ERR_NO_SPACE, SYMLINK_ERR_NO_PERM,
 	                       SYMLINK_ERR_NAME_TOO_LONG };
 
-	enum Execve_error    { EXECVE_NONEXISTENT    = Vfs::Directory_service::NUM_GENERAL_ERRORS, EXECVE_NOMEM };
+	enum Execve_error    { EXECVE_ERR_NO_ENTRY = Vfs::Directory_service::NUM_GENERAL_ERRORS,
+	                       EXECVE_ERR_NO_MEMORY,
+	                       EXECVE_ERR_NO_EXEC,
+	                       EXECVE_ERR_ACCESS};
 	enum Fork_error      { FORK_NOMEM = Vfs::Directory_service::NUM_GENERAL_ERRORS };
 	enum Select_error    { SELECT_ERR_INTERRUPT };
 

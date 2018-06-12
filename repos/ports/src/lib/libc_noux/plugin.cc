@@ -210,6 +210,7 @@ static bool noux_syscall(Noux::Session::Syscall opcode)
 			if (signal_action[signal].sa_handler == SIG_DFL) {
 				switch (signal) {
 					case SIGCHLD:
+					case SIGWINCH:
 						/* ignore */
 						break;
 					default:
@@ -231,7 +232,7 @@ static bool noux_syscall(Noux::Session::Syscall opcode)
 }
 
 
-enum { FS_BLOCK_SIZE = 1024 };
+enum { FS_BLOCK_SIZE = 4096 };
 
 
 /***********************************************
@@ -375,7 +376,6 @@ extern "C" int getrlimit(int resource, struct rlimit *rlim)
 			return 0;
 	}
 	errno = ENOSYS;
-	warning(__func__, " not implemented (resource=", resource, ")");
 	return -1;
 }
 
@@ -1099,8 +1099,10 @@ namespace {
 		if (!noux_syscall(Noux::Session::SYSCALL_EXECVE)) {
 			warning("exec syscall failed for path \"", filename, "\"");
 			switch (sysio()->error.execve) {
-			case Noux::Sysio::EXECVE_NONEXISTENT: errno = ENOENT; break;
-			case Noux::Sysio::EXECVE_NOMEM:       errno = ENOMEM; break;
+			case Noux::Sysio::EXECVE_ERR_NO_ENTRY:  errno = ENOENT; break;
+			case Noux::Sysio::EXECVE_ERR_NO_MEMORY: errno = ENOMEM; break;
+			case Noux::Sysio::EXECVE_ERR_NO_EXEC:   errno = ENOEXEC; break;
+			case Noux::Sysio::EXECVE_ERR_ACCESS:    errno = EACCES; break;
 			}
 			return -1;
 		}
@@ -1262,8 +1264,8 @@ namespace {
 				}
 			}
 
-			count -= curr_count;
-			src   += curr_count;
+			count -= sysio()->write_out.count;
+			src   += sysio()->write_out.count;
 		}
 		return orig_count;
 	}
@@ -1416,6 +1418,13 @@ namespace {
 
 				break;
 			}
+
+		case TIOCSETA:
+			{
+				/* not implemented but used by e.g. vim */
+				break;
+			}
+
 
 		default:
 
@@ -1595,14 +1604,8 @@ namespace {
 			}
 
 		case F_GETFD:
-			/*
-			 * Normally, we would return the file-descriptor flags.
-			 *
-			 * XXX: FD_CLOEXEC not yet supported
-			 */
-			if (verbose)
-				warning("fcntl(F_GETFD) not implemented, returning 0");
-			return 0;
+			sysio()->fcntl_in.cmd = Noux::Sysio::FCNTL_CMD_GET_FD_FLAGS;
+			break;
 
 		case F_SETFD:
 			sysio()->fcntl_in.cmd      = Noux::Sysio::FCNTL_CMD_SET_FD_FLAGS;

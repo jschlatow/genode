@@ -121,9 +121,11 @@ void Entrypoint::_process_incoming_signals()
 				 * destroyed. In that case we will get an ipc error exception
 				 * as result, which has to be caught.
 				 */
-				retry<Blocking_canceled>(
-					[&] () { _signal_proxy_cap.call<Signal_proxy::Rpc_signal>(); },
-					[]  () { warning("blocking canceled during signal processing"); });
+				try {
+					retry<Blocking_canceled>(
+						[&] () { _signal_proxy_cap.call<Signal_proxy::Rpc_signal>(); },
+						[]  () { warning("blocking canceled during signal processing"); });
+				} catch (Genode::Ipc_error) { /* ignore - context got destroyed in meantime */ }
 
 				cmpxchg(&_signal_recipient, SIGNAL_PROXY, NONE);
 			} else {
@@ -262,7 +264,7 @@ void Genode::Entrypoint::dissolve(Signal_dispatcher_base &dispatcher)
 
 namespace {
 
-	struct Constructor
+	struct Constructor : Interface
 	{
 		GENODE_RPC(Rpc_construct, void, construct);
 		GENODE_RPC_INTERFACE(Rpc_construct);

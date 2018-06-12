@@ -22,7 +22,10 @@
 #include <util/random.h>
 #include <util/string.h>
 
-enum { SUPPORTED_RUMP_VERSION = 17 };
+enum {
+	SUPPORTED_RUMP_VERSION = 17,
+	MAX_VIRTUAL_MEMORY = (sizeof(void *) == 4 ? 256UL : 4096UL) * 1024 * 1024
+};
 
 static bool verbose = false;
 
@@ -112,7 +115,6 @@ void rumpuser_seterrno(int e) { errno = e; }
 
 int rumpuser_init(int version, const struct rumpuser_hyperup *hyp)
 {
-	Genode::log("RUMP ver: ", version);
 	if (version != SUPPORTED_RUMP_VERSION) {
 		Genode::error("unsupported rump-kernel version (", version, ") - "
 		              "supported is ", (int)SUPPORTED_RUMP_VERSION);
@@ -141,12 +143,23 @@ int rumpuser_init(int version, const struct rumpuser_hyperup *hyp)
  ** Parameter retrieval **
  *************************/
 
+static size_t _rump_memlimit = 0;
+
+
+void rump_set_memlimit(Genode::size_t limit)
+{
+	_rump_memlimit = limit;
+}
+
+
 int rumpuser_getparam(const char *name, void *buf, size_t buflen)
 {
-	enum { RESERVE_MEM = 2U * 1024 * 1024 };
+	enum {
+		MIN_RESERVE_MEM = 1U << 20,
+		MIN_RUMP_MEM    = 6U << 20,
+	};
 
 	/* support one cpu */
-	Genode::log(name);
 	if (!Genode::strcmp(name, "_RUMPUSER_NCPU")) {
 		Genode::strncpy((char *)buf, "1", 2);
 		return 0;
@@ -160,16 +173,40 @@ int rumpuser_getparam(const char *name, void *buf, size_t buflen)
 
 	if (!Genode::strcmp(name, "RUMP_MEMLIMIT")) {
 
-		/* leave 2 MB for the Genode */
-		size_t rump_ram =  Rump::env().env().ram().avail_ram().value;
-
-		if (rump_ram <= RESERVE_MEM) {
-			Genode::error("insufficient quota left: ",
-			              rump_ram, " < ", (long)RESERVE_MEM, " bytes");
-			return -1;
+		if (!_rump_memlimit) {
+			Genode::error("no RAM limit set");
+			throw -1;
 		}
 
-		rump_ram -= RESERVE_MEM;
+		/*
+		 * Set RAM limit and reserve a 10th or at least 1MiB for
+		 * Genode meta-data.
+		 */
+		Genode::size_t rump_ram = _rump_memlimit;
+		size_t const   reserve  = Genode::max((size_t)MIN_RESERVE_MEM, rump_ram / 10);
+
+		if (reserve < MIN_RESERVE_MEM) {
+			Genode::error("could not reserve enough RAM for meta-data, need at least ",
+			              (size_t)MIN_RESERVE_MEM >> 20, " MiB");
+			throw -1;
+		}
+
+		rump_ram -= reserve;
+
+		/* check RAM limit is enough... */
+		if (rump_ram < MIN_RUMP_MEM) {
+			Genode::error("RAM limit too small, need at least ",
+			              (size_t)MIN_RUMP_MEM >> 20, " MiB");
+			throw -1;
+		}
+
+		/* ... and is in valid range (overflow) */
+		if (rump_ram >= _rump_memlimit) {
+			Genode::error("rump RAM limit invalid");
+			throw -1;
+		}
+
+		rump_ram  = Genode::min((unsigned long)MAX_VIRTUAL_MEMORY, rump_ram);
 
 		/* convert to string */
 		Genode::snprintf((char *)buf, buflen, "%zu", rump_ram);
@@ -233,7 +270,7 @@ struct Allocator_policy
 };
 
 
-typedef Allocator::Fap<128 * 1024 * 1024, Allocator_policy> Rump_alloc;
+typedef Allocator::Fap<MAX_VIRTUAL_MEMORY, Allocator_policy> Rump_alloc;
 
 static Genode::Lock & alloc_lock()
 {

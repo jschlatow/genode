@@ -34,6 +34,12 @@ class Vfs::Tar_file_system : public File_system
 	char                          *_tar_base = _tar_ds.local_addr<char>();
 	file_size               const  _tar_size = _tar_ds.size();
 
+	/*
+	 * Noncopyable
+	 */
+	Tar_file_system(Tar_file_system const &);
+	Tar_file_system &operator = (Tar_file_system const &);
+
 	class Record
 	{
 		private:
@@ -66,30 +72,77 @@ class Vfs::Tar_file_system : public File_system
 				return value;
 			}
 
+			char const *_data_begin() const { return (char const *)this + BLOCK_LEN; }
+
+			/*
+			 * GNU extension for long path names, which support unlimited sizes using
+			 * separate records
+			 */
+			bool _long_name() const
+			{
+				 return _type[0] == TYPE_LONG_LINK || _type[0] == TYPE_LONG_NAME;
+			}
+
+			/*
+			 * Round up up next block
+			 */
+			file_size _block_align(file_size size) const {
+				return Genode::align_addr(size, BLOCK_SHIFT); }
+
+			/*
+			 * Next record header
+			 */
+			Record *_next() const {
+				return (Record *)(_data_begin() + _block_align(_read(_size))); }
+
 		public:
 
-			/* length of on data block in tar */
-			enum { BLOCK_LEN = 512 };
+			/* length of one data block in tar */
+			enum {
+				BLOCK_SHIFT = 9, /* 512 bytes */
+				BLOCK_LEN   = 1ul << BLOCK_SHIFT,
+			};
 
 			/* record type values */
-			enum { TYPE_FILE    = 0, TYPE_HARDLINK = 1,
-			       TYPE_SYMLINK = 2, TYPE_DIR      = 5 };
+			enum {
+				TYPE_FILE = 0, TYPE_HARDLINK = 1, TYPE_SYMLINK = 2, TYPE_DIR = 5,
+				/* GNU extensions */
+				TYPE_LONG_LINK = 75, TYPE_LONG_NAME = 76
+			};
 
-			file_size          size() const { return _read(_size); }
-			unsigned            uid() const { return _read(_uid);  }
-			unsigned            gid() const { return _read(_gid);  }
-			unsigned           mode() const { return _read(_mode); }
-			unsigned           type() const { return _read(_type); }
-			char const        *name() const { return _name;        }
-			char const *linked_name() const { return _linked_name; }
+			file_size  size() const  { return _long_name() ? _next()->size() : _read(_size);  }
+			unsigned    uid() const  { return _long_name() ? _next()->uid()  : _read(_uid);   }
+			unsigned    gid() const  { return _long_name() ? _next()->gid()  : _read(_gid);   }
+			unsigned   mode() const  { return _long_name() ? _next()->mode() : _read(_mode);  }
+			unsigned   type() const  { return _long_name() ? _next()->type() : _read(_type);  }
+			void      *data() const  { return _long_name() ? _next()->data() : (void *)_data_begin(); }
 
-			void *data() const { return (char *)this + BLOCK_LEN; }
+			char const *name()        const { return _long_name() ? _data_begin() : _name;        }
+			char const *linked_name() const { return _long_name() ? _data_begin() : _linked_name; }
+
+			file_size storage_size()
+			{
+				if (_long_name()) {
+					/* this size + next header + next size */
+					return _block_align(_read(_size)) + BLOCK_LEN + _block_align(_next()->size());
+				}
+
+				return _read(_size);
+			}
 	};
 
 	class Node;
 
 	class Tar_vfs_handle : public Vfs_handle
 	{
+		private:
+
+			/*
+			 * Noncopyable
+			 */
+			Tar_vfs_handle(Tar_vfs_handle const &);
+			Tar_vfs_handle &operator = (Tar_vfs_handle const &);
+
 		protected:
 
 			Node const *_node;
@@ -378,7 +431,7 @@ class Vfs::Tar_file_system : public File_system
 
 			tar_record_action(record);
 
-			file_size size = record->size();
+			file_size size = record->storage_size();
 
 			/* some datablocks */       /* one metablock */
 			block_id = block_id + (size / Record::BLOCK_LEN) + 1;
@@ -400,7 +453,7 @@ class Vfs::Tar_file_system : public File_system
 
 	struct Num_dirent_cache
 	{
-		Lock             lock;
+		Lock             lock { };
 		Node            &root_node;
 		bool             valid;              /* true after first lookup */
 		char             key[256];           /* key used for lookup */
@@ -428,29 +481,40 @@ class Vfs::Tar_file_system : public File_system
 
 	/**
 	 * Walk hardlinks until we reach a file
-	 *
-	 * XXX: check for hardlink loops
 	 */
 	Node const *dereference(char const *path)
 	{
 		Node const *node = _root_node.lookup(path);
-		if (!node) return 0;
+		Node const *slow_node = node;
+		int i = 0;
+		while (node) {
+			Record const *record = node->record;
+			if (!record || record->type() != Record::TYPE_HARDLINK)
+				break; /* got it */
 
-		Record const *record = node->record;
-		if (!record || record->type() != Record::TYPE_HARDLINK)
-			return node;
-
-		return dereference(record->linked_name());
+			/*
+			 * The `node` pointer is followed every iteration and
+			 * `slow_node` every-other iteration. If there is a
+			 * loop then eventually we catch it as the faster
+			 * laps the slower.
+			 */
+			node = _root_node.lookup(record->linked_name());
+			if (i++ & 1) {
+				slow_node = _root_node.lookup(slow_node->record->linked_name());
+				if (node == slow_node) {
+					Genode::error(_rom_name, " contains a hard-link loop at '", path, "'");
+					node = nullptr;
+				}
+			}
+		}
+		return node;
 	}
 
 	public:
 
-		Tar_file_system(Genode::Env       &env,
-		                Genode::Allocator &alloc,
-		                Genode::Xml_node   config,
-		                Io_response_handler &)
+		Tar_file_system(Vfs::Env &env, Genode::Xml_node config)
 		:
-			_env(env), _alloc(alloc),
+			_env(env.env()), _alloc(env.alloc()),
 			_rom_name(config.attribute_value("name", Rom_name())),
 			_root_node("", 0),
 			_cached_num_dirent(_root_node)
@@ -584,12 +648,16 @@ class Vfs::Tar_file_system : public File_system
 			if (!node || !node->record || node->record->type() != Record::TYPE_FILE)
 				return OPEN_ERR_UNACCESSIBLE;
 
-			*out_handle = new (alloc) Tar_vfs_file_handle(*this, alloc, 0, node);
-
-			return OPEN_OK;
+			try {
+				*out_handle = new (alloc)
+					Tar_vfs_file_handle(*this, alloc, 0, node);
+				return OPEN_OK;
+			}
+			catch (Genode::Out_of_ram)  { return OPEN_ERR_OUT_OF_RAM; }
+			catch (Genode::Out_of_caps) { return OPEN_ERR_OUT_OF_CAPS; }
 		}
 
-		Opendir_result opendir(char const *path, bool create,
+		Opendir_result opendir(char const *path, bool /* create */,
 		                       Vfs_handle **out_handle,
 		                       Genode::Allocator& alloc) override
 		{
@@ -599,23 +667,31 @@ class Vfs::Tar_file_system : public File_system
 			    (node->record && (node->record->type() != Record::TYPE_DIR)))
 				return OPENDIR_ERR_LOOKUP_FAILED;
 
-			*out_handle = new (alloc) Tar_vfs_dir_handle(*this, alloc, 0, node);
-
-			return OPENDIR_OK;
+			try {
+				*out_handle = new (alloc)
+					Tar_vfs_dir_handle(*this, alloc, 0, node);
+				return OPENDIR_OK;
+			}
+			catch (Genode::Out_of_ram)  { return OPENDIR_ERR_OUT_OF_RAM; }
+			catch (Genode::Out_of_caps) { return OPENDIR_ERR_OUT_OF_CAPS; }
 		}
 
-		Openlink_result openlink(char const *path, bool create,
-	                             Vfs_handle **out_handle, Allocator &alloc)
-	    {
+		Openlink_result openlink(char const *path, bool /* create */,
+		                         Vfs_handle **out_handle, Allocator &alloc)
+		{
 			Node const *node = dereference(path);
 			if (!node || !node->record ||
 			    node->record->type() != Record::TYPE_SYMLINK)
 				return OPENLINK_ERR_LOOKUP_FAILED;
 
-			*out_handle = new (alloc) Tar_vfs_symlink_handle(*this, alloc, 0, node);
-
-			return OPENLINK_OK;
-	    }
+			try {
+				*out_handle = new (alloc)
+					Tar_vfs_symlink_handle(*this, alloc, 0, node);
+				return OPENLINK_OK;
+			}
+			catch (Genode::Out_of_ram)  { return OPENLINK_ERR_OUT_OF_RAM; }
+			catch (Genode::Out_of_caps) { return OPENLINK_ERR_OUT_OF_CAPS; }
+		}
 
 		void close(Vfs_handle *vfs_handle) override
 		{
@@ -658,7 +734,7 @@ class Vfs::Tar_file_system : public File_system
 			return handle->read(dst, count, out_count);
 		}
 
-		Ftruncate_result ftruncate(Vfs_handle *handle, file_size) override
+		Ftruncate_result ftruncate(Vfs_handle *, file_size) override
 		{
 			return FTRUNCATE_ERR_NO_PERM;
 		}

@@ -15,14 +15,14 @@ create_boot_directory
 
 proc test_1_config { } {
 	if {[enable_test_1]} { return "
-		[client_config udp 2 10.0.2.212  10.0.2.1    255.255.255.0 nic_bridge 1 10.0.2.55]
-		[server_config udp 2 18.17.16.15 18.17.16.14 255.255.0.0   nic_router 1 ]" }
+		[client_config udp_client_2 udp 10.0.2.212  10.0.2.1    255.255.255.0 nic_bridge 1 10.0.2.55]
+		[server_config udp_server_2 udp 18.17.16.15 18.17.16.14 255.255.0.0   nic_router 1 ]" }
 }
 
 proc test_2_config { } {
 	if {[enable_test_2]} { return "
-		[client_config http 1 10.0.2.201   10.0.2.1    255.255.255.0 nic_bridge 80 10.0.2.55]
-		[server_config http 1 192.168.1.18 192.168.1.1 255.255.255.0 nic_router 80 ]" }
+		[client_config http_client_1 http 10.0.2.201   10.0.2.1    255.255.255.0 nic_bridge 80 10.0.2.55]
+		[server_config http_server_1 http 192.168.1.18 192.168.1.1 255.255.255.0 nic_router 80 ]" }
 }
 
 append config {
@@ -44,8 +44,6 @@ append config {
 
 	<default caps="100"/>
 
-	} [gpio_drv_config] {
-	} [nic_drv_config] {
 	} [platform_drv_config] {
 
 	<start name="timer" priority="0">
@@ -53,10 +51,25 @@ append config {
 		<provides><service name="Timer"/></provides>
 	</start>
 
+	<start name="nic_loopback" priority="-1">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Nic"/></provides>
+	</start>
+
 	<start name="nic_dump" priority="-1">
 		<resource name="RAM" quantum="6M"/>
 		<provides><service name="Nic"/></provides>
-		<config uplink="bridge" downlink="router" time="yes"/>
+		<config uplink="bridge"
+		        downlink="router"
+		        time="yes"
+		        default="name"
+		        eth="name"
+		        arp="all"
+		        ipv4="default"
+		        dhcp="no"
+		        udp="no"
+		        icmp="all"
+		        tcp="default" />
 		<route>
 			<service name="Nic"> <child name="nic_bridge"/> </service>
 			<any-service> <parent/> <any-child/> </any-service>
@@ -66,7 +79,7 @@ append config {
 	<start name="nic_router" caps="200" priority="-1">
 		<resource name="RAM" quantum="10M"/>
 		<provides><service name="Nic"/></provides>
-		<config rtt_sec="6" verbose="no">
+		<config verbose="no">
 
 			<policy label_prefix="udp_client_1"  domain="udp_client_1"  />
 			<policy label_prefix="http_client_3" domain="http_client_3" />
@@ -122,7 +135,7 @@ append config {
 			<policy label_prefix="udp_server_3"  ip_addr="10.0.2.213" />
 		</config>
 		<route>
-		<service name="Nic"> <child name="} [nic_drv] {"/> </service>
+		<service name="Nic"> <child name="nic_loopback"/> </service>
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
@@ -138,4 +151,8 @@ lappend boot_modules nic_dump
 
 build_boot_image $boot_modules
 
-run_genode_until {.*Test done.*\n.*Test done.*\n} 120
+for {set i 0} {$i < $nr_of_clients} {incr i 1} {
+	append done_string {.*Test done.*\n}
+}
+
+run_genode_until $done_string 120

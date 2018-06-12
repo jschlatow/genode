@@ -12,12 +12,14 @@
  */
 
 /* Genode includes */
+#include <base/attached_rom_dataspace.h>
 #include <trace_session/connection.h>
 #include <timer_session/connection.h>
 #include <base/component.h>
 #include <base/attached_rom_dataspace.h>
 #include <base/heap.h>
 #include <os/reporter.h>
+#include <util/retry.h>
 
 
 struct Trace_subject_registry
@@ -28,7 +30,7 @@ struct Trace_subject_registry
 		{
 			Genode::Trace::Subject_id const id;
 
-			Genode::Trace::Subject_info info;
+			Genode::Trace::Subject_info info { };
 
 			/**
 			 * Execution time during the last period
@@ -45,7 +47,7 @@ struct Trace_subject_registry
 			}
 		};
 
-		Genode::List<Entry> _entries;
+		Genode::List<Entry> _entries { };
 
 		Entry *_lookup(Genode::Trace::Subject_id const id)
 		{
@@ -79,12 +81,19 @@ struct Trace_subject_registry
 			_entries = sorted;
 		}
 
+		unsigned update_subjects(Genode::Trace::Connection &trace)
+		{
+			return Genode::retry<Genode::Out_of_ram>(
+				[&] () { return trace.subjects(_subjects, MAX_SUBJECTS); },
+				[&] () { trace.upgrade_ram(4096); }
+			);
+		}
 
 	public:
 
 		void update(Genode::Trace::Connection &trace, Genode::Allocator &alloc)
 		{
-			unsigned const num_subjects = trace.subjects(_subjects, MAX_SUBJECTS);
+			unsigned const num_subjects = update_subjects(trace);
 
 			/* add and update existing entries */
 			for (unsigned i = 0; i < num_subjects; i++) {
@@ -151,7 +160,7 @@ struct App::Main
 {
 	Env &_env;
 
-	Trace::Connection _trace { _env, 512*1024, 32*1024, 0 };
+	Trace::Connection _trace { _env, 10*4096, 32*1024, 0 };
 
 	Reporter _reporter { _env, "trace_subjects", "trace_subjects", 64*1024 };
 
@@ -175,7 +184,7 @@ struct App::Main
 
 	Heap _heap { _env.ram(), _env.rm() };
 
-	Trace_subject_registry _trace_subject_registry;
+	Trace_subject_registry _trace_subject_registry { };
 
 	void _handle_config();
 
@@ -207,10 +216,6 @@ void App::Main::_handle_config()
 
 	_report_affinity = _config_report_attribute_enabled("affinity");
 	_report_activity = _config_report_attribute_enabled("activity");
-
-	log("period_ms=",       _period_ms,       ", "
-	    "report_activity=", _report_activity, ", "
-	    "report_affinity=", _report_affinity);
 
 	_timer.trigger_periodic(1000*_period_ms);
 }

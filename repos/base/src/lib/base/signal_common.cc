@@ -26,26 +26,26 @@ using namespace Genode;
  ************/
 
 Signal::Signal(Signal const &other)
+:
+	_data(other._data.context, other._data.num)
 {
-	_data.context = other._data.context;
-	_data.num     = other._data.num;
-
 	_inc_ref();
 }
 
 
 Signal & Signal::operator=(Signal const &other)
 {
-	if ((_data.context == other._data.context) &&
-	    (_data.num     == other._data.num))
-		return *this;
+	bool const same_context = (_data.context == other._data.context);
 
-	_dec_ref_and_unlock();
+	/* don't change ref cnt if it's the same context */
+	if (!same_context)
+		_dec_ref_and_unlock();
 
 	_data.context = other._data.context;
 	_data.num     = other._data.num;
 
-	_inc_ref();
+	if (!same_context)
+		_inc_ref();
 
 	return *this;
 }
@@ -175,6 +175,7 @@ Signal Signal_receiver::pending_signal()
 		throw Context_ring::Break_for_each();
 	});
 	if (result.context) {
+		Lock::Guard lock_guard(result.context->_lock);
 		if (result.num == 0)
 			warning("returning signal with num == 0");
 
@@ -229,9 +230,13 @@ void Signal_receiver::dissolve(Signal_context *context)
 	if (context->_receiver != this)
 		throw Context_not_associated();
 
-	Lock::Guard contexts_lock_guard(_contexts_lock);
+	{
+		Lock::Guard contexts_lock_guard(_contexts_lock);
 
-	_unsynchronized_dissolve(context);
+		Lock::Guard context_lock_guard(context->_lock);
+
+		_unsynchronized_dissolve(context);
+	}
 
 	Lock::Guard context_destroy_lock_guard(context->_destroy_lock);
 }

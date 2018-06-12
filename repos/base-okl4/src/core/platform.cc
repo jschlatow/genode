@@ -22,19 +22,15 @@
 #include <base/internal/stack_area.h>
 #include <base/internal/native_utcb.h>
 #include <base/internal/globals.h>
+#include <base/internal/okl4.h>
 
 /* core includes */
 #include <boot_modules.h>
+#include <core_log.h>
 #include <platform.h>
 #include <platform_thread.h>
 #include <platform_pd.h>
 #include <map_local.h>
-
-/* OKL4 includes */
-namespace Okl4 {
-#include <l4/ipc.h>
-#include <l4/schedule.h>
-}
 
 using namespace Genode;
 
@@ -48,7 +44,7 @@ bool Mapped_mem_allocator::_map_local(addr_t virt_addr, addr_t phys_addr,
 	return map_local(phys_addr, virt_addr, size / get_page_size()); }
 
 
-bool Mapped_mem_allocator::_unmap_local(addr_t virt_addr, addr_t phys_addr,
+bool Mapped_mem_allocator::_unmap_local(addr_t virt_addr, addr_t,
                                         unsigned size) {
 	return unmap_local(virt_addr, size / get_page_size()); }
 
@@ -68,7 +64,7 @@ int Platform::bi_init_mem(Okl4::uintptr_t virt_base, Okl4::uintptr_t virt_end,
 }
 
 
-int Platform::bi_add_virt_mem(Okl4::bi_name_t pool, Okl4::uintptr_t base,
+int Platform::bi_add_virt_mem(Okl4::bi_name_t, Okl4::uintptr_t base,
                               Okl4::uintptr_t end, const Okl4::bi_user_data_t *data)
 {
 	/* prevent first page from being added to core memory */
@@ -168,14 +164,9 @@ Platform::Platform() :
 	                                           stack_area_virtual_size());
 
 	_vm_start = 0x1000;
-	_vm_size  = 0xb0000000 - 0x1000;
+	_vm_size  = 0xc0000000 - _vm_start;
 
-	log(":phys_alloc: ", *_core_mem_alloc.phys_alloc());
-	log(":virt_alloc: ", *_core_mem_alloc.virt_alloc());
-	log(":io_mem: ",      _io_mem_alloc);
-	log(":io_port: ",     _io_port_alloc);
-	log(":irq: ",         _irq_alloc);
-	log(":rom_fs: ",      _rom_fs);
+	log(_rom_fs);
 
 	/* setup task object for core task */
 	_core_pd = new(core_mem_alloc()) Platform_pd(true);
@@ -192,6 +183,29 @@ Platform::Platform() :
 	core_thread->set_l4_thread_id(Okl4::L4_rootserver);
 
 	_core_pd->bind_thread(core_thread);
+
+	/* core log as ROM module */
+	{
+		void * core_local_ptr = nullptr;
+		void * phys_ptr       = nullptr;
+		unsigned const pages  = 1;
+		size_t const log_size = pages << get_page_size_log2();
+
+		ram_alloc()->alloc_aligned(log_size, &phys_ptr, get_page_size_log2());
+		addr_t const phys_addr = reinterpret_cast<addr_t>(phys_ptr);
+
+		/* let one page free after the log buffer */
+		region_alloc()->alloc_aligned(log_size, &core_local_ptr, get_page_size_log2());
+		addr_t const core_local_addr = reinterpret_cast<addr_t>(core_local_ptr);
+
+		map_local(phys_addr, core_local_addr, pages);
+		memset(core_local_ptr, 0, log_size);
+
+		_rom_fs.insert(new (core_mem_alloc()) Rom_module(phys_addr, log_size,
+		                                                 "core_log"));
+
+		init_core_log(Core_log_range { core_local_addr, log_size } );
+	}
 }
 
 

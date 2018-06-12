@@ -17,39 +17,60 @@
 /* Genode includes */
 #include <base/exception.h>
 
-namespace Net { template <typename> class Pointer; }
+namespace Net {
+
+	template <typename> class Pointer;
+	template <typename> class Const_pointer;
+}
+
 
 template <typename T>
 class Net::Pointer
 {
 	private:
 
-		T *_ptr;
+		T *_obj;
 
 	public:
 
-		struct Valid   : Genode::Exception { };
 		struct Invalid : Genode::Exception { };
 
-		Pointer() : _ptr(nullptr) { }
+		Pointer() : _obj(nullptr) { }
 
-		T &deref() const
+		Pointer(T &obj) : _obj(&obj) { }
+
+		T &operator () () const
 		{
-			if (_ptr == nullptr) {
-				throw Invalid(); }
+			if (_obj == nullptr)
+				throw Invalid();
 
-			return *_ptr;
+			return *_obj;
 		}
+};
 
-		void set(T &ptr)
+
+template <typename T>
+class Net::Const_pointer
+{
+	private:
+
+		T const *_obj;
+
+	public:
+
+		struct Invalid : Genode::Exception { };
+
+		Const_pointer() : _obj(nullptr) { }
+
+		Const_pointer(T const &obj) : _obj(&obj) { }
+
+		T const &operator () () const
 		{
-			if (_ptr != nullptr) {
-				throw Valid(); }
+			if (_obj == nullptr)
+				throw Invalid();
 
-			_ptr = &ptr;
+			return *_obj;
 		}
-
-		void unset() { _ptr = nullptr; }
 };
 
 #endif /* _POINTER_H_ */

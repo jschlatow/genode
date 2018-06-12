@@ -31,6 +31,7 @@ namespace Rom_filter {
 	using Genode::Constructible;
 	using Genode::Xml_generator;
 	using Genode::size_t;
+	using Genode::Interface;
 
 	class  Output_buffer;
 	class  Session_component;
@@ -44,7 +45,7 @@ namespace Rom_filter {
 /**
  * Interface used by the sessions to obtain the XML output data
  */
-struct Rom_filter::Output_buffer
+struct Rom_filter::Output_buffer : Interface
 {
 	virtual size_t content_size() const = 0;
 	virtual size_t export_content(char *dst, size_t dst_len) const = 0;
@@ -52,19 +53,21 @@ struct Rom_filter::Output_buffer
 
 
 class Rom_filter::Session_component : public Rpc_object<Genode::Rom_session>,
-                                      public Session_list::Element
+                                      private Session_list::Element
 {
 	private:
 
+		friend class Genode::List<Session_component>;
+
 		Genode::Env &_env;
 
-		Signal_context_capability _sigh;
+		Signal_context_capability _sigh { };
 
 		Output_buffer const &_output_buffer;
 
 		Session_list &_sessions;
 
-		Constructible<Genode::Attached_ram_dataspace> _ram_ds;
+		Constructible<Genode::Attached_ram_dataspace> _ram_ds { };
 
 	public:
 
@@ -77,6 +80,8 @@ class Rom_filter::Session_component : public Rpc_object<Genode::Rom_session>,
 		}
 
 		~Session_component() { _sessions.remove(this); }
+
+		using Session_list::Element::next;
 
 		void notify_client()
 		{
@@ -124,11 +129,11 @@ class Rom_filter::Root : public Genode::Root_component<Session_component>
 
 		Genode::Env   &_env;
 		Output_buffer &_output_buffer;
-		Session_list   _sessions;
+		Session_list   _sessions { };
 
 	protected:
 
-		Session_component *_create_session(const char *args)
+		Session_component *_create_session(const char *)
 		{
 			/*
 			 * We ignore the name of the ROM module requested
@@ -165,7 +170,7 @@ struct Rom_filter::Main : Input_rom_registry::Input_rom_changed_fn,
 
 	Input_rom_registry _input_rom_registry { _env, _heap, *this };
 
-	Genode::Constructible<Genode::Attached_ram_dataspace> _xml_ds;
+	Genode::Constructible<Genode::Attached_ram_dataspace> _xml_ds { };
 
 	size_t _xml_output_len = 0;
 
@@ -176,12 +181,16 @@ struct Rom_filter::Main : Input_rom_registry::Input_rom_changed_fn,
 
 	Genode::Attached_rom_dataspace _config { _env, "config" };
 
+	bool _verbose = false;
+
 	Genode::Signal_handler<Main> _config_handler =
 		{ _env.ep(), *this, &Main::_handle_config };
 
 	void _handle_config()
 	{
 		_config.update();
+
+		_verbose = _config.xml().attribute_value("verbose", false);
 
 		/*
 		 * Create buffer for generated XML data
@@ -269,7 +278,8 @@ void Rom_filter::Main::_evaluate_node(Xml_node node, Xml_generator &xml)
 						condition_satisfied = true;
 				}
 				catch (Input_rom_registry::Nonexistent_input_value) {
-					Genode::warning("could not obtain input value for input ", input_name);
+					if (_verbose)
+						Genode::warning("could not obtain input value for input ", input_name);
 				}
 			}
 
@@ -299,7 +309,8 @@ void Rom_filter::Main::_evaluate_node(Xml_node node, Xml_generator &xml)
 					              input_value);
 				}
 				catch (Input_rom_registry::Nonexistent_input_value) {
-					Genode::warning("could not obtain input value for input ", input_name);
+					if (_verbose)
+						Genode::warning("could not obtain input value for input ", input_name);
 				}
 			}
 
@@ -334,23 +345,13 @@ void Rom_filter::Main::_evaluate_node(Xml_node node, Xml_generator &xml)
 		} else
 
 		if (node.has_type("input")) {
-			typedef Genode::String<128> String;
 
 			Input_name const input_name =
 				node.attribute_value("name", Input_name());
 
-			String const sub_node =
-				node.attribute_value("sub_node", String());
-
-			if (!sub_node.valid())
-				return;
-
 			try {
-				Xml_node input_node = _input_rom_registry.xml(input_name);
-
-				input_node.for_each_sub_node(sub_node.string(),
-				[&] (Xml_node node) { xml.append(node.addr(), node.size()); });
-			} catch (...) { }
+				_input_rom_registry.gen_xml(input_name, xml); }
+			catch (...) { }
 		}
 	};
 
@@ -383,7 +384,6 @@ void Rom_filter::Main::_evaluate()
 				_xml_output_len = xml.used();
 			},
 			[&] () {
-				Genode::log("UPGRADING XML DATASPACE");
 				_xml_ds.construct(_env.ram(), _env.rm(), _xml_ds->size() + UPGRADE);
 			},
 			NUM_ATTEMPTS);

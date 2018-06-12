@@ -62,7 +62,7 @@ void Packet_handler::_link_state()
 void Packet_handler::broadcast_to_clients(Ethernet_frame *eth, Genode::size_t size)
 {
 	/* check whether it's really a broadcast packet */
-	if (eth->dst() == Ethernet_frame::BROADCAST) {
+	if (eth->dst() == Ethernet_frame::broadcast()) {
 		/* iterate through the list of clients */
 		Mac_address_node *node =
 			_vlan.mac_list.first();
@@ -79,30 +79,22 @@ void Packet_handler::handle_ethernet(void* src, Genode::size_t size)
 {
 	try {
 		/* parse ethernet frame header */
-		Ethernet_frame *eth = new (src) Ethernet_frame(size);
-		switch (eth->type()) {
+		Size_guard size_guard(size);
+		Ethernet_frame &eth = Ethernet_frame::cast_from(src, size_guard);
+		switch (eth.type()) {
 		case Ethernet_frame::Type::ARP:
-			if (!handle_arp(eth, size)) return;
+			if (!handle_arp(eth, size_guard)) return;
 			break;
 		case Ethernet_frame::Type::IPV4:
-			if(!handle_ip(eth, size)) return;
+			if (!handle_ip(eth, size_guard)) return;
 			break;
 		default:
 			;
 		}
-
-		broadcast_to_clients(eth, size);
-		finalize_packet(eth, size);
-	} catch(Arp_packet::No_arp_packet) {
-		Genode::warning("Invalid ARP packet!");
-	} catch(Ethernet_frame::No_ethernet_frame) {
-		Genode::warning("Invalid ethernet frame");
-	} catch(Dhcp_packet::No_dhcp_packet) {
-		Genode::warning("Invalid IPv4 packet!");
-	} catch(Ipv4_packet::No_ip_packet) {
-		Genode::warning("Invalid IPv4 packet!");
-	} catch(Udp_packet::No_udp_packet) {
-		Genode::warning("Invalid UDP packet!");
+		broadcast_to_clients(&eth, size);
+		finalize_packet(&eth, size);
+	} catch(Size_guard::Exceeded) {
+		Genode::warning("Packet size guard exceeded!");
 	}
 }
 

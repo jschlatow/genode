@@ -1,11 +1,11 @@
 # 1.28 is broken (SAVEDIR_SORT_INODE)
 
 LICENSE := GPLv3
-VERSION := 1.27
+VERSION := 1.30
 DOWNLOADS := tar.archive
 
-URL(tar) := http://ftp.gnu.org/gnu/tar/tar-$(VERSION).tar.xz
-SHA(tar) := f6e601fa60ec663afd51135c8e4641e5e43ccf58
+URL(tar) := https://ftp.gnu.org/gnu/tar/tar-$(VERSION).tar.xz
+SHA(tar) := f1bf92dbb1e1ab27911a861ea8dde8208ee774866c46c0bb6ead41f4d1f4d2d3
 SIG(tar) := ${URL(tar)}.sig
 KEY(tar) := GNU
 DIR(tar) := src/noux-pkg/tar

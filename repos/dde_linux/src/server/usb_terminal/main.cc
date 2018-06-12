@@ -87,7 +87,7 @@ struct Usb::Pl2303_driver : Completion
 		Genode::log("Manufacturer     : ", Cstring(_device.manufactorer_string.to_char(buffer, BUF)));
 		Genode::log("Product          : ", Cstring(_device.product_string.to_char(buffer, BUF)));
 
-		Interface &iface = _device.interface(0);
+		Usb::Interface &iface = _device.interface(0);
 		iface.claim();
 
 		/* undocumented magic, taken from Linux and GRUB */
@@ -175,7 +175,7 @@ struct Usb::Pl2303_driver : Completion
 
 	void bulk_packet(Packet_descriptor &p)
 	{
-		Interface iface = _device.interface(0);
+		Usb::Interface iface = _device.interface(0);
 
 		/* error or write packet */
 		if (!p.succeded || !p.read_transfer()) {
@@ -214,9 +214,9 @@ struct Usb::Pl2303_driver : Completion
 	{
 		num_bytes = min(num_bytes, MAX_PACKET_SIZE);
 
-		Interface         &iface = _device.interface(0);
-		Endpoint          &ep    = iface.endpoint(OUT);
-		Packet_descriptor  p     = iface.alloc(num_bytes);
+		Usb::Interface   &iface = _device.interface(0);
+		Endpoint         &ep    = iface.endpoint(OUT);
+		Packet_descriptor p     = iface.alloc(num_bytes);
 
 		memcpy(iface.content(p), dst, num_bytes);
 		iface.bulk_transfer(p, ep, false, this);
@@ -252,18 +252,20 @@ class Terminal::Session_component : public Rpc_object<Session, Session_component
 			_driver(driver)
 		{ }
 
-		void read_avail_sigh(Signal_context_capability sigh)
+		void read_avail_sigh(Signal_context_capability sigh) override
 		{
 			_driver.read_avail_sigh(sigh);
 		}
 
-		void connected_sigh(Signal_context_capability sigh)
+		void connected_sigh(Signal_context_capability sigh) override
 		{
 			_driver.connected_sigh(sigh);
 		}
 
-		Size size()  { return Size(0, 0); }
-		bool avail() { return _driver.avail(); }
+		void size_changed_sigh(Signal_context_capability) override { }
+
+		Size size()  override { return Size(0, 0); }
+		bool avail() override { return _driver.avail(); }
 
 		size_t _read(size_t dst_len)
 		{
@@ -289,8 +291,8 @@ class Terminal::Session_component : public Rpc_object<Session, Session_component
 
 		Dataspace_capability _dataspace() { return _io_buffer.cap(); }
 
-		size_t read(void *buf, size_t) { return 0; }
-		size_t write(void const *buf, size_t) { return 0; }
+		size_t read(void *buf, size_t) override { return 0; }
+		size_t write(void const *buf, size_t) override { return 0; }
 };
 
 

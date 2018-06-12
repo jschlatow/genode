@@ -19,13 +19,15 @@
 #include <component.h>
 
 using namespace Net;
+using namespace Genode;
 
-bool Session_component::handle_arp(Ethernet_frame *eth, Genode::size_t size)
+
+bool Session_component::handle_arp(Ethernet_frame &eth,
+                                   Size_guard     &size_guard)
 {
-	Arp_packet *arp =
-		new (eth->data<void>()) Arp_packet(size - sizeof(Ethernet_frame));
-	if (arp->ethernet_ipv4() &&
-		arp->opcode() == Arp_packet::REQUEST) {
+	Arp_packet &arp = eth.data<Arp_packet>(size_guard);
+	if (arp.ethernet_ipv4() &&
+		arp.opcode() == Arp_packet::REQUEST) {
 
 		/*
 		 * 'Gratuitous ARP' broadcast messages are used to announce newly created
@@ -35,35 +37,34 @@ bool Session_component::handle_arp(Ethernet_frame *eth, Genode::size_t size)
 		 * The simplest solution to this problem is to just drop those messages,
 		 * since they are not really necessary.
 		 */
-		 if (arp->src_ip() == arp->dst_ip())
+		 if (arp.src_ip() == arp.dst_ip())
 			return false;
 
 		Ipv4_address_node *node = vlan().ip_tree.first();
 		if (node)
-			node = node->find_by_address(arp->dst_ip());
+			node = node->find_by_address(arp.dst_ip());
 		if (!node) {
-			arp->src_mac(_nic.mac());
+			arp.src_mac(_nic.mac());
 		}
 	}
 	return true;
 }
 
 
-bool Session_component::handle_ip(Ethernet_frame *eth, Genode::size_t size)
+bool Session_component::handle_ip(Ethernet_frame &eth,
+                                  Size_guard     &size_guard)
 {
-	Ipv4_packet *ip =
-		new (eth->data<void>()) Ipv4_packet(size - sizeof(Ethernet_frame));
+	Ipv4_packet &ip = eth.data<Ipv4_packet>(size_guard);
+	if (ip.protocol() == Ipv4_packet::Protocol::UDP) {
 
-	if (ip->protocol() == Ipv4_packet::Protocol::UDP)
-	{
-		Udp_packet *udp = new (ip->data<void>())
-			Udp_packet(size - sizeof(Ipv4_packet));
-		if (Dhcp_packet::is_dhcp(udp)) {
-			Dhcp_packet *dhcp = new (udp->data<void>())
-				Dhcp_packet(size - sizeof(Ipv4_packet) - sizeof(Udp_packet));
-			if (dhcp->op() == Dhcp_packet::REQUEST) {
-				dhcp->broadcast(true);
-				udp->update_checksum(ip->src(), ip->dst());
+		Udp_packet &udp = ip.data<Udp_packet>(size_guard);
+		if (Dhcp_packet::is_dhcp(&udp)) {
+
+			Dhcp_packet &dhcp = udp.data<Dhcp_packet>(size_guard);
+			if (dhcp.op() == Dhcp_packet::REQUEST) {
+
+				dhcp.broadcast(true);
+				udp.update_checksum(ip.src(), ip.dst());
 			}
 		}
 	}
@@ -72,7 +73,7 @@ bool Session_component::handle_ip(Ethernet_frame *eth, Genode::size_t size)
 
 
 void Session_component::finalize_packet(Ethernet_frame *eth,
-                                                    Genode::size_t size)
+                                        Genode::size_t  size)
 {
 	Mac_address_node *node = vlan().mac_tree.first();
 	if (node)
@@ -154,3 +155,13 @@ Session_component::~Session_component() {
 	vlan().mac_list.remove(&_mac_node);
 	_unset_ipv4_node();
 }
+
+
+Net::Root::Root(Genode::Env &env, Net::Nic &nic, Genode::Allocator &md_alloc,
+                Genode::Xml_node config)
+:
+	Genode::Root_component<Session_component>(env.ep(), md_alloc),
+	_mac_alloc(Mac_address(config.attribute_value("mac", Mac_address(DEFAULT_MAC)))),
+	_env(env),
+	_nic(nic),
+	_config(config) { }

@@ -33,6 +33,10 @@ struct Noux::Terminal_io_channel : Io_channel
 
 	Signal_handler<Terminal_io_channel> _read_avail_handler;
 
+	Signal_handler<Terminal_io_channel> _resize_handler;
+
+	enum { EOF = 4 };
+
 	bool eof = false;
 
 	enum Type { STDIN, STDOUT, STDERR } type;
@@ -44,6 +48,7 @@ struct Noux::Terminal_io_channel : Io_channel
 	:
 		_terminal(terminal),
 		_read_avail_handler(ep, *this, &Terminal_io_channel::_handle_read_avail),
+		_resize_handler    (ep, *this, &Terminal_io_channel::_handle_resize),
 		type(type)
 	{
 		/*
@@ -59,10 +64,11 @@ struct Noux::Terminal_io_channel : Io_channel
 		 */
 		if (type == STDIN) {
 			terminal.read_avail_sigh(_read_avail_handler);
+			terminal.size_changed_sigh(_resize_handler);
 		}
 	}
 
-	bool write(Sysio &sysio, size_t &offset) override
+	bool write(Sysio &sysio) override
 	{
 		size_t const count = min(sysio.write_in.count,
 		                         sizeof(sysio.write_in.chunk));
@@ -70,7 +76,6 @@ struct Noux::Terminal_io_channel : Io_channel
 		_terminal.write(sysio.write_in.chunk, count);
 
 		sysio.write_out.count = count;
-		offset = count;
 
 		return true;
 	}
@@ -98,8 +103,6 @@ struct Noux::Terminal_io_channel : Io_channel
 		     sysio.read_out.count++) {
 
 			char c = read_buffer.get();
-
-			enum { EOF = 4 };
 
 			if (c == EOF) {
 
@@ -211,13 +214,23 @@ struct Noux::Terminal_io_channel : Io_channel
 			enum { INTERRUPT = 3 };
 
 			if (c == INTERRUPT) {
-				Io_channel::invoke_all_interrupt_handlers();
+				Io_channel::invoke_all_interrupt_handlers(Sysio::SIG_INT);
 			} else {
 				read_buffer.add(c);
 			}
 		}
 
 		Io_channel::invoke_all_notifiers();
+	}
+
+	void _handle_resize()
+	{
+		/* respond to terminal-close event */
+		Terminal::Session::Size const size = _terminal.size();
+		if (_terminal.size().columns()*_terminal.size().lines() == 0)
+			read_buffer.add(EOF);
+
+		Io_channel::invoke_all_interrupt_handlers(Sysio::SIG_WINCH);
 	}
 };
 

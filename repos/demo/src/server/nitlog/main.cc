@@ -26,8 +26,8 @@
 /*
  * Nitpicker's graphics backend
  */
-#include <nitpicker_gfx/text_painter.h>
 #include <nitpicker_gfx/box_painter.h>
+#include <nitpicker_gfx/tff_font.h>
 
 
 enum { LOG_W = 80 };  /* number of visible characters per line */
@@ -41,10 +41,9 @@ typedef Genode::Color               Color;
 
 
 /*
- * Font initialization
+ * Builtin font
  */
-extern char _binary_mono_tff_start;
-Font default_font(&_binary_mono_tff_start);
+extern char _binary_mono_tff_start[];
 
 
 namespace Nitlog {
@@ -62,7 +61,7 @@ namespace Nitlog {
 /**
  * Pixel-type-independent interface to graphics backend
  */
-struct Canvas_base
+struct Canvas_base : Genode::Interface
 {
 	virtual void draw_string(Point, Font const &, Color, char const *) = 0;
 
@@ -89,7 +88,8 @@ class Canvas : public Canvas_base
 		void draw_string(Point p, Font const &font, Color color,
 		                 char const *sstr)
 		{
-			Text_painter::paint(_surface, p, font, color, sstr);
+			Text_painter::paint(_surface, Text_painter::Position(p.x(), p.y()),
+			                    font, color, sstr);
 		}
 
 		void draw_box(Rect rect, Color color)
@@ -108,10 +108,10 @@ class Log_entry
 		char  _label[64];
 		char  _text[LOG_W];
 		char  _attr[LOG_W];
-		Color _color;
-		int   _label_len;
-		int   _text_len;
-		int   _id;
+		Color _color { };
+		int   _label_len = 0;
+		int   _text_len  = 0;
+		int   _id        = 0;
 
 	public:
 
@@ -145,7 +145,7 @@ class Log_entry
 		 * marks a transition of output from one session to another. This
 		 * information is used to separate sessions visually.
 		 */
-		void draw(Canvas_base &canvas, int y, int new_section = false)
+		void draw(Canvas_base &canvas, Font const &font, int y, int new_section = false)
 		{
 			Color label_fgcol = Color(Genode::min(255, _color.r + 200),
 			                          Genode::min(255, _color.g + 200),
@@ -155,12 +155,12 @@ class Log_entry
 			Color text_bgcol  = Color(_color.r / 2, _color.g / 2, _color.b / 2);
 
 			/* calculate label dimensions */
-			int label_w = default_font.str_w(_label);
-			int label_h = default_font.str_h(_label);
+			int label_w = font.string_width(_label).decimal();
+			int label_h = font.bounding_box().h();
 
 			if (new_section) {
 				canvas.draw_box(Rect(Point(1, y), Area(label_w + 2, label_h - 1)), label_bgcol);
-				canvas.draw_string(Point(1, y - 1), default_font, label_fgcol, _label);
+				canvas.draw_string(Point(1, y - 1), font, label_fgcol, _label);
 				canvas.draw_box(Rect(Point(1, y + label_h - 1), Area(label_w + 2, 1)), Color(0, 0, 0));
 				canvas.draw_box(Rect(Point(label_w + 2, y), Area(1, label_h - 1)), _color);
 				canvas.draw_box(Rect(Point(label_w + 3, y), Area(1, label_h - 1)), Color(0, 0, 0));
@@ -170,7 +170,7 @@ class Log_entry
 				canvas.draw_box(Rect(Point(1, y), Area(1000, label_h)), text_bgcol);
 
 			/* draw log text */
-			canvas.draw_string(Point(label_w + 6, y), default_font, text_fgcol, _text);
+			canvas.draw_string(Point(label_w + 6, y), font, text_fgcol, _text);
 		}
 
 		/**
@@ -186,22 +186,22 @@ class Log_window
 	private:
 
 		Canvas_base &_canvas;
-		Log_entry    _entries[LOG_H]; /* log entries                           */
-		int          _dst_entry;      /* destination entry for next write      */
-		int          _view_pos;       /* current view port on the entry array  */
-		bool         _scroll;         /* scroll mode (when text hits bottom)   */
-		char         _attr[LOG_W];    /* character attribute buffer            */
-		bool         _dirty;          /* schedules the log window for a redraw */
-		Genode::Lock _dirty_lock;
+		Font  const &_font;
+		Log_entry    _entries[LOG_H];    /* log entries                           */
+		int          _dst_entry = 0;     /* destination entry for next write      */
+		int          _view_pos  = 0;     /* current view port on the entry array  */
+		bool         _scroll    = false; /* scroll mode (when text hits bottom)   */
+		char         _attr[LOG_W];       /* character attribute buffer            */
+		bool         _dirty     = true;  /* schedules the log window for a redraw */
+		Genode::Lock _dirty_lock { };
 
 	public:
 
 		/**
 		 * Constructor
 		 */
-		Log_window(Canvas_base &canvas)
-		: _canvas(canvas), _dst_entry(0), _view_pos(0), _dirty(true)
-		{ }
+		Log_window(Canvas_base &canvas, Font const &font)
+		: _canvas(canvas), _font(font) { }
 
 		/**
 		 * Write log entry
@@ -243,12 +243,12 @@ class Log_window
 				_dirty = false;
 			}
 
-			int line_h = default_font.str_h(" ");
+			int line_h = _font.bounding_box().h();
 			int curr_session_id = -1;
 
 			for (int i = 0, y = 0; i < LOG_H; i++, y += line_h) {
 				Log_entry *le = &_entries[(i + _view_pos) % LOG_H];
-				le->draw(_canvas, y, curr_session_id != le->id());
+				le->draw(_canvas, _font, y, curr_session_id != le->id());
 				curr_session_id = le->id();
 			}
 
@@ -357,7 +357,8 @@ class Log_view
 		Nitpicker::Area                 _size;
 		Nitpicker::Session::View_handle _handle;
 
-		typedef Nitpicker::Session::Command Command;
+		typedef Nitpicker::Session::Command     Command;
+		typedef Nitpicker::Session::View_handle View_handle;
 
 	public:
 
@@ -374,7 +375,7 @@ class Log_view
 
 		void top()
 		{
-			_nitpicker.enqueue<Command::To_front>(_handle);
+			_nitpicker.enqueue<Command::To_front>(_handle, View_handle());
 			_nitpicker.execute();
 		}
 
@@ -395,9 +396,13 @@ struct Nitlog::Main
 {
 	Env &_env;
 
+	Tff_font::Static_glyph_buffer<4096> _glyph_buffer { };
+
+	Tff_font _font { _binary_mono_tff_start, _glyph_buffer };
+
 	/* calculate size of log view in pixels */
-	unsigned const _win_w = default_font.str_w(" ") * LOG_W + 2;
-	unsigned const _win_h = default_font.str_h(" ") * LOG_H + 2;
+	unsigned const _win_w = _font.bounding_box().w() * LOG_W + 2;
+	unsigned const _win_h = _font.bounding_box().h() * LOG_H + 2;
 
 	/* init sessions to the required external services */
 	Nitpicker::Connection _nitpicker { _env };
@@ -419,7 +424,7 @@ struct Nitlog::Main
 	Canvas<Pixel_rgb565> _canvas { _fb_ds.local_addr<Pixel_rgb565>(),
 	                               ::Area(_win_w, _win_h) };
 
-	Log_window _log_window { _canvas };
+	Log_window _log_window { _canvas, _font };
 
 	void _init_canvas()
 	{
@@ -443,7 +448,10 @@ struct Nitlog::Main
 
 	Attached_dataspace _ev_ds { _env.rm(), _nitpicker.input()->dataspace() };
 
-	Nitpicker::Point _old_mouse_pos;
+	Nitpicker::Point const _initial_mouse_pos { -1, -1 };
+
+	Nitpicker::Point _old_mouse_pos = _initial_mouse_pos;
+
 	unsigned _key_cnt = 0;
 
 	Signal_handler<Main> _input_handler {
@@ -457,20 +465,24 @@ struct Nitlog::Main
 
 			Input::Event const &ev = ev_buf[i];
 
-			if (ev.type() == Input::Event::PRESS)   _key_cnt++;
-			if (ev.type() == Input::Event::RELEASE) _key_cnt--;
-
-			Nitpicker::Point mouse_pos(ev.ax(), ev.ay());
+			if (ev.press())   _key_cnt++;
+			if (ev.release()) _key_cnt--;
 
 			/* move view */
-			if (ev.type() == Input::Event::MOTION && _key_cnt > 0)
-				_view.move(_view.pos() + mouse_pos - _old_mouse_pos);
+			ev.handle_absolute_motion([&] (int x, int y) {
+
+				Nitpicker::Point const mouse_pos(x, y);
+
+				if (_key_cnt && _old_mouse_pos != _initial_mouse_pos)
+					_view.move(_view.pos() + mouse_pos - _old_mouse_pos);
+
+				_old_mouse_pos = mouse_pos;
+			});
 
 			/* find selected view and bring it to front */
-			if (ev.type() == Input::Event::PRESS && _key_cnt == 1)
+			if (ev.press() && _key_cnt == 1)
 				_view.top();
 
-			_old_mouse_pos = mouse_pos;
 		}
 	}
 
@@ -498,8 +510,5 @@ struct Nitlog::Main
 
 void Component::construct(Genode::Env &env)
 {
-	/* XXX execute constructors of global statics */
-	env.exec_static_constructors();
-
 	static Nitlog::Main main(env);
 }

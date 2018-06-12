@@ -22,9 +22,36 @@
 #include <interface.h>
 #include <ipv4_address_prefix.h>
 
-namespace Net { class Uplink; }
+namespace Net {
 
-class Net::Uplink : public Nic::Packet_allocator,
+	using Domain_name = Genode::String<160>;
+	class Uplink_base;
+	class Uplink;
+}
+
+
+class Net::Uplink_base
+{
+	protected:
+
+		struct Interface_policy : Net::Interface_policy
+		{
+			/***************************
+			 ** Net::Interface_policy **
+			 ***************************/
+
+			Domain_name determine_domain_name() const override { return Genode::Cstring("uplink"); };
+			void handle_config(Configuration const &) override { }
+		};
+
+		Interface_policy _intf_policy { };
+
+		virtual ~Uplink_base() { }
+};
+
+
+class Net::Uplink : public Uplink_base,
+                    public Nic::Packet_allocator,
                     public Nic::Connection,
                     public Interface
 {
@@ -35,29 +62,39 @@ class Net::Uplink : public Nic::Packet_allocator,
 			BUF_SIZE = Nic::Session::QUEUE_SIZE * PKT_SIZE,
 		};
 
+		Genode::Session_label    const &_label;
+		bool                            _link_state_ { false };
+		Genode::Signal_handler<Uplink>  _link_state_handler;
+
 		Ipv4_address_prefix _read_interface();
+
+		void _handle_link_state();
 
 
 		/********************
 		 ** Net::Interface **
 		 ********************/
 
-		Packet_stream_sink   &_sink()   { return *rx(); }
-		Packet_stream_source &_source() { return *tx(); }
+		Packet_stream_sink   &_sink()       override { return *rx(); }
+		Packet_stream_source &_source()     override { return *tx(); }
+		bool                  _link_state() override { return _link_state_; }
 
 	public:
 
-		Uplink(Genode::Env        &env,
-		       Timer::Connection  &timer,
-		       Genode::Allocator  &alloc,
-		       Configuration      &config);
+		Uplink(Genode::Env                 &env,
+		       Timer::Connection           &timer,
+		       Genode::Allocator           &alloc,
+		       Interface_list              &interfaces,
+		       Configuration               &config,
+		       Genode::Session_label const &label);
 
 
 		/***************
 		 ** Accessors **
 		 ***************/
 
-		Mac_address const &router_mac() const { return _router_mac; }
+		Mac_address           const &router_mac() const { return _router_mac; }
+		Genode::Session_label const &label()      const { return _label; }
 };
 
 #endif /* _UPLINK_H_ */

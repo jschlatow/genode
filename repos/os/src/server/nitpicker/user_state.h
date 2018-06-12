@@ -27,9 +27,15 @@
 namespace Nitpicker { class User_state; }
 
 
-class Nitpicker::User_state : public Focus_controller
+class Nitpicker::User_state
 {
 	private:
+
+		/*
+		 * Noncopyable
+		 */
+		User_state(User_state const &);
+		User_state &operator = (User_state const &);
 
 		/*
 		 * Number of currently pressed keys. This counter is used to determine
@@ -117,9 +123,7 @@ class Nitpicker::User_state : public Focus_controller
 							xml.attribute("key", Input::key_name((Input::Keycode)i)); });
 			}
 
-		} _key_array;
-
-		bool _focus_change_permitted(View_owner const &caller) const;
+		} _key_array { };
 
 		void _focus_view_owner_via_click(View_owner &);
 
@@ -160,34 +164,12 @@ class Nitpicker::User_state : public Focus_controller
 		 * \param focus  exported focus information, to be consumed by the
 		 *               view stack to tailor its view drawing operations
 		 */
-		User_state(Focus &focus, Global_keys &global_keys, View_stack &view_stack)
+		User_state(Focus &focus, Global_keys &global_keys, View_stack &view_stack,
+		           Point initial_pointer_pos)
 		:
-			_focus(focus), _global_keys(global_keys), _view_stack(view_stack)
+			_focus(focus), _global_keys(global_keys), _view_stack(view_stack),
+			_pointer_pos(initial_pointer_pos)
 		{ }
-
-
-		/********************************
-		 ** Focus_controller interface **
-		 ********************************/
-
-		void focus_view_owner(View_owner const &caller,
-		                      View_owner &next_focused) override
-		{
-			/* check permission by comparing session labels */
-			if (!_focus_change_permitted(caller)) {
-				warning("unauthorized focus change requesed by ", caller.label());
-				return;
-			}
-
-			/*
-			 * To avoid changing the focus in the middle of a drag operation,
-			 * we cannot perform the focus change immediately. Instead, it
-			 * comes into effect via the 'apply_pending_focus_change()' method
-			 * called the next time when the user input is handled and no drag
-			 * operation is in flight.
-			 */
-			_next_focused = &next_focused;
-		}
 
 
 		/****************************************

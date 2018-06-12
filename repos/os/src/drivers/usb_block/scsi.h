@@ -98,7 +98,14 @@ Genode::uint64_t Scsi::be64(Genode::uint64_t val)
 
 struct Scsi::Inquiry_response : Genode::Mmio
 {
-	enum { LENGTH = 36 /* default */ + 20 /* drive serial number and vendor unique */};
+	/*
+	 * Minimum response length is 36 bytes.
+	 *
+	 * Some devices have problems when more is requested, e.g.: 
+	 * - hama sd card reader (05e3:0738)
+	 * - delock sata adapter (174c:5106)
+	 */
+	enum { LENGTH = 36 };
 
 	struct Dt  : Register<0x0, 8> { }; /* device type */
 	struct Rm  : Register<0x1, 8> { struct Rmb : Bitfield<7, 1> { }; }; /* removable media */
@@ -176,18 +183,18 @@ struct Scsi::Capacity_response_10 : Genode::Mmio
 {
 	enum { LENGTH = 8 };
 
-	struct Bc : Register<0x0, 32> { };
-	struct Bs : Register<0x4, 32> { };
+	struct Lba : Register<0x0, 32> { };
+	struct Bs  : Register<0x4, 32> { };
 
 	Capacity_response_10(addr_t addr) : Mmio(addr) { }
 
-	uint32_t block_count() const { return be32(read<Bc>()); }
-	uint32_t block_size()  const { return be32(read<Bs>()); }
+	uint32_t last_block() const { return be32(read<Lba>()); }
+	uint32_t block_size() const { return be32(read<Bs>()); }
 
 	void dump()
 	{
 		Genode::log("--- Dump READ_CAPACITY_10 data ---");
-		Genode::log("Bc: ", Genode::Hex(block_count()));
+		Genode::log("Lba: ", Genode::Hex(last_block()));
 		Genode::log("Bs: ", Genode::Hex(block_size()));
 	}
 };
@@ -197,18 +204,18 @@ struct Scsi::Capacity_response_16 : Genode::Mmio
 {
 	enum { LENGTH = 32 };
 
-	struct Bc : Register<0x0, 64> { };
-	struct Bs : Register<0x8, 32> { };
+	struct Lba : Register<0x0, 64> { };
+	struct Bs  : Register<0x8, 32> { };
 
 	Capacity_response_16(addr_t addr) : Mmio(addr) { }
 
-	uint64_t block_count() const { return be64(read<Bc>()); }
-	uint32_t block_size()  const { return be32(read<Bs>()); }
+	uint64_t last_block() const { return be64(read<Lba>()); }
+	uint32_t block_size() const { return be32(read<Bs>()); }
 
 	void dump()
 	{
 		Genode::log("--- Dump READ_CAPACITY_16 data ---");
-		Genode::log("Bc: ", Genode::Hex(block_count()));
+		Genode::log("Lba: ", Genode::Hex(last_block()));
 		Genode::log("Bs: ", Genode::Hex(block_size()));
 	}
 };

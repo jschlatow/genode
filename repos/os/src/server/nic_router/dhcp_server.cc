@@ -14,6 +14,7 @@
 /* local includes */
 #include <dhcp_server.h>
 #include <interface.h>
+#include <domain.h>
 
 using namespace Net;
 using namespace Genode;
@@ -24,22 +25,31 @@ using namespace Genode;
  *****************/
 
 Dhcp_server::Dhcp_server(Xml_node            const  node,
+                         Domain              const &domain,
                          Allocator                 &alloc,
-                         Ipv4_address_prefix const &interface)
+                         Ipv4_address_prefix const &interface,
+                         Domain_tree               &domains)
 :
 	_dns_server(node.attribute_value("dns_server", Ipv4_address())),
-	_ip_lease_time(_init_ip_lease_time(node)),
+	_dns_server_from(_init_dns_server_from(node, domains)),
+	_ip_lease_time  (_init_ip_lease_time(node)),
 	_ip_first(node.attribute_value("ip_first", Ipv4_address())),
 	_ip_last(node.attribute_value("ip_last", Ipv4_address())),
 	_ip_first_raw(_ip_first.to_uint32_little_endian()),
-	_ip_count(_ip_last.to_uint32_little_endian() - _ip_first_raw),
+	_ip_count(_ip_last.to_uint32_little_endian() - _ip_first_raw + 1),
 	_ip_alloc(alloc, _ip_count)
 {
-	if (!interface.prefix_matches(_ip_first) ||
-	    !interface.prefix_matches(_ip_last) ||
-	    interface.address.is_in_range(_ip_first, _ip_last))
-	{
-		throw Invalid();
+	if (!interface.prefix_matches(_ip_first)) {
+		log("[", domain, "] first IP of DHCP server does not match domain subnet");
+		throw Domain::Invalid();
+	}
+	if (!interface.prefix_matches(_ip_last)) {
+		log("[", domain, "] last IP of DHCP server does not match domain subnet");
+		throw Domain::Invalid();
+	}
+	if (interface.address.is_in_range(_ip_first, _ip_last)) {
+		log("[", domain, "] IP range of DHCP server contains IP address of domain");
+		throw Domain::Invalid();
 	}
 }
 
@@ -50,8 +60,6 @@ Microseconds Dhcp_server::_init_ip_lease_time(Xml_node const node)
 		node.attribute_value("ip_lease_time_sec", 0UL);
 
 	if (!ip_lease_time_sec) {
-		warning("fall back to default ip_lease_time_sec=\"",
-		        (unsigned long)DEFAULT_IP_LEASE_TIME_SEC, "\"");
 		ip_lease_time_sec = DEFAULT_IP_LEASE_TIME_SEC;
 	}
 	return Microseconds((unsigned long)ip_lease_time_sec * 1000 * 1000);
@@ -61,8 +69,11 @@ Microseconds Dhcp_server::_init_ip_lease_time(Xml_node const node)
 void Dhcp_server::print(Output &output) const
 {
 	if (_dns_server.valid()) {
-		Genode::print(output, "DNS server ", _dns_server, " ");
+		Genode::print(output, "DNS server ", _dns_server, ", ");
 	}
+	try { Genode::print(output, "DNS server from ", _dns_server_from(), ", "); }
+	catch (Pointer<Domain>::Invalid) { }
+
 	Genode::print(output, "IP first ", _ip_first,
 	                        ", last ", _ip_last,
 	                       ", count ", _ip_count,
@@ -82,9 +93,53 @@ Ipv4_address Dhcp_server::alloc_ip()
 }
 
 
+void Dhcp_server::alloc_ip(Ipv4_address const &ip)
+{
+	try { _ip_alloc.alloc_addr(ip.to_uint32_little_endian() - _ip_first_raw); }
+	catch (Bit_allocator_dynamic::Range_conflict)   { throw Alloc_ip_failed(); }
+	catch (Bit_array_dynamic::Invalid_index_access) { throw Alloc_ip_failed(); }
+}
+
+
 void Dhcp_server::free_ip(Ipv4_address const &ip)
 {
 	_ip_alloc.free(ip.to_uint32_little_endian() - _ip_first_raw);
+}
+
+
+Pointer<Domain> Dhcp_server::_init_dns_server_from(Genode::Xml_node const  node,
+                                                   Domain_tree            &domains)
+{
+	if (_dns_server.valid()) {
+		return Pointer<Domain>();
+	}
+	Domain_name dns_server_from =
+		node.attribute_value("dns_server_from", Domain_name());
+
+	if (dns_server_from == Domain_name()) {
+		return Pointer<Domain>();
+	}
+	try { return domains.find_by_name(dns_server_from); }
+	catch (Domain_tree::No_match) { throw Invalid(); }
+}
+
+
+Ipv4_address const &Dhcp_server::dns_server() const
+{
+	try { return _dns_server_from().ip_config().dns_server; }
+	catch (Pointer<Domain>::Invalid) { }
+	return _dns_server;
+}
+
+
+bool Dhcp_server::ready() const
+{
+	if (_dns_server.valid()) {
+		return true;
+	}
+	try { return _dns_server_from().ip_config().valid; }
+	catch (Pointer<Domain>::Invalid) { }
+	return true;
 }
 
 
@@ -149,8 +204,8 @@ void Dhcp_allocation::_handle_timeout(Duration)
 Dhcp_allocation &
 Dhcp_allocation_tree::find_by_mac(Mac_address const &mac) const
 {
-	if (!first()) {
+	if (!_tree.first()) {
 		throw No_match(); }
 
-	return first()->find_by_mac(mac);
+	return _tree.first()->find_by_mac(mac);
 }

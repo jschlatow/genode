@@ -140,7 +140,7 @@ class Terminal::Decoder
 					return (index <= _index) ? _entries[index] : Invalid_entry();
 				}
 
-		} _escape_stack;
+		} _escape_stack { };
 
 		enum State {
 			STATE_IDLE,
@@ -175,6 +175,22 @@ class Terminal::Decoder
 			_number = 0;
 		}
 
+		bool _sgr(int const p)
+		{
+			if (p < 30)
+				return (_screen.sgr(p), true);
+
+			/* p starting with digit '3' -> set foreground color */
+			if (starts_with_digit(3, p))
+				return (_screen.setaf(remove_first_digit(p)), true);
+
+			/* p starting with digit '4' -> set background color */
+			if (starts_with_digit(4, p))
+				return (_screen.setab(remove_first_digit(p)), true);
+
+			return false;
+		}
+
 		/**
 		 * Try to handle single-element escape sequence
 		 *
@@ -184,9 +200,13 @@ class Terminal::Decoder
 		{
 			switch (_escape_stack[0].value) {
 			case '7': return (_screen.sc(),  true);
-			case 'c': return (_screen.ris(), true);
+			case '8': return (_screen.rc(),  true);
+			case 'E': return (_screen.nel(), true);
 			case 'H': return (_screen.hts(), true);
-			case 'M': return (_screen.ri(),  true);
+			case 'M': return (_screen.cuu1(), true);
+			case '=': return true; /* follows 'smkx' */
+			case '>': return true; /* follows 'rmkx' */
+			case 'c': return true; /* prefixes 'rs2' */
 			default:  return false;
 			}
 		}
@@ -198,32 +218,21 @@ class Terminal::Decoder
 			case '[':
 
 				switch (_escape_stack[1].value) {
-				case 'A': return (_screen.cuu1(), true);
 				case 'C': return (_screen.cuf(1), true);
-				case 'c': return (_screen.u9(),   true);
 				case 'H': return (_screen.home(), true);
 				case 'J': return (_screen.ed(),   true);
 				case 'K': return (_screen.el(),   true);
 				case 'L': return (_screen.il(1),  true);
 				case 'M': return (_screen.dl(1),  true);
 				case 'P': return (_screen.dch(1), true);
-				case '@': return (_screen.ich(1), true);
-				case 'R': return (_screen.cpr(),  true);
+				case 'Z': return (_screen.cbt(),  true);
 				case 'm': return (_screen.sgr0(), true);
 				default:  return false;
 				}
 				break;
 
-			case ']':
-
-				switch (_escape_stack[1].value) {
-				case 'R': return (_screen.oc(), true);
-				default : return false;
-				}
-
-			case 8:
-
-				return (_escape_stack[1].value == 'A') && (_screen.rc(), true);
+			case ')':
+				return (_escape_stack[1].value == 0) && (_screen.is2(), true);
 
 			default: return false;
 			}
@@ -244,32 +253,21 @@ class Terminal::Decoder
 			char const command = _escape_stack[2].value;
 
 			switch (command) {
-			case 'm':
-				if (p1 < 30)
-					return (_screen.sgr(p1), true);
-
-				/* p1 starting with digit '3' -> set foreground color */
-				if (starts_with_digit(3, p1))
-					return (_screen.setaf(remove_first_digit(p1)), true);
-
-				/* p1 starting with digit '4' -> set background color */
-				if (starts_with_digit(4, p1))
-					return (_screen.setab(remove_first_digit(p1)), true);
-
+			case 'm': return _sgr(p1);
 			case 'D': return (_screen.cub(p1), true);
-			case 'd': return (_screen.vpa(p1), true);
+			case 'A': return (_screen.cuu(p1), true);
+			case 'B': return (_screen.cud(p1), true);
 			case 'g': return (p1 == 3) && (_screen.tbc(), true);
-			case 'G': return (_screen.hpa(p1), true);
-			case 'h': return (p1 == 4) && (_screen.smir(), true);
-			case 'K': return ((p1 == 0) && (_screen.el(),  true))
-			              || ((p1 == 1) && (_screen.el1(), true));
-			case 'l': return (p1 == 4) && (_screen.rmir(), true);
+			case 'h': return ((p1 ==  4) && (_screen.smir(), true))
+			              || ((p1 == 34) && (_screen.cnorm(), true));
+			case 'K': return ((p1 ==  0) && (_screen.el(),  true))
+			              || ((p1 ==  1) && (_screen.el1(), true));
+			case 'l': return ((p1 ==  4) && (_screen.rmir(), true))
+			              || ((p1 == 34) && (_screen.cvvis(), true));
 			case 'L': return (_screen.il(p1), true);
 			case 'M': return (_screen.dl(p1), true);
-			case 'n': return (p1 == 6) && (_screen.u7(), true);
 			case 'P': return (_screen.dch(p1), true);
 			case '@': return (_screen.ich(p1), true);
-			case 'X': return (_screen.ech(p1), true);
 			case 'C': return (_screen.cuf(p1), true);
 
 			default: return false;
@@ -292,18 +290,25 @@ class Terminal::Decoder
 
 			switch (command) {
 			case 'l':
-				if (p1 ==  7) return (_screen.rmam(),  true);
-				if (p1 == 25) return (_screen.civis(), true);
+				if (p1 ==    1) return (_screen.rmkx(),  true);
+				if (p1 ==   25) return (_screen.civis(), true);
+				if (p1 == 1000) return (_screen.rs2(),   true);
+				if (p1 == 1049) return (_screen.rmcup(), true);
+				if (p1 == 2004) {
+					/* disable bracketed paste */
+					Genode::warning("Sequence '[?2004l' is not implemented");
+					return true;
+				}
 				return false;
 			case 'h':
-				if (p1 ==  7) return (_screen.smam(),  true);
-				if (p1 == 25) return (_screen.cnorm(), true);
-				return false;
-			case 'c':
-				if (p1 == 0) return true; /* appended to cnorm */
-				if (p1 == 1) return true; /* appended to civis */
-				if (p1 == 6) return (_screen.u8(),    true);
-				if (p1 == 8) return (_screen.cvvis(), true);
+				if (p1 ==    1) return (_screen.smkx(),  true);
+				if (p1 ==   25) return (_screen.cnorm(), true);
+				if (p1 == 1049) return (_screen.smcup(), true);
+				if (p1 == 2004) {
+					/* enable bracketed paste */
+					Genode::warning("Sequence '[?2004h' is not implemented");
+					return true;
+				}
 				return false;
 			default: return false;
 			}
@@ -328,40 +333,20 @@ class Terminal::Decoder
 			switch (command) {
 			case 'r': return (_screen.csr(p[0], p[1]), true);
 			case 'H': return (_screen.cup(p[0], p[1]), true);
-			case 'm': {
-				bool result = false;
+			case 'm':
 
-				for (int i = 0; i < 2; i++) {
+				if (p[0] == 39 && p[1] == 49)
+					return (_screen.op(), true);
 
-					if (p[i] == 0) {
-						/* turn off all attributes */
-						_screen.sgr0();
-						result = true;
+				for (int i = 0; i < 2; i++)
+					if (!_sgr(p[i]))
+						Genode::warning("Number ", p[i],
+						                " in sequence '[",
+						                p[0], ";",
+						                p[1], "m' is not implemented");
 
-					} else if (p[i] == 1) {
-						 /*
-						  * attribute
-						  *   1 bold (turn into highlight)
-						  */
-						_screen.sgr(p[i]);
-						result = true;
+				return true;
 
-					} else if ((p[i] >= 30) && (p[i] <= 37)) {
-						/*
-						 * color
-						 *   30...37 text colors
-						 *   40...47 background colors
-						 */
-						_screen.setaf(p[i] - 30);
-						return true;
-
-					} else if ((p[i] == 39) && (p[!i] == 49))
-						return (_screen.op(),   true);
-
-				}
-				return result;
-			}
-			case 'R': return (_screen.u6(p[0], p[1]), true);
 			default: return false;
 			}
 		}
@@ -381,20 +366,24 @@ class Terminal::Decoder
 			 || (_escape_stack[5].type  != Escape_stack::Entry::NUMBER))
 				return false;
 
-			int const p1      = _escape_stack[1].value;
-			int const p2      = _escape_stack[2].value;
-			int const p3      = _escape_stack[3].value;
+			int const p[3]    = { _escape_stack[1].value,
+			                      _escape_stack[3].value,
+			                      _escape_stack[5].value };
 			int const command = _escape_stack[6].value;
 
 			switch (command) {
 			case 'm':
 
-				/*
-				 * Currently returning true w/o actually handling the
-				 * sequence
-				 */
-				Genode::warning("Sequence '[", p1, ";", p2, ";", p3, "m' is not implemented");
+				for (int i = 0; i < 3; i++)
+					if (!_sgr(p[i]))
+						Genode::warning("Number ", p[i],
+						                " in sequence '[",
+						                p[0], ";",
+						                p[1], ";",
+						                p[2], "m' is not implemented");
+
 				return true;
+
 			default: return false;
 			}
 

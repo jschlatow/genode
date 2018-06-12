@@ -78,19 +78,21 @@ Genode::Lock &Linker::lock()
 /**
  * The actual ELF object, one per file
  */
-class Linker::Elf_object : public Object, public Fifo<Elf_object>::Element
+class Linker::Elf_object : public Object, private Fifo<Elf_object>::Element
 {
 	private:
 
-		Link_map       _map;
-		unsigned       _ref_count = 1;
-		unsigned const _keep      = KEEP;
-		bool           _relocated = false;
+		friend class Fifo<Elf_object>;
+
+		Link_map       _map       { };
+		unsigned       _ref_count { 1 };
+		unsigned const _keep      { KEEP };
+		bool           _relocated { false };
 
 		/*
 		 * Optional ELF file, skipped for initial 'Ld' initialization
 		 */
-		Constructible<Elf_file> _elf_file;
+		Constructible<Elf_file> _elf_file { };
 
 
 		bool _object_init(Object::Name const &name, Elf::Addr reloc_base)
@@ -218,9 +220,7 @@ class Linker::Elf_object : public Object, public Fifo<Elf_object>::Element
 		/**
 		 * Next in initializion list
 		 */
-		Object *next_init() const override {
-			return List<Object>::Element::next();
-		}
+		Object *next_init() const override { return _next_object(); }
 
 		/**
 		 * Next in object list
@@ -249,7 +249,7 @@ class Linker::Elf_object : public Object, public Fifo<Elf_object>::Element
 /**
  * The dynamic linker object (ld.lib.so)
  */
-struct Linker::Ld : Dependency, Elf_object
+struct Linker::Ld : private Dependency, Elf_object
 {
 	Ld() :
 		Dependency(*this, nullptr),
@@ -341,8 +341,10 @@ static void exit_on_suspended() { genode_exit(exit_status); }
 /**
  * The dynamic binary to load
  */
-struct Linker::Binary : Root_object, Elf_object
+struct Linker::Binary : private Root_object, public Elf_object
 {
+	using Root_object::first_dep;
+
 	bool static_construction_finished = false;
 
 	Binary(Env &env, Allocator &md_alloc, Bind bind)
@@ -383,10 +385,7 @@ struct Linker::Binary : Root_object, Elf_object
 	{
 		if (static_construction_finished) return false;
 
-		Func * const ctors_start = (Func *)lookup_symbol("_ctors_start");
-		Func * const ctors_end   = (Func *)lookup_symbol("_ctors_end");
-
-		return (ctors_end != ctors_start) || Init::list()->contains_deps();
+		return Init::list()->needs_static_construction();
 	}
 
 	void finish_static_construction()
@@ -473,6 +472,28 @@ struct Linker::Binary : Root_object, Elf_object
 
 	bool is_binary() const override { return true; }
 };
+
+
+/**********************************
+ ** Linker object implementation **
+ **********************************/
+
+Elf::Addr Linker::Object::_symbol_address(char const *name)
+{
+	unsigned long   hash = Hash_table::hash(name);
+	Elf::Sym const *sym  = dynamic().lookup_symbol(name, hash);
+
+	if (sym)
+		return reloc_base() + sym->st_value;
+	else
+		return Elf::Addr(0);
+}
+
+
+bool Linker::Object::needs_static_construction()
+{
+	return _symbol_address("_ctors_end") != _symbol_address("_ctors_start");
+}
 
 
 /***************************************
@@ -651,6 +672,10 @@ void Genode::init_ldso_phdr(Env &env)
 
 void Genode::exec_static_constructors()
 {
+	if (!binary_ptr->static_construction_pending())
+		warning("Don't call Genode::Env::exec_static_constructors() "
+		        "in components without static globals");
+
 	binary_ptr->finish_static_construction();
 }
 

@@ -18,6 +18,7 @@
 #include <port_allocator.h>
 #include <leaf_rule.h>
 #include <l3_protocol.h>
+#include <avl_tree.h>
 
 /* Genode includes */
 #include <util/avl_string.h>
@@ -38,12 +39,14 @@ class Net::Nat_rule : public Leaf_rule,
 
 		Port_allocator_guard _tcp_port_alloc;
 		Port_allocator_guard _udp_port_alloc;
+		Port_allocator_guard _icmp_port_alloc;
 
 	public:
 
 		Nat_rule(Domain_tree            &domains,
 		         Port_allocator         &tcp_port_alloc,
 		         Port_allocator         &udp_port_alloc,
+		         Port_allocator         &icmp_port_alloc,
 		         Genode::Xml_node const  node);
 
 		Nat_rule &find_by_domain(Domain &domain);
@@ -69,12 +72,13 @@ class Net::Nat_rule : public Leaf_rule,
 		 ** Accessors **
 		 ***************/
 
-		Port_allocator_guard &tcp_port_alloc() { return _tcp_port_alloc; }
-		Port_allocator_guard &udp_port_alloc() { return _udp_port_alloc; }
+		Port_allocator_guard &tcp_port_alloc()  { return _tcp_port_alloc; }
+		Port_allocator_guard &udp_port_alloc()  { return _udp_port_alloc; }
+		Port_allocator_guard &icmp_port_alloc() { return _icmp_port_alloc; }
 };
 
 
-struct Net::Nat_rule_tree : Genode::Avl_tree<Nat_rule>
+struct Net::Nat_rule_tree : Avl_tree<Nat_rule>
 {
 	struct No_match : Genode::Exception { };
 

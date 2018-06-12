@@ -3,7 +3,6 @@ ___tolower T
 ___toupper T
 __assert T
 __dn_expand T
-__dn_expand T
 __error T
 __flt_rounds T
 __fpclassifyd T
@@ -196,6 +195,7 @@ fseeko T
 fsetpos T
 fstat T
 fstatat T
+fstatfs T
 fstatvfs T
 fsync T
 ftell T
@@ -204,20 +204,12 @@ ftok T
 ftruncate T
 ftrylockfile W
 fts_children T
-fts_children T
-fts_close T
 fts_close T
 fts_get_clientptr T
-fts_get_clientptr T
-fts_get_stream T
 fts_get_stream T
 fts_open T
-fts_open T
-fts_read T
 fts_read T
 fts_set T
-fts_set T
-fts_set_clientptr T
 fts_set_clientptr T
 ftw T
 funlockfile W
@@ -613,7 +605,6 @@ seed48 T
 seekdir T
 select W
 semctl T
-semctl T
 semget W
 semop W
 send T
@@ -764,6 +755,7 @@ sys_nerr R 4
 sys_nsig R 4
 sys_siglist D 256
 sys_signame D 256
+syscall T
 sysconf T
 sysctl T
 sysctlbyname T
@@ -931,7 +923,8 @@ _ZN4Libc19Select_handler_baseC1Ev T
 _ZN4Libc19Select_handler_baseC2Ev T
 _ZN4Libc19Select_handler_baseD1Ev T
 _ZN4Libc19Select_handler_baseD2Ev T
-
+_ZN4Libc10resume_allEv T
+_ZN4Libc7suspendERNS_15Suspend_functorEm T
 
 #
 # Libc plugin interface
@@ -1018,4 +1011,4 @@ _ZN4Libc6PluginD0Ev T
 _ZN4Libc6PluginD1Ev T
 _ZN4Libc6PluginD2Ev T
 _ZN4Libc9mem_allocEv T
-_ZTIN4Libc6PluginE D 18
+_ZTIN4Libc6PluginE D 40

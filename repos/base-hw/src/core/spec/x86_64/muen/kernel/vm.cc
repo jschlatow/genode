@@ -56,12 +56,9 @@ void Kernel::Vm::exception(Cpu & cpu)
 }
 
 
-extern void * __tss_client_context_ptr;
-
-void Kernel::Vm::proceed(Cpu &)
+void Kernel::Vm::proceed(Cpu & cpu)
 {
-	void * * tss_stack_ptr = (&__tss_client_context_ptr);
-	*tss_stack_ptr = (void*)((addr_t)_state + sizeof(Genode::Cpu_state));
+	cpu.tss.ist[0] = (addr_t)_state + sizeof(Genode::Cpu_state);
 
 	asm volatile("sti          \n"
 	             "mov $1, %rax \n"
@@ -69,4 +66,4 @@ void Kernel::Vm::proceed(Cpu &)
 }
 
 
-void Kernel::Vm::inject_irq(unsigned irq) { }
+void Kernel::Vm::inject_irq(unsigned) { }

@@ -220,7 +220,7 @@ class Terminal::Session_component : public Genode::Rpc_object<Session, Session_c
 			_label(label),
 			_session_manager(session_manager),
 			_io_buffer(_env.ram(), _env.rm(), io_buffer_size),
-			_char_cell_array(ncurses.columns(), ncurses.lines() - 1, &heap),
+			_char_cell_array(ncurses.columns(), ncurses.lines() - 1, heap),
 			_char_cell_array_character_screen(_char_cell_array),
 			_decoder(_char_cell_array_character_screen)
 		{
@@ -329,6 +329,9 @@ class Terminal::Session_component : public Genode::Rpc_object<Session, Session_c
 		{
 			_read_buffer.sigh(cap);
 		}
+
+		void size_changed_sigh(Genode::Signal_context_capability cap) override
+		{ }
 
 		Genode::size_t read(void *buf, Genode::size_t) override  { return 0; }
 		Genode::size_t write(void const *buf, Genode::size_t) override { return 0; }

@@ -74,13 +74,20 @@ extern "C" int MMIO2_MAPPED_SYNC(PVM pVM, RTGCPHYS GCPhys, size_t cbWrite,
                                  bool &writeable);
 
 
-class Vcpu_handler : public Vmm::Vcpu_dispatcher<pthread>,
+class Vcpu_handler : public Vmm::Vcpu_dispatcher<Genode::Thread>,
                      public Genode::List<Vcpu_handler>::Element
 {
+	protected:
+
+		pthread::start_routine_t const _start_routine;
+		void                   * const _start_routine_arg;
+
 	private:
 
 		X86FXSTATE _guest_fpu_state __attribute__((aligned(0x10)));
 		X86FXSTATE _emt_fpu_state __attribute__((aligned(0x10)));
+
+		pthread _pthread;
 
 		Vmm::Vcpu_other_pd _vcpu;
 
@@ -760,21 +767,25 @@ class Vcpu_handler : public Vmm::Vcpu_dispatcher<pthread>,
 		};
 
 
-		Vcpu_handler(Genode::Env &env, size_t stack_size, const pthread_attr_t *attr,
+		Vcpu_handler(Genode::Env &env, size_t stack_size,
 		             void *(*start_routine) (void *), void *arg,
 		             Genode::Cpu_session * cpu_session,
 		             Genode::Affinity::Location location,
 		             unsigned int cpu_id, const char * name,
 		             Genode::Pd_session_capability pd_vcpu)
 		:
-			Vmm::Vcpu_dispatcher<pthread>(env, stack_size, cpu_session, location,
-			                              attr ? *attr : 0, start_routine, arg,
-			                              name),
+			Vmm::Vcpu_dispatcher<Genode::Thread>(env, stack_size, cpu_session,
+			                                     location, name),
+			_pthread(*this),
+			_start_routine(start_routine),
+			_start_routine_arg(arg),
 			_vcpu(cpu_session, location, pd_vcpu),
 			_ec_sel(Genode::cap_map()->insert()),
 			_irq_win(false),
 			_cpu_id(cpu_id)
 		{ }
+
+		pthread &pthread_obj() { return _pthread; }
 
 		unsigned int cpu_id() { return _cpu_id; }
 

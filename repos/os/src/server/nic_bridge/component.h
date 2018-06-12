@@ -14,18 +14,21 @@
 #ifndef _COMPONENT_H_
 #define _COMPONENT_H_
 
-/* Genode */
+/* Genode includes */
 #include <base/log.h>
 #include <base/heap.h>
 #include <nic/packet_allocator.h>
 #include <nic_session/rpc_object.h>
 #include <nic_session/connection.h>
-#include <nic_bridge/mac_allocator.h>
 #include <os/ram_session_guard.h>
 #include <os/session_policy.h>
 #include <root/component.h>
 #include <util/arg_string.h>
 
+/* NIC router includes */
+#include <mac_allocator.h>
+
+/* local includes */
 #include <address_node.h>
 #include <nic.h>
 #include <packet_handler.h>
@@ -93,7 +96,7 @@ struct Net::Stream_dataspaces
  * would be more convinient, because the allocator needs to be initialized
  * before base-class Session_rpc_object.
  */
-class Net::Session_component : public  Net::Stream_allocator,
+class Net::Session_component : private Net::Stream_allocator,
                                private Net::Stream_dataspaces,
                                public  ::Nic::Session_rpc_object,
                                public  Net::Packet_handler
@@ -103,7 +106,7 @@ class Net::Session_component : public  Net::Stream_allocator,
 		Mac_address_node                  _mac_node;
 		Ipv4_address_node                 _ipv4_node;
 		Net::Nic                         &_nic;
-		Genode::Signal_context_capability _link_state_sigh;
+		Genode::Signal_context_capability _link_state_sigh { };
 
 		void _unset_ipv4_node();
 
@@ -163,15 +166,20 @@ class Net::Session_component : public  Net::Stream_allocator,
 		 ** Packet_handler interface **
 		 ******************************/
 
-		Packet_stream_sink< ::Nic::Session::Policy>   * sink()   {
+		Packet_stream_sink< ::Nic::Session::Policy> * sink() override {
 			return _tx.sink(); }
 
-		Packet_stream_source< ::Nic::Session::Policy> * source() {
+		Packet_stream_source< ::Nic::Session::Policy> * source() override {
 			return _rx.source(); }
 
-		bool handle_arp(Ethernet_frame *eth,      Genode::size_t size);
-		bool handle_ip(Ethernet_frame *eth,       Genode::size_t size);
-		void finalize_packet(Ethernet_frame *eth, Genode::size_t size);
+
+		bool handle_arp(Ethernet_frame &eth,
+		                Size_guard     &size_guard) override;
+
+		bool handle_ip(Ethernet_frame &eth,
+		               Size_guard     &size_guard) override;
+
+		void finalize_packet(Ethernet_frame *, Genode::size_t) override;
 };
 
 
@@ -181,6 +189,8 @@ class Net::Session_component : public  Net::Stream_allocator,
 class Net::Root : public Genode::Root_component<Net::Session_component>
 {
 	private:
+
+		enum { DEFAULT_MAC = 0x02 };
 
 		Mac_allocator     _mac_alloc;
 		Genode::Env      &_env;
@@ -235,9 +245,7 @@ class Net::Root : public Genode::Root_component<Net::Session_component>
 	public:
 
 		Root(Genode::Env &env, Net::Nic &nic, Genode::Allocator &md_alloc,
-		     Genode::Xml_node config)
-		: Genode::Root_component<Session_component>(env.ep(), md_alloc),
-		  _env(env), _nic(nic), _config(config) { }
+		     Genode::Xml_node config);
 };
 
 #endif /* _COMPONENT_H_ */

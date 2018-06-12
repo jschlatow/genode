@@ -47,7 +47,7 @@ class Input_filter::Accelerate_source : public Source, Source::Sink
 				/* clamp parameter to valid range */
 				curve = min(255, max(0, curve));
 
-				auto fill_segment = [&] (long x1, long y1, long x2, long y2)
+				auto fill_segment = [&] (long x1, long y1, long x2, long /* y2 */)
 				{
 					for (long i = x1 >> 8; i <= (x2 >> 8); i++) values[i] = y1 >> 8;
 				};
@@ -74,11 +74,11 @@ class Input_filter::Accelerate_source : public Source, Source::Sink
 		 */
 		long const _max;
 
-		long _apply_acceleration(long v) const
+		int _apply_acceleration(int v) const
 		{
-			long const sign  = (v < 0) ? -1 : 1,
-			           index = max(0, min(255, (sign*v*_sensitivity_percent)/100)),
-			           accel = (_lut.values[index]*_max)/256;
+			int const sign  = (v < 0) ? -1 : 1,
+			          index = max(0, min(255, (sign*v*_sensitivity_percent)/100)),
+			          accel = (_lut.values[index]*_max)/256;
 
 			return v + sign*accel;
 		}
@@ -88,15 +88,14 @@ class Input_filter::Accelerate_source : public Source, Source::Sink
 		 */
 		void submit_event(Input::Event const &event) override
 		{
-			/* forward unrelated events */
-			if (!event.relative_motion()) {
-				_destination.submit_event(event);
-				return;
-			}
+			using namespace Input;
 
-			_destination.submit_event(Input::Event(Input::Event::MOTION, 0, 0, 0,
-			                                       _apply_acceleration(event.rx()),
-			                                       _apply_acceleration(event.ry())));
+			Event ev = event;
+
+			ev.handle_relative_motion([&] (int x, int y) {
+				ev = Relative_motion{_apply_acceleration(x),
+				                     _apply_acceleration(y)}; });
+			_destination.submit_event(ev);
 		}
 
 	public:

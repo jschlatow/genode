@@ -51,6 +51,7 @@ SRC_CC += Devices/Audio/DevHDA.cpp
 SRC_CC += Devices/Audio/DevIchAc97.cpp
 SRC_CC += Devices/Audio/DrvAudioCommon.cpp
 SRC_CC += Devices/Audio/HDACodec.cpp
+SRC_CC += Devices/Audio/HDAStreamPeriod.cpp
 SRC_CC += Devices/USB/DevOHCI.cpp
 SRC_CC += Devices/USB/USBProxyDevice.cpp
 SRC_CC += Devices/USB/VUSBBufferedPipe.cpp
@@ -111,3 +112,5 @@ vboxssdt-cpuhotplug.hex: vbox-cpuhotplug.dsl
 
 vpath %.dsl $(VBOX_DIR)/Devices/PC
 vpath devxhci.cc $(REP_DIR)/src/virtualbox5
+
+CC_CXX_WARN_STRICT =

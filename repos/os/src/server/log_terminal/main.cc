@@ -95,7 +95,7 @@ class Terminal::Session_component : public Rpc_object<Session, Session_component
 		 */
 		Attached_ram_dataspace _io_buffer;
 
-		Buffered_output _output;
+		Buffered_output _output { };
 
 	public:
 
@@ -111,11 +111,11 @@ class Terminal::Session_component : public Rpc_object<Session, Session_component
 		 ** Terminal session interface **
 		 ********************************/
 
-		Size size() { return Size(0, 0); }
+		Size size() override { return Size(0, 0); }
 
-		bool avail() { return false; }
+		bool avail() override { return false; }
 
-		size_t _read(size_t dst_len) { return 0; }
+		size_t _read(size_t) { return 0; }
 
 		size_t _write(Genode::size_t num_bytes)
 		{
@@ -134,7 +134,9 @@ class Terminal::Session_component : public Rpc_object<Session, Session_component
 
 		Dataspace_capability _dataspace() { return _io_buffer.cap(); }
 
-		void read_avail_sigh(Signal_context_capability) { }
+		void read_avail_sigh(Signal_context_capability) override { }
+
+		void size_changed_sigh(Signal_context_capability) override { }
 
 		void connected_sigh(Signal_context_capability sigh)
 		{
@@ -146,8 +148,8 @@ class Terminal::Session_component : public Rpc_object<Session, Session_component
 			Signal_transmitter(sigh).submit();
 		}
 
-		size_t read(void *buf, size_t) { return 0; }
-		size_t write(void const *buf, size_t) { return 0; }
+		size_t read(void *, size_t) override { return 0; }
+		size_t write(void const *, size_t) override { return 0; }
 };
 
 
@@ -160,7 +162,7 @@ class Terminal::Root_component : public Genode::Root_component<Session_component
 
 	protected:
 
-		Session_component *_create_session(const char *args)
+		Session_component *_create_session(const char *)
 		{
 			size_t const io_buffer_size = 4096;
 			return new (md_alloc()) Session_component(_ram, _rm, io_buffer_size);

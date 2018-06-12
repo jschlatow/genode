@@ -21,7 +21,7 @@
 
 /* Genode includes */
 #include <util/noncopyable.h>
-#include <os/alarm.h>
+#include <base/lock.h>
 #include <base/log.h>
 #include <os/duration.h>
 
@@ -43,12 +43,12 @@ namespace Timer
 /**
  * Interface of a time source that can handle one timeout at a time
  */
-struct Genode::Time_source
+struct Genode::Time_source : Interface
 {
 	/**
 	 * Interface of a timeout callback
 	 */
-	struct Timeout_handler
+	struct Timeout_handler : Interface
 	{
 		virtual void handle_timeout(Duration curr_time) = 0;
 	};
@@ -79,7 +79,7 @@ struct Genode::Time_source
 	 * accurate but expensive timer only on a periodic basis while using a
 	 * cheaper interpolation in general.
 	 */
-	virtual void scheduler(Timeout_scheduler &scheduler) { };
+	virtual void scheduler(Timeout_scheduler &) { };
 };
 
 
@@ -90,7 +90,7 @@ struct Genode::Time_source
  * implementation only. Users of the timeout framework must schedule and
  * discard timeouts via methods of the timeout.
  */
-class Genode::Timeout_scheduler
+class Genode::Timeout_scheduler : Interface
 {
 	private:
 
@@ -145,28 +145,64 @@ class Genode::Timeout : private Noncopyable
 		/**
 		 * Interface of a timeout handler
 		 */
-		struct Handler
+		struct Handler : Interface
 		{
 			virtual void handle_timeout(Duration curr_time) = 0;
 		};
 
 	private:
 
-		struct Alarm : Genode::Alarm
+		class Alarm
 		{
-			Timeout_scheduler &timeout_scheduler;
-			Handler           *handler = nullptr;
-			bool               periodic;
+			friend class Alarm_timeout_scheduler;
 
-			Alarm(Timeout_scheduler &timeout_scheduler)
-			: timeout_scheduler(timeout_scheduler) { }
+			private:
 
+				typedef unsigned long Time;
 
-			/*******************
-			 ** Genode::Alarm **
-			 *******************/
+				struct Raw
+				{
+					Time deadline;
+					bool deadline_period;
+					Time period;
 
-			bool on_alarm(unsigned) override;
+					bool is_pending_at(unsigned long time, bool time_period) const;
+				};
+
+				Lock                     _dispatch_lock { };
+				Raw                      _raw           { };
+				int                      _active        { 0 };
+				Alarm                   *_next          { nullptr };
+				Alarm_timeout_scheduler *_scheduler     { nullptr };
+
+				void _alarm_assign(Time                     period,
+				                   Time                     deadline,
+				                   bool                     deadline_period,
+				                   Alarm_timeout_scheduler *scheduler)
+				{
+					_raw.period          = period;
+					_raw.deadline_period = deadline_period;
+					_raw.deadline        = deadline;
+					_scheduler           = scheduler;
+				}
+
+				void _alarm_reset() { _alarm_assign(0, 0, false, 0), _active = 0, _next = 0; }
+
+				bool _on_alarm(unsigned);
+
+				Alarm(Alarm const &);
+				Alarm &operator = (Alarm const &);
+
+			public:
+
+				Timeout_scheduler &timeout_scheduler;
+				Handler           *handler  = nullptr;
+				bool               periodic = false;
+
+				Alarm(Timeout_scheduler &timeout_scheduler)
+				: timeout_scheduler(timeout_scheduler) { _alarm_reset(); }
+
+				virtual ~Alarm();
 
 		} _alarm;
 
@@ -196,11 +232,27 @@ class Genode::Alarm_timeout_scheduler : private Noncopyable,
 {
 	friend class Timer::Connection;
 	friend class Timer::Root_component;
+	friend class Timeout::Alarm;
 
 	private:
 
+		using Alarm = Timeout::Alarm;
+
 		Time_source     &_time_source;
-		Alarm_scheduler  _alarm_scheduler;
+		Lock             _lock              { };
+		Alarm           *_active_head       { nullptr };
+		Alarm           *_pending_head      { nullptr };
+		Alarm::Time      _now               { 0UL };
+		bool             _now_period        { false };
+		Alarm::Raw       _min_handle_period { };
+
+		void _alarm_unsynchronized_enqueue(Alarm *alarm);
+
+		void _alarm_unsynchronized_dequeue(Alarm *alarm);
+
+		Alarm *_alarm_get_pending_alarm();
+
+		void _alarm_setup_alarm(Alarm &alarm, Alarm::Time period, Alarm::Time first_duration);
 
 		void _enable();
 
@@ -220,12 +272,29 @@ class Genode::Alarm_timeout_scheduler : private Noncopyable,
 		void _schedule_periodic(Timeout &timeout, Microseconds duration) override;
 
 		void _discard(Timeout &timeout) override {
-			_alarm_scheduler.discard(&timeout._alarm); }
+			_alarm_discard(&timeout._alarm); }
+
+		void _alarm_discard(Alarm *alarm);
+
+		void _alarm_schedule_absolute(Alarm *alarm, Alarm::Time duration);
+
+		void _alarm_schedule(Alarm *alarm, Alarm::Time period);
+
+		void _alarm_handle(Alarm::Time now);
+
+		bool _alarm_next_deadline(Alarm::Time *deadline);
+
+		bool _alarm_head_timeout(const Alarm * alarm) { return _active_head == alarm; }
+
+		Alarm_timeout_scheduler(Alarm_timeout_scheduler const &);
+		Alarm_timeout_scheduler &operator = (Alarm_timeout_scheduler const &);
 
 	public:
 
 		Alarm_timeout_scheduler(Time_source  &time_source,
 		                        Microseconds  min_handle_period = Microseconds(1));
+
+		~Alarm_timeout_scheduler();
 
 
 		/***********************

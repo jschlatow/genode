@@ -5,6 +5,7 @@ GEN_SRC_DIR  := $(realpath $(GEN_CORE_DIR)/..)
 
 SRC_CC       = stack_area.cc \
                core_log.cc \
+               core_log_out.cc \
                core_rpc_cap_alloc.cc \
                core_region_map.cc \
                cpu_session_component.cc \
@@ -48,6 +49,7 @@ include $(GEN_CORE_DIR)/version.inc
 vpath main.cc                     $(GEN_CORE_DIR)
 vpath pd_session_component.cc     $(GEN_CORE_DIR)
 vpath rom_session_component.cc    $(GEN_CORE_DIR)
+vpath core_log.cc                 $(GEN_CORE_DIR)
 vpath cpu_session_component.cc    $(GEN_CORE_DIR)
 vpath cpu_session_support.cc      $(GEN_CORE_DIR)
 vpath cpu_thread_component.cc     $(GEN_CORE_DIR)

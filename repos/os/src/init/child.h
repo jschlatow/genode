@@ -19,12 +19,12 @@
 #include <base/child.h>
 #include <os/session_requester.h>
 #include <os/session_policy.h>
+#include <os/buffered_xml.h>
 
 /* local includes */
 #include <types.h>
 #include <verbose.h>
 #include <report.h>
-#include <buffered_xml.h>
 #include <name_registry.h>
 #include <service.h>
 #include <utils.h>
@@ -46,11 +46,9 @@ class Init::Child : Child_policy, Routed_service::Wakeup
 		 */
 		struct Id { unsigned value; };
 
-		struct Default_route_accessor { virtual Xml_node default_route() = 0; };
-
-		struct Default_caps_accessor { virtual Cap_quota default_caps() = 0; };
-
-		struct Ram_limit_accessor { virtual Ram_quota ram_limit() = 0; };
+		struct Default_route_accessor : Interface { virtual Xml_node default_route() = 0; };
+		struct Default_caps_accessor  : Interface { virtual Cap_quota default_caps() = 0; };
+		struct Ram_limit_accessor     : Interface { virtual Ram_quota ram_limit()    = 0; };
 
 	private:
 
@@ -159,7 +157,7 @@ class Init::Child : Child_policy, Routed_service::Wakeup
 
 		Resources _resources_from_start_node(Xml_node start_node, Prio_levels prio_levels,
 		                                     Affinity::Space const &affinity_space,
-		                                     Cap_quota default_cap_quota, Cap_quota cap_limit)
+		                                     Cap_quota default_cap_quota, Cap_quota)
 		{
 			size_t          cpu_quota_pc   = 0;
 			bool            constrain_phys = false;
@@ -282,7 +280,7 @@ class Init::Child : Child_policy, Routed_service::Wakeup
 			Service &service() { return _service; }
 		};
 
-		Constructible<Inline_config_rom_service> _config_rom_service;
+		Constructible<Inline_config_rom_service> _config_rom_service { };
 
 		Session_requester _session_requester;
 
@@ -313,7 +311,7 @@ class Init::Child : Child_policy, Routed_service::Wakeup
 			{ }
 		};
 
-		Constructible<Requested_resources> _requested_resources;
+		Constructible<Requested_resources> _requested_resources { };
 
 		Genode::Child _child { _env.rm(), _env.ep().rpc_ep(), *this };
 
@@ -385,7 +383,7 @@ class Init::Child : Child_policy, Routed_service::Wakeup
 				    service.name() == node.attribute_value("name", Service::Name()))
 					exists = true; });
 
-			return exists;
+			return exists && !abandoned();
 		}
 
 		void _add_service(Xml_node service)
@@ -411,6 +409,8 @@ class Init::Child : Child_policy, Routed_service::Wakeup
 
 		bool _exited     { false };
 		int  _exit_value { -1 };
+
+		void _destroy_services();
 
 	public:
 
@@ -493,7 +493,13 @@ class Init::Child : Child_policy, Routed_service::Wakeup
 					service.abandon(); });
 		}
 
+		void destroy_services();
+
+		void close_all_sessions() { _child.close_all_sessions(); }
+
 		bool abandoned() const { return _state == STATE_ABANDONED; }
+
+		bool env_sessions_closed() const { return _child.env_sessions_closed(); }
 
 		enum Apply_config_result { MAY_HAVE_SIDE_EFFECTS, NO_SIDE_EFFECTS };
 
@@ -549,6 +555,9 @@ class Init::Child : Child_policy, Routed_service::Wakeup
 			 */
 			_exited     = true;
 			_exit_value = exit_value;
+
+			_child.close_all_sessions();
+
 			_report_update_trigger.trigger_report_update();
 
 			/*

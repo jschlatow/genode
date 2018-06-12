@@ -62,29 +62,14 @@ struct Noux::Vfs_io_channel : Io_channel
 
 	Vfs::Vfs_handle *_fh;
 
-	Vfs_handle_context &_context;
-
 	Vfs_io_waiter_registry &_vfs_io_waiter_registry;
 
 	Absolute_path _path;
 	Absolute_path _leaf_path;
 
-	Vfs_io_channel(char const *path, char const *leaf_path,
-	               Vfs::Dir_file_system *root_dir, Vfs::Vfs_handle *vfs_handle,
-	               Vfs_handle_context &vfs_handle_context,
-	               Vfs_io_waiter_registry &vfs_io_waiter_registry,
-	               Entrypoint &ep)
-	:
-		_read_avail_handler(ep, *this, &Vfs_io_channel::_handle_read_avail),
-		_fh(vfs_handle), _context(vfs_handle_context),
-		_vfs_io_waiter_registry(vfs_io_waiter_registry),
-		_path(path), _leaf_path(leaf_path)
-	{
-		_fh->context = &_context;
-		_fh->fs().register_read_ready_sigh(_fh, _read_avail_handler);
-	}
+	bool const _dir = _fh->ds().directory(_leaf_path.base());
 
-	~Vfs_io_channel()
+	void _sync()
 	{
 		Registered_no_delete<Vfs_io_waiter>
 			vfs_io_waiter(_vfs_io_waiter_registry);
@@ -93,13 +78,35 @@ struct Noux::Vfs_io_channel : Io_channel
 			vfs_io_waiter.wait_for_io();
 
 		while (_fh->fs().complete_sync(_fh) == Vfs::File_io_service::SYNC_QUEUED)
-			_context.vfs_io_waiter.wait_for_io();
+			vfs_io_waiter.wait_for_io();
+	}
+
+	Vfs_io_channel(char const *path, char const *leaf_path,
+	               Vfs::File_system *root_dir, Vfs::Vfs_handle *vfs_handle,
+	               Vfs_io_waiter_registry &vfs_io_waiter_registry,
+	               Entrypoint &ep)
+	:
+		_read_avail_handler(ep, *this, &Vfs_io_channel::_handle_read_avail),
+		_fh(vfs_handle), _vfs_io_waiter_registry(vfs_io_waiter_registry),
+		_path(path), _leaf_path(leaf_path)
+	{
+		_fh->fs().register_read_ready_sigh(_fh, _read_avail_handler);
+	}
+
+	~Vfs_io_channel()
+	{
+		_sync();
 
 		_fh->ds().close(_fh);
 	}
 
-	bool write(Sysio &sysio, size_t &offset) override
+	bool write(Sysio &sysio) override
 	{
+		if (_dir) {
+			sysio.error.write = Vfs::File_io_service::WRITE_ERR_INVALID;
+			return false;
+		}
+
 		Vfs::file_size count = sysio.write_in.count;
 		Vfs::file_size out_count = 0;
 
@@ -122,13 +129,17 @@ struct Noux::Vfs_io_channel : Io_channel
 		_fh->advance_seek(out_count);
 
 		sysio.write_out.count = out_count;
-		offset = out_count;
 
 		return true;
 	}
 
 	bool read(Sysio &sysio) override
 	{
+		if (_dir) {
+			sysio.error.read = Vfs::File_io_service::READ_ERR_INVALID;
+			return false;
+		}
+
 		size_t count = min(sysio.read_in.count, sizeof(sysio.read_out.chunk));
 
 		Vfs::file_size out_count = 0;
@@ -146,7 +157,7 @@ struct Noux::Vfs_io_channel : Io_channel
 			if (sysio.error.read != Vfs::File_io_service::READ_QUEUED)
 				break;
 
-			_context.vfs_io_waiter.wait_for_io();
+			vfs_io_waiter.wait_for_io();
 		}
 
 		if (sysio.error.read != Vfs::File_io_service::READ_OK)
@@ -161,19 +172,12 @@ struct Noux::Vfs_io_channel : Io_channel
 
 	bool fstat(Sysio &sysio) override
 	{
+		_sync();
+
 		/*
 		 * 'sysio.stat_in' is not used in '_fh->ds().stat()',
 		 * so no 'sysio' member translation is needed here
 		 */
-
-		Registered_no_delete<Vfs_io_waiter>
-			vfs_io_waiter(_vfs_io_waiter_registry);
-
-		while (!_fh->fs().queue_sync(_fh))
-			vfs_io_waiter.wait_for_io();
-
-		while (_fh->fs().complete_sync(_fh) == Vfs::File_io_service::SYNC_QUEUED)
-			_context.vfs_io_waiter.wait_for_io();
 
 		Vfs::Directory_service::Stat stat;
 		sysio.error.stat =  _fh->ds().stat(_leaf_path.base(), stat);
@@ -184,6 +188,8 @@ struct Noux::Vfs_io_channel : Io_channel
 
 	bool ftruncate(Sysio &sysio) override
 	{
+		_sync();
+
 		sysio.error.ftruncate = _fh->fs().ftruncate(_fh, sysio.ftruncate_in.length);
 
 		return (sysio.error.ftruncate == Vfs::File_io_service::FTRUNCATE_OK);
@@ -262,7 +268,7 @@ struct Noux::Vfs_io_channel : Io_channel
 			if (read_result != Vfs::File_io_service::READ_QUEUED)
 				break;
 
-			_context.vfs_io_waiter.wait_for_io();
+			vfs_io_waiter.wait_for_io();
 		}
 
 		if ((read_result != Vfs::File_io_service::READ_OK) ||

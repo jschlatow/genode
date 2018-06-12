@@ -30,16 +30,22 @@ class Vfs::Dir_file_system : public File_system
 
 		enum { MAX_NAME_LEN = 128 };
 
-		struct Root { };
-
 	private:
+
+		/*
+		 * Noncopyable
+		 */
+		Dir_file_system(Dir_file_system const &);
+		Dir_file_system &operator = (Dir_file_system const &);
+
+		Vfs::Env &_env;
 
 		/**
 		 * This instance is the root of VFS
 		 *
 		 * Additionally, the root has an empty _name.
 		 */
-		bool _vfs_root;
+		bool const _vfs_root;
 
 		struct Dir_vfs_handle : Vfs_handle
 		{
@@ -49,6 +55,8 @@ class Vfs::Dir_file_system : public File_system
 
 			struct Subdir_handle_element : Subdir_handle_registry::Element
 			{
+				bool synced { false };
+
 				Vfs_handle &vfs_handle;
 				Subdir_handle_element(Subdir_handle_registry &registry,
 				                      Vfs_handle &vfs_handle)
@@ -58,7 +66,7 @@ class Vfs::Dir_file_system : public File_system
 
 			Absolute_path             path;
 			Vfs_handle               *queued_read_handle { nullptr };
-			Subdir_handle_registry    subdir_handle_registry;
+			Subdir_handle_registry    subdir_handle_registry { };
 
 			Dir_vfs_handle(Directory_service &ds,
 			               File_io_service   &fs,
@@ -71,15 +79,64 @@ class Vfs::Dir_file_system : public File_system
 			{
 				/* close all sub-handles */
 				auto f = [&] (Subdir_handle_element &e) {
-					e.vfs_handle.ds().close(&e.vfs_handle);
+					e.vfs_handle.close();
 					destroy(alloc(), &e);
 				};
 				subdir_handle_registry.for_each(f);
 			}
+
+			private:
+
+				/*
+				 * Noncopyable
+				 */
+				Dir_vfs_handle(Dir_vfs_handle const &);
+				Dir_vfs_handle &operator = (Dir_vfs_handle const &);
 		};
 
+		struct Dir_watch_handle : Vfs_watch_handle
+		{
+			struct Watch_handle_element;
+
+			typedef Genode::Registry<Watch_handle_element> Watch_handle_registry;
+
+			struct Watch_handle_element : Watch_handle_registry::Element
+			{
+				Vfs_watch_handle &watch_handle;
+				Watch_handle_element(Watch_handle_registry &registry,
+				                     Vfs_watch_handle &handle)
+				: Watch_handle_registry::Element(registry, *this),
+				  watch_handle(handle) { }
+			};
+
+			Watch_handle_registry  handle_registry { };
+
+			Dir_watch_handle(File_system &fs, Genode::Allocator &alloc)
+			: Vfs_watch_handle(fs, alloc) { }
+
+			~Dir_watch_handle()
+			{
+				/* close all sub-handles */
+				auto f = [&] (Watch_handle_element &e) {
+					e.watch_handle.close();
+					destroy(alloc(), &e);
+				};
+				handle_registry.for_each(f);
+			}
+
+			/**
+			 * Propagate the handle context to each sub-handle
+			 */
+			void context(Context *ctx) override
+			{
+				handle_registry.for_each( [&] (Watch_handle_element &elem) {
+					elem.watch_handle.context(ctx); } );
+			}
+		};
+
+
 		/* pointer to first child file system */
-		File_system *_first_file_system;
+		File_system *_first_file_system = nullptr;
 
 		/* add new file system to the list of children */
 		void _append_file_system(File_system *fs)
@@ -306,19 +363,16 @@ class Vfs::Dir_file_system : public File_system
 
 	public:
 
-		Dir_file_system(Genode::Env         &env,
-		                Genode::Allocator   &alloc,
+		Dir_file_system(Vfs::Env            &env,
 		                Genode::Xml_node     node,
-		                Io_response_handler &io_handler,
 		                File_system_factory &fs_factory)
 		:
-			_vfs_root(false),
-			_first_file_system(0)
+			_env(env), _vfs_root(!node.has_type("dir"))
 		{
 			using namespace Genode;
 
 			/* remember directory name */
-			if (node.has_type("fstab") || node.has_type("vfs"))
+			if (_vfs_root)
 				_name[0] = 0;
 			else
 				node.attribute("name").value(_name, sizeof(_name));
@@ -329,12 +383,14 @@ class Vfs::Dir_file_system : public File_system
 
 				/* traverse into <dir> nodes */
 				if (sub_node.has_type("dir")) {
-					_append_file_system(new (alloc)
-						Dir_file_system(env, alloc, sub_node, io_handler, fs_factory));
+					_append_file_system(new (_env.alloc())
+						Dir_file_system(_env, sub_node, fs_factory));
 					continue;
 				}
 
-				File_system *fs = fs_factory.create(env, alloc, sub_node, io_handler);
+				File_system * const fs =
+					fs_factory.create(_env, sub_node);
+
 				if (fs) {
 					_append_file_system(fs);
 					continue;
@@ -352,16 +408,6 @@ class Vfs::Dir_file_system : public File_system
 				} catch (Xml_node::Nonexistent_attribute) { }
 			}
 		}
-
-		Dir_file_system(Genode::Env         &env,
-		                Genode::Allocator   &alloc,
-		                Genode::Xml_node     node,
-		                Io_response_handler &io_handler,
-		                File_system_factory &fs_factory,
-		                Dir_file_system::Root)
-		:
-			Dir_file_system(env, alloc, node, io_handler, fs_factory)
-			{ _vfs_root = true; }
 
 		/*********************************
 		 ** Directory-service interface **
@@ -524,8 +570,12 @@ class Vfs::Dir_file_system : public File_system
 			 * are subjected to the stacked file-system layout.
 			 */
 			if (directory(path)) {
-				*out_handle = new (alloc) Vfs_handle(*this, *this, alloc, 0);
-				return OPEN_OK;
+				try {
+					*out_handle = new (alloc) Dir_vfs_handle(*this, *this, alloc, path);
+					return OPEN_OK;
+				}
+				catch (Genode::Out_of_ram)  { return OPEN_ERR_OUT_OF_RAM; }
+				catch (Genode::Out_of_caps) { return OPEN_ERR_OUT_OF_CAPS; }
 			}
 
 			/*
@@ -542,8 +592,12 @@ class Vfs::Dir_file_system : public File_system
 
 			/* path equals directory name */
 			if (strlen(path) == 0) {
-				*out_handle = new (alloc) Vfs_handle(*this, *this, alloc, 0);
-				return OPEN_OK;
+				try {
+					*out_handle = new (alloc) Vfs_handle(*this, *this, alloc, 0);
+					return OPEN_OK;
+				}
+				catch (Genode::Out_of_ram)  { return OPEN_ERR_OUT_OF_RAM; }
+				catch (Genode::Out_of_caps) { return OPEN_ERR_OUT_OF_CAPS; }
 			}
 
 			/* path refers to any of our sub file systems */
@@ -569,6 +623,7 @@ class Vfs::Dir_file_system : public File_system
 		Opendir_result open_composite_dirs(char const *sub_path,
 		                                   Dir_vfs_handle &dir_vfs_handle)
 		{
+			Opendir_result res = OPENDIR_ERR_LOOKUP_FAILED;
 			try {
 				for (File_system *fs = _first_file_system; fs; fs = fs->next) {
 					Vfs_handle *sub_dir_handle = nullptr;
@@ -579,7 +634,9 @@ class Vfs::Dir_file_system : public File_system
 					switch (r) {
 					case OPENDIR_OK:
 						break;
-					case OPENDIR_ERR_LOOKUP_FAILED:
+					case OPEN_ERR_OUT_OF_RAM:
+					case OPEN_ERR_OUT_OF_CAPS:
+						return r;
 					default:
 						continue;
 					}
@@ -587,12 +644,14 @@ class Vfs::Dir_file_system : public File_system
 					new (dir_vfs_handle.alloc())
 						Dir_vfs_handle::Subdir_handle_element(
 							dir_vfs_handle.subdir_handle_registry, *sub_dir_handle);
+					/* return OK because at least one directory has been opened */
+					res = OPENDIR_OK;
 				}
 			}
-			catch (Genode::Out_of_ram)  { return OPENDIR_ERR_OUT_OF_RAM; }
-			catch (Genode::Out_of_caps) { return OPENDIR_ERR_OUT_OF_CAPS; }
+			catch (Genode::Out_of_ram)  { res = OPENDIR_ERR_OUT_OF_RAM; }
+			catch (Genode::Out_of_caps) { res = OPENDIR_ERR_OUT_OF_CAPS; }
 
-			return OPENDIR_OK;
+			return res;
 		}
 
 		Opendir_result opendir(char const *path, bool create,
@@ -609,8 +668,13 @@ class Vfs::Dir_file_system : public File_system
 				 * only, VFS root additionally calls 'open_composite_dirs' in order to
 				 * open its file systems
 				 */
-				Dir_vfs_handle *root_handle = new (alloc)
-					Dir_vfs_handle(*this, *this, alloc, path);
+				Dir_vfs_handle *root_handle;
+				try {
+					root_handle = new (alloc)
+						Dir_vfs_handle(*this, *this, alloc, path);
+				}
+				catch (Genode::Out_of_ram)  { return OPENDIR_ERR_OUT_OF_RAM; }
+				catch (Genode::Out_of_caps) { return OPENDIR_ERR_OUT_OF_CAPS; }
 
 				/* the VFS root may contain more file systems */
 				if (_vfs_root)
@@ -636,8 +700,9 @@ class Vfs::Dir_file_system : public File_system
 					Vfs_handle *tmp_handle;
 					Opendir_result opendir_result =
 						fs.opendir(path, true, &tmp_handle, alloc);
-					if (opendir_result == OPENDIR_OK)
-						fs.close(tmp_handle);
+					if (opendir_result == OPENDIR_OK) {
+						tmp_handle->close();
+					}
 					return opendir_result; /* return from lambda */
 				};
 
@@ -651,8 +716,13 @@ class Vfs::Dir_file_system : public File_system
 					return opendir_result;
 			}
 
-			Dir_vfs_handle *dir_vfs_handle = new (alloc)
-				Dir_vfs_handle(*this, *this, alloc, path);
+			Dir_vfs_handle *dir_vfs_handle;
+			try {
+				dir_vfs_handle = new (alloc)
+					Dir_vfs_handle(*this, *this, alloc, path);
+			}
+			catch (Genode::Out_of_ram)  { return OPENDIR_ERR_OUT_OF_RAM; }
+			catch (Genode::Out_of_caps) { return OPENDIR_ERR_OUT_OF_CAPS; }
 
 			/* path equals "/" (for reading the name of this directory) */
 			if (strlen(sub_path) == 0)
@@ -686,6 +756,43 @@ class Vfs::Dir_file_system : public File_system
 		void close(Vfs_handle *handle) override
 		{
 			if (handle && (&handle->ds() == this))
+				destroy(handle->alloc(), handle);
+		}
+
+		Watch_result watch(char const      *path,
+		                   Vfs_watch_handle **handle,
+		                   Allocator        &alloc) override
+		{
+			Watch_result res = WATCH_ERR_UNACCESSIBLE;
+			Dir_watch_handle *meta_handle = nullptr;
+
+			char const *sub_path = _sub_path(path);
+			if (!sub_path) return res;
+
+			for (File_system *fs = _first_file_system; fs; fs = fs->next) {
+				Vfs_watch_handle *sub_handle;
+
+				if (fs->watch(sub_path, &sub_handle, alloc) == WATCH_OK) {
+					if (meta_handle == nullptr) {
+						/* at least one non-static FS, allocate handle */
+						meta_handle = new (alloc) Dir_watch_handle(*this, alloc);
+						*handle = meta_handle;
+						res = WATCH_OK;
+					}
+
+					/* attach child FS handle to returned handle */
+					new (alloc)
+						Dir_watch_handle::Watch_handle_element(
+							meta_handle->handle_registry, *sub_handle);
+				}
+			}
+
+			return res;
+		}
+
+		void close(Vfs_watch_handle *handle) override
+		{
+			if (handle && (&handle->fs() == this))
 				destroy(handle->alloc(), handle);
 		}
 
@@ -765,13 +872,12 @@ class Vfs::Dir_file_system : public File_system
 		 ** File I/O service interface **
 		 ********************************/
 
-		Write_result write(Vfs_handle *handle, char const *, file_size,
-		                   file_size &) override
+		Write_result write(Vfs_handle *, char const *, file_size, file_size &) override
 		{
 			return WRITE_ERR_INVALID;
 		}
 
-		bool queue_read(Vfs_handle *vfs_handle, file_size count) override
+		bool queue_read(Vfs_handle *vfs_handle, file_size) override
 		{
 			Dir_vfs_handle *dir_vfs_handle =
 				static_cast<Dir_vfs_handle*>(vfs_handle);
@@ -852,6 +958,7 @@ class Vfs::Dir_file_system : public File_system
 			auto f = [&result, dir_vfs_handle] (Dir_vfs_handle::Subdir_handle_element &e) {
 				/* forward the handle context */
 				e.vfs_handle.context = dir_vfs_handle->context;
+				e.synced = false;
 
 				if (!e.vfs_handle.fs().queue_sync(&e.vfs_handle)) {
 					result = false;
@@ -871,9 +978,14 @@ class Vfs::Dir_file_system : public File_system
 				static_cast<Dir_vfs_handle*>(vfs_handle);
 
 			auto f = [&result, dir_vfs_handle] (Dir_vfs_handle::Subdir_handle_element &e) {
+				if (e.synced)
+					return;
+
 				Sync_result r = e.vfs_handle.fs().complete_sync(&e.vfs_handle);
 				if (r != SYNC_OK)
 					result = r;
+				else
+					e.synced = true;
 			};
 
 			dir_vfs_handle->subdir_handle_registry.for_each(f);

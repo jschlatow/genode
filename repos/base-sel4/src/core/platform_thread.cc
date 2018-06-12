@@ -37,8 +37,8 @@ class Platform_thread_registry : Noncopyable
 {
 	private:
 
-		List<Platform_thread> _threads;
-		Lock                  _lock;
+		List<Platform_thread> _threads { };
+		Lock                  _lock    { };
 
 	public:
 
@@ -117,8 +117,8 @@ static void prepopulate_ipc_buffer(addr_t ipc_buffer_phys, Cap_sel ep_sel,
 
 	/* populate IPC buffer with thread information */
 	Native_utcb &utcb = *(Native_utcb *)virt_addr;
-	utcb.ep_sel = ep_sel.value();
-	utcb.lock_sel = lock_sel.value();
+	utcb.ep_sel  (ep_sel  .value());
+	utcb.lock_sel(lock_sel.value());
 
 	/* unmap IPC buffer from core */
 	if (!unmap_local((addr_t)virt_addr, 1)) {
@@ -136,7 +136,7 @@ static void prepopulate_ipc_buffer(addr_t ipc_buffer_phys, Cap_sel ep_sel,
  ** Platform_thread interface **
  *******************************/
 
-int Platform_thread::start(void *ip, void *sp, unsigned int cpu_no)
+int Platform_thread::start(void *ip, void *sp, unsigned int)
 {
 	ASSERT(_pd);
 	ASSERT(_pager);
@@ -164,14 +164,17 @@ int Platform_thread::start(void *ip, void *sp, unsigned int cpu_no)
 	prepopulate_ipc_buffer(_info.ipc_buffer_phys, _ep_sel, _lock_sel);
 
 	/* bind thread to PD and CSpace */
-	seL4_CapData_t const guard_cap_data =
-		seL4_CapData_Guard_new(0, CONFIG_WORD_SIZE - _pd->cspace_size_log2());
+	seL4_CNode_CapData const guard_cap_data =
+		seL4_CNode_CapData_new(0, CONFIG_WORD_SIZE - _pd->cspace_size_log2());
 
-	seL4_CapData_t const no_cap_data = { { 0 } };
+	seL4_CNode_CapData const no_cap_data = { { 0 } };
 
-	int const ret = seL4_TCB_SetSpace(_info.tcb_sel.value(), _fault_handler_sel.value(),
-	                                  _pd->cspace_cnode_1st().sel().value(), guard_cap_data,
-	                                  _pd->page_directory_sel().value(), no_cap_data);
+	int const ret = seL4_TCB_SetSpace(_info.tcb_sel.value(),
+	                                  _fault_handler_sel.value(),
+	                                  _pd->cspace_cnode_1st().sel().value(),
+	                                  guard_cap_data.words[0],
+	                                  _pd->page_directory_sel().value(),
+	                                  no_cap_data.words[0]);
 	ASSERT(ret == 0);
 
 	start_sel4_thread(_info.tcb_sel, (addr_t)ip, (addr_t)(sp), _location.xpos());
@@ -195,7 +198,7 @@ void Platform_thread::resume()
 }
 
 
-void Platform_thread::state(Thread_state s)
+void Platform_thread::state(Thread_state)
 {
 	warning(__PRETTY_FUNCTION__, " not implemented");
 	throw Cpu_thread::State_access_failed();
@@ -229,7 +232,7 @@ Platform_thread::Platform_thread(size_t, const char *name, unsigned priority,
 	if (_priority > 0)
 		_priority -= 1;
 
-	_info.init(_utcb ? _utcb : INITIAL_IPC_BUFFER_VIRT, _priority);
+	_info.init(_utcb ? _utcb : (addr_t)INITIAL_IPC_BUFFER_VIRT, _priority);
 	platform_thread_registry().insert(*this);
 }
 

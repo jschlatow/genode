@@ -35,7 +35,7 @@ struct Genode::Local_connection_base : Noncopyable
 
 	protected:
 
-		Constructible<Session_state> _session_state;
+		Constructible<Session_state> _session_state { };
 
 	private:
 
@@ -97,13 +97,15 @@ struct Genode::Local_connection_base : Noncopyable
 				        "after ", (int)NUM_ATTEMPTS, " attempts");
 		}
 
-		~Local_connection_base()
+		void close()
 		{
 			if (_session_state->alive()) {
 				_session_state->phase = Session_state::CLOSE_REQUESTED;
 				_session_state->service().initiate_request(*_session_state);
 			}
 		}
+
+		~Local_connection_base() { close(); }
 };
 
 
@@ -114,7 +116,7 @@ class Genode::Local_connection : Local_connection_base
 
 		typedef typename CONNECTION::Session_type SESSION;
 
-		Constructible <typename SESSION::Client> _client;
+		Constructible <typename SESSION::Client> _client { };
 
 	public:
 
@@ -172,6 +174,10 @@ class Genode::Local_connection : Local_connection_base
 		{
 			service.wakeup();
 		}
+
+		bool alive() const { return _session_state->alive(); }
+
+		using Local_connection_base::close;
 };
 
 #endif /* _INCLUDE__BASE__LOCAL_CONNECTION_H_ */

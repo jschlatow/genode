@@ -12,7 +12,7 @@ define HELP_MESSAGE
 
   usage:
 
-    $(firstword $(MAKEFILE_LIST)) <archive-path> {PUBLIC=<public>}
+    $(firstword $(MAKEFILE_LIST)) <archive-path> {PUBLIC_DIR=<public>}
 
   The <archive-path> denotes the archives (and implicitly their
   dependencies) to publish from the depot to the public directory.
@@ -21,7 +21,7 @@ define HELP_MESSAGE
   This tool does not touch any Genode source repository. It solely
   reads from the depot and writes to the public directory.
 
-  The optional 'PUBLIC' argument defines the location of the public
+  The optional 'PUBLIC_DIR' argument defines the location of the public
   directory. If not specified, '<genode-dir>/public/' is used.
 
 endef
@@ -38,12 +38,15 @@ include $(GENODE_DIR)/tool/depot/mk/front_end.inc
 #
 
 ifneq ($(MAKECMDGOALS),)
-DEPENDENCIES_CMD    := $(GENODE_DIR)/tool/depot/dependencies $(MAKECMDGOALS)
+DEPENDENCIES_CMD    := $(GENODE_DIR)/tool/depot/dependencies DEPOT_DIR="$(DEPOT_DIR)" $(MAKECMDGOALS)
 DEPENDENCIES_RESULT := $(shell $(DEPENDENCIES_CMD) 2> /dev/null || true)
 endif
 
+DEPENDENCIES_MISSING := $(sort $(foreach A, $(DEPENDENCIES_RESULT),\
+                                  $(if $(wildcard $(PUBLIC_DIR)/$A.tar.xz.sig),,$A)))
+
 ifeq ($(filter Error:,$(DEPENDENCIES_RESULT)),)
-ARCHIVES := $(DEPENDENCIES_RESULT)
+ARCHIVES := $(DEPENDENCIES_MISSING)
 else
 ARCHIVES :=
 $(MAKECMDGOALS): dependencies_error
@@ -65,18 +68,19 @@ MISSING_PUBKEY_FILES := $(sort \
                               $(if $(call pubkey_path,$A),,\
                                  $(DEPOT_DIR)/$(call pubkey_filename,$A))))
 
-TARGETS := $(addsuffix .tgz.sig,$(addprefix $(PUBLIC_DIR)/,$(ARCHIVES)))
+TARGETS := $(addsuffix .tar.xz.sig,$(addprefix $(PUBLIC_DIR)/,$(ARCHIVES)))
 
-$(PUBLIC_DIR)/%.tgz.sig : $(PUBLIC_DIR)/%.tgz
+$(PUBLIC_DIR)/%.tar.xz.sig : $(PUBLIC_DIR)/%.tar.xz
 	$(VERBOSE)rm -f $@;
-	$(VERBOSE)gpg --detach-sign --no-tty --use-agent --local-user $(call pubkey_id,$*) $<
+	$(VERBOSE)gpg --detach-sign --digest-algo SHA256 --no-tty --use-agent \
+	              --local-user $(call pubkey_id,$*) $<
 
-.PRECIOUS: $(TARGETS:.tgz.sig=.tgz)
+.PRECIOUS: $(TARGETS:.tar.xz.sig=.tar.xz)
 
-$(PUBLIC_DIR)/%.tgz: $(DEPOT_DIR)/%
+$(PUBLIC_DIR)/%.tar.xz: $(DEPOT_DIR)/%
 	@$(ECHO) "$(DARK_COL)publish$(DEFAULT_COL) $@"
 	$(VERBOSE)test -e $(dir $@) || mkdir -p $(dir $@)
-	$(VERBOSE)tar czf $@ -C $(dir $<) $(notdir $<)
+	$(VERBOSE)tar cJf $@ -C $(dir $<) $(notdir $<)
 
 ifneq ($(MISSING_PUBKEY_FILES),)
 $(MAKECMDGOALS) $(TARGETS): missing_pubkey_files

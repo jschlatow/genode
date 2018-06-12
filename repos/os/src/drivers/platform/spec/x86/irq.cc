@@ -43,8 +43,8 @@ class Platform::Irq_allocator
 		 */
 		enum { LEGACY = 40, MSI = 64, LEGACY_ARRAY = 64 };
 
-		Genode::Bit_array<LEGACY_ARRAY> _legacy;
-		Genode::Bit_allocator<MSI>      _msi;
+		Genode::Bit_array<LEGACY_ARRAY> _legacy { };
+		Genode::Bit_allocator<MSI>      _msi    { };
 
 	public:
 
@@ -193,10 +193,6 @@ Platform::Irq_session_component::Irq_session_component(unsigned irq,
 :
 	_gsi(irq)
 {
-	/* invalid irq number for pci_devices */
-	if (_gsi >= INVALID_IRQ)
-		return;
-
 	if (pci_config_space != ~0UL) {
 		/* msi way */
 		unsigned msi = irq_alloc.alloc_msi();
@@ -218,6 +214,10 @@ Platform::Irq_session_component::Irq_session_component(unsigned irq,
 			irq_alloc.free_msi(msi);
 		}
 	}
+
+	/* invalid irq number for pci_devices */
+	if (_gsi >= INVALID_IRQ)
+		return;
 
 	Genode::Irq_session::Trigger  trigger;
 	Genode::Irq_session::Polarity polarity;
@@ -287,12 +287,15 @@ void Platform::Irq_session_component::sigh(Genode::Signal_context_capability sig
 
 
 unsigned short Platform::Irq_routing::rewrite(unsigned char bus, unsigned char dev,
-                                         unsigned char func, unsigned char pin)
+                                              unsigned char, unsigned char pin)
 {
-	for (Irq_routing *i = list()->first(); i; i = i->next())
+	unsigned const bridge_bdf_bus = Platform::bridge_bdf(bus);
+
+	for (Irq_routing *i = list()->first(); i; i = i->next()) {
 		if ((dev == i->_device) && (pin - 1 == i->_device_pin) &&
-		    (i->_bridge_bdf == Platform::bridge_bdf(bus)))
+		    (i->_bridge_bdf == bridge_bdf_bus))
 			return i->_gsi;
+	}
 
 	return 0;
 }

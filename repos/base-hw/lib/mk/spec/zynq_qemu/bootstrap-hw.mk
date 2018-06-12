@@ -1,4 +1,4 @@
-INC_DIR += $(BASE_DIR)/../base-hw/src/bootstrap/spec/zynq
+INC_DIR += $(BASE_DIR)/../base-hw/src/bootstrap/spec/zynq_qemu
 
 SRC_S   += bootstrap/spec/arm/crt0.s
 

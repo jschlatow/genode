@@ -4,6 +4,103 @@
                                ===========
 
 
+Sculpt for Early Adopters | 2018-03-02
+######################################
+
+| A detailed step-by-step guide for installing and using the Genode-based
+| Sculpt OS is available now.
+
+Sculpt for Early Adopters (EA) is the first revision of our Genode-based
+general-purpose OS. This version is targeted at enthusiasts who are already
+familiar with Genode. The documentation covers everything needed to get
+it running on a real machine. This includes disk preparation, input handling,
+wireless networking, storage, software installation and deployment, and
+virtualization.
+
+*Printable version (pdf)* [https:/documentation/sculpt-ea.pdf]
+
+*Online version* [https:/documentation/articles/sculpt-ea]
+
+
+Genode OS Framework release 18.02 | 2018-02-28
+##############################################
+
+| Genode version 18.02 kicks off the Year of Sculpt by featuring the
+| first revision of the Sculpt operating system for general-purpose
+| computing. Further highlights of the new release range from
+| network-stack improvements, over a new tracing utility, to the
+| experimental use of the Nim programming language.
+
+Since we announced the Year of Sculpt on our
+[https://genode.org/about/road-map - roadmap], our team anticipated the
+release of version 18.02 with excitement. The current release officially
+presents the first revision of the Sculpt operating system, which is targeted
+at the use of Genode as day-to-day OS. In fact, the system has been in
+use internally at Genode Labs for several months. We feel confident in
+sharing it with a broader community now.
+
+Driven by the demands of Sculpt, the most prominent topics of this release
+are Genode's new mechanisms for installing, updating, and deploying software
+from within a running Genode system. Further highlights are the experimental
+use of the Nim programming language for the implementation of Genode servers,
+a new tracing utility that makes Genode's existing tracing infrastructure much
+easier to use, improvements across the entire user-level networking stack, and
+updates of many 3rd-party software packages.
+
+These and many more topics are covered in detail by the
+[https:/documentation/release-notes/18.02 - release documentation of version 18.02...]
+
+
+Road Map for 2018 | 2018-01-17
+##############################
+
+| 2018 will be the year of Sculpt.
+
+In autumn last year, a new Genode system scenario called "Sculpt" emerged.
+By the end of 2017, all members of the Genode-Labs team switched to this
+operating system on their laptops. The planning of 2018 revolves around the
+ambition to expand the user base of Sculpt in several steps. Additionally,
+the year will be focused on software quality, device-driver support for
+popular ARM boards, Genode's custom kernel, and seL4.
+
+The new road map is available at the [https:/about/road-map - road-map page].
+
+
+Genode at FOSDEM 2018 | 2018-01-16
+##################################
+
+| Genode will participate in the microkernel developer room at FOSDEM with
+| three presentations, covering our recent work on GPUs, user-level networking,
+| and the dynamic sculpting of a Genode-based system.
+
+The microkernel developer room at FOSDEM is the melting pot of the open-source
+microkernel world where projects and users meet to present their work and
+experience with microkernel-based operating systems. Like every year, we will
+take the chance to present the recent developments of Genode to the audience.
+If you are curious about the technology, or interested in meeting the people
+behind the projects, please do not hesitate to join us at FOSDEM, which will
+be held on 3rd - 4th of February in Brussels:
+
+FOSDEM 2018: [https://fosdem.org/2018/]
+
+This year, the following Genode-related topics will be presented:
+
+Saturday 11:05 *GPU resource multiplexing in component based systems*
+_Microkernel devroom (AW1.126)_
+[https://fosdem.org/2018/schedule/event/microkernel_genode_gpu_multiplexing/ - abstract...]
+
+Saturday 12:25 *Live sculpting a Genode-based operating system*
+_Microkernel devroom (AW1.126)_
+[https://fosdem.org/2018/schedule/event/microkernel_genode_live_sculpting/ - abstract...]
+
+Saturday 17:30 *User-level networking on Genode*
+_Microkernel devroom (AW1.126)_
+[https://fosdem.org/2018/schedule/event/microkernel_genode_user_level_networking/ - abstract...]
+
+The complete schedule of the developer room is available at
+[https://fosdem.org/2018/schedule/track/microkernels/].
+
+
 Genode OS Framework release 17.11 | 2017-11-30
 ##############################################
 

@@ -39,7 +39,7 @@ class Net::Packet_handler
 {
 	private:
 
-		Packet_descriptor _packet;
+		Packet_descriptor _packet { };
 		Net::Vlan        &_vlan;
 
 		/**
@@ -85,6 +85,8 @@ class Net::Packet_handler
 
 		Packet_handler(Genode::Entrypoint&, Vlan&);
 
+		virtual ~Packet_handler() { }
+
 		virtual Packet_stream_sink< ::Nic::Session::Policy>   * sink()   = 0;
 		virtual Packet_stream_source< ::Nic::Session::Policy> * source() = 0;
 
@@ -122,8 +124,8 @@ class Net::Packet_handler
 		 * \param eth   ethernet frame containing the ARP packet.
 		 * \param size  ethernet frame's size.
 		 */
-		virtual bool handle_arp(Ethernet_frame *eth,
-		                        Genode::size_t size)   = 0;
+		virtual bool handle_arp(Ethernet_frame &eth,
+		                        Size_guard     &size_guard)   = 0;
 
 		/*
 		 * Handle an IP packet
@@ -131,8 +133,8 @@ class Net::Packet_handler
 		 * \param eth   ethernet frame containing the IP packet.
 		 * \param size  ethernet frame's size.
 		 */
-		virtual bool handle_ip(Ethernet_frame *eth,
-		                       Genode::size_t size)    = 0;
+		virtual bool handle_ip(Ethernet_frame &eth,
+		                       Size_guard     &size_guard)    = 0;
 
 		/*
 		 * Finalize handling of ethernet frame.

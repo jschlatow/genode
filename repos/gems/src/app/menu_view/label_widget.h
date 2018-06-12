@@ -35,7 +35,7 @@ struct Menu_view::Label_widget : Widget
 
 	void update(Xml_node node)
 	{
-		font = _factory.styles.font(node, "font");
+		font = _factory.styles.font(node);
 		text = Decorator::string_attribute(node, "text", Text(""));
 	}
 
@@ -44,8 +44,8 @@ struct Menu_view::Label_widget : Widget
 		if (!font)
 			return Area(0, 0);
 
-		return Area(font->str_w(text.string()),
-		            font->str_h(text.string()));
+		return Area(font->string_width(text.string()).decimal(),
+		            font->height());
 	}
 
 	void draw(Surface<Pixel_rgb888> &pixel_surface,
@@ -59,13 +59,15 @@ struct Menu_view::Label_widget : Widget
 		int const dx = (int)geometry().w() - text_size.w(),
 		          dy = (int)geometry().h() - text_size.h();
 
-		Point const centered = Point(dx/2, dy/2);
+		Point const centered = at + Point(dx/2, dy/2);
 
-		Text_painter::paint(pixel_surface, at + centered, *font,
-		                    Color(0, 0, 0), text.string());
+		Text_painter::paint(pixel_surface,
+		                    Text_painter::Position(centered.x(), centered.y()),
+		                    *font, Color(0, 0, 0), text.string());
 
-		Text_painter::paint(alpha_surface, at + centered, *font,
-		                    Color(255, 255, 255), text.string());
+		Text_painter::paint(alpha_surface,
+		                    Text_painter::Position(centered.x(), centered.y()),
+		                    *font, Color(255, 255, 255), text.string());
 	}
 };
 

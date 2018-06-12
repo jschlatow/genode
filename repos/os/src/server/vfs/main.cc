@@ -34,8 +34,10 @@ namespace Vfs_server {
 	using namespace Vfs;
 
 	class Session_component;
-	class Root;
 	class Io_response_handler;
+	class Watch_response_handler;
+	class Vfs_env;
+	class Root;
 
 	typedef Genode::Registered<Session_component> Registered_session;
 	typedef Genode::Registry<Registered_session>  Session_registry;
@@ -53,11 +55,11 @@ namespace Vfs_server {
 
 
 class Vfs_server::Session_component : public File_system::Session_rpc_object,
-                                      public Node_io_handler
+                                      public Session_io_handler
 {
 	private:
 
-		Node_space _node_space;
+		Node_space _node_space { };
 
 		Genode::Ram_quota_guard           _ram_guard;
 		Genode::Cap_quota_guard           _cap_guard;
@@ -66,7 +68,7 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 
 		Genode::Signal_handler<Session_component> _process_packet_handler;
 
-		Vfs::Dir_file_system &_vfs;
+		Vfs::File_system &_vfs;
 
 		/*
 		 * The root node needs be allocated with the session struct
@@ -74,13 +76,15 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 		 */
 		Path const _root_path;
 
+		Genode::Session_label const _label;
+
 		bool const _writable;
 
 		/*
 		 * XXX Currently, we have only one packet in backlog, which must finish
 		 *     processing before new packets can be processed.
 		 */
-		Packet_descriptor _backlog_packet;
+		Packet_descriptor _backlog_packet { };
 
 		/****************************
 		 ** Handle to node mapping **
@@ -92,11 +96,11 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 		 * \throw Invalid_handle
 		 */
 		template <typename FUNC>
-		void _apply(Node_handle handle, FUNC const &fn)
+		void _apply_node(Node_handle handle, FUNC const &fn)
 		{
 			Node_space::Id id { handle.value };
 
-			try { _node_space.apply<Node>(id, fn); }
+			try { return _node_space.apply<Node>(id, fn); }
 			catch (Node_space::Unknown_id) { throw Invalid_handle(); }
 		}
 
@@ -148,20 +152,25 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 
 			/* resulting length */
 			size_t res_length = 0;
+			bool succeeded = false;
 
 			switch (packet.operation()) {
 
 			case Packet_descriptor::READ:
 
 				try {
-					_apply(packet.handle(), [&] (Node &node) {
+					_apply(packet.handle(), [&] (Io_node &node) {
 						if (!node.read_ready()) {
 							node.notify_read_ready(true);
 							throw Not_ready();
 						}
 
-						if (node.mode() & READ_ONLY)
+						if (node.mode() & READ_ONLY) {
 							res_length = node.read((char *)content, length, seek);
+							/* no way to distinguish EOF from unsuccessful
+							   reads, both have res_length == 0 */
+							succeeded = true;
+						}
 					});
 				}
 				catch (Not_ready) { throw; }
@@ -173,9 +182,19 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 			case Packet_descriptor::WRITE:
 
 				try {
-					_apply(packet.handle(), [&] (Node &node) {
-						if (node.mode() & WRITE_ONLY)
+					_apply(packet.handle(), [&] (Io_node &node) {
+						if (node.mode() & WRITE_ONLY) {
 							res_length = node.write((char const *)content, length, seek);
+
+							/* File system session can't handle partial writes */
+							if (res_length != length) {
+								Genode::error("partial write detected ",
+								              res_length, " vs ", length);
+								/* don't acknowledge */
+								throw Dont_ack();
+							}
+							succeeded = true;
+						}
 					});
 				} catch (Operation_incomplete) {
 					throw Not_ready();
@@ -191,13 +210,14 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 							throw Dont_ack();
 						}
 					});
+					succeeded = true;
 				}
 				catch (Dont_ack) { throw; }
 				catch (...) { }
 				break;
 
 			case Packet_descriptor::CONTENT_CHANGED:
-				/* The VFS does not track file changes yet */
+				Genode::warning("ignoring CONTENT_CHANGED packet from client");
 				throw Dont_ack();
 
 			case Packet_descriptor::SYNC:
@@ -206,8 +226,9 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 				 * Sync the VFS and send any pending signals on the node.
 				 */
 				try {
-					_apply(packet.handle(), [&] (Node &node) {
+					_apply(packet.handle(), [&] (Io_node &node) {
 						node.sync();
+						succeeded = true;
 					});
 				} catch (Operation_incomplete) {
 					throw Not_ready();
@@ -216,7 +237,7 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 			}
 
 			packet.length(res_length);
-			packet.succeeded(!!res_length);
+			packet.succeeded(succeeded);
 		}
 
 		bool _try_process_packet_op(Packet_descriptor &packet)
@@ -339,6 +360,8 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 				destroy(_alloc, dir);
 			else if (Symlink *link = dynamic_cast<Symlink*>(&node))
 				destroy(_alloc, link);
+			else if (Watch_node *watch = dynamic_cast<Watch_node*>(&node))
+				destroy(_alloc, watch);
 			else
 				destroy(_alloc, &node);
 		}
@@ -354,12 +377,12 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 		 * \param writable     whether the session can modify files
 		 */
 
-		Session_component(Genode::Env         &env,
-		                  char          const *label,
-		                  Genode::Ram_quota    ram_quota,
-		                  Genode::Cap_quota    cap_quota,
-		                  size_t               tx_buf_size,
-		                  Vfs::Dir_file_system &vfs,
+		Session_component(Genode::Env          &env,
+		                  char           const *label,
+		                  Genode::Ram_quota     ram_quota,
+		                  Genode::Cap_quota     cap_quota,
+		                  size_t                tx_buf_size,
+		                  Vfs::File_system     &vfs,
 		                  char           const *root_path,
 		                  bool                  writable)
 		:
@@ -371,6 +394,7 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 			_process_packet_handler(env.ep(), *this, &Session_component::_process_packets),
 			_vfs(vfs),
 			_root_path(root_path),
+			_label(label),
 			_writable(writable)
 		{
 			/*
@@ -391,18 +415,6 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 		}
 
 		/**
-		 * Clip quota limits
-		 */
-		void clip_ram(size_t clipped) {
-			auto avail = _ram_guard.avail().value;
-			if (avail > clipped)
-				_ram_guard.withdraw(Genode::Ram_quota{avail - clipped}); }
-		void clip_caps(size_t clipped) {
-			auto avail = _cap_guard.avail().value;
-			if (avail > clipped)
-				_cap_guard.withdraw(Genode::Cap_quota{avail - clipped}); }
-
-		/**
 		 * Increase quotas
 		 */
 		void upgrade(Genode::Ram_quota ram) {
@@ -415,22 +427,45 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 		 * node-specific, for example after 'release_packet()' to signal
 		 * that a previously failed 'alloc_packet()' may succeed now.
 		 */
-		void handle_general_io()
-		{
-			_process_packets();
-		}
+		void handle_general_io() {
+			_process_packets(); }
 
-		/* Node_io_handler interface */
-		void handle_node_io(Node &node) override
+
+		/********************************
+		 **  Node_io_handler interface **
+		 ********************************/
+
+		void handle_node_io(Io_node &node) override
 		{
+			if (!tx_sink()->ready_to_ack())
+				Genode::error(
+					"dropping I/O notfication, congested packet buffer to '", _label, "'");
+
 			if (node.notify_read_ready() && node.read_ready()
 			 && tx_sink()->ready_to_ack()) {
 				Packet_descriptor packet(Packet_descriptor(),
 				                         Node_handle { node.id().value },
 				                         Packet_descriptor::READ_READY,
 				                         0, 0);
+				packet.succeeded(true);
 				tx_sink()->acknowledge_packet(packet);
 				node.notify_read_ready(false);
+			}
+			_process_packets();
+		}
+
+		void handle_node_watch(Watch_node &node) override
+		{
+			if (!tx_sink()->ready_to_ack())
+				Genode::error(
+					"dropping watch notfication, congested packet buffer to '", _label, "'");
+
+			if (tx_sink()->ready_to_ack()) {
+				Packet_descriptor packet(Packet_descriptor(),
+				                         Node_handle { node.id().value },
+				                         Packet_descriptor::CONTENT_CHANGED,
+				                         0, 0);
+				tx_sink()->acknowledge_packet(packet);
 			}
 			_process_packets();
 		}
@@ -477,7 +512,7 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 				_assert_valid_name(name_str);
 
 				return File_handle {
-					dir.file(_node_space, _vfs, _alloc, *this, name_str, fs_mode, create).value
+					dir.file(_node_space, _vfs, _alloc, name_str, fs_mode, create).value
 				};
 			});
 		}
@@ -511,16 +546,47 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 
 			Node *node;
 
-			try { node  = new (_alloc) Node(_node_space, path_str, STAT_ONLY,
-			                               *this); }
+			try { node  = new (_alloc) Node(_node_space, path_str, *this); }
 			catch (Out_of_memory) { throw Out_of_ram(); }
 
 			return Node_handle { node->id().value };
 		}
 
+		Watch_handle watch(File_system::Path const &path) override
+		{
+			char const *path_str = path.string();
+
+			_assert_valid_path(path_str);
+
+			/* re-root the path */
+			Path sub_path(path_str+1, _root_path.base());
+			path_str = sub_path.base();
+
+			Vfs::Vfs_watch_handle *vfs_handle = nullptr;
+			typedef Directory_service::Watch_result Result;
+			switch (_vfs.watch(path_str, &vfs_handle, _alloc)) {
+			case Result::WATCH_OK: break;
+			case Result::WATCH_ERR_UNACCESSIBLE:
+				throw Lookup_failed();
+			case Result::WATCH_ERR_STATIC:
+				throw Unavailable();
+			case Result::WATCH_ERR_OUT_OF_RAM:
+				throw Out_of_ram();
+			case Result::WATCH_ERR_OUT_OF_CAPS:
+				throw Out_of_caps();
+			}
+
+			Node *node;
+			try { node  = new (_alloc)
+				Watch_node(_node_space, path_str, *vfs_handle, *this); }
+			catch (Out_of_memory) { throw Out_of_ram(); }
+
+			return Watch_handle { node->id().value };
+		}
+
 		void close(Node_handle handle) override
 		{
-			try { _apply(handle, [&] (Node &node) {
+			try { _apply_node(handle, [&] (Node &node) {
 				_close(node);
 			}); } catch (File_system::Invalid_handle) { }
 		}
@@ -529,7 +595,7 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 		{
 			File_system::Status      fs_stat;
 
-			_apply(node_handle, [&] (Node &node) {
+			_apply_node(node_handle, [&] (Node &node) {
 				Directory_service::Stat vfs_stat;
 
 				if (_vfs.stat(node.path(), vfs_stat) != Directory_service::STAT_OK)
@@ -610,7 +676,9 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 		void control(Node_handle, Control) override { }
 };
 
-
+/**
+ * Global I/O event handler
+ */
 struct Vfs_server::Io_response_handler : Vfs::Io_response_handler
 {
 	Session_registry &_session_registry;
@@ -631,8 +699,8 @@ struct Vfs_server::Io_response_handler : Vfs::Io_response_handler
 
 		_in_progress = true;
 
-		if (Vfs_server::Node *node = static_cast<Vfs_server::Node *>(context))
-			node->handle_io_response();
+		if (context)
+			Io_node::node_by_context(*context).handle_io_response();
 		else
 			_handle_general_io = true;
 
@@ -647,16 +715,60 @@ struct Vfs_server::Io_response_handler : Vfs::Io_response_handler
 	}
 };
 
+/**
+ * Global VFS watch handler
+ */
+struct Vfs_server::Watch_response_handler : Vfs::Watch_response_handler
+{
+	void handle_watch_response(Vfs::Vfs_watch_handle::Context *context) override
+	{
+		if (context)
+			Watch_node::node_by_context(*context).handle_watch_response();
+	}
+};
 
-class Vfs_server::Root :
-	public Genode::Root_component<Session_component>
+
+class Vfs_server::Vfs_env final : Vfs::Env
 {
 	private:
 
 		Genode::Env  &_env;
+		Genode::Heap  _heap { &_env.ram(), &_env.rm() };
 
-		/* heap for internal VFS allocation */
-		Genode::Heap  _vfs_heap { &_env.ram(), &_env.rm() };
+		Io_response_handler    _io_handler;
+		Watch_response_handler _watch_handler { };
+
+		Vfs::Global_file_system_factory _global_file_system_factory { _heap };
+
+		Vfs::Dir_file_system _root_dir;
+
+	public:
+
+		Vfs_env(Genode::Env &env, Genode::Xml_node config,
+		        Session_registry &sessions)
+		: _env(env), _io_handler(sessions),
+		  _root_dir(*this, config, _global_file_system_factory)
+		{ }
+
+		Genode::Env &env() override { return _env; }
+
+		Genode::Allocator &alloc() override { return _heap; }
+
+		Vfs::File_system &root_dir() override { return _root_dir; }
+
+		Io_response_handler &io_handler() override {
+			return _io_handler; }
+
+		Watch_response_handler &watch_handler() override {
+			return _watch_handler; }
+};
+
+
+class Vfs_server::Root : public Genode::Root_component<Session_component>
+{
+	private:
+
+		Genode::Env &_env;
 
 		Genode::Attached_rom_dataspace _config_rom { _env, "config" };
 
@@ -670,15 +782,9 @@ class Vfs_server::Root :
 			}
 		}
 
-		Session_registry _session_registry;
+		Session_registry _session_registry { };
 
-		Io_response_handler _io_response_handler { _session_registry };
-
-		Vfs::Global_file_system_factory _global_file_system_factory { _vfs_heap };
-
-		Vfs::Dir_file_system _vfs {
-			_env, _vfs_heap, vfs_config(), _io_response_handler,
-			_global_file_system_factory, Vfs::Dir_file_system::Root() };
+		Vfs_env _vfs_env { _env, vfs_config(), _session_registry };
 
 		Genode::Signal_handler<Root> _config_handler {
 			_env.ep(), *this, &Root::_config_update };
@@ -686,7 +792,7 @@ class Vfs_server::Root :
 		void _config_update()
 		{
 			_config_rom.update();
-			_vfs.apply_config(vfs_config());
+			_vfs_env.root_dir().apply_config(vfs_config());
 		}
 
 	protected:
@@ -764,7 +870,8 @@ class Vfs_server::Root :
 			}
 
 			/* check if the session root exists */
-			if (!((session_root == "/") || _vfs.directory(session_root.base()))) {
+			if (!((session_root == "/")
+			 || _vfs_env.root_dir().directory(session_root.base()))) {
 				error("session root '", session_root, "' not found for '", label, "'");
 				throw Service_denied();
 			}
@@ -773,7 +880,7 @@ class Vfs_server::Root :
 				Registered_session(_session_registry, _env, label.string(),
 				                   Genode::Ram_quota{ram_quota},
 				                   Genode::Cap_quota{cap_quota},
-				                   tx_buf_size, _vfs,
+				                   tx_buf_size, _vfs_env.root_dir(),
 				                   session_root.base(), writeable);
 
 			auto ram_used = _env.pd().used_ram().value - initial_ram_usage;
@@ -781,20 +888,14 @@ class Vfs_server::Root :
 
 			if ((ram_used > ram_quota) || (cap_used > cap_quota)) {
 				if (ram_used > ram_quota)
-					Genode::error("ram donation is ", ram_quota,
-					              " but used RAM is ", ram_used, "B"
-					              ", denying '", label, "'");
+					Genode::warning("ram donation is ", ram_quota,
+					                " but used RAM is ", ram_used, "B"
+					                ", '", label, "'");
 				if (cap_used > cap_quota)
-					Genode::error("cap donation is ", cap_quota,
-					              " but used caps is ", cap_used,
-					              ", denying '", label, "'");
-				destroy(*session);
-				throw Service_denied();
+					Genode::warning("cap donation is ", cap_quota,
+					                " but used caps is ", cap_used,
+					                ", '", label, "'");
 			}
-
-			/* account allocations not caught by session guards */
-			session->clip_ram(ram_quota - ram_used);
-			session->clip_caps(cap_quota - cap_used);
 
 			Genode::log("session opened for '", label, "' at '", session_root, "'");
 			return session;

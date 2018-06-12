@@ -26,7 +26,7 @@ class Vfs::Block_file_system : public Single_file_system
 {
 	private:
 
-		Genode::Allocator &_alloc;
+		Vfs::Env &_env;
 
 		typedef Genode::String<64> Label;
 		Label _label;
@@ -34,24 +34,31 @@ class Vfs::Block_file_system : public Single_file_system
 		/*
 		 * Serialize access to packet stream of the block session
 		 */
-		Lock _lock;
+		Lock _lock { };
 
 		char                       *_block_buffer;
 		unsigned                    _block_buffer_count;
 
-		Genode::Allocator_avl       _tx_block_alloc { &_alloc };
-		Block::Connection           _block;
-		Genode::size_t              _block_size;
-		Block::sector_t             _block_count;
-		Block::Session::Operations  _block_ops;
+		Genode::Allocator_avl       _tx_block_alloc { &_env.alloc() };
+		Block::Connection           _block {
+			_env.env(), &_tx_block_alloc, 128*1024, _label.string() };
+		Genode::size_t              _block_size  = 0;
+		Block::sector_t             _block_count = 0;
+		Block::Session::Operations  _block_ops { };
 		Block::Session::Tx::Source *_tx_source;
 
 		bool                        _readable;
 		bool                        _writeable;
 
-		Genode::Signal_receiver           _signal_receiver;
-		Genode::Signal_context            _signal_context;
+		Genode::Signal_receiver           _signal_receiver { };
+		Genode::Signal_context            _signal_context  { };
 		Genode::Signal_context_capability _source_submit_cap;
+
+		/*
+		 * Noncopyable
+		 */
+		Block_file_system(Block_file_system const &);
+		Block_file_system &operator = (Block_file_system const &);
 
 		class Block_vfs_handle : public Single_vfs_handle
 		{
@@ -73,6 +80,12 @@ class Vfs::Block_file_system : public Single_file_system
 				Genode::Signal_receiver           &_signal_receiver;
 				Genode::Signal_context            &_signal_context;
 				Genode::Signal_context_capability &_source_submit_cap;
+
+				/*
+				 * Noncopyable
+				 */
+				Block_vfs_handle(Block_vfs_handle const &);
+				Block_vfs_handle &operator = (Block_vfs_handle const &);
 
 				file_size _block_io(file_size nr, void *buf, file_size sz,
 				                    bool write, bool bulk = false)
@@ -196,14 +209,14 @@ class Vfs::Block_file_system : public Single_file_system
 
 						/*
 						 * We take a shortcut and read the blocks all at once if the
-						 * offset is aligned on a block boundary and we the count is a
+						 * offset is aligned on a block boundary and the count is a
 						 * multiple of the block size, e.g. 4K reads will be read at
 						 * once.
 						 *
 						 * XXX this is quite hackish because we have to omit partial
 						 * blocks at the end.
 						 */
-						if (displ == 0 && (count % _block_size) >= 0 && !(count < _block_size)) {
+						if (displ == 0 && !(count < _block_size)) {
 							file_size bytes_left = count - (count % _block_size);
 
 							nbytes = _block_io(blk_nr, dst + read, bytes_left, false, true);
@@ -271,7 +284,7 @@ class Vfs::Block_file_system : public Single_file_system
 						 * XXX this is quite hackish because we have to omit partial
 						 * blocks at the end.
 						 */
-						if (displ == 0 && (count % _block_size) >= 0 && !(count < _block_size)) {
+						if (displ == 0 && !(count < _block_size)) {
 							file_size bytes_left = count - (count % _block_size);
 
 							nbytes = _block_io(blk_nr, (void*)(buf + written),
@@ -322,17 +335,13 @@ class Vfs::Block_file_system : public Single_file_system
 
 	public:
 
-		Block_file_system(Genode::Env &env,
-		                  Genode::Allocator &alloc,
-		                  Genode::Xml_node config,
-		                  Io_response_handler &)
+		Block_file_system(Vfs::Env &env, Genode::Xml_node config)
 		:
 			Single_file_system(NODE_TYPE_BLOCK_DEVICE, name(), config),
-			_alloc(alloc),
+			_env(env),
 			_label(config.attribute_value("label", Label())),
 			_block_buffer(0),
 			_block_buffer_count(1),
-			_block(env, &_tx_block_alloc, 128*1024, _label.string()),
 			_tx_source(_block.tx()),
 			_readable(false),
 			_writeable(false),
@@ -346,7 +355,7 @@ class Vfs::Block_file_system : public Single_file_system
 			_readable  = _block_ops.supported(Block::Packet_descriptor::READ);
 			_writeable = _block_ops.supported(Block::Packet_descriptor::WRITE);
 
-			_block_buffer = new (_alloc) char[_block_buffer_count * _block_size];
+			_block_buffer = new (_env.alloc()) char[_block_buffer_count * _block_size];
 
 			_block.tx_channel()->sigh_ready_to_submit(_source_submit_cap);
 		}
@@ -355,7 +364,7 @@ class Vfs::Block_file_system : public Single_file_system
 		{
 			_signal_receiver.dissolve(&_signal_context);
 
-			destroy(_alloc, _block_buffer);
+			destroy(_env.alloc(), _block_buffer);
 		}
 
 		static char const *name()   { return "block"; }
@@ -372,22 +381,26 @@ class Vfs::Block_file_system : public Single_file_system
 			if (!_single_file(path))
 				return OPEN_ERR_UNACCESSIBLE;
 
-			*out_handle = new (alloc) Block_vfs_handle(*this, *this, alloc,
-			                                           _label, _lock,
-			                                           _block_buffer,
-			                                           _block_buffer_count,
-			                                           _tx_block_alloc,
-			                                           _block,
-			                                           _block_size,
-			                                           _block_count,
-			                                           _block_ops,
-			                                           _tx_source,
-			                                           _readable,
-			                                           _writeable,
-			                                           _signal_receiver,
-			                                           _signal_context,
-			                                           _source_submit_cap);
-			return OPEN_OK;
+			try {
+				*out_handle = new (alloc) Block_vfs_handle(*this, *this, alloc,
+				                                           _label, _lock,
+				                                           _block_buffer,
+				                                           _block_buffer_count,
+				                                           _tx_block_alloc,
+				                                           _block,
+				                                           _block_size,
+				                                           _block_count,
+				                                           _block_ops,
+				                                           _tx_source,
+				                                           _readable,
+				                                           _writeable,
+				                                           _signal_receiver,
+				                                           _signal_context,
+				                                           _source_submit_cap);
+				return OPEN_OK;
+			}
+			catch (Genode::Out_of_ram)  { return OPEN_ERR_OUT_OF_RAM; }
+			catch (Genode::Out_of_caps) { return OPEN_ERR_OUT_OF_CAPS; }
 		}
 
 		Stat_result stat(char const *path, Stat &out) override
@@ -402,12 +415,12 @@ class Vfs::Block_file_system : public Single_file_system
 		 ** File I/O service interface **
 		 ********************************/
 
-		Ftruncate_result ftruncate(Vfs_handle *vfs_handle, file_size) override
+		Ftruncate_result ftruncate(Vfs_handle *, file_size) override
 		{
 			return FTRUNCATE_OK;
 		}
 
-		Ioctl_result ioctl(Vfs_handle *vfs_handle, Ioctl_opcode opcode, Ioctl_arg,
+		Ioctl_result ioctl(Vfs_handle *, Ioctl_opcode opcode, Ioctl_arg,
 		                   Ioctl_out &out) override
 		{
 			switch (opcode) {

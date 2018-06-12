@@ -76,8 +76,7 @@ class Vfs::Rtc_file_system : public Single_file_system
 
 				}
 
-				Write_result write(char const *src, file_size count,
-				                   file_size &out_count) override
+				Write_result write(char const *, file_size, file_size &) override
 				{
 					return WRITE_ERR_IO;
 				}
@@ -87,13 +86,10 @@ class Vfs::Rtc_file_system : public Single_file_system
 
 	public:
 
-		Rtc_file_system(Genode::Env &env,
-		                Genode::Allocator&,
-		                Genode::Xml_node config,
-		                Io_response_handler &)
+		Rtc_file_system(Vfs::Env &env, Genode::Xml_node config)
 		:
 			Single_file_system(NODE_TYPE_CHAR_DEVICE, name(), config),
-			_rtc(env)
+			_rtc(env.env())
 		{ }
 
 		static char const *name()   { return "rtc"; }
@@ -110,9 +106,13 @@ class Vfs::Rtc_file_system : public Single_file_system
 			if (!_single_file(path))
 				return OPEN_ERR_UNACCESSIBLE;
 
-			*out_handle = new (alloc) Rtc_vfs_handle(*this, *this, alloc,
-			                                         _rtc);
-			return OPEN_OK;
+			try {
+				*out_handle = new (alloc)
+					Rtc_vfs_handle(*this, *this, alloc, _rtc);
+				return OPEN_OK;
+			}
+			catch (Genode::Out_of_ram)  { return OPEN_ERR_OUT_OF_RAM; }
+			catch (Genode::Out_of_caps) { return OPEN_ERR_OUT_OF_CAPS; }
 		}
 
 		Stat_result stat(char const *path, Stat &out) override

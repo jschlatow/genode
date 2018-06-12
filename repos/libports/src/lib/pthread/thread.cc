@@ -22,6 +22,8 @@
 #include <stdlib.h> /* malloc, free */
 #include "thread.h"
 
+#include <libc/task.h> /* libc suspend/resume */
+
 using namespace Genode;
 
 /*
@@ -59,6 +61,22 @@ static __attribute__((constructor)) Thread * main_thread()
 	return thread;
 }
 
+
+/*
+ * pthread
+ */
+void pthread::Thread_object::entry()
+{
+	void *exit_status = _start_routine(_arg);
+	_exiting = true;
+	Libc::resume_all();
+	pthread_exit(exit_status);
+}
+
+
+/*
+ * Registry
+ */
 
 void Pthread_registry::insert(pthread_t thread)
 {
@@ -110,6 +128,26 @@ Pthread_registry &pthread_registry()
 extern "C" {
 
 	/* Thread */
+
+	int pthread_join(pthread_t thread, void **retval)
+	{
+		struct Check : Libc::Suspend_functor
+		{
+			bool suspend() override {
+				return true;
+			}
+		} check;
+
+		while (!thread->exiting()) {
+			Libc::suspend(check);
+		}
+
+
+		thread->join();
+		*((int **)retval) = 0;
+
+		return 0;
+	}
 
 
 	int pthread_attr_init(pthread_attr_t *attr)
@@ -179,37 +217,34 @@ extern "C" {
 
 	pthread_t pthread_self(void)
 	{
-		Thread *myself = Thread::myself();
+		try {
+			pthread_t pthread_myself =
+				static_cast<pthread_t>(&Thread::Tls::Base::tls());
 
-		pthread_t pthread_myself = static_cast<pthread_t>(myself);
-
-		if (pthread_registry().contains(pthread_myself))
-			return pthread_myself;
+			if (pthread_registry().contains(pthread_myself))
+				return pthread_myself;
+		}
+		catch (Thread::Tls::Base::Undefined) { }
 
 		/*
 		 * We pass here if the main thread or an alien thread calls
 		 * pthread_self(). So check for aliens (or other bugs) and opt-out
 		 * early.
 		 */
-
 		if (!_pthread_main_np()) {
 			error("pthread_self() called from alien thread named ",
-			      "'", myself->name().string(), "'");
-
+			      "'", Thread::myself()->name().string(), "'");
 			return nullptr;
 		}
 
 		/*
-		 * We create a pthread object containing a copy of main thread's
-		 * Thread object. Therefore, we ensure the pthread object does not
-		 * get deleted by allocating it in heap via new(). Otherwise, the
-		 * static destruction of the pthread object would also destruct the
-		 * 'Thread' of the main thread.
+		 * We create a pthread object associated to the main thread's Thread
+		 * object. We ensure the pthread object does never get deleted by
+		 * allocating it in heap via new(). Otherwise, the static destruction
+		 * of the pthread object would also destruct the 'Thread' of the main
+		 * thread.
 		 */
-
-		static struct pthread_attr main_thread_attr;
-		static struct pthread *main = new pthread(*myself, &main_thread_attr);
-
+		static pthread *main = new pthread(*Thread::myself());
 		return main;
 	}
 
@@ -219,9 +254,14 @@ extern "C" {
 		if (!attr || !*attr)
 			return EINVAL;
 
-		if (stacksize > (Thread::stack_virtual_size() - 4 * 4096) ||
-		    stacksize < 4096)
+		if (stacksize < 4096)
 			return EINVAL;
+
+		size_t max_stack = Thread::stack_virtual_size() - 4 * 4096;
+		if (stacksize > max_stack) {
+			warning(__func__, ": requested stack size is ", stacksize, " limiting to ", max_stack);
+			stacksize = max_stack;
+		}
 
 		(*attr)->stack_size = Genode::align_addr(stacksize, 12);
 
@@ -233,18 +273,37 @@ extern "C" {
 	                          void **stackaddr,
 	                          ::size_t *stacksize)
 	{
-		/* FIXME */
-		warning("pthread_attr_getstack() called, might not work correctly");
-
 		if (!attr || !*attr || !stackaddr || !stacksize)
 			return EINVAL;
 
 		pthread_t pthread = (*attr)->pthread;
 
-		*stackaddr = pthread->stack_top();
-		*stacksize = (addr_t)pthread->stack_top() - (addr_t)pthread->stack_base();
+		if (pthread != pthread_self()) {
+			error("pthread_attr_getstack() called, where pthread != phtread_self");
+			*stackaddr = nullptr;
+			*stacksize = 0;
+			return EINVAL;
+		}
+
+		Thread::Stack_info info = Thread::mystack();
+		*stackaddr = (void *)info.base;
+		*stacksize = info.top - info.base;
 
 		return 0;
+	}
+
+
+	int pthread_attr_getstackaddr(const pthread_attr_t *attr, void **stackaddr)
+	{
+		size_t stacksize;
+		return pthread_attr_getstack(attr, stackaddr, &stacksize);
+	}
+
+
+	int pthread_attr_getstacksize(const pthread_attr_t *attr, size_t *stacksize)
+	{
+		void *stackaddr;
+		return pthread_attr_getstack(attr, &stackaddr, stacksize);
 	}
 
 
@@ -253,7 +312,7 @@ extern "C" {
 		if (!attr)
 			return EINVAL;
 
-		*attr = pthread->_attr;
+		(*attr)->pthread = pthread;
 		return 0;
 	}
 

@@ -1,6 +1,11 @@
 SHARED_LIB = yes
 LIBS       = libc blit
 
+# Link to Mesa, EGL clients should use `eglGetProcAddres`
+# to retrieve Mesa implementations rather than use Mesa
+# symbols directly.
+LIBS += mesa
+
 include $(REP_DIR)/lib/mk/mesa-common.inc
 
 SRC_C = \
@@ -31,3 +36,5 @@ INC_DIR += $(MESA_PORT_DIR)/src/egl/main \
 vpath %.c  $(MESA_PORT_DIR)/src/egl
 vpath %.c  $(LIB_DIR)/egl
 vpath %.cc $(LIB_DIR)/egl
+
+CC_CXX_WARN_STRICT =

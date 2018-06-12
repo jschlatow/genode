@@ -124,7 +124,7 @@ class Noux::Child : public Rpc_object<Session>,
 
 		Env &_env;
 
-		Vfs::Dir_file_system &_root_dir;
+		Vfs::File_system &_root_dir;
 
 		Vfs_io_waiter_registry &_vfs_io_waiter_registry;
 		Vfs_handle_context      _vfs_handle_context;
@@ -243,11 +243,15 @@ class Noux::Child : public Rpc_object<Session>,
 		/**
 		 * Let specified child inherit our file descriptors
 		 */
-		void _assign_io_channels_to(Child *child)
+		void _assign_io_channels_to(Child *child, bool skip_when_close_on_execve_set)
 		{
 			for (int fd = 0; fd < MAX_FILE_DESCRIPTORS; fd++)
-				if (fd_in_use(fd))
+				if (fd_in_use(fd)) {
+					if (skip_when_close_on_execve_set && close_fd_on_execve(fd))
+						continue;
 					child->add_io_channel(io_channel_by_fd(fd), fd);
+					child->close_fd_on_execve(fd, close_fd_on_execve(fd));
+				}
 		}
 
 		/**
@@ -296,7 +300,6 @@ class Noux::Child : public Rpc_object<Session>,
 
 	public:
 
-		struct Binary_does_not_exist : Exception { };
 		struct Insufficient_memory : Exception { };
 
 		/**
@@ -307,10 +310,6 @@ class Noux::Child : public Rpc_object<Session>,
 		 *                or children created via execve, or
 		 *                true if the child is a fork from another child
 		 *
-		 * \throw Binary_does_not_exist  if child is not a fork and the
-		 *                               specified name could not be
-		 *                               looked up at the virtual file
-		 *                               system
 		 * \throw Insufficent_memory if the child could not be started by
 		 *                           the parent
 		 */
@@ -324,7 +323,7 @@ class Noux::Child : public Rpc_object<Session>,
 		      Pid_allocator            &pid_allocator,
 		      int                       pid,
 		      Env                      &env,
-		      Vfs::Dir_file_system     &root_dir,
+		      Vfs::File_system         &root_dir,
 		      Vfs_io_waiter_registry   &vfs_io_waiter_registry,
 		      Args               const &args,
 		      Sysio::Env         const &sysio_env,
@@ -536,7 +535,7 @@ class Noux::Child : public Rpc_object<Session>,
 			                                 false,
 			                                 _destruct_queue);
 
-			_assign_io_channels_to(child);
+			_assign_io_channels_to(child, true);
 
 			/* move the signal queue */
 			while (!_pending_signals.empty())
@@ -564,13 +563,14 @@ class Noux::Child : public Rpc_object<Session>,
 			return child;
 		}
 
+
 		/*********************************
 		 ** Interrupt_handler interface **
 		 *********************************/
 
-		void handle_interrupt()
+		void handle_interrupt(Sysio::Signal signal)
 		{
-			submit_signal(Sysio::SIG_INT);
+			submit_signal(signal);
 		}
 };
 

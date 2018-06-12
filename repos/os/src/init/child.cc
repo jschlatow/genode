@@ -15,6 +15,14 @@
 #include <child.h>
 
 
+void Init::Child::destroy_services()
+{
+	_child_services.for_each([&] (Routed_service &service) {
+		if (service.has_id_space(_session_requester.id_space()))
+			destroy(_alloc, &service); });
+}
+
+
 Init::Child::Apply_config_result
 Init::Child::apply_config(Xml_node start_node)
 {
@@ -267,6 +275,9 @@ void Init::Child::apply_ram_downgrade()
 
 void Init::Child::report_state(Xml_generator &xml, Report_detail const &detail) const
 {
+	/* true if it's safe to call the PD for requesting resource information */
+	bool const pd_alive = !abandoned() && !_exited;
+
 	xml.node("child", [&] () {
 
 		xml.attribute("name",   _unique_name);
@@ -290,7 +301,8 @@ void Init::Child::report_state(Xml_generator &xml, Report_detail const &detail) 
 				xml.attribute("assigned", String<32> {
 					Number_of_bytes(_resources.assigned_ram_quota.value) });
 
-				generate_ram_info(xml, _child.ram());
+				if (pd_alive)
+					generate_ram_info(xml, _child.ram());
 
 				if (_requested_resources.constructed() && _requested_resources->ram.value)
 					xml.attribute("requested", String<32>(_requested_resources->ram));
@@ -302,7 +314,8 @@ void Init::Child::report_state(Xml_generator &xml, Report_detail const &detail) 
 
 				xml.attribute("assigned", String<32>(_resources.assigned_cap_quota));
 
-				generate_caps_info(xml, _child.pd());
+				if (pd_alive)
+					generate_caps_info(xml, _child.pd());
 
 				if (_requested_resources.constructed() && _requested_resources->caps.value)
 					xml.attribute("requested", String<32>(_requested_resources->caps));
@@ -385,7 +398,8 @@ Init::Child::Route Init::Child::resolve_session_request(Service::Name const &ser
 
 		if (_config_rom_service.constructed() &&
 		   !_config_rom_service->abandoned())
-			return Route { _config_rom_service->service(), label };
+			return Route { _config_rom_service->service(), label,
+			               Session::Diag{false} };
 
 		/*
 		 * \deprecated  the support for the <configfile> tag will
@@ -431,7 +445,8 @@ Init::Child::Route Init::Child::resolve_session_request(Service::Name const &ser
 	/* check for "session_requests" ROM request */
 	if (service_name == Rom_session::service_name()
 	 && label.last_element() == Session_requester::rom_name())
-		return Route { _session_requester.service() };
+		return Route { _session_requester.service(),
+		               Session::Label(), Session::Diag{false} };
 
 	try {
 		Xml_node route_node = _default_route_accessor.default_route();
@@ -606,7 +621,8 @@ Genode::Affinity Init::Child::filter_session_affinity(Affinity const &session_af
 
 void Init::Child::announce_service(Service::Name const &service_name)
 {
-	log("child \"", name(), "\" announces service \"", service_name, "\"");
+	if (_verbose.enabled())
+		log("child \"", name(), "\" announces service \"", service_name, "\"");
 
 	bool found = false;
 	_child_services.for_each([&] (Routed_service &service) {
@@ -684,9 +700,4 @@ Init::Child::Child(Env                      &env,
 }
 
 
-Init::Child::~Child()
-{
-	_child_services.for_each([&] (Routed_service &service) {
-		if (service.has_id_space(_session_requester.id_space()))
-			destroy(_alloc, &service); });
-}
+Init::Child::~Child() { }

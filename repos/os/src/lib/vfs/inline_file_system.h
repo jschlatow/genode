@@ -29,12 +29,24 @@ class Vfs::Inline_file_system : public Single_file_system
 		char const * const _base;
 		file_size    const _size;
 
+		/*
+		 * Noncopyable
+		 */
+		Inline_file_system(Inline_file_system const &);
+		Inline_file_system &operator = (Inline_file_system const &);
+
 		class Inline_vfs_handle : public Single_vfs_handle
 		{
 			private:
 
 				char const * const _base;
 				file_size    const _size;
+
+				/*
+				 * Noncopyable
+				 */
+				Inline_vfs_handle(Inline_vfs_handle const &);
+				Inline_vfs_handle &operator = (Inline_vfs_handle const &);
 
 			public:
 
@@ -77,7 +89,7 @@ class Vfs::Inline_file_system : public Single_file_system
 					return READ_OK;
 				}
 
-				Write_result write(char const *src, file_size count,
+				Write_result write(char const *, file_size,
 				                   file_size &out_count) override
 				{
 					out_count = 0;
@@ -89,10 +101,7 @@ class Vfs::Inline_file_system : public Single_file_system
 
 	public:
 
-		Inline_file_system(Genode::Env&,
-		                   Genode::Allocator&,
-		                   Genode::Xml_node config,
-		                   Io_response_handler &)
+		Inline_file_system(Vfs::Env&, Genode::Xml_node config)
 		:
 			Single_file_system(NODE_TYPE_FILE, name(), config),
 			_base(config.content_base()),
@@ -113,9 +122,13 @@ class Vfs::Inline_file_system : public Single_file_system
 			if (!_single_file(path))
 				return OPEN_ERR_UNACCESSIBLE;
 
-			*out_handle = new (alloc) Inline_vfs_handle(*this, *this, alloc,
-			                                            _base, _size);
-			return OPEN_OK;
+			try {
+				*out_handle = new (alloc)
+					Inline_vfs_handle(*this, *this, alloc, _base, _size);
+				return OPEN_OK;
+			}
+			catch (Genode::Out_of_ram)  { return OPEN_ERR_OUT_OF_RAM; }
+			catch (Genode::Out_of_caps) { return OPEN_ERR_OUT_OF_CAPS; }
 		}
 
 		Stat_result stat(char const *path, Stat &out) override

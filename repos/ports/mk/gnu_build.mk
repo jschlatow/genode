@@ -36,8 +36,13 @@ PKG    ?= $(TARGET)
 # 'make install' rule is created. By setting the 'INSTALL_TREE' variable
 # to a non-empty value, a symlink to the actual file tree is created.
 #
+# By default, the generated tar archive contains the entire content of the
+# package's install directory. The 'INSTALL_TAR_CONTENT' variable may be
+# overriden to manually specify only the parts of the content.
+#
 INSTALL_TREE        ?=
 INSTALL_TAR_ARCHIVE ?= yes
+INSTALL_TAR_CONTENT ?= .
 
 LIBS += posix
 
@@ -123,6 +128,12 @@ LDLIBS_SO = $(addprefix $(PWD)/,$(sort $(SHARED_LIBS)))
 LDLIBS   += $(LDLIBS_A) $(LDLIBS_SO) $(LDLIBS_A)
 
 #
+# By default, assume that there exists a 'configure' script in the top-level
+# of the package.
+#
+CONFIGURE_SCRIPT ?= $(PKG_DIR)/configure
+
+#
 # Re-configure the Makefile if the Genode build environment changes
 #
 Makefile reconfigure: $(MAKEFILE_LIST)
@@ -132,7 +143,7 @@ Makefile reconfigure: $(MAKEFILE_LIST)
 #
 Makefile reconfigure: env.sh $(SHARED_LIBS)
 	@$(MSG_CONFIG)$(TARGET)
-	$(VERBOSE)source env.sh && $(PKG_DIR)/configure $(ENV) $(CONFIGURE_ARGS) $(CONFIGURE_OUTPUT_FILTER)
+	$(VERBOSE)source env.sh && $(CONFIGURE_SCRIPT) $(ENV) $(CONFIGURE_ARGS) $(CONFIGURE_OUTPUT_FILTER)
 
 env.sh:
 	$(VERBOSE)rm -f $@
@@ -162,19 +173,27 @@ env.sh:
 #
 built.tag: env.sh Makefile
 	@$(MSG_BUILD)$(TARGET)
-	$(VERBOSE)source env.sh && $(MAKE) $(MAKE_ENV) $(MAKE_VERBOSE) MAN= $(BUILD_OUTPUT_FILTER)
+	$(VERBOSE)source env.sh &&\
+	          $(MAKE) $(MAKE_ENV) $(MAKE_VERBOSE) $(MAKE_TARGET) MAN= \
+	          $(BUILD_OUTPUT_FILTER)
 	@touch $@
 
 INSTALL_TARGET ?= install-strip
 
 #
 # Install result of the build in an 'install/' directory local to the target's
-# build directory
+# build directory. The default install step 'make install-strip' can be
+# customized by setting 'INSTALL_TARGET' to be empty. This is useful to
+# explicitly filter the installed content in the 'target.mk' file.
 #
 installed.tag: built.tag
+
+ifneq ($(INSTALL_TARGET),)
+installed.tag:
 	@$(MSG_INST)$(TARGET)
 	$(VERBOSE)source env.sh && $(MAKE) $(MAKE_ENV) $(MAKE_VERBOSE) $(INSTALL_TARGET) DESTDIR=$(PWD)/install MAN= >> stdout.log 2>> stderr.log
 	@touch $@
+endif
 
 $(TARGET): installed.tag
 	@touch $@
@@ -202,7 +221,7 @@ installed_tree.tag: installed.tag
 # via the VFS tar file system
 #
 installed_tar.tag: installed.tag
-	$(VERBOSE)tar cf $(TARGET).tar -h -C $(PWD)/install .
+	$(VERBOSE)tar cf $(TARGET).tar -h -C $(PWD)/install $(INSTALL_TAR_CONTENT)
 	$(VERBOSE)rm -f $(INSTALL_DIR)/$(TARGET)
 	$(VERBOSE)ln -sf $(PWD)/$(TARGET).tar $(INSTALL_DIR)/$(TARGET).tar
 
@@ -217,5 +236,3 @@ clean_dir:
 
 clean_prg_objects: clean_dir
 endif
-
-

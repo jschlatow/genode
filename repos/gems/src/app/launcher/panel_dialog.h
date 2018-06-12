@@ -16,6 +16,7 @@
 
 /* Genode includes */
 #include <timer_session/connection.h>
+#include <os/buffered_xml.h>
 
 /* local includes */
 #include <fading_dialog.h>
@@ -49,37 +50,6 @@ class Launcher::Panel_dialog : Input_event_handler, Dialog_generator,
 		};
 
 		Genode::Allocator &_alloc;
-
-		struct Buffered_xml
-		{
-			Allocator         &_alloc;
-			char const * const _ptr;   /* pointer to dynamically allocated buffer */
-			Xml_node     const _xml;   /* referring to buffer of '_ptr' */
-
-			/**
-			 * \throw Allocator::Out_of_memory
-			 */
-			static char const *_init_ptr(Allocator &alloc, Xml_node node)
-			{
-				char *ptr = (char *)alloc.alloc(node.size());
-				Genode::memcpy(ptr, node.addr(), node.size());
-				return ptr;
-			}
-
-			/**
-			 * Constructor
-			 *
-			 * \throw Allocator::Out_of_memory
-			 */
-			Buffered_xml(Allocator &alloc, Xml_node node)
-			:
-				_alloc(alloc), _ptr(_init_ptr(alloc, node)), _xml(_ptr, node.size())
-			{ }
-
-			~Buffered_xml() { _alloc.free(const_cast<char *>(_ptr), _xml.size()); }
-
-			Xml_node xml() const { return _xml; }
-		};
 
 		Constructible<Buffered_xml> _config;
 
@@ -375,7 +345,7 @@ class Launcher::Panel_dialog : Input_event_handler, Dialog_generator,
 		 */
 		bool handle_input_event(Input::Event const &ev) override
 		{
-			if (ev.type() == Input::Event::LEAVE) {
+			if (ev.hover_leave()) {
 
 				/*
 				 * Let menu dialog disappear when the panel is unhovered. One
@@ -392,15 +362,13 @@ class Launcher::Panel_dialog : Input_event_handler, Dialog_generator,
 				return true;
 			}
 
-			if (ev.type() == Input::Event::MOTION)
+			if (ev.absolute_motion())
 				return true;
 
-			if (ev.type() == Input::Event::PRESS)   _key_cnt++;
-			if (ev.type() == Input::Event::RELEASE) _key_cnt--;
+			if (ev.press())   _key_cnt++;
+			if (ev.release()) _key_cnt--;
 
-			if (ev.type() == Input::Event::PRESS
-			 && ev.keycode() == Input::BTN_LEFT
-			 && _key_cnt == 1) {
+			if (ev.key_press(Input::BTN_LEFT) && _key_cnt == 1) {
 
 			 	_context_dialog.visible(false);
 
@@ -442,9 +410,7 @@ class Launcher::Panel_dialog : Input_event_handler, Dialog_generator,
 			/*
 			 * Open context dialog on right click
 			 */
-			if (ev.type() == Input::Event::PRESS
-			 && ev.keycode() == Input::BTN_RIGHT
-			 && _key_cnt == 1) {
+			if (ev.key_press(Input::BTN_RIGHT) && _key_cnt == 1) {
 
 				Element *hovered = _hovered();
 
@@ -452,8 +418,7 @@ class Launcher::Panel_dialog : Input_event_handler, Dialog_generator,
 					_open_context_dialog(hovered->label);
 			}
 
-			if (ev.type() == Input::Event::RELEASE
-			 && _click_in_progress && _key_cnt == 0) {
+			if (ev.release() && _click_in_progress && _key_cnt == 0) {
 
 				Element *hovered = _hovered();
 

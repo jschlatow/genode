@@ -64,7 +64,7 @@ namespace Genode {
 			 * User-level signal handler registered for this pager object via
 			 * 'Cpu_session::exception_handler()'.
 			 */
-			Signal_context_capability _exception_sigh;
+			Signal_context_capability _exception_sigh { };
 
 			/**
 			 * selectors for
@@ -74,31 +74,35 @@ namespace Genode {
 			 */
 			addr_t _selectors;
 
-			addr_t _initial_esp;
-			addr_t _initial_eip;
+			addr_t _initial_esp = 0;
+			addr_t _initial_eip = 0;
 			addr_t _client_exc_pt_sel;
 
-			Lock   _state_lock;
+			Lock   _state_lock { };
 
 			struct
 			{
 				struct Thread_state thread;
 				addr_t sel_client_ec;
 				enum {
-					BLOCKED       = 0x1U,
-					DEAD          = 0x2U,
-					SINGLESTEP    = 0x4U,
-					SIGNAL_SM     = 0x8U,
-					DISSOLVED     = 0x10U,
-					SUBMIT_SIGNAL = 0x20U,
+					BLOCKED          = 0x1U,
+					DEAD             = 0x2U,
+					SINGLESTEP       = 0x4U,
+					SIGNAL_SM        = 0x8U,
+					DISSOLVED        = 0x10U,
+					SUBMIT_SIGNAL    = 0x20U,
+					BLOCKED_PAUSE_SM = 0x40U,
 				};
 				uint8_t _status;
 				bool modified;
 
 				/* convenience function to access pause/recall state */
-				inline bool blocked() { return _status & BLOCKED;}
-				inline void block()   { _status |= BLOCKED; }
-				inline void unblock() { _status &= ~BLOCKED; }
+				inline bool blocked()          { return _status & BLOCKED;}
+				inline void block()            { _status |= BLOCKED; }
+				inline void unblock()          { _status &= ~BLOCKED; }
+				inline bool blocked_pause_sm() { return _status & BLOCKED_PAUSE_SM;}
+				inline void block_pause_sm()   { _status |= BLOCKED_PAUSE_SM; }
+				inline void unblock_pause_sm() { _status &= ~BLOCKED_PAUSE_SM; }
 
 				inline void mark_dead() { _status |= DEAD; }
 				inline bool is_dead() { return _status & DEAD; }
@@ -115,7 +119,7 @@ namespace Genode {
 				inline void submit_signal() { _status |= SUBMIT_SIGNAL; }
 				inline void reset_submit() { _status &= ~SUBMIT_SIGNAL; }
 
-			} _state;
+			} _state { };
 
 			Cpu_session_capability   _cpu_session_cap;
 			Thread_capability        _thread_cap;
@@ -377,6 +381,12 @@ namespace Genode {
 			 * Lock used for blocking until '_cap' is initialized
 			 */
 			Lock _cap_valid;
+
+			/*
+			 * Noncopyable
+			 */
+			Pager_activation_base(Pager_activation_base const &);
+			Pager_activation_base &operator = (Pager_activation_base const &);
 
 		public:
 

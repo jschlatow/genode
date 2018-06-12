@@ -41,18 +41,22 @@ void Pd_session_component::map(addr_t virt, addr_t size)
 
 	auto lambda = [&] (Region_map_component *region_map,
 	                   Rm_region            *region,
-	                   addr_t                ds_offset,
-	                   addr_t                region_offset) -> addr_t
+	                   addr_t const          ds_offset,
+	                   addr_t const          region_offset,
+	                   addr_t const          dst_region_size) -> addr_t
 	{
 		Dataspace_component * dsc = region ? region->dataspace() : nullptr;
-		if (!dsc)
-			return ~0UL;
+		if (!dsc) {
+			struct No_dataspace{};
+			throw No_dataspace();
+		}
 
 		Mapping mapping = Region_map_component::create_map_item(region_map,
 		                                                        region,
 		                                                        ds_offset,
 		                                                        region_offset,
-		                                                        dsc, virt);
+		                                                        dsc, virt,
+		                                                        dst_region_size);
 
 		/* asynchronously map memory */
 		uint8_t err = Nova::NOVA_PD_OOM;
@@ -64,10 +68,13 @@ void Pd_session_component::map(addr_t virt, addr_t size)
 			/* one item ever fits on the UTCB */
 			(void)res;
 
+			Nova::Rights const map_rights (true,
+			                               region->write() && dsc->writable(),
+			                              region->executable());
+
 			/* receive window in destination pd */
 			Nova::Mem_crd crd_mem(mapping.dst_addr() >> 12,
-			                      mapping.mem_crd().order(),
-			                      Nova::Rights(true, dsc->writable(), region->executable()));
+			                      mapping.mem_crd().order(), map_rights);
 
 			err = Nova::delegate(pd_core, pd_dst, crd_mem);
 		} while (err == Nova::NOVA_PD_OOM &&
@@ -87,9 +94,13 @@ void Pd_session_component::map(addr_t virt, addr_t size)
 		return mapped;
 	};
 
-	while (size) {
-		addr_t mapped = _address_space.apply_to_dataspace(virt, lambda);
-		virt         += mapped;
-		size          = size < mapped ? size : size - mapped;
+	try {
+		while (size) {
+			addr_t mapped = _address_space.apply_to_dataspace(virt, lambda);
+			virt         += mapped;
+			size          = size < mapped ? size : size - mapped;
+		}
+	} catch (...) {
+		error(__func__, " failed ", Hex(virt), "+", Hex(size));
 	}
 }

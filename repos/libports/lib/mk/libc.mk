@@ -11,12 +11,12 @@ LIBS  += base vfs
 # Back end
 #
 SRC_CC = atexit.cc dummies.cc rlimit.cc sysctl.cc \
-         issetugid.cc errno.cc gai_strerror.cc clock_gettime.cc \
-         gettimeofday.cc malloc.cc progname.cc fd_alloc.cc file_operations.cc \
+         issetugid.cc errno.cc gai_strerror.cc time.cc \
+         malloc.cc progname.cc fd_alloc.cc file_operations.cc \
          plugin.cc plugin_registry.cc select.cc exit.cc environ.cc nanosleep.cc \
          pread_pwrite.cc readv_writev.cc poll.cc \
          libc_pdbg.cc vfs_plugin.cc rtc.cc dynamic_linker.cc signal.cc \
-         socket_operations.cc task.cc socket_fs_plugin.cc
+         socket_operations.cc task.cc socket_fs_plugin.cc syscall.cc
 
 CC_OPT_sysctl += -Wno-write-strings
 
@@ -42,3 +42,5 @@ vpath % $(LIBC_DIR)/lib/libc/string
 #
 SHARED_LIB  = yes
 LD_OPT     += --version-script=$(REP_DIR)/src/lib/libc/Version.def
+
+CC_CXX_WARN_STRICT =

@@ -17,9 +17,10 @@
 /* Genode includes */
 #include <base/exception.h>
 #include <util/string.h>
-
+#include <util/construct_at.h>
 #include <util/endian.h>
 #include <net/mac_address.h>
+#include <net/size_guard.h>
 
 namespace Net
 {
@@ -49,8 +50,7 @@ class Net::Ethernet_frame
 			ADDR_LEN  = 6, /* MAC address length in bytes */
 		};
 
-
-		static const Mac_address BROADCAST;  /* broadcast address */
+		static Mac_address broadcast() { return Mac_address((Genode::uint8_t)0xff); }
 
 	private:
 
@@ -60,8 +60,6 @@ class Net::Ethernet_frame
 		unsigned         _data[0];       /* encapsulated data */
 
 	public:
-
-		class No_ethernet_frame : Genode::Exception {};
 
 		enum { MIN_SIZE = 64 };
 
@@ -73,46 +71,64 @@ class Net::Ethernet_frame
 			ARP  = 0x0806,
 		};
 
+		template <typename T>
+		T const &data(Size_guard &size_guard) const
+		{
+			size_guard.consume_head(sizeof(T));
+			T const &obj = *(T *)(_data);
 
-		/*****************
-		 ** Constructor **
-		 *****************/
-
-		Ethernet_frame(Genode::size_t size) {
-			/* at least, frame header needs to fit in */
-			if (size < sizeof(Ethernet_frame))
-				throw No_ethernet_frame();
+			/* Ethernet may have a tail whose size must be considered */
+			Genode::size_t const unconsumed = size_guard.unconsumed();
+			size_guard.consume_tail(unconsumed + sizeof(T) -
+			                        obj.size(unconsumed));
+			return obj;
 		}
 
-		/**
-		 * Constructor for composing a new Ethernet frame
-		 */
-		Ethernet_frame() { }
+		template <typename T>
+		T &data(Size_guard &size_guard)
+		{
+			size_guard.consume_head(sizeof(T));
+			T &obj = *(T *)(_data);
+
+			/* Ethernet may have a tail whose size must be considered */
+			Genode::size_t const max_obj_sz = size_guard.unconsumed() + sizeof(T);
+			size_guard.consume_tail(max_obj_sz - obj.size(max_obj_sz));
+			return obj;
+		}
+
+		template <typename T>
+		T &construct_at_data(Size_guard &size_guard)
+		{
+			size_guard.consume_head(sizeof(T));
+			return *Genode::construct_at<T>(_data);
+		}
+
+		static Ethernet_frame &construct_at(void       *base,
+		                                    Size_guard &size_guard)
+		{
+			size_guard.consume_head(sizeof(Ethernet_frame));
+			return *Genode::construct_at<Ethernet_frame>(base);
+		}
+
+		static Ethernet_frame &cast_from(void       *base,
+		                                 Size_guard &size_guard)
+		{
+			size_guard.consume_head(sizeof(Ethernet_frame));
+			return *(Ethernet_frame *)base;
+		}
 
 
 		/***************
 		 ** Accessors **
 		 ***************/
 
-		Mac_address                    dst()  const { return Mac_address((void *)_dst); }
-		Mac_address                    src()  const { return Mac_address((void *)_src); }
-		Type                           type() const { return (Type)host_to_big_endian(_type); }
-		template <typename T> T const *data() const { return (T const *)(_data); }
-		template <typename T> T       *data()       { return (T *)(_data); }
+		Mac_address dst()  const { return Mac_address((void *)_dst); }
+		Mac_address src()  const { return Mac_address((void *)_src); }
+		Type        type() const { return (Type)host_to_big_endian(_type); }
 
 		void dst(Mac_address v) { v.copy(&_dst); }
 		void src(Mac_address v) { v.copy(&_src); }
 		void type(Type type)    { _type = host_to_big_endian((Genode::uint16_t)type); }
-
-
-		/***************
-		 ** Operators **
-		 ***************/
-
-		/**
-		 * Placement new operator.
-		 */
-		void * operator new(__SIZE_TYPE__ size, void* addr) { return addr; }
 
 
 		/*********

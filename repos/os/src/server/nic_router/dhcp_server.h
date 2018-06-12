@@ -17,6 +17,8 @@
 /* local includes */
 #include <ipv4_address_prefix.h>
 #include <bit_allocator_dynamic.h>
+#include <list.h>
+#include <pointer.h>
 
 /* Genode includes */
 #include <net/mac_address.h>
@@ -30,10 +32,12 @@ namespace Net {
 	class Dhcp_allocation;
 	class Dhcp_allocation;
 	class Dhcp_allocation_tree;
-	using Dhcp_allocation_list = Genode::List<Dhcp_allocation>;
+	using Dhcp_allocation_list = List<Dhcp_allocation>;
 
 	/* forward declarations */
 	class Interface;
+	class Domain;
+	class Domain_tree;
 }
 
 
@@ -42,6 +46,7 @@ class Net::Dhcp_server : private Genode::Noncopyable
 	private:
 
 		Ipv4_address         const    _dns_server;
+		Pointer<Domain>      const    _dns_server_from;
 		Genode::Microseconds const    _ip_lease_time;
 		Ipv4_address         const    _ip_first;
 		Ipv4_address         const    _ip_last;
@@ -51,6 +56,9 @@ class Net::Dhcp_server : private Genode::Noncopyable
 
 		Genode::Microseconds _init_ip_lease_time(Genode::Xml_node const node);
 
+		Pointer<Domain> _init_dns_server_from(Genode::Xml_node const  node,
+		                                      Domain_tree            &domains);
+
 	public:
 
 		enum { DEFAULT_IP_LEASE_TIME_SEC = 3600 };
@@ -59,12 +67,18 @@ class Net::Dhcp_server : private Genode::Noncopyable
 		struct Invalid         : Genode::Exception { };
 
 		Dhcp_server(Genode::Xml_node    const  node,
+		            Domain              const &domain,
 		            Genode::Allocator         &alloc,
-		            Ipv4_address_prefix const &interface);
+		            Ipv4_address_prefix const &interface,
+		            Domain_tree               &domains);
 
 		Ipv4_address alloc_ip();
 
+		void alloc_ip(Ipv4_address const &ip);
+
 		void free_ip(Ipv4_address const &ip);
+
+		bool ready() const;
 
 
 		/*********
@@ -78,23 +92,14 @@ class Net::Dhcp_server : private Genode::Noncopyable
 		 ** Accessors **
 		 ***************/
 
-		Ipv4_address   const &dns_server()    const { return _dns_server; }
+		Ipv4_address   const &dns_server()    const;
+		Domain               &dns_server_from()     { return _dns_server_from(); }
 		Genode::Microseconds  ip_lease_time() const { return _ip_lease_time; }
 };
 
 
-struct Net::Dhcp_allocation_tree : public  Genode::Avl_tree<Dhcp_allocation>,
-                                   private Genode::Noncopyable
-{
-	struct No_match : Genode::Exception { };
-
-	Dhcp_allocation &find_by_mac(Mac_address const &mac) const;
-};
-
-
 class Net::Dhcp_allocation : public  Genode::Avl_node<Dhcp_allocation>,
-                             public  Dhcp_allocation_list::Element,
-                             private Genode::Noncopyable
+                             public  Dhcp_allocation_list::Element
 {
 	protected:
 
@@ -143,6 +148,47 @@ class Net::Dhcp_allocation : public  Genode::Avl_node<Dhcp_allocation>,
 		bool                bound() const { return _bound; }
 
 		void set_bound() { _bound = true; }
+};
+
+
+struct Net::Dhcp_allocation_tree
+{
+	private:
+
+		Genode::Avl_tree<Dhcp_allocation> _tree { };
+		Dhcp_allocation_list              _list { };
+
+	public:
+
+		struct No_match : Genode::Exception { };
+
+		Dhcp_allocation &find_by_mac(Mac_address const &mac) const;
+
+		void insert(Dhcp_allocation &dhcp_alloc)
+		{
+			_tree.insert(&dhcp_alloc);
+			_list.insert(&dhcp_alloc);
+		}
+
+		void remove(Dhcp_allocation &dhcp_alloc)
+		{
+			_tree.remove(&dhcp_alloc);
+			_list.remove(&dhcp_alloc);
+		}
+
+		Dhcp_allocation *first() { return _tree.first(); }
+
+		template <typename FUNC>
+		void for_each(FUNC && functor)
+		{
+			using List_item = Dhcp_allocation_list::Element;
+			for (Dhcp_allocation *item = _list.first(); item; )
+			{
+				Dhcp_allocation *const next_item = item->List_item::next();
+				functor(*item);
+				item = next_item;
+			}
+		}
 };
 
 #endif /* _DHCP_SERVER_H_ */

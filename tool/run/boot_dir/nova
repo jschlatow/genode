@@ -50,22 +50,30 @@ proc run_boot_dir {binaries} {
 	#
 	build_core_image $binaries
 
-	exec [cross_dev_prefix]objcopy -O elf32-i386 [run_dir]/genode/hypervisor [run_dir]/hypervisor
-	exec [cross_dev_prefix]strip [run_dir]/hypervisor
+	exec mkdir -p [run_dir]/boot
+	exec [cross_dev_prefix]objcopy -O elf32-i386 [run_dir]/genode/hypervisor [run_dir]/boot/hypervisor
+	exec [cross_dev_prefix]strip [run_dir]/boot/hypervisor
 
 	exec rm -rf [run_dir]/genode
+
+	exec mv   [run_dir]/image.elf [run_dir]/boot/image.elf
 
 	if {[have_include "image/iso"] || [have_include "image/disk"] || [have_include image/uefi]} {
 		#
 		# Compress Genode image, to be uncompressed by GRUB
 		#
-		exec gzip [run_dir]/image.elf
+		exec gzip [run_dir]/boot/image.elf
 
 		set serial_bender_opt ""
 
 		if {[have_include "image/disk"]} {
 			exec mkdir -p [run_dir]/boot/grub
 			exec cp [genode_dir]/tool/boot/bender [run_dir]/boot/bender
+			exec cp [genode_dir]/tool/boot/boot.png [run_dir]/boot/boot.png
+			if {[file exists /boot/grub/unicode.pf2]} {
+				# needed in graphical menu with non-scrampled characters
+				# exec cp /boot/grub/unicode.pf2 [run_dir]/boot/grub/unicode.pf2
+			}
 		}
 
 		if {[have_include "image/iso"]} {
@@ -81,6 +89,12 @@ proc run_boot_dir {binaries} {
 			exec mkdir -p [run_dir]/boot/grub
 			exec cp [genode_dir]/tool/boot/bender [run_dir]/boot/bender
 
+			exec cp [genode_dir]/tool/boot/boot.png [run_dir]/boot/boot.png
+			if {[file exists /boot/grub/unicode.pf2]} {
+				# needed in graphical menu with non-scrampled characters
+				# exec cp /boot/grub/unicode.pf2 [run_dir]/boot/grub/unicode.pf2
+			}
+
 			set serial_bender_opt "serial_fallback"
 		}
 
@@ -88,15 +102,32 @@ proc run_boot_dir {binaries} {
 		# Generate GRUB2 config file
 		#
 		set fh [open "[run_dir]/boot/grub/grub.cfg" "WRONLY CREAT TRUNC"]
+
+		# If timeout != 0 is used and gfxterm, enable and add unicode.pf2 (see above)
+		# puts $fh "loadfont /boot/grub/unicode.pf2"
 		puts $fh "set timeout=0"
+
 		# tell grub2 to prefer 32bit framebuffer resolution
 		puts $fh "set gfxpayload=\"0x0x32\""
+
+		if {[have_include image/uefi]} {
+			puts $fh "insmod gfxterm"
+			puts $fh "terminal_output gfxterm"
+			puts $fh "insmod gfxterm_background"
+			puts $fh "insmod png"
+			puts $fh "background_image -m center /boot/boot.png"
+		}
+
+		# set this to get text console instead of graphical console
+		# puts $fh "terminal_input console"
+		# puts $fh "terminal_output console"
+
 		puts $fh "menuentry 'Genode on NOVA' {"
 		puts $fh " insmod multiboot2"
 		puts $fh " insmod gzio"
 		puts $fh " multiboot2 /boot/bender $serial_bender_opt"
-		puts $fh " module2 /hypervisor hypervisor iommu serial novpid novga"
-		puts $fh " module2 /image.elf.gz image.elf"
+		puts $fh " module2 /boot/hypervisor hypervisor iommu serial novpid novga"
+		puts $fh " module2 /boot/image.elf.gz image.elf"
 		puts $fh "}"
 		close $fh
 	}
@@ -117,8 +148,8 @@ proc run_boot_dir {binaries} {
 		#
 		set fh [open "[run_dir]/config-52-54-00-12-34-56" "WRONLY CREAT TRUNC"]
 		puts $fh " exec /boot/bender"
-		puts $fh " load /hypervisor iommu serial novpid novga"
-		puts $fh " load /image.elf"
+		puts $fh " load /boot/hypervisor iommu serial novpid novga"
+		puts $fh " load /boot/image.elf"
 		close $fh
 
 		generate_tftp_config
@@ -135,5 +166,13 @@ proc run_boot_dir {binaries} {
 ##
 # Base source archive within depot
 #
-proc base_src { } { return base-nova }
+proc base_src { } {
 
+	if {[have_spec x86]} { return base-nova }
+
+	global specs
+
+	puts stderr "Test requires base-nova kernel archive, which is missing for this build configuration"
+	puts stderr "  SPECS=\"$specs\""
+	exit 0
+}

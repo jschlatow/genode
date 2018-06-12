@@ -1,0 +1,34 @@
+A small frontend to the libcURL library.
+
+Configuration
+-------------
+
+!<config>
+! <libc stdout="/dev/log" stderr="/dev/log">
+!  <vfs>
+!   <dir name="dev"> <jitterentropy name="random"/> <log/> </dir>
+!  </vfs>
+! </libc>
+! <fetch url="http://genode.org/about/LICENSE" path="LICENSE" retry="3"/>
+! <report progress="yes"/>
+!</config>
+
+The two primary options are 'url', the URL to fetch, and 'path', the
+file-system path where fetched data is written. Secondary options are
+'retry' and 'proxy'. Retry is the number of fetch attempts to make
+following failure, and proxy is used to reroute requests.
+
+An example TOR proxying configuration:
+
+! <fetch url="http://genode.org/about/LICENSE" path="LICENSE"
+!        proxy="sock5://10.0.0.1:9050" />
+
+The presence of a 'report' node in the configuration with an
+affirmative 'progress' attribute will enable a progress report.
+The 'delay_ms' attribute will set the minimum interval between
+reports and defauts to 100 miliseconds. The report format is as
+follows.
+
+! <progress>
+!   <fetch url="..." total="100.0" now="50.0"/>
+! </progress>

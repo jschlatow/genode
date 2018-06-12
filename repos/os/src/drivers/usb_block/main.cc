@@ -56,13 +56,13 @@ struct Usb::Block_driver : Usb::Completion,
 	 */
 	struct Block_request
 	{
-		Block::Packet_descriptor  packet;
-		Block::sector_t           lba;
-		char                     *buffer;
-		size_t                    size;
-		bool                      read;
-		bool                      pending = false;
-	} req;
+		Block::Packet_descriptor  packet  { };
+		Block::sector_t           lba     { 0 };
+		char                     *buffer  { nullptr };
+		size_t                    size    { 0 };
+		bool                      read    { false };
+		bool                      pending { false };
+	} req { };
 
 	bool initialized     = false;
 	bool device_plugged  = false;
@@ -131,13 +131,13 @@ struct Usb::Block_driver : Usb::Completion,
 	/*
 	 * Block session
 	 */
-	Block::Session::Operations _block_ops;
-	Block::sector_t            _block_count;
-	size_t                     _block_size;
+	Block::Session::Operations _block_ops   { };
+	Block::sector_t            _block_count { 0 };
+	size_t                     _block_size  { 0 };
 
 	bool _writeable = false;
 
-	bool force_cmd_10 = false;
+	bool force_cmd_16 = false;
 
 	uint8_t active_interface = 0;
 	uint8_t active_lun       = 0;
@@ -149,7 +149,11 @@ struct Usb::Block_driver : Usb::Completion,
 		INQ_TAG = 0x01, RDY_TAG = 0x02, CAP_TAG = 0x04,
 		REQ_TAG = 0x08, SS_TAG = 0x10
 	};
-	enum Endpoints  { IN = 0, OUT = 1 };
+
+	uint8_t ep_in = 0;
+	uint8_t ep_out = 0;
+
+	bool reset_device = false;
 
 	/*
 	 * Completion used while initializing the device
@@ -167,8 +171,8 @@ struct Usb::Block_driver : Usb::Completion,
 		Usb::Device &device;
 		uint8_t      interface;
 
-		Block::sector_t block_count;
-		size_t          block_size;
+		Block::sector_t block_count = 0;
+		size_t          block_size  = 0;
 
 		char vendor[Scsi::Inquiry_response::Vid::ITEMS+1];
 		char product[Scsi::Inquiry_response::Pid::ITEMS+1];
@@ -178,7 +182,7 @@ struct Usb::Block_driver : Usb::Completion,
 
 		void complete(Packet_descriptor &p)
 		{
-			Interface iface = device.interface(interface);
+			Usb::Interface iface = device.interface(interface);
 
 			if (p.type != Packet_descriptor::BULK) {
 				Genode::error("Can only handle BULK packets");
@@ -204,7 +208,6 @@ struct Usb::Block_driver : Usb::Completion,
 			using namespace Scsi;
 
 			switch (actual_size) {
-			case 36: /* min INQUIRY data size */
 			case Inquiry_response::LENGTH:
 			{
 				Inquiry_response r((addr_t)data);
@@ -223,7 +226,7 @@ struct Usb::Block_driver : Usb::Completion,
 				Capacity_response_10 r((addr_t)data);
 				if (verbose_scsi) r.dump();
 
-				block_count = r.block_count();
+				block_count = r.last_block() + 1;
 				block_size  = r.block_size();
 				break;
 			}
@@ -232,7 +235,7 @@ struct Usb::Block_driver : Usb::Completion,
 				Capacity_response_16 r((addr_t)data);
 				if (verbose_scsi) r.dump();
 
-				block_count = r.block_count();
+				block_count = r.last_block() + 1;
 				block_size  = r.block_size();
 				break;
 			}
@@ -301,7 +304,7 @@ struct Usb::Block_driver : Usb::Completion,
 	{
 		enum { CBW_VALID_SIZE = Cbw::LENGTH };
 		Usb::Interface     &iface = device.interface(active_interface);
-		Usb::Endpoint         &ep = iface.endpoint(OUT);
+		Usb::Endpoint         &ep = iface.endpoint(ep_out);
 		Usb::Packet_descriptor  p = iface.alloc(CBW_VALID_SIZE);
 		memcpy(iface.content(p), cb, CBW_VALID_SIZE);
 		iface.bulk_transfer(p, ep, block, &c);
@@ -314,7 +317,7 @@ struct Usb::Block_driver : Usb::Completion,
 	{
 		enum { CSW_VALID_SIZE = Csw::LENGTH };
 		Usb::Interface     &iface = device.interface(active_interface);
-		Usb::Endpoint         &ep = iface.endpoint(IN);
+		Usb::Endpoint         &ep = iface.endpoint(ep_in);
 		Usb::Packet_descriptor  p = iface.alloc(CSW_VALID_SIZE);
 		iface.bulk_transfer(p, ep, block, &c);
 	}
@@ -325,7 +328,7 @@ struct Usb::Block_driver : Usb::Completion,
 	void resp(size_t size, Completion &c, bool block = false)
 	{
 		Usb::Interface     &iface = device.interface(active_interface);
-		Usb::Endpoint         &ep = iface.endpoint(IN);
+		Usb::Endpoint         &ep = iface.endpoint(ep_in);
 		Usb::Packet_descriptor  p = iface.alloc(size);
 		iface.bulk_transfer(p, ep, block, &c);
 	}
@@ -353,7 +356,8 @@ struct Usb::Block_driver : Usb::Completion,
 	 * Initialize device
 	 *
 	 * All USB transfers in this method are done synchronously. First we reset
-	 * the device, than we query the max LUN. Afterwards we start sending CBWs.
+	 * the device (optional), then we query the max LUN. Afterwards we start
+	 * sending CBWs.
 	 *
 	 * Since it might take some time for the device to get ready to use, we
 	 * have to check the SCSI logical unit several times.
@@ -362,7 +366,7 @@ struct Usb::Block_driver : Usb::Completion,
 	{
 		device.update_config();
 
-		Interface &iface = device.interface(active_interface);
+		Usb::Interface &iface = device.interface(active_interface);
 		try { iface.claim(); }
 		catch (Usb::Session::Interface_already_claimed) {
 			Genode::error("Device already claimed");
@@ -387,25 +391,47 @@ struct Usb::Block_driver : Usb::Completion,
 				Genode::error("No mass storage SCSI bulk-only device");
 				return false;
 			}
+
+			for (int i = 0; i < alt_iface.num_endpoints; i++) {
+				Endpoint ep = alt_iface.endpoint(i);
+				if (!ep.is_bulk())
+					continue;
+				if (ep.address & Usb::ENDPOINT_IN)
+					ep_in = i;
+				else
+					ep_out = i;
+			}
+
 		} catch (Usb::Session::Interface_not_found) {
 			Genode::error("Interface not found");
 			return false;
 		}
 
 		try {
-			/* reset */
-			Usb::Packet_descriptor p = iface.alloc(0);
-			iface.control_transfer(p, 0x21, 0xff, 0, active_interface, 100);
-			if (!p.succeded) {
-				Genode::error("Could not reset device");
-				throw -1;
+
+			/*
+			 * reset
+			 *
+			 * This command caused write command errors on a
+			 * 'SanDisk Cruzer Force' (0781:557d) USB stick, so it is
+			 * omitted by default.
+			 */
+			if (reset_device) {
+				Usb::Packet_descriptor p = iface.alloc(0);
+				iface.control_transfer(p, 0x21, 0xff, 0, active_interface, 100);
+				if (!p.succeded) {
+					Genode::error("Could not reset device");
+					iface.release(p);
+					throw -1;
+				}
+				iface.release(p);
 			}
 
 			/*
 			 * Let us do GetMaxLUN and simply ignore the return value because none
 			 * of the devices that were tested did infact report another value than 0.
 			 */
-			p = iface.alloc(1);
+			Usb::Packet_descriptor p = iface.alloc(1);
 			iface.control_transfer(p, 0xa1, 0xfe, 0, active_interface, 100);
 			uint8_t max_lun = *(uint8_t*)iface.content(p);
 			if (p.succeded && max_lun == 0) { max_lun = 1; }
@@ -478,19 +504,37 @@ struct Usb::Block_driver : Usb::Completion,
 				}
 			}
 
-			/* Scsi::Opcode::READ_CAPACITY_16 */
-			Read_capacity_16 read_cap((addr_t)cbw_buffer, CAP_TAG, active_lun);
+			/*
+			 * Some devices (e.g. corsair voyager usb stick (1b1c:1a03)) failed
+			 * when the 16-byte command was tried first and when the 10-byte
+			 * command was tried afterwards as a fallback.
+			 *
+			 * For this reason, we use the 10-byte commands by default and the
+			 * 16-byte commands only when the capacity of the device requires
+			 * it.
+			 */
+
+			/* Scsi::Opcode::READ_CAPACITY_10 */
+			Read_capacity_10 read_cap((addr_t)cbw_buffer, CAP_TAG, active_lun);
 
 			cbw(cbw_buffer, init, true);
-			resp(Scsi::Capacity_response_16::LENGTH, init, true);
+			resp(Scsi::Capacity_response_10::LENGTH, init, true);
 			csw(init, true);
 
 			if (!init.read_capacity) {
-				/* try Scsi::Opcode::READ_CAPACITY_10 next */
-				Read_capacity_10 read_cap((addr_t)cbw_buffer, CAP_TAG, active_lun);
+				Genode::warning("Read_capacity_cmd failed");
+				throw -1;
+			}
+
+			if (init.block_count == 0x100000000) {
+
+				/* capacity too large, try Scsi::Opcode::READ_CAPACITY_16 next */
+				Read_capacity_16 read_cap((addr_t)cbw_buffer, CAP_TAG, active_lun);
+
+				init.read_capacity = false;
 
 				cbw(cbw_buffer, init, true);
-				resp(Scsi::Capacity_response_10::LENGTH, init, true);
+				resp(Scsi::Capacity_response_16::LENGTH, init, true);
 				csw(init, true);
 
 				if (!init.read_capacity) {
@@ -498,8 +542,7 @@ struct Usb::Block_driver : Usb::Completion,
 					throw -1;
 				}
 
-				Genode::warning("Device does not support CDB 16-byte commands, force 10-byte commands");
-				force_cmd_10 = true;
+				force_cmd_16 = true;
 			}
 
 			_block_size  = init.block_size;
@@ -543,7 +586,7 @@ struct Usb::Block_driver : Usb::Completion,
 	bool execute_pending_request()
 	{
 		Usb::Interface     &iface = device.interface(active_interface);
-		Usb::Endpoint          ep = iface.endpoint(req.read ? IN : OUT);
+		Usb::Endpoint          ep = iface.endpoint(req.read ? ep_in : ep_out);
 		Usb::Packet_descriptor  p = iface.alloc(req.size);
 
 		if (!req.read) memcpy(iface.content(p), req.buffer, req.size);
@@ -579,7 +622,7 @@ struct Usb::Block_driver : Usb::Completion,
 	 */
 	void complete(Packet_descriptor &p)
 	{
-		Interface iface = device.interface(active_interface);
+		Usb::Interface iface = device.interface(active_interface);
 
 		if (p.type != Packet_descriptor::BULK) {
 			Genode::error("No BULK packet");
@@ -697,6 +740,8 @@ struct Usb::Block_driver : Usb::Completion,
 		active_interface = node.attribute_value<unsigned long>("interface", 0);
 		active_lun       = node.attribute_value<unsigned long>("lun", 0);
 
+		reset_device = node.attribute_value<bool>("reset_device", false);
+
 		verbose_scsi = node.attribute_value<bool>("verbose_scsi", false);
 	}
 
@@ -722,7 +767,7 @@ struct Usb::Block_driver : Usb::Completion,
 
 	~Block_driver()
 	{
-		Interface &iface = device.interface(active_interface);
+		Usb::Interface &iface = device.interface(active_interface);
 		iface.release();
 	}
 
@@ -735,11 +780,11 @@ struct Usb::Block_driver : Usb::Completion,
 
 		char cb[Cbw::LENGTH];
 		if (read) {
-			if (!force_cmd_10) Read_16 r((addr_t)cb, t, active_lun, lba, len, _block_size);
-			else               Read_10 r((addr_t)cb, t, active_lun, lba, len, _block_size);
+			if (force_cmd_16) Read_16 r((addr_t)cb, t, active_lun, lba, len, _block_size);
+			else              Read_10 r((addr_t)cb, t, active_lun, lba, len, _block_size);
 		} else {
-			if (!force_cmd_10) Write_16 w((addr_t)cb, t, active_lun, lba, len, _block_size);
-			else               Write_10 w((addr_t)cb, t, active_lun, lba, len, _block_size);
+			if (force_cmd_16) Write_16 w((addr_t)cb, t, active_lun, lba, len, _block_size);
+			else              Write_10 w((addr_t)cb, t, active_lun, lba, len, _block_size);
 		}
 
 		cbw(cb, *this);
@@ -808,23 +853,24 @@ struct Usb::Main
 		Env                       &env;
 		Allocator                 &alloc;
 		Signal_context_capability  sigh;
-
-		Usb::Block_driver *driver = nullptr;
+		Usb::Block_driver          driver;
 
 		Factory(Env &env, Allocator &alloc,
 		        Signal_context_capability sigh)
-		: env(env), alloc(alloc), sigh(sigh)
-		{
-			driver = new (&alloc) Usb::Block_driver(env, alloc, sigh);
-		}
+		: env(env), alloc(alloc), sigh(sigh),
+		  driver(env, alloc, sigh) { }
 
-		Block::Driver *create() override { return driver; }
+		Block::Driver *create() override { return &driver; }
 
-		void destroy(Block::Driver *driver) override
-		{
-			Genode::destroy(alloc, driver);
-			driver = nullptr;
-		}
+		void destroy(Block::Driver *) override { }
+
+		private:
+
+			/*
+			 * Noncopyable
+			 */
+			Factory(Factory const &);
+			Factory &operator = (Factory const &);
 	};
 
 	Factory     factory { env, heap, announce_dispatcher };

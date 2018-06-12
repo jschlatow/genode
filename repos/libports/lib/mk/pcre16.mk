@@ -1,4 +1,4 @@
-include $(REP_DIR)/lib/import/import-pcre.mk
+include $(call select_from_repositories,lib/import/import-pcre.mk)
 
 PCRE_PORT_DIR := $(call select_from_ports,pcre)
 
@@ -36,3 +36,5 @@ LIBS += libc
 SHARED_LIB = yes
 
 vpath %.c $(PCRE_PORT_DIR)/src/lib/pcre
+
+CC_CXX_WARN_STRICT =

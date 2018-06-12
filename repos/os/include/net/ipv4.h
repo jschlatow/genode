@@ -18,9 +18,10 @@
 #include <base/exception.h>
 #include <util/string.h>
 #include <util/token.h>
-
+#include <util/construct_at.h>
 #include <util/endian.h>
 #include <net/netaddress.h>
+#include <net/size_guard.h>
 
 namespace Genode { class Output; }
 
@@ -85,12 +86,14 @@ class Net::Ipv4_packet
 			ADDR_LEN = IPV4_ADDR_LEN, /* Ip address length in bytes */
 		};
 
-		static const Ipv4_address CURRENT;    /* current network   */
-		static const Ipv4_address BROADCAST;  /* broadcast address */
+		static Ipv4_address current()   { return Ipv4_address((Genode::uint8_t)0x00); }
+		static Ipv4_address broadcast() { return Ipv4_address((Genode::uint8_t)0xff); }
 
 		static Ipv4_address ip_from_string(const char *ip);
 
-		static Genode::uint16_t calculate_checksum(Ipv4_packet const &packet);
+		void update_checksum();
+
+		bool checksum_error() const;
 
 	private:
 
@@ -113,78 +116,56 @@ class Net::Ipv4_packet
 		Genode::uint8_t  _dst[ADDR_LEN];
 		unsigned         _data[0];
 
-		/**
-		 * Bitmasks for differentiated services field.
-		 */
-		enum Differentiated_services {
-			PRECEDENCE  = 0x7,
-			DELAY       = 0x8,
-			THROUGHPUT  = 0x10,
-			RELIABILITY = 0x20,
-			COST        = 0x40
-		};
-
 	public:
 
 		enum class Protocol : Genode::uint8_t
 		{
-			TCP = 6,
-			UDP = 17,
+			ICMP = 1,
+			TCP  = 6,
+			UDP  = 17,
 		};
 
-		enum Precedence {
-			NETWORK_CONTROL      = 7,
-			INTERNETWORK_CONTROL = 6,
-			CRITIC_ECP           = 5,
-			FLASH_OVERRIDE       = 4,
-			FLASH                = 3,
-			IMMEDIATE            = 2,
-			PRIORITY             = 1,
-			ROUTINE              = 0
-		};
-
-		enum Flags {
-			NO_FRAGMENT    = 0x2,
-			MORE_FRAGMENTS = 0x4
-		};
-
-
-		/**
-		 * Exception used to indicate protocol violation.
-		 */
-		class No_ip_packet : Genode::Exception {};
-
-
-		/*****************
-		 ** Constructor **
-		 *****************/
-
-		Ipv4_packet(Genode::size_t size) {
-			/* ip header needs to fit in */
-			if (size < sizeof(Ipv4_packet))
-				throw No_ip_packet();
+		template <typename T>
+		T const &data(Size_guard &size_guard) const
+		{
+			size_guard.consume_head(sizeof(T));
+			return *(T const *)(_data);
 		}
+
+		template <typename T>
+		T &data(Size_guard &size_guard)
+		{
+			size_guard.consume_head(sizeof(T));
+			return *(T *)(_data);
+		}
+
+		template <typename T, typename SIZE_GUARD>
+		T &construct_at_data(SIZE_GUARD &size_guard)
+		{
+			size_guard.consume_head(sizeof(T));
+			return *Genode::construct_at<T>(_data);
+		}
+
+		Genode::size_t size(Genode::size_t max_size) const;
 
 
 		/***************
 		 ** Accessors **
 		 ***************/
 
-		Genode::size_t                  header_length()          const { return _header_length; }
-		Genode::uint8_t                 version()                const { return _version; }
-		Genode::uint8_t                 diff_service()           const { return _diff_service; }
-		Genode::uint8_t                 ecn()                    const { return _ecn; }
-		Genode::size_t                  total_length()           const { return host_to_big_endian(_total_length); }
-		Genode::uint16_t                identification()         const { return host_to_big_endian(_identification); }
-		Genode::uint8_t                 flags()                  const { return _flags; }
-		Genode::size_t                  fragment_offset()        const { return _fragment_offset; }
-		Genode::uint8_t                 time_to_live()           const { return _time_to_live; }
-		Protocol                        protocol()               const { return (Protocol)_protocol; }
-		Genode::uint16_t                checksum()               const { return host_to_big_endian(_checksum); }
-		Ipv4_address                    src()                    const { return Ipv4_address((void *)&_src); }
-		Ipv4_address                    dst()                    const { return Ipv4_address((void *)&_dst); }
-		template <typename T> T const * data()                   const { return (T const *)(_data); }
-		template <typename T> T *       data()                         { return (T *)(_data); }
+		Genode::size_t   header_length()   const { return _header_length; }
+		Genode::uint8_t  version()         const { return _version; }
+		Genode::uint8_t  diff_service()    const { return _diff_service; }
+		Genode::uint8_t  ecn()             const { return _ecn; }
+		Genode::size_t   total_length()    const { return host_to_big_endian(_total_length); }
+		Genode::uint16_t identification()  const { return host_to_big_endian(_identification); }
+		Genode::uint8_t  flags()           const { return _flags; }
+		Genode::size_t   fragment_offset() const { return _fragment_offset; }
+		Genode::uint8_t  time_to_live()    const { return _time_to_live; }
+		Protocol         protocol()        const { return (Protocol)_protocol; }
+		Genode::uint16_t checksum()        const { return host_to_big_endian(_checksum); }
+		Ipv4_address     src()             const { return Ipv4_address((void *)&_src); }
+		Ipv4_address     dst()             const { return Ipv4_address((void *)&_dst); }
 
 		void header_length(Genode::size_t v)     { _header_length = v; }
 		void version(Genode::uint8_t v)          { _version = v; }
@@ -199,16 +180,6 @@ class Net::Ipv4_packet
 		void checksum(Genode::uint16_t checksum) { _checksum = host_to_big_endian(checksum); }
 		void src(Ipv4_address v)                 { v.copy(&_src); }
 		void dst(Ipv4_address v)                 { v.copy(&_dst); }
-
-
-		/***************
-		 ** Operators **
-		 ***************/
-
-		/**
-		 * Placement new.
-		 */
-		void * operator new(__SIZE_TYPE__ size, void* addr) { return addr; }
 
 
 		/*********

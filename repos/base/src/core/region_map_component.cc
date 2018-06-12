@@ -31,9 +31,9 @@ static const bool verbose_page_faults = false;
 
 struct Genode::Region_map_component::Fault_area
 {
-	addr_t _fault_addr;
-	addr_t _base;
-	size_t _size_log2;
+	addr_t _fault_addr = 0;
+	addr_t _base       = 0;
+	size_t _size_log2  = 0;
 
 	addr_t _upper_bound() const {
 		return (_size_log2 == ~0UL) ? ~0UL : (_base + (1UL << _size_log2) - 1); }
@@ -41,13 +41,13 @@ struct Genode::Region_map_component::Fault_area
 	/**
 	 * Default constructor, constructs invalid fault area
 	 */
-	Fault_area() : _size_log2(0) { }
+	Fault_area() { }
 
 	/**
 	 * Constructor, fault area spans the maximum address-space size
 	 */
 	Fault_area(addr_t fault_addr) :
-		_fault_addr(fault_addr), _base(0), _size_log2(~0UL) { }
+		_fault_addr(fault_addr), _size_log2(~0UL) { }
 
 	/**
 	 * Constrain fault area to specified region
@@ -185,8 +185,9 @@ int Rm_client::pager(Ipc_pager &pager)
 
 	auto lambda = [&] (Region_map_component *region_map,
 	                   Rm_region            *region,
-	                   addr_t                ds_offset,
-	                   addr_t                region_offset) -> int
+	                   addr_t const          ds_offset,
+	                   addr_t const          region_offset,
+	                   addr_t const          dst_region_size) -> int
 	{
 		Dataspace_component * dsc = region ? region->dataspace() : nullptr;
 		if (!dsc) {
@@ -213,7 +214,8 @@ int Rm_client::pager(Ipc_pager &pager)
 		/*
 		 * Check if dataspace is compatible with page-fault type
 		 */
-		if (pf_type == Region_map::State::WRITE_FAULT && !dsc->writable()) {
+		if (pf_type == Region_map::State::WRITE_FAULT &&
+		    (!region->write() || !dsc->writable())) {
 
 			print_page_fault("attempted write at read-only memory",
 			                 pf_addr, pf_ip, pf_type, *this);
@@ -239,7 +241,8 @@ int Rm_client::pager(Ipc_pager &pager)
 		                                                        region,
 		                                                        ds_offset,
 		                                                        region_offset,
-		                                                        dsc, pf_addr);
+		                                                        dsc, pf_addr,
+		                                                        dst_region_size);
 
 		/*
 		 * On kernels with a mapping database, the 'dsc' dataspace is a leaf
@@ -282,7 +285,7 @@ void Rm_faulter::dissolve_from_faulting_region_map(Region_map_component * caller
 	Lock::Guard lock_guard(_lock);
 
 	enum { DO_LOCK = true };
-	if (caller == static_cast<Region_map_component *>(_faulting_region_map.obj())) {
+	if (caller->equals(_faulting_region_map)) {
 		caller->discard_faulter(this, !DO_LOCK);
 	} else {
 		Locked_ptr<Region_map_component> locked_ptr(_faulting_region_map);
@@ -309,18 +312,19 @@ void Rm_faulter::continue_after_resolved_fault()
  ** Region-map component **
  **************************/
 
-Mapping Region_map_component::create_map_item(Region_map_component *region_map,
+Mapping Region_map_component::create_map_item(Region_map_component *,
                                               Rm_region            *region,
-                                              addr_t                ds_offset,
-                                              addr_t                region_offset,
+                                              addr_t const          ds_offset,
+                                              addr_t const          region_offset,
                                               Dataspace_component  *dsc,
-                                              addr_t                page_addr)
+                                              addr_t const          page_addr,
+                                              addr_t const          dst_region_size)
 {
 	addr_t ds_base = dsc->map_src_addr();
 	Fault_area src_fault_area(ds_base + ds_offset);
 	Fault_area dst_fault_area(page_addr);
 	src_fault_area.constrain(ds_base, dsc->size());
-	dst_fault_area.constrain(region_offset + region->base(), region->size());
+	dst_fault_area.constrain(region_offset + region->base(), dst_region_size);
 
 	/*
 	 * Determine mapping size compatible with source and destination,
@@ -337,7 +341,8 @@ Mapping Region_map_component::create_map_item(Region_map_component *region_map,
 
 	return Mapping(dst_fault_area.base(), src_fault_area.base(),
 	               dsc->cacheability(), dsc->io_mem(),
-	               map_size_log2, dsc->writable(), region->executable());
+	               map_size_log2, region->write() && dsc->writable(),
+	               region->executable());
 };
 
 
@@ -345,7 +350,7 @@ Region_map::Local_addr
 Region_map_component::attach(Dataspace_capability ds_cap, size_t size,
                              off_t offset, bool use_local_addr,
                              Region_map::Local_addr local_addr,
-                             bool executable)
+                             bool executable, bool writeable)
 {
 	/* serialize access */
 	Lock::Guard lock_guard(_lock);
@@ -357,6 +362,10 @@ Region_map_component::attach(Dataspace_capability ds_cap, size_t size,
 	auto lambda = [&] (Dataspace_component *dsc) {
 		/* check dataspace validity */
 		if (!dsc) throw Invalid_dataspace();
+
+		size_t const off = offset;
+		if (off >= dsc->size())
+			throw Region_conflict();
 
 		if (!size)
 			size = dsc->size() - offset;
@@ -405,33 +414,28 @@ Region_map_component::attach(Dataspace_capability ds_cap, size_t size,
 				Range_allocator::Alloc_return alloc_return =
 					_map.alloc_aligned(size, &attach_at, align_log2);
 
-				if (!alloc_return.ok())
-					_map.free(attach_at);
-
 				typedef Range_allocator::Alloc_return Alloc_return;
 
 				switch (alloc_return.value) {
 				case Alloc_return::OK:              break; /* switch */
 				case Alloc_return::OUT_OF_METADATA: throw Out_of_ram();
-				case Alloc_return::RANGE_CONFLICT:  throw Region_conflict();
+				case Alloc_return::RANGE_CONFLICT:  continue; /* for loop */
 				}
-
 				break; /* for loop */
+
 			}
 
-			if (align_log2 < get_page_size_log2()) {
-				_map.free(attach_at);
+			if (align_log2 < get_page_size_log2())
 				throw Region_conflict();
-			}
 		}
 
 		/* store attachment info in meta data */
 		try {
-			_map.metadata(attach_at, Rm_region((addr_t)attach_at, size, true,
+			_map.metadata(attach_at, Rm_region((addr_t)attach_at, size,
+			                                   dsc->writable() && writeable,
 			                                   dsc, offset, this, executable));
-
-		} catch (Allocator_avl_tpl<Rm_region>::Assign_metadata_failed) {
-
+		}
+		catch (Allocator_avl_tpl<Rm_region>::Assign_metadata_failed) {
 			error("failed to store attachment info");
 			throw Invalid_dataspace();
 		}
@@ -495,16 +499,17 @@ void Region_map_component::detach(Local_addr local_addr)
 	Rm_region *region_ptr = _map.metadata(local_addr);
 
 	if (!region_ptr) {
-		warning("detach: no attachment at ", (void *)local_addr);
+		if (_diag.enabled)
+			warning("detach: no attachment at ", (void *)local_addr);
 		return;
 	}
 
-	if (region_ptr->base() != static_cast<addr_t>(local_addr))
+	if ((region_ptr->base() != static_cast<addr_t>(local_addr)) && _diag.enabled)
 		warning("detach: ", static_cast<void *>(local_addr), " is not "
 		        "the beginning of the region ", Hex(region_ptr->base()));
 
 	Dataspace_component *dsc = region_ptr->dataspace();
-	if (!dsc)
+	if (!dsc && _diag.enabled)
 		warning("detach: region of ", this, " may be inconsistent!");
 
 	/* inform dataspace about detachment */
@@ -546,9 +551,13 @@ void Region_map_component::detach(Local_addr local_addr)
 	 */
 
 	if (_address_space) {
+
 		if (!platform()->supports_direct_unmap() && dsc->managed() &&
 		    dsc->core_local_addr() == 0) {
-			warning("unmapping of managed dataspaces not yet supported");
+
+			if (_diag.enabled)
+				warning("unmapping of managed dataspaces not yet supported");
+
 		} else {
 			Address_space::Core_local_addr core_local
 				= { dsc->core_local_addr() + region.offset() };
@@ -636,9 +645,10 @@ Region_map_component::Region_map_component(Rpc_entrypoint   &ep,
                                            Allocator        &md_alloc,
                                            Pager_entrypoint &pager_ep,
                                            addr_t            vm_start,
-                                           size_t            vm_size)
+                                           size_t            vm_size,
+                                           Session::Diag     diag)
 :
-	_ds_ep(&ep), _thread_ep(&ep), _session_ep(&ep),
+	_diag(diag), _ds_ep(&ep), _thread_ep(&ep), _session_ep(&ep),
 	_md_alloc(md_alloc),
 	_map(&_md_alloc), _pager_ep(&pager_ep),
 	_ds(align_addr(vm_size, get_page_size_log2())),

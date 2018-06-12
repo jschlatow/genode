@@ -59,7 +59,7 @@ struct Global_keys_handler::Main
 	/**
 	 * Hover model as reported by nitpicker
 	 */
-	Constructible<Attached_rom_dataspace> _hover_ds;
+	Constructible<Attached_rom_dataspace> _hover_ds { };
 
 	struct Bool_state
 	{
@@ -97,7 +97,7 @@ struct Global_keys_handler::Main
 		bool has_name(Name const &name) const { return name == _name; }
 	};
 
-	Registry<Bool_state> _bool_states;
+	Registry<Bool_state> _bool_states { };
 
 	struct Report
 	{
@@ -155,8 +155,8 @@ struct Global_keys_handler::Main
 			bool satisfied(Domain const &hovered) const { return hovered == _domain; }
 		};
 
-		Registry<Bool_condition>  _bool_conditions;
-		Registry<Hover_condition> _hover_conditions;
+		Registry<Bool_condition>  _bool_conditions  { };
+		Registry<Hover_condition> _hover_conditions { };
 
 		Reporter _reporter;
 
@@ -173,7 +173,7 @@ struct Global_keys_handler::Main
 		/*
 		 * Handler used for generating delayed reports
 		 */
-		Constructible<Timer::Connection> _timer;
+		Constructible<Timer::Connection> _timer { };
 
 		unsigned long const _delay_ms;
 
@@ -246,7 +246,7 @@ struct Global_keys_handler::Main
 		}
 	};
 
-	Registry<Report> _reports;
+	Registry<Report> _reports { };
 
 	bool _reports_depend_on_hover_info() const
 	{
@@ -292,18 +292,14 @@ void Global_keys_handler::Main::_apply_input_events(unsigned num_ev,
 
 		Input::Event const &ev = events[i];
 
-		if (ev.type() != Input::Event::PRESS
-		 && ev.type() != Input::Event::RELEASE)
+		if (!ev.press() && !ev.release())
 			continue;
 
-		if (ev.type() == Input::Event::PRESS)   _key_cnt++;
-		if (ev.type() == Input::Event::RELEASE) _key_cnt--;
+		if (ev.press())   _key_cnt++;
+		if (ev.release()) _key_cnt--;
 
 		/* ignore key combinations */
 		if (_key_cnt > 1) continue;
-
-		typedef String<32> Key_name;
-		Key_name const ev_key_name(Input::key_name(ev.keycode()));
 
 		typedef Xml_node Xml_node;
 
@@ -312,17 +308,24 @@ void Global_keys_handler::Main::_apply_input_events(unsigned num_ev,
 			if (!node.has_type("press") && !node.has_type("release"))
 				return;
 
-			if (node.has_type("press") && ev.type() != Input::Event::PRESS)
-				return;
-
-			if (node.has_type("release") && ev.type() != Input::Event::RELEASE)
-				return;
-
 			/*
 			 * XML node applies for current event type, check if the key
 			 * matches.
 			 */
-			if (node.attribute_value("name", Key_name()) != ev_key_name)
+			typedef String<32> Key_name;
+			Key_name const expected = node.attribute_value("name", Key_name());
+
+			bool key_matches = false;
+
+			if (node.has_type("press"))
+				ev.handle_press([&] (Input::Keycode key, Codepoint) {
+					key_matches = (expected == Input::key_name(key)); });
+
+			if (node.has_type("release"))
+				ev.handle_release([&] (Input::Keycode key) {
+					key_matches = (expected == Input::key_name(key)); });
+
+			if (!key_matches)
 				return;
 
 			/*

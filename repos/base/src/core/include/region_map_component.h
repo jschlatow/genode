@@ -46,6 +46,7 @@ namespace Genode {
 	class Rm_client;
 	class Rm_region;
 	class Rm_faulter;
+	class Rm_session_component;
 }
 
 
@@ -112,14 +113,22 @@ class Genode::Rm_region : public List<Rm_region>::Element
  * be able to handle faults by arbitrary clients (not only its own
  * clients), it maintains the list head of faulters.
  */
-class Genode::Rm_faulter : public Fifo<Rm_faulter>::Element
+class Genode::Rm_faulter : Fifo<Rm_faulter>::Element, Interface
 {
 	private:
 
-		Pager_object                   *_pager_object;
-		Lock                            _lock;
-		Weak_ptr<Region_map_component>  _faulting_region_map;
-		Region_map::State               _fault_state;
+		Pager_object                   *_pager_object = nullptr;
+		Lock                            _lock { };
+		Weak_ptr<Region_map_component>  _faulting_region_map { };
+		Region_map::State               _fault_state { };
+
+		/*
+		 * Noncopyable
+		 */
+		Rm_faulter(Rm_faulter const &);
+		Rm_faulter &operator = (Rm_faulter const &);
+
+		friend class Fifo<Rm_faulter>;
 
 	public:
 
@@ -130,8 +139,9 @@ class Genode::Rm_faulter : public Fifo<Rm_faulter>::Element
 		 *
 		 * Currently, there is only one pager in core.
 		 */
-		Rm_faulter(Pager_object *pager_object) :
-			_pager_object(pager_object) { }
+		Rm_faulter(Pager_object *pager_object) : _pager_object(pager_object) { }
+
+		using Fifo<Rm_faulter>::Element::next;
 
 		/**
 		 * Assign fault state
@@ -172,11 +182,19 @@ class Genode::Rm_faulter : public Fifo<Rm_faulter>::Element
  * class represents the thread's role as member of this address space.
  */
 class Genode::Rm_client : public Pager_object, public Rm_faulter,
-                          public List<Rm_client>::Element
+                          private List<Rm_client>::Element
 {
 	private:
 
-		Region_map_component   *_region_map;
+		friend class List<Rm_client>;
+
+		Region_map_component *_region_map = nullptr;
+
+		/*
+		 * Noncopyable
+		 */
+		Rm_client(Rm_client const &);
+		Rm_client &operator = (Rm_client const &);
 
 	public:
 
@@ -208,11 +226,15 @@ class Genode::Rm_client : public Pager_object, public Rm_faulter,
 };
 
 
-class Genode::Region_map_component : public Genode::Weak_object<Genode::Region_map_component>,
-                                     public Rpc_object<Region_map>,
-                                     public List<Region_map_component>::Element
+class Genode::Region_map_component : private Weak_object<Region_map_component>,
+                                     public  Rpc_object<Region_map>,
+                                     private List<Region_map_component>::Element
 {
 	private:
+
+		friend class List<Region_map_component>;
+
+		Session::Diag const _diag;
 
 		Rpc_entrypoint *_ds_ep;
 		Rpc_entrypoint *_thread_ep;
@@ -220,10 +242,17 @@ class Genode::Region_map_component : public Genode::Weak_object<Genode::Region_m
 
 		Allocator &_md_alloc;
 
-		Signal_transmitter _fault_notifier;  /* notification mechanism for
-		                                        region-manager faults */
+		Signal_transmitter _fault_notifier { };  /* notification mechanism for
+		                                            region-manager faults */
 
 		Address_space  *_address_space { nullptr };
+
+		/*
+		 * Noncopyable
+		 */
+		Region_map_component(Region_map_component const &);
+		Region_map_component &operator = (Region_map_component const &);
+
 
 		/*********************
 		 ** Paging facility **
@@ -247,7 +276,7 @@ class Genode::Region_map_component : public Genode::Weak_object<Genode::Region_m
 		{
 			private:
 
-				Native_capability _rm_cap;
+				Native_capability _rm_cap { };
 
 			public:
 
@@ -279,17 +308,18 @@ class Genode::Region_map_component : public Genode::Weak_object<Genode::Region_m
 
 		Allocator_avl_tpl<Rm_region>  _map;          /* region map for attach,
 		                                                detach, pagefaults */
-		Fifo<Rm_faulter>              _faulters;     /* list of threads that faulted at
+		Fifo<Rm_faulter>              _faulters { }; /* list of threads that faulted at
 		                                                the region map and wait
 		                                                for fault resolution */
-		List<Rm_client>               _clients;      /* list of RM clients using this region map */
-		Lock                          _lock;         /* lock for map and list */
+		List<Rm_client>               _clients  { }; /* list of RM clients using this region map */
+		Lock                          _lock     { }; /* lock for map and list */
 		Pager_entrypoint             *_pager_ep;
 		Rm_dataspace_component        _ds;           /* dataspace representation of region map */
 		Dataspace_capability          _ds_cap;
 
 		template <typename F>
-		auto _apply_to_dataspace(addr_t addr, F f, addr_t offset, unsigned level)
+		auto _apply_to_dataspace(addr_t addr, F f, addr_t offset,
+		                         unsigned level, addr_t dst_region_size)
 		-> typename Trait::Functor<decltype(&F::operator())>::Return_type
 		{
 			using Functor = Trait::Functor<decltype(&F::operator())>;
@@ -298,12 +328,16 @@ class Genode::Region_map_component : public Genode::Weak_object<Genode::Region_m
 			Lock::Guard lock_guard(_lock);
 
 			/* skip further lookup when reaching the recursion limit */
-			if (!level) return f(this, nullptr, 0, 0);
+			if (!level) return f(this, nullptr, 0, 0, dst_region_size);
 
 			/* lookup region and dataspace */
 			Rm_region *region        = _map.metadata((void*)addr);
 			Dataspace_component *dsc = region ? region->dataspace()
 			                                  : nullptr;
+
+			if (region && dst_region_size > region->size())
+				dst_region_size = region->size();
+
 
 			/* calculate offset in dataspace */
 			addr_t ds_offset = region ? (addr - region->base()
@@ -313,15 +347,16 @@ class Genode::Region_map_component : public Genode::Weak_object<Genode::Region_m
 			Native_capability cap = dsc ? dsc->sub_rm()
 			                            : Native_capability();
 
-			if (!cap.valid()) return f(this, region, ds_offset, offset);
+			if (!cap.valid()) return f(this, region, ds_offset, offset, dst_region_size);
 
 			/* in case of a nested dataspace perform a recursive lookup */
 			auto lambda = [&] (Region_map_component *rmc) -> Return_type
 			{
-				return (!rmc) ? f(nullptr, nullptr, ds_offset, offset)
+				return (!rmc) ? f(nullptr, nullptr, ds_offset, offset, dst_region_size)
 				              : rmc->_apply_to_dataspace(ds_offset, f,
 				                                         offset+region->base(),
-				                                         --level);
+				                                         --level,
+				                                         dst_region_size);
 			};
 			return _session_ep->apply(cap, lambda);
 		}
@@ -337,9 +372,18 @@ class Genode::Region_map_component : public Genode::Weak_object<Genode::Region_m
 		                     Allocator        &md_alloc,
 		                     Pager_entrypoint &pager_ep,
 		                     addr_t            vm_start,
-		                     size_t            vm_size);
+		                     size_t            vm_size,
+		                     Session::Diag     diag);
 
 		~Region_map_component();
+
+		using Weak_object<Region_map_component>::weak_ptr;
+		friend class Locked_ptr<Region_map_component>;
+
+		bool equals(Weak_ptr<Region_map_component> const &other)
+		{
+			return (this == static_cast<Region_map_component *>(other.obj()));
+		}
 
 		void address_space(Address_space *space) { _address_space = space; }
 		Address_space *address_space() { return _address_space; }
@@ -381,7 +425,7 @@ class Genode::Region_map_component : public Genode::Weak_object<Genode::Region_m
 		{
 			enum { RECURSION_LIMIT = 5 };
 
-			return _apply_to_dataspace(addr, f, 0, RECURSION_LIMIT);
+			return _apply_to_dataspace(addr, f, 0, RECURSION_LIMIT, ~0UL);
 		}
 
 		/**
@@ -400,13 +444,14 @@ class Genode::Region_map_component : public Genode::Weak_object<Genode::Region_m
 		                               addr_t                ds_offset,
 		                               addr_t                region_offset,
 		                               Dataspace_component  *dsc,
-		                               addr_t);
+		                               addr_t, addr_t);
 
 		/**************************
 		 ** Region map interface **
 		 **************************/
 
-		Local_addr       attach        (Dataspace_capability, size_t, off_t, bool, Local_addr, bool) override;
+		Local_addr       attach        (Dataspace_capability, size_t, off_t,
+		                                bool, Local_addr, bool, bool) override;
 		void             detach        (Local_addr) override;
 		void             fault_handler (Signal_context_capability handler) override;
 		State            state         () override;

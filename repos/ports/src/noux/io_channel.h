@@ -68,22 +68,18 @@ class Noux::Io_channel : public Reference_counter
 
 	public:
 
-		bool close_on_execve;
-
-		Io_channel() : close_on_execve(false) { }
-
 		virtual ~Io_channel() { }
 
 		virtual Io_channel_backend *backend() { return nullptr; }
 
-		virtual bool     write(Sysio &sysio, size_t &offset) { return false; }
-		virtual bool      read(Sysio &sysio)                 { return false; }
-		virtual bool     fstat(Sysio &sysio)                 { return false; }
-		virtual bool ftruncate(Sysio &sysio)                 { return false; }
-		virtual bool     fcntl(Sysio &sysio)                 { return false; }
-		virtual bool    dirent(Sysio &sysio)                 { return false; }
-		virtual bool     ioctl(Sysio &sysio)                 { return false; }
-		virtual bool     lseek(Sysio &sysio)                 { return false; }
+		virtual bool     write(Sysio &sysio) { return false; }
+		virtual bool      read(Sysio &sysio) { return false; }
+		virtual bool     fstat(Sysio &sysio) { return false; }
+		virtual bool ftruncate(Sysio &sysio) { return false; }
+		virtual bool     fcntl(Sysio &sysio) { return false; }
+		virtual bool    dirent(Sysio &sysio) { return false; }
+		virtual bool     ioctl(Sysio &sysio) { return false; }
+		virtual bool     lseek(Sysio &sysio) { return false; }
 
 		/**
 		 * Return true if an unblocking condition of the channel is satisfied
@@ -181,14 +177,14 @@ class Noux::Io_channel : public Reference_counter
 		/**
 		 * Tell all registered handlers about an interrupt event
 		 */
-		void invoke_all_interrupt_handlers()
+		void invoke_all_interrupt_handlers(Sysio::Signal signal)
 		{
 			Lock::Guard signal_lock_guard(signal_lock());
 			Lock::Guard guard(_interrupt_handlers_lock);
 
 			for (Io_channel_listener *l = _interrupt_handlers.first();
 			     l; l = l->next())
-				l->object()->handle_interrupt();
+				l->object()->handle_interrupt(signal);
 		}
 
 		/**

@@ -34,12 +34,12 @@ struct X86_hba : Platform::Hba
 
 	Genode::Env &env;
 
-	Platform::Connection                   pci { env };
-	Platform::Device_capability            pci_device_cap;
-	Constructible<Platform::Device_client> pci_device;
-	Constructible<Irq_session_client>      irq;
-	addr_t                                 res_base;
-	size_t                                 res_size;
+	Platform::Connection                   pci            { env };
+	Platform::Device_capability            pci_device_cap { };
+	Constructible<Platform::Device_client> pci_device     { };
+	Constructible<Irq_session_client>      irq            { };
+	addr_t                                 res_base       { 0 };
+	size_t                                 res_size       { 0 };
 
 	X86_hba(Genode::Env &env) : env(env)
 	{
@@ -63,9 +63,9 @@ struct X86_hba : Platform::Hba
 		res_base = resource.base();
 		res_size = resource.size();
 
-		/* enable bus master */
 		uint16_t cmd = pci_device->config_read(PCI_CMD, Platform::Device::ACCESS_16BIT);
-		cmd |= 0x4;
+		cmd |= 0x2; /* respond to memory space accesses */
+		cmd |= 0x4; /* enable bus master */
 		_config_write(PCI_CMD, cmd, Platform::Device::ACCESS_16BIT);
 
 		irq.construct(pci_device->irq(0));

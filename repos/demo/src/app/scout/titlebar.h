@@ -15,23 +15,25 @@
 #define _TITLEBAR_H_
 
 #include "widgets.h"
-
-#define TITLE_TFF _binary_vera18_tff_start
-extern char TITLE_TFF[];
+#include "styles.h"
 
 namespace Scout { template <typename PT> class Titlebar; }
 
-
-static Scout::Font title_font(TITLE_TFF);
 
 template <typename PT>
 class Scout::Titlebar : public Parent_element
 {
 	private:
 
-		Icon<PT, 32, 32> _fg;
-		const char *_txt;
-		int _txt_w, _txt_h, _txt_len;
+		/*
+		 * Noncopyable
+		 */
+		Titlebar(Titlebar const &);
+		Titlebar &operator = (Titlebar const &);
+
+		Icon<PT, 32, 32> _fg { };
+		const char *_txt = nullptr;
+		int _txt_w = 0, _txt_h = 0, _txt_len = 0;
 
 	public:
 
@@ -41,8 +43,8 @@ class Scout::Titlebar : public Parent_element
 		void text(const char *txt)
 		{
 			_txt     = txt ? txt : "Scout";
-			_txt_w   = title_font.str_w(_txt, strlen(_txt));
-			_txt_h   = title_font.str_h(_txt, strlen(_txt));
+			_txt_w   = title_font.string_width(_txt, strlen(_txt)).decimal();
+			_txt_h   = title_font.bounding_box().h();
 			_txt_len = strlen(_txt);
 		}
 

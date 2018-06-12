@@ -24,10 +24,10 @@ struct Char_cell
 	unsigned char ascii;
 	unsigned char color;
 
-	enum { ATTR_COLIDX_MASK = 0x07,
-	       ATTR_CURSOR      = 0x10,
-	       ATTR_INVERSE     = 0x20,
-	       ATTR_HIGHLIGHT   = 0x40 };
+	enum { ATTR_COLIDX_MASK = 0x07U,
+	       ATTR_CURSOR      = 0x10U,
+	       ATTR_INVERSE     = 0x20U,
+	       ATTR_HIGHLIGHT   = 0x40U };
 
 	enum { COLOR_MASK = 0x3f }; /* 111111 */
 
@@ -47,8 +47,8 @@ struct Char_cell
 		return Font_face((Font_face::Type)(attr & Font_face::attr_mask()));
 	}
 
-	int  colidx_fg() const { return color        & ATTR_COLIDX_MASK; }
-	int  colidx_bg() const { return (color >> 3) & ATTR_COLIDX_MASK; }
+	unsigned colidx_fg() const { return color        & ATTR_COLIDX_MASK; }
+	unsigned colidx_bg() const { return (color >> 3) & ATTR_COLIDX_MASK; }
 	bool inverse()   const { return attr         & ATTR_INVERSE;     }
 	bool highlight() const { return attr         & ATTR_HIGHLIGHT;   }
 
@@ -69,7 +69,8 @@ class Char_cell_array_character_screen : public Terminal::Character_screen
 
 		Cell_array<Char_cell> &_char_cell_array;
 		Terminal::Boundary     _boundary;
-		Terminal::Position     _cursor_pos;
+		Terminal::Position     _cursor_pos { };
+
 		/**
 		 * Color index contains the fg color in the first 3 bits
 		 * and the bg color in the second 3 bits (0bbbbfff).
@@ -113,21 +114,10 @@ class Char_cell_array_character_screen : public Terminal::Character_screen
 			}
 		};
 
-	public:
-
-		Char_cell_array_character_screen(Cell_array<Char_cell> &char_cell_array)
-		:
-			_char_cell_array(char_cell_array),
-			_boundary(_char_cell_array.num_cols(), _char_cell_array.num_lines()),
-			_color_index(DEFAULT_COLOR_INDEX),
-			_inverse(false),
-			_highlight(false),
-			_cursor_visibility(CURSOR_VISIBLE),
-			_region_start(0),
-			_region_end(_boundary.height - 1),
-			_tab_size(DEFAULT_TAB_SIZE)
-		{ }
-
+		static void _missing(char const *method_name)
+		{
+			Genode::warning(method_name, " not implemented");
+		}
 
 		void _line_feed()
 		{
@@ -148,12 +138,33 @@ class Char_cell_array_character_screen : public Terminal::Character_screen
 			_cursor_pos.x = 0;
 		}
 
+	public:
+
+		Char_cell_array_character_screen(Cell_array<Char_cell> &char_cell_array)
+		:
+			_char_cell_array(char_cell_array),
+			_boundary(_char_cell_array.num_cols(), _char_cell_array.num_lines()),
+			_color_index(DEFAULT_COLOR_INDEX),
+			_inverse(false),
+			_highlight(false),
+			_cursor_visibility(CURSOR_VISIBLE),
+			_region_start(0),
+			_region_end(_boundary.height - 1),
+			_tab_size(DEFAULT_TAB_SIZE)
+		{ }
+
 
 		/********************************
 		 ** Character_screen interface **
 		 ********************************/
 
 		Terminal::Position cursor_pos() const { return _cursor_pos; }
+
+		void cursor_pos(Terminal::Position pos)
+		{
+			_cursor_pos.x = Genode::min(_boundary.width  - 1, pos.x);
+			_cursor_pos.y = Genode::min(_boundary.height - 1, pos.y);
+		}
 
 		void output(Terminal::Character c)
 		{
@@ -203,24 +214,24 @@ class Char_cell_array_character_screen : public Terminal::Character_screen
 			}
 		}
 
-		void civis()
+		void cbt() override { _missing(__func__); }
+
+		void civis() override
 		{
 			_cursor_visibility = CURSOR_INVISIBLE;
 		}
 
-		void cnorm()
+		void cnorm() override
 		{
 			_cursor_visibility = CURSOR_VISIBLE;
 		}
 
-		void cvvis()
+		void cvvis() override
 		{
 			_cursor_visibility = CURSOR_VERY_VISIBLE;
 		}
 
-		void cpr() { Genode::warning(__func__, " not implemented"); }
-
-		void csr(int start, int end)
+		void csr(int start, int end) override
 		{
 			/* the arguments are specified use coordinate origin (1, 1) */
 			start--;
@@ -233,7 +244,7 @@ class Char_cell_array_character_screen : public Terminal::Character_screen
 			_region_end = Genode::max(_region_end, _region_start);
 		}
 
-		void cub(int dx)
+		void cub(int dx) override
 		{
 			Cursor_guard guard(*this);
 
@@ -241,7 +252,7 @@ class Char_cell_array_character_screen : public Terminal::Character_screen
 			_cursor_pos.x = Genode::max(0, _cursor_pos.x);
 		}
 
-		void cuf(int dx)
+		void cuf(int dx) override
 		{
 			Cursor_guard guard(*this);
 
@@ -249,7 +260,7 @@ class Char_cell_array_character_screen : public Terminal::Character_screen
 			_cursor_pos.x = Genode::min(_boundary.width - 1, _cursor_pos.x);
 		}
 
-		void cup(int y, int x)
+		void cup(int y, int x) override
 		{
 			Cursor_guard guard(*this);
 
@@ -264,61 +275,47 @@ class Char_cell_array_character_screen : public Terminal::Character_screen
 			_cursor_pos = Terminal::Position(x, y);
 		}
 
-		void cuu1()   { Genode::warning(__func__, " not implemented"); }
-		void dch(int) { Genode::warning(__func__, " not implemented"); }
+		void cud(int) override { _missing(__func__); }
+		void cuu1()   override { _missing(__func__); }
+		void cuu(int) override { _missing(__func__); }
+		void dch(int) override { _missing(__func__); }
 
-		void dl(int num_lines)
+		void dl(int num_lines) override
 		{
 			/* delete number of lines */
 			for (int i = 0; i < num_lines; i++)
 				_char_cell_array.scroll_up(_cursor_pos.y, _region_end);
 		}
 
-		void ech(int v)
-		{
-			Cursor_guard guard(*this);
-
-			for (int i = 0; i < v; i++, _cursor_pos.x++)
-				_char_cell_array.set_cell(_cursor_pos.x, _cursor_pos.y,
-				                          Char_cell(' ', Font_face::REGULAR,
-				                          _color_index, _inverse, _highlight));
-		}
-
-		void ed()
+		void ed() override
 		{
 			/* clear to end of screen */
 			el();
 			_char_cell_array.clear(_cursor_pos.y + 1, _boundary.height - 1);
 		}
 
-		void el()
+		void el() override
 		{
 			/* clear to end of line */
 			for (int x = _cursor_pos.x; x < _boundary.width; x++)
 				_char_cell_array.set_cell(x, _cursor_pos.y, Char_cell());
 		}
 
-		void el1() { Genode::warning(__func__, " not implemented"); }
+		void el1()   override { _missing(__func__); }
+		void enacs() override { _missing(__func__); }
+		void flash() override { _missing(__func__); }
 
-		void home()
+		void home() override
 		{
 			Cursor_guard guard(*this);
 
 			_cursor_pos = Terminal::Position(0, 0);
 		}
 
-		void hpa(int x)
-		{
-			Cursor_guard guard(*this);
+		void hts()    override { _missing(__func__); }
+		void ich(int) override { _missing(__func__); }
 
-			_cursor_pos.x = x;
-			_cursor_pos.x = Genode::min(_boundary.width - 1, _cursor_pos.x);
-		}
-
-		void hts()    { Genode::warning(__func__, " not implemented"); }
-		void ich(int) { Genode::warning(__func__, " not implemented"); }
-
-		void il(int value)
+		void il(int value) override
 		{
 			Cursor_guard guard(*this);
 
@@ -333,63 +330,59 @@ class Char_cell_array_character_screen : public Terminal::Character_screen
 			_char_cell_array.cursor(_cursor_pos, true);
 		}
 
-		void oc() { Genode::warning(__func__, " not implemented"); }
+		void is2() override { _missing(__func__); }
+		void nel() override { _missing(__func__); }
 
-		void op()
+		void op() override
 		{
 			_color_index = DEFAULT_COLOR_INDEX | (DEFAULT_COLOR_INDEX_BG << 3);
 		}
 
-		void rc()   { Genode::warning(__func__, " not implemented"); }
-		void ri()   { Genode::warning(__func__, " not implemented"); }
-		void ris()  { Genode::warning(__func__, " not implemented"); }
-		void rmam() { Genode::warning(__func__, " not implemented"); }
-		void rmir() { Genode::warning(__func__, " not implemented"); }
+		void rc()    override { _missing(__func__); }
+		void rs2()   override { _missing(__func__); }
+		void rmir()  override { _missing(__func__); }
+		void rmcup() override { }
+		void rmkx()  override { }
 
-		void setab(int value)
+		void setab(int value) override
 		{
-			//_inverse = (value != 0);
 			_color_index &= ~0x38; /* clear 111000 */
 			_color_index |= (((value == 9) ? DEFAULT_COLOR_INDEX_BG : value) << 3);
 		}
 
-		void setaf(int value)
+		void setaf(int value) override
 		{
 			_color_index &= ~0x7; /* clear 000111 */
 			_color_index |= (value == 9) ? DEFAULT_COLOR_INDEX : value;
 		}
 
-		void sgr(int value)
+		void sgr(int value) override
 		{
-			_highlight = (value & 0x1) != 0;
-			_inverse   = (value & 0x2) != 0;
-
-			/* sgr 0 is the command to reset all attributes, including color */
-			if (value == 0)
+			switch (value) {
+			case 0:
+				/* sgr 0 is the command to reset all attributes, including color */
+				_highlight = false;
+				_inverse = false;
 				_color_index = DEFAULT_COLOR_INDEX | (DEFAULT_COLOR_INDEX_BG << 3);
+				break;
+			case 1:
+				_highlight = true;
+				break;
+			case 7:
+				_inverse = true;
+				break;
+			default:
+				break;
+			}
 		}
 
-		void sgr0()
-		{
-			sgr(0);
-		}
+		void sgr0() override { sgr(0); }
 
-		void sc()         { Genode::warning(__func__, " not implemented"); }
-		void smam()       { Genode::warning(__func__, " not implemented"); }
-		void smir()       { Genode::warning(__func__, " not implemented"); }
-		void tbc()        { Genode::warning(__func__, " not implemented"); }
-		void u6(int, int) { Genode::warning(__func__, " not implemented"); }
-		void u7()         { Genode::warning(__func__, " not implemented"); }
-		void u8()         { Genode::warning(__func__, " not implemented"); }
-		void u9()         { Genode::warning(__func__, " not implemented"); }
-
-		void vpa(int y)
-		{
-			Cursor_guard guard(*this);
-
-			_cursor_pos.y = y;
-			_cursor_pos.y = Genode::min(_boundary.height - 1, _cursor_pos.y);
-		}
+		void sc()    override { _missing(__func__); }
+		void smcup() override { }
+		void smir()  override { _missing(__func__); }
+		void smkx()  override { }
+		void tbc()   override { _missing(__func__); }
 };
 
 #endif /* _TERMINAL__CHAR_CELL_ARRAY_CHARACTER_SCREEN_H_ */

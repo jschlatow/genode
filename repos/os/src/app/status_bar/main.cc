@@ -19,7 +19,7 @@
 #include <os/pixel_rgb565.h>
 #include <nitpicker_session/connection.h>
 #include <nitpicker_gfx/box_painter.h>
-#include <nitpicker_gfx/text_painter.h>
+#include <nitpicker_gfx/tff_font.h>
 
 namespace Status_bar {
 
@@ -61,7 +61,8 @@ struct Status_bar::Buffer
 
 	Attached_dataspace _fb_ds;
 
-	Text_painter::Font const _font { &_binary_default_tff_start };
+	Tff_font::Static_glyph_buffer<4096> _glyph_buffer { };
+	Tff_font _font { &_binary_default_tff_start, _glyph_buffer };
 
 	Buffer(Region_map &rm, Nitpicker::Connection &nitpicker)
 	:
@@ -74,8 +75,9 @@ struct Status_bar::Buffer
 		for (int j = -1; j <= 1; j++)
 			for (int i = -1; i <= 1; i++)
 				if (i || j)
-					Text_painter::paint(surface, pos + Point(i, j), _font,
-					                    Color(0, 0, 0), s);
+					Text_painter::paint(surface,
+					                    Text_painter::Position(pos.x() + i, pos.y() + j),
+					                    _font, Color(0, 0, 0), s);
 	}
 
 	template <typename PT>
@@ -91,20 +93,21 @@ struct Status_bar::Buffer
 		pos = pos + Point(1, 1);
 
 		_draw_outline(surface, pos, domain_name.string());
-		Text_painter::paint(surface, pos, _font, domain_text_color,
-		                    domain_name.string());
+		Text_painter::paint(surface, Text_painter::Position(pos.x(), pos.y()),
+		                    _font, domain_text_color, domain_name.string());
 
-		pos = pos + Point(_font.str_w(domain_name.string()) + LABEL_GAP, 0);
+		pos = pos + Point(_font.string_width(domain_name.string()).decimal() + LABEL_GAP, 0);
 
 		_draw_outline(surface, pos, label.string());
-		Text_painter::paint(surface, pos, _font, label_text_color, label.string());
+		Text_painter::paint(surface, Text_painter::Position(pos.x(), pos.y()),
+		                    _font, label_text_color, label.string());
 	}
 
 	Area _label_size(Domain_name const &domain_name, Label const &label) const
 	{
-		return Area(_font.str_w(domain_name.string()) + LABEL_GAP
-		          + _font.str_w(label.string()) + 2,
-		            _font.str_h(domain_name.string()) + 2);
+		return Area(_font.string_width(domain_name.string()).decimal() + LABEL_GAP
+		          + _font.string_width(label.string()).decimal() + 2,
+		            _font.bounding_box().h() + 2);
 	}
 
 	void draw(Domain_name const &, Label const &, Color);
@@ -182,9 +185,9 @@ struct Status_bar::Main
 	Nitpicker::Connection _nitpicker { _env, "status_bar" };
 
 	/* status-bar attributes */
-	Domain_name _domain_name;
-	Label       _label;
-	Color       _color;
+	Domain_name _domain_name { };
+	Label       _label       { };
+	Color       _color       { };
 
 	Reconstructible<Buffer> _buffer { _env.rm(), _nitpicker };
 
@@ -202,7 +205,8 @@ struct Status_bar::Main
 		_nitpicker.mode_sigh(_mode_handler);
 
 		/* schedule initial view-stacking command, needed only once */
-		_nitpicker.enqueue<Nitpicker::Session::Command::To_front>(_view);
+		typedef Nitpicker::Session::View_handle View_handle;
+		_nitpicker.enqueue<Nitpicker::Session::Command::To_front>(_view, View_handle());
 
 		/* import initial state */
 		_handle_mode();

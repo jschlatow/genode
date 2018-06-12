@@ -29,16 +29,19 @@ namespace Vfs_server {
 	using namespace File_system;
 	using namespace Vfs;
 
-	struct Node;
-	struct Directory;
-	struct File;
-	struct Symlink;
+	class Node;
+	class Io_node;
+	class Watch_node;
+	class Directory;
+	class File;
+	class Symlink;
 
 	typedef Genode::Id_space<Node> Node_space;
 
-	struct Node_io_handler
+	struct Session_io_handler : Interface
 	{
-		virtual void handle_node_io(Node &node) = 0;
+		virtual void handle_node_io(Io_node &node) = 0;
+		virtual void handle_node_watch(Watch_node &node) = 0;
 	};
 
 	/**
@@ -59,20 +62,21 @@ namespace Vfs_server {
 	 * Type trait for determining the node type for a given handle type
 	 */
 	template<typename T> struct Node_type;
-	template<> struct Node_type<Node_handle>    { typedef Node      Type; };
-	template<> struct Node_type<Dir_handle>     { typedef Directory Type; };
-	template<> struct Node_type<File_handle>    { typedef File      Type; };
-	template<> struct Node_type<Symlink_handle> { typedef Symlink   Type; };
-
+	template<> struct Node_type<Node_handle>    { typedef Io_node    Type; };
+	template<> struct Node_type<Dir_handle>     { typedef Directory  Type; };
+	template<> struct Node_type<File_handle>    { typedef File       Type; };
+	template<> struct Node_type<Symlink_handle> { typedef Symlink    Type; };
+	template<> struct Node_type<Watch_handle>   { typedef Watch_node Type; };
 
 	/**
 	 * Type trait for determining the handle type for a given node type
 	 */
 	template<typename T> struct Handle_type;
-	template<> struct Handle_type<Node>      { typedef Node_handle    Type; };
+	template<> struct Handle_type<Io_node>   { typedef Node_handle    Type; };
 	template<> struct Handle_type<Directory> { typedef Dir_handle     Type; };
 	template<> struct Handle_type<File>      { typedef File_handle    Type; };
 	template<> struct Handle_type<Symlink>   { typedef Symlink_handle Type; };
+	template<> struct Handle_type<Watch>     { typedef Watch_handle   Type; };
 
 	/*
 	 * Note that the file objects are created at the
@@ -82,9 +86,8 @@ namespace Vfs_server {
 	 */
 }
 
-
-class Vfs_server::Node : public File_system::Node_base, public Node_space::Element,
-                         public Vfs::Vfs_handle::Context
+class Vfs_server::Node : public  File_system::Node_base,
+                         private Node_space::Element
 {
 	public:
 
@@ -92,13 +95,67 @@ class Vfs_server::Node : public File_system::Node_base, public Node_space::Eleme
 
 	private:
 
-		Path const       _path;
-		Mode const       _mode;
+		/*
+		 * Noncopyable
+		 */
+		Node(Node const &);
+		Node &operator = (Node const &);
+
+		Path const _path;
+
+	protected:
+
+		/**
+		 * I/O handler for session context
+		 */
+		Session_io_handler &_session_io_handler;
+
+	public:
+
+		Node(Node_space &space, char const *node_path,
+		     Session_io_handler &io_handler)
+		:
+			Node_space::Element(*this, space),
+			_path(node_path),
+			_session_io_handler(io_handler)
+		{ }
+
+		virtual ~Node() { }
+
+		using Node_space::Element::id;
+
+		char const *path() const { return _path.base(); }
+
+		/**
+		 * Print for debugging
+		 */
+		void print(Genode::Output &out) const {
+			out.out_string(_path.base()); }
+};
+
+class Vfs_server::Io_node : public  Vfs_server::Node,
+                            private Vfs::Vfs_handle::Context
+{
+	public:
+
+		enum Op_state { IDLE, READ_QUEUED, SYNC_QUEUED };
+
+	private:
+
+		/*
+		 * Noncopyable
+		 */
+		Io_node(Io_node const &);
+		Io_node &operator = (Io_node const &);
+
+		Mode const _mode;
+
 		bool _notify_read_ready = false;
 
 	protected:
 
-		Node_io_handler &_node_io_handler;
+		Vfs::Vfs_handle::Context &context() { return *this; }
+
 		Vfs::Vfs_handle *_handle { nullptr };
 		Op_state         op_state { Op_state::IDLE };
 
@@ -173,31 +230,36 @@ class Vfs_server::Node : public File_system::Node_base, public Node_space::Eleme
 
 	public:
 
-		Node(Node_space &space, char const *node_path, Mode node_mode,
-		     Node_io_handler &node_io_handler)
-		:
-			Node_space::Element(*this, space),
-			_path(node_path), _mode(node_mode),
-			_node_io_handler(node_io_handler)
-		{ }
+		Io_node(Node_space &space, char const *node_path, Mode node_mode,
+		        Session_io_handler &io_handler)
+		: Node(space, node_path, io_handler), _mode(node_mode) { }
 
-		virtual ~Node() { }
+		virtual ~Io_node() { }
 
-		char const *path() { return _path.base(); }
+		using Node_space::Element::id;
+
+		static Io_node &node_by_context(Vfs::Vfs_handle::Context &context)
+		{
+			return static_cast<Io_node &>(context);
+		}
+
 		Mode mode() const { return _mode; }
 
-		virtual size_t read(char *dst, size_t len, seek_off_t seek_offset)
+		virtual size_t read(char * /* dst */, size_t /* len */, seek_off_t)
 		{ return 0; }
 
-		virtual size_t write(char const *src, size_t len,
-		                     seek_off_t seek_offset) { return 0; }
+		virtual size_t write(char const * /* src */, size_t /* len */,
+		                     seek_off_t) { return 0; }
 
 		bool read_ready() { return _handle->fs().read_ready(_handle); }
 
-		void handle_io_response()
-		{
-			_node_io_handler.handle_node_io(*this);
-		}
+		/**
+		 * The global handler has drawn an association from an I/O
+		 * context and this open node, now process the event at the
+		 * session for this node.
+		 */
+		void handle_io_response() {
+			_session_io_handler.handle_node_io(*this); }
 
 		void notify_read_ready(bool requested)
 		{
@@ -240,21 +302,73 @@ class Vfs_server::Node : public File_system::Node_base, public Node_space::Eleme
 		}
 };
 
-struct Vfs_server::Symlink : Node
+
+class Vfs_server::Watch_node final : public  Vfs_server::Node,
+                                     private Vfs::Vfs_watch_handle::Context
 {
-	Symlink(Node_space        &space,
-	        Vfs::File_system  &vfs,
-	        Genode::Allocator &alloc,
-	        Node_io_handler   &node_io_handler,
-	        char       const  *link_path,
-	        Mode               mode,
-	        bool               create)
-	: Node(space, link_path, mode, node_io_handler)
+	private:
+
+		/*
+		 * Noncopyable
+		 */
+		Watch_node(Watch_node const &);
+		Watch_node &operator = (Watch_node const &);
+
+		Vfs::Vfs_watch_handle &_watch_handle;
+
+	public:
+
+		Watch_node(Node_space &space,  char const *path,
+		           Vfs::Vfs_watch_handle &handle,
+		           Session_io_handler &io_handler)
+		:
+			Node(space, path, io_handler),
+			_watch_handle(handle)
+		{
+			/*
+			 * set the context so this Watch object
+			 * is passed back thru the Io_handler
+			 */
+			_watch_handle.context(this);
+		}
+
+		~Watch_node()
+		{
+			_watch_handle.context((Vfs::Vfs_watch_handle::Context*)~0ULL);
+			_watch_handle.close();
+		}
+
+		static Watch_node &node_by_context(Vfs::Vfs_watch_handle::Context &context)
+		{
+			return static_cast<Watch_node &>(context);
+		}
+
+		/**
+		 * The global handler has drawn an association from a watch
+		 * context and this open node, now process the event at the
+		 * session for this node.
+		 */
+		void handle_watch_response() {
+			_session_io_handler.handle_node_watch(*this); }
+};
+
+
+struct Vfs_server::Symlink : Io_node
+{
+	Symlink(Node_space         &space,
+	        Vfs::File_system   &vfs,
+	        Genode::Allocator  &alloc,
+	        Session_io_handler &node_io_handler,
+	        char       const   *link_path,
+	        Mode                mode,
+	        bool                create)
+	: Io_node(space, link_path, mode, node_io_handler)
 	{
 		assert_openlink(vfs.openlink(link_path, create, &_handle, alloc));
-		_handle->context = this;
+		_handle->context = &context();
 	}
 
+	~Symlink() { _handle->close(); }
 
 	/********************
 	 ** Node interface **
@@ -270,7 +384,7 @@ struct Vfs_server::Symlink : Node
 		return _read(dst, len, 0);
 	}
 
-	size_t write(char const *src, size_t len, seek_off_t seek_offset)
+	size_t write(char const *src, size_t const len, seek_off_t)
 	{
 		/*
 		 * if the symlink target is too long return a short result
@@ -294,48 +408,54 @@ struct Vfs_server::Symlink : Node
 
 		mark_as_updated();
 		notify_listeners();
-		return out_count;
+		return len;
 	}
 };
 
 
-class Vfs_server::File : public Node
+class Vfs_server::File : public Io_node
 {
 	private:
 
-		char const *_leaf_path; /* offset pointer to Node::_path */
+		/*
+		 * Noncopyable
+		 */
+		File(File const &);
+		File &operator = (File const &);
+
+		char const *_leaf_path = nullptr; /* offset pointer to Node::_path */
 
 	public:
 
-		File(Node_space        &space,
-		     Vfs::File_system  &vfs,
-		     Genode::Allocator &alloc,
-		     Node_io_handler   &node_io_handler,
-		     char       const  *file_path,
-		     Mode               fs_mode,
-		     bool               create)
+		File(Node_space         &space,
+		     Vfs::File_system   &vfs,
+		     Genode::Allocator  &alloc,
+		     Session_io_handler &node_io_handler,
+		     char       const   *file_path,
+		     Mode                fs_mode,
+		     bool                create)
 		:
-			Node(space, file_path, fs_mode, node_io_handler)
+			Io_node(space, file_path, fs_mode, node_io_handler)
 		{
 			unsigned vfs_mode =
 				(fs_mode-1) | (create ? Vfs::Directory_service::OPEN_MODE_CREATE : 0);
 
 			assert_open(vfs.open(file_path, vfs_mode, &_handle, alloc));
 			_leaf_path       = vfs.leaf_path(path());
-			_handle->context = this;
+			_handle->context = &context();
 		}
 
-		~File() { _handle->ds().close(_handle); }
+		~File() { _handle->close(); }
 
 		size_t read(char *dst, size_t len, seek_off_t seek_offset) override
 		{
-			if (seek_offset == SEEK_TAIL) {
+			if (seek_offset == (seek_off_t)SEEK_TAIL) {
 				typedef Directory_service::Stat_result Result;
 				Vfs::Directory_service::Stat st;
 
 				/* if stat fails, try and see if the VFS will seek to the end */
 				seek_offset = (_handle->ds().stat(_leaf_path, st) == Result::STAT_OK) ?
-					((len < st.size) ? (st.size - len) : 0) : SEEK_TAIL;
+					((len < st.size) ? (st.size - len) : 0) : (seek_off_t)SEEK_TAIL;
 			}
 
 			return _read(dst, len, seek_offset);
@@ -344,13 +464,13 @@ class Vfs_server::File : public Node
 		size_t write(char const *src, size_t len,
 		             seek_off_t seek_offset) override
 		{
-			if (seek_offset == SEEK_TAIL) {
+			if (seek_offset == (seek_off_t)SEEK_TAIL) {
 				typedef Directory_service::Stat_result Result;
 				Vfs::Directory_service::Stat st;
 
 				/* if stat fails, try and see if the VFS will seek to the end */
 				seek_offset = (_handle->ds().stat(_leaf_path, st) == Result::STAT_OK) ?
-					st.size : SEEK_TAIL;
+					st.size : (seek_off_t)SEEK_TAIL;
 			}
 
 			return _write(src, len, seek_offset);
@@ -364,26 +484,25 @@ class Vfs_server::File : public Node
 };
 
 
-struct Vfs_server::Directory : Node
+struct Vfs_server::Directory : Io_node
 {
-	Directory(Node_space        &space,
-	          Vfs::File_system  &vfs,
-	          Genode::Allocator &alloc,
-	          Node_io_handler   &node_io_handler,
-	          char const        *dir_path,
-	          bool               create)
-	: Node(space, dir_path, READ_ONLY, node_io_handler)
+	Directory(Node_space         &space,
+	          Vfs::File_system   &vfs,
+	          Genode::Allocator  &alloc,
+	          Session_io_handler &node_io_handler,
+	          char const         *dir_path,
+	          bool                create)
+	: Io_node(space, dir_path, READ_ONLY, node_io_handler)
 	{
 		assert_opendir(vfs.opendir(dir_path, create, &_handle, alloc));
-		_handle->context = this;
+		_handle->context = &context();
 	}
 
-	~Directory() { _handle->ds().close(_handle); }
+	~Directory() { _handle->close(); }
 
 	Node_space::Id file(Node_space        &space,
 	                    Vfs::File_system  &vfs,
 	                    Genode::Allocator &alloc,
-	                    Node_io_handler   &node_io_handler,
 	                    char        const *file_path,
 	                    Mode               mode,
 	                    bool               create)
@@ -393,8 +512,9 @@ struct Vfs_server::Directory : Node
 
 		File *file;
 		try {
-			file = new (alloc)
-			       File(space, vfs, alloc, node_io_handler, path_str, mode, create);
+			file = new (alloc) File(space, vfs, alloc,
+			                        _session_io_handler,
+			                        path_str, mode, create);
 		} catch (Out_of_memory) { throw Out_of_ram(); }
 
 		if (create)
@@ -413,7 +533,8 @@ struct Vfs_server::Directory : Node
 		char const *path_str = subpath.base();
 
 		Symlink *link;
-		try { link = new (alloc) Symlink(space, vfs, alloc, _node_io_handler,
+		try { link = new (alloc) Symlink(space, vfs, alloc,
+		                                 _session_io_handler,
 		                                 path_str, mode, create); }
 		catch (Out_of_memory) { throw Out_of_ram(); }
 		if (create)
@@ -464,11 +585,7 @@ struct Vfs_server::Directory : Node
 		return len - remains;
 	}
 
-	size_t write(char const *src, size_t len,
-	             seek_off_t seek_offset) override
-	{
-		return 0;
-	}
+	size_t write(char const *, size_t, seek_off_t) override { return 0; }
 };
 
 #endif /* _VFS__NODE_H_ */

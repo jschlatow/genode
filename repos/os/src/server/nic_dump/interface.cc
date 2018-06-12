@@ -17,19 +17,19 @@
 /* Genode includes */
 #include <net/ethernet.h>
 #include <packet_log.h>
+#include <util/xml_node.h>
 
 using namespace Net;
 using namespace Genode;
 
 
-void Interface::_handle_eth(void              *const  eth_base,
-                            size_t             const  eth_size,
-                            Packet_descriptor  const &pkt)
+void Net::Interface::_handle_eth(void              *const  eth_base,
+                                 size_t             const  eth_size,
+                                 Packet_descriptor  const &)
 {
 	try {
-		Ethernet_frame &eth = *new (eth_base) Ethernet_frame(eth_size);
+		Ethernet_frame &eth = *reinterpret_cast<Ethernet_frame *>(eth_base);
 		Interface &remote = _remote.deref();
-		Packet_log_config log_cfg;
 
 		if (_log_time) {
 			Genode::Duration const new_time    = _timer.curr_time();
@@ -37,24 +37,22 @@ void Interface::_handle_eth(void              *const  eth_base,
 			unsigned long    const old_time_ms = _curr_time.trunc_to_plain_us().value / 1000;
 
 			log("\033[33m(", remote._label, " <- ", _label, ")\033[0m ",
-			    packet_log(eth, log_cfg), " \033[33mtime ", new_time_ms,
+			    packet_log(eth, _log_cfg), " \033[33mtime ", new_time_ms,
 			    " ms (Δ ", new_time_ms - old_time_ms, " ms)\033[0m");
 
 			_curr_time = new_time;
 		} else {
-			log("\033[33m(", remote._label, " <- ", _label, ")\033[0m ",  packet_log(eth, log_cfg));
+			log("\033[33m(", remote._label, " <- ", _label, ")\033[0m ", 
+			    packet_log(eth, _log_cfg));
 		}
 		remote._send(eth, eth_size);
 	}
-	catch (Ethernet_frame::No_ethernet_frame) {
-		error("invalid ethernet frame"); }
-
 	catch (Pointer<Interface>::Invalid) {
 		error("no remote interface set"); }
 }
 
 
-void Interface::_send(Ethernet_frame &eth, Genode::size_t const size)
+void Net::Interface::_send(Ethernet_frame &eth, Genode::size_t const size)
 {
 	try {
 		Packet_descriptor const pkt = _source().alloc_packet(size);
@@ -67,7 +65,7 @@ void Interface::_send(Ethernet_frame &eth, Genode::size_t const size)
 }
 
 
-void Interface::_ready_to_submit()
+void Net::Interface::_ready_to_submit()
 {
 	while (_sink().packet_avail()) {
 
@@ -86,24 +84,36 @@ void Interface::_ready_to_submit()
 }
 
 
-void Interface::_ready_to_ack()
+void Net::Interface::_ready_to_ack()
 {
 	while (_source().ack_avail()) {
 		_source().release_packet(_source().get_acked_packet()); }
 }
 
 
-Interface::Interface(Entrypoint        &ep,
-                     Interface_label    label,
-                     Timer::Connection &timer,
-                     Duration          &curr_time,
-                     bool               log_time,
-                     Allocator         &alloc)
+Net::Interface::Interface(Entrypoint        &ep,
+                          Interface_label    label,
+                          Timer::Connection &timer,
+                          Duration          &curr_time,
+                          bool               log_time,
+                          Allocator         &alloc,
+                          Xml_node           config)
 :
-	_sink_ack     (ep, *this, &Interface::_ack_avail),
-	_sink_submit  (ep, *this, &Interface::_ready_to_submit),
-	_source_ack   (ep, *this, &Interface::_ready_to_ack),
-	_source_submit(ep, *this, &Interface::_packet_avail),
-	_alloc(alloc), _label(label), _timer(timer), _curr_time(curr_time),
-	_log_time(log_time)
+	_sink_ack          { ep, *this, &Interface::_ack_avail },
+	_sink_submit       { ep, *this, &Interface::_ready_to_submit },
+	_source_ack        { ep, *this, &Interface::_ready_to_ack },
+	_source_submit     { ep, *this, &Interface::_packet_avail },
+	_alloc             { alloc },
+	_label             { label },
+	_timer             { timer },
+	_curr_time         { curr_time },
+	_log_time          { log_time },
+	_default_log_style { config.attribute_value("default", Packet_log_style::DEFAULT) },
+	_log_cfg           { config.attribute_value("eth",     _default_log_style),
+	                     config.attribute_value("arp",     _default_log_style),
+	                     config.attribute_value("ipv4",    _default_log_style),
+	                     config.attribute_value("dhcp",    _default_log_style),
+	                     config.attribute_value("udp",     _default_log_style),
+	                     config.attribute_value("icmp",    _default_log_style),
+	                     config.attribute_value("tcp",     _default_log_style) }
 { }

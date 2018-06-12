@@ -253,7 +253,7 @@ class Genode::Child : protected Rpc_object<Parent>,
 {
 	private:
 
-		struct Initial_thread_base
+		struct Initial_thread_base : Interface
 		{
 			/**
 			 * Start execution at specified instruction pointer
@@ -304,16 +304,16 @@ class Genode::Child : protected Rpc_object<Parent>,
 		Capability_guard _parent_cap_guard;
 
 		/* signal handlers registered by the child */
-		Signal_context_capability _resource_avail_sigh;
-		Signal_context_capability _yield_sigh;
-		Signal_context_capability _session_sigh;
+		Signal_context_capability _resource_avail_sigh { };
+		Signal_context_capability _yield_sigh          { };
+		Signal_context_capability _session_sigh        { };
 
 		/* arguments fetched by the child in response to a yield signal */
-		Lock          _yield_request_lock;
-		Resource_args _yield_request_args;
+		Lock          _yield_request_lock { };
+		Resource_args _yield_request_args { };
 
 		/* sessions opened by the child */
-		Id_space<Client> _id_space;
+		Id_space<Client> _id_space { };
 
 		/* allocator used for dynamically created session state objects */
 		Sliced_heap _session_md_alloc { _policy.ref_pd(), _local_rm };
@@ -337,7 +337,7 @@ class Genode::Child : protected Rpc_object<Parent>,
 
 		void _try_construct_env_dependent_members();
 
-		Constructible<Initial_thread> _initial_thread;
+		Constructible<Initial_thread> _initial_thread { };
 
 		struct Process
 		{
@@ -350,7 +350,7 @@ class Genode::Child : protected Rpc_object<Parent>,
 				 * Initial instruction pointer of the new process, as defined
 				 * in the header of the executable.
 				 */
-				addr_t entry;
+				addr_t entry { 0 };
 
 				/**
 				 * Constructor parses the executable and sets up segment
@@ -414,7 +414,7 @@ class Genode::Child : protected Rpc_object<Parent>,
 			~Process();
 		};
 
-		Constructible<Process> _process;
+		Constructible<Process> _process { };
 
 		/*
 		 * The child's environment sessions
@@ -451,18 +451,27 @@ class Genode::Child : protected Rpc_object<Parent>,
 				{
 					session.ready_callback = this;
 					session.async_client_notify = true;
+
 					_service.initiate_request(session);
 
 					if (session.phase == Session_state::SERVICE_DENIED)
 						error(_child._policy.name(), ": environment ",
 						      CONNECTION::service_name(), " session denied "
 						      "(", session.args(), ")");
+
+					/*
+					 * If the env session is provided by an async service,
+					 * we have to wake up the server when closing the env
+					 * session.
+					 */
+					if (session.phase == Session_state::CLOSE_REQUESTED)
+						_service.wakeup();
 				}
 
 				/**
 				 * Session_state::Ready_callback
 				 */
-				void session_ready(Session_state &session) override
+				void session_ready(Session_state &) override
 				{
 					_child._try_construct_env_dependent_members();
 				}
@@ -511,9 +520,9 @@ class Genode::Child : protected Rpc_object<Parent>,
 				}
 			};
 
-			Constructible<Env_service> _env_service;
+			Constructible<Env_service> _env_service { };
 
-			Constructible<Local_connection<CONNECTION> > _connection;
+			Constructible<Local_connection<CONNECTION> > _connection { };
 
 			/**
 			 * Construct session arguments with the child policy applied
@@ -575,6 +584,10 @@ class Genode::Child : protected Rpc_object<Parent>,
 			Capability<SESSION> cap() const {
 				return _connection.constructed() ? _connection->cap()
 				                                 : Capability<SESSION>(); }
+
+			bool alive() const { return _connection.constructed() && _connection->alive(); }
+
+			void close() { if (_connection.constructed()) _connection->close(); }
 		};
 
 		Env_connection<Pd_connection>  _pd     { *this, Env::pd(),     _policy.name() };
@@ -582,7 +595,7 @@ class Genode::Child : protected Rpc_object<Parent>,
 		Env_connection<Log_connection> _log    { *this, Env::log(),    _policy.name() };
 		Env_connection<Rom_connection> _binary { *this, Env::binary(), _policy.binary_name() };
 
-		Constructible<Env_connection<Rom_connection> > _linker;
+		Constructible<Env_connection<Rom_connection> > _linker { };
 
 		Dataspace_capability _linker_dataspace()
 		{
@@ -667,6 +680,21 @@ class Genode::Child : protected Rpc_object<Parent>,
 		void initiate_env_sessions();
 
 		/**
+		 * Return true if the child is safe to be destroyed
+		 *
+		 * The child must not be destroyed until all environment sessions
+		 * are closed at the respective servers. Otherwise, the session state,
+		 * which is kept as part of the child object may be gone before
+		 * the close request reaches the server.
+		 */
+		bool env_sessions_closed() const
+		{
+			if (_linker.constructed() && _linker->alive()) return false;
+
+			return !_cpu.alive() && !_log.alive() && !_binary.alive();
+		}
+
+		/**
 		 * Quota unconditionally consumed by the child's environment
 		 */
 		static Ram_quota env_ram_quota()
@@ -681,6 +709,8 @@ class Genode::Child : protected Rpc_object<Parent>,
 			         Log_connection::CAP_QUOTA + 2*Rom_connection::CAP_QUOTA +
 			         1 /* parent cap */ };
 		}
+
+		void close_all_sessions();
 
 		template <typename FN>
 		void for_each_session(FN const &fn) const

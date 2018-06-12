@@ -223,9 +223,9 @@ class Genode::Xml_node
 
 			private:
 
-				Token _token;
-				Token _name;
-				Type  _type;
+				Token _token { };
+				Token _name  { };
+				Type  _type  { INVALID };
 
 			public:
 
@@ -243,7 +243,7 @@ class Genode::Xml_node
 				 * # '/' for marking an empty-element tag (if tag is no end tag)
 				 * # Closing '>' tag delimiter
 				 */
-				Tag(Token start) : _token(start), _type(INVALID)
+				Tag(Token start) : _token(start)
 				{
 					Type supposed_type = START;
 
@@ -294,7 +294,7 @@ class Genode::Xml_node
 				/**
 				 * Default constructor produces invalid Tag
 				 */
-				Tag() : _type(INVALID) { }
+				Tag() { }
 
 				/**
 				 * Return type of tag
@@ -343,8 +343,8 @@ class Genode::Xml_node
 		{
 			private:
 
-				Token _next;   /* token following the comment */
-				bool  _valid;  /* true if comment is well formed */
+				Token _next  { };        /* token following the comment */
+				bool  _valid { false };  /* true if comment is well formed */
 
 			public:
 
@@ -353,7 +353,7 @@ class Genode::Xml_node
 				 *
 				 * \param start  first token of the comment tag
 				 */
-				Comment(Token t) : _valid(false)
+				Comment(Token t)
 				{
 					/* check for comment start */
 					if (!t.matches("<!--"))
@@ -370,7 +370,7 @@ class Genode::Xml_node
 				/**
 				 * Default constructor produces invalid Comment
 				 */
-				Comment() : _valid(false) { }
+				Comment() { }
 
 				/**
 				 * Return true if comment is valid
@@ -683,7 +683,7 @@ class Genode::Xml_node
 			char const *src        = content_base();
 			size_t      src_len    = content_size();
 
-			for (; dst_len > 1 && src_len; result_len++) {
+			for (; dst_len && src_len; dst_len--, result_len++) {
 
 				Decoded_character const decoded_character(src, src_len);
 
@@ -703,8 +703,8 @@ class Genode::Xml_node
 		STRING decoded_content() const
 		{
 			char buf[STRING::capacity() + 1];
-			size_t const len = decoded_content(buf, sizeof(buf));
-			buf[min(len, STRING::capacity())] = 0;
+			size_t const len = decoded_content(buf, sizeof(buf) - 1);
+			buf[min(len, sizeof(buf) - 1)] = 0;
 			return STRING(Cstring(buf));
 		}
 
@@ -747,14 +747,6 @@ class Genode::Xml_node
 			try { next(type); return false; }
 			catch (Nonexistent_sub_node) { return true; }
 		}
-
-		/**
-		 * Return true if node is the last of a node sequence
-		 *
-		 * \noapi
-		 * \deprecated use 'last' instead
-		 */
-		bool is_last(const char *type = 0) const { return last(); }
 
 		/**
 		 * Return sub node with specified index

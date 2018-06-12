@@ -22,19 +22,32 @@
 #include <net/dhcp.h>
 #include <net/ethernet.h>
 #include <net/tcp.h>
+#include <net/icmp.h>
 #include <net/ipv4.h>
 
 namespace Net {
 
 	enum class Packet_log_style : Genode::uint8_t
 	{
-		NONE, SHORT, COMPACT, COMPREHENSIVE,
+		NO, NAME, DEFAULT, ALL,
 	};
 
 	struct Packet_log_config;
 
 	template <typename PKT>
 	struct Packet_log;
+}
+
+namespace Genode
+{
+	inline size_t ascii_to(char const *s, Net::Packet_log_style &result)
+	{
+		if (!strcmp(s, "no",      2)) { result = Net::Packet_log_style::NO;      return 2; }
+		if (!strcmp(s, "name",    4)) { result = Net::Packet_log_style::NAME;    return 4; }
+		if (!strcmp(s, "default", 7)) { result = Net::Packet_log_style::DEFAULT; return 7; }
+		if (!strcmp(s, "all",     3)) { result = Net::Packet_log_style::ALL;     return 3; }
+		return 0;
+	}
 }
 
 
@@ -45,18 +58,19 @@ struct Net::Packet_log_config
 {
 	using Style = Packet_log_style;
 
-	Style eth, arp, ipv4, dhcp, udp, tcp;
+	Style eth, arp, ipv4, dhcp, udp, icmp, tcp;
 
-	Packet_log_config(Style def = Style::COMPACT)
-	: eth(def), arp(def), ipv4(def), dhcp(def), udp(def), tcp(def) { }
+	Packet_log_config(Style def = Style::DEFAULT)
+	: eth(def), arp(def), ipv4(def), dhcp(def), udp(def), icmp(def), tcp(def) { }
 
 	Packet_log_config(Style eth,
 	                  Style arp,
 	                  Style ipv4,
 	                  Style dhcp,
 	                  Style udp,
+	                  Style icmp,
 	                  Style tcp)
-	: eth(eth), arp(arp), ipv4(ipv4), dhcp(dhcp), udp(udp), tcp(tcp) { }
+	: eth(eth), arp(arp), ipv4(ipv4), dhcp(dhcp), udp(udp), icmp(icmp), tcp(tcp) { }
 };
 
 
@@ -114,6 +128,9 @@ namespace Net {
 
 	template <>
 	void Packet_log<Udp_packet>::print(Genode::Output &output) const;
+
+	template <>
+	void Packet_log<Icmp_packet>::print(Genode::Output &output) const;
 }
 
 #endif /* _PACKET_LOG_H_ */

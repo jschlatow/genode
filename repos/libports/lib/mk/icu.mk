@@ -1,4 +1,4 @@
-include $(REP_DIR)/lib/import/import-icu.mk
+include $(call select_from_repositories,lib/import/import-icu.mk)
 
 ICU_DIR = $(call select_from_ports,icu)/src/lib/icu
 
@@ -97,3 +97,5 @@ vpath % $(ICU_DIR)/source/i18n
 vpath % $(ICU_DIR)/source/data/in
 
 SHARED_LIB = yes
+
+CC_CXX_WARN_STRICT =

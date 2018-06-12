@@ -50,31 +50,17 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 
 		case SYSCALL_WRITE:
 			{
-				size_t const count_in = _sysio.write_in.count;
+				Shared_pointer<Io_channel> io = _lookup_channel(_sysio.write_in.fd);
 
-				for (size_t offset = 0; offset != count_in; ) {
+				if (!io->nonblocking())
+					_block_for_io_channel(io, false, true, false);
 
-					Shared_pointer<Io_channel> io = _lookup_channel(_sysio.write_in.fd);
+				if (io->check_unblock(false, true, false)) {
+					/* 'io->write' is expected to update '_sysio.write_out.count' */
+					result = io->write(_sysio);
+				} else
+					_sysio.error.write = Vfs::File_io_service::WRITE_ERR_INTERRUPT;
 
-					if (!io->nonblocking())
-						_block_for_io_channel(io, false, true, false);
-
-					if (io->check_unblock(false, true, false)) {
-						/*
-						 * 'io->write' is expected to update
-						 * '_sysio.write_out.count' and 'offset'
-						 */
-						result = io->write(_sysio, offset);
-						if (result == false)
-							break;
-					} else {
-						if (result == false) {
-							/* nothing was written yet */
-							_sysio.error.write = Vfs::File_io_service::WRITE_ERR_INTERRUPT;
-						}
-						break;
-					}
-				}
 				break;
 			}
 
@@ -171,8 +157,15 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 			if (_sysio.fcntl_in.cmd == Sysio::FCNTL_CMD_SET_FD_FLAGS) {
 
 				/* we assume that there is only the close-on-execve flag */
-				_lookup_channel(_sysio.fcntl_in.fd)->close_on_execve =
-					!!_sysio.fcntl_in.long_arg;
+				close_fd_on_execve(_sysio.fcntl_in.fd, !!_sysio.fcntl_in.long_arg);
+				result = true;
+				break;
+			}
+
+			if (_sysio.fcntl_in.cmd == Sysio::FCNTL_CMD_GET_FD_FLAGS) {
+
+				/* we assume that there is only the close-on-execve flag */
+				_sysio.fcntl_out.result = close_fd_on_execve(_sysio.fcntl_in.fd);
 				result = true;
 				break;
 			}
@@ -240,7 +233,7 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 				Shared_pointer<Io_channel>
 					channel(new (_heap) Vfs_io_channel(_sysio.open_in.path,
 					                                   leaf_path, &_root_dir,
-					                                   vfs_handle, _vfs_handle_context,
+					                                   vfs_handle,
 					                                   _vfs_io_waiter_registry,
 					                                   _env.ep()),
 					                                   _heap);
@@ -273,57 +266,38 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 			break;
 
 		case SYSCALL_EXECVE:
-			{
+
+			typedef Child_env<sizeof(_sysio.execve_in.args)> Execve_child_env;
+
+			try {
+
+				Execve_child_env child_env(_sysio.execve_in.filename,
+					                       _sysio.execve_in.args,
+					                       _sysio.execve_in.env,
+					                       _root_dir, _vfs_io_waiter_registry,
+					                       _env.ram(), _env.rm(), _heap);
+
+				_parent_execve.execve_child(*this,
+					                        child_env.binary_name(),
+					                        child_env.args(),
+					                        child_env.env());
+
 				/*
-				 * We have to check the dataspace twice because the binary
-				 * could be a script that uses an interpreter which maybe
-				 * does not exist.
+				 * 'return' instead of 'break' to skip possible signal delivery,
+				 * which might cause the old child process to exit itself
 				 */
-				Genode::Reconstructible<Vfs_dataspace> binary_ds {
-					_root_dir, _vfs_io_waiter_registry,
-					_sysio.execve_in.filename, _env.ram(), _env.rm(), _heap
-				};
-
-				if (!binary_ds->ds.valid()) {
-					_sysio.error.execve = Sysio::EXECVE_NONEXISTENT;
-					break;
-				}
-
-				Child_env<sizeof(_sysio.execve_in.args)>
-					child_env(_env.rm(),
-					          _sysio.execve_in.filename, binary_ds->ds,
-					          _sysio.execve_in.args, _sysio.execve_in.env);
-
-				binary_ds.construct(_root_dir, _vfs_io_waiter_registry,
-				                    child_env.binary_name(), _env.ram(),
-				                    _env.rm(), _heap);
-
-				if (!binary_ds->ds.valid()) {
-					_sysio.error.execve = Sysio::EXECVE_NONEXISTENT;
-					break;
-				}
-
-				binary_ds.destruct();
-
-				try {
-					_parent_execve.execve_child(*this,
-					                            child_env.binary_name(),
-					                            child_env.args(),
-					                            child_env.env());
-
-					/*
-					 * 'return' instead of 'break' to skip possible signal delivery,
-					 * which might cause the old child process to exit itself
-					 */
-					return true;
-				}
-				catch (Child::Binary_does_not_exist) {
-					_sysio.error.execve = Sysio::EXECVE_NONEXISTENT; }
-				catch (Child::Insufficient_memory) {
-					_sysio.error.execve = Sysio::EXECVE_NOMEM; }
-
-				break;
+				return true;
 			}
+			catch (Execve_child_env::Binary_does_not_exist) {
+				_sysio.error.execve = Sysio::EXECVE_ERR_NO_ENTRY; }
+			catch (Execve_child_env::Binary_is_not_accessible) {
+				_sysio.error.execve = Sysio::EXECVE_ERR_ACCESS; }
+			catch (Execve_child_env::Binary_is_not_executable) {
+				_sysio.error.execve = Sysio::EXECVE_ERR_NO_EXEC; }
+			catch (Child::Insufficient_memory) {
+				_sysio.error.execve = Sysio::EXECVE_ERR_NO_MEMORY; }
+
+			break;
 
 		case SYSCALL_SELECT:
 			{
@@ -556,7 +530,7 @@ bool Noux::Child::syscall(Noux::Session::Syscall sc)
 
 				Family_member::insert(child);
 
-				_assign_io_channels_to(child);
+				_assign_io_channels_to(child, false);
 
 				/* copy our address space into the new child */
 				try {

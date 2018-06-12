@@ -20,6 +20,7 @@
 
 /* core includes */
 #include <boot_modules.h>
+#include <core_log.h>
 #include <platform.h>
 #include <map_local.h>
 #include <cnode.h>
@@ -251,14 +252,15 @@ void Platform::_switch_to_core_cspace()
 
 	/* activate core's CSpace */
 	{
-		seL4_CapData_t null_data = { { 0 } };
-		seL4_CapData_t const guard = seL4_CapData_Guard_new(0, CONFIG_WORD_SIZE - 32);
+		seL4_CNode_CapData const null_data = { { 0 } };
+		seL4_CNode_CapData const guard = seL4_CNode_CapData_new(0, CONFIG_WORD_SIZE - 32);
 
 		int const ret = seL4_TCB_SetSpace(seL4_CapInitThreadTCB,
 		                                  seL4_CapNull, /* fault_ep */
 		                                  Core_cspace::top_cnode_sel(),
-		                                  guard,
-		                                  seL4_CapInitThreadPD, null_data);
+		                                  guard.words[0],
+		                                  seL4_CapInitThreadPD,
+		                                  null_data.words[0]);
 
 		if (ret != seL4_NoError)
 			error(__FUNCTION__, ": seL4_TCB_SetSpace returned ", ret);
@@ -359,7 +361,7 @@ void Platform::_init_rom_modules()
 	addr_t   const phys_addr = Untyped_memory::alloc_page(*ram_alloc());
 	Untyped_memory::convert_to_page_frames(phys_addr, pages);
 
-	if (!region_alloc()->alloc(rom_size, &virt_ptr)) {
+	if (region_alloc()->alloc_aligned(rom_size, &virt_ptr, get_page_size_log2()).error()) {
 		error("could not setup platform_info ROM - region allocation error");
 		Untyped_memory::free_page(*ram_alloc(), phys_addr);
 		return;
@@ -376,6 +378,7 @@ void Platform::_init_rom_modules()
 	Genode::Xml_generator xml(reinterpret_cast<char *>(virt_addr),
 	                          rom_size, rom_name, [&] ()
 	{
+
 		if (!bi.extraLen)
 			return;
 
@@ -390,6 +393,28 @@ void Platform::_init_rom_modules()
 		     next <= last && element->id != SEL4_BOOTINFO_HEADER_PADDING;
 			 element = next)
 		{
+			if (element->id == SEL4_BOOTINFO_HEADER_X86_TSC_FREQ) {
+				struct tsc_freq {
+					uint32_t freq_mhz;
+				} __attribute__((packed));
+				if (sizeof(tsc_freq) + sizeof(*element) != element->len) {
+					error("unexpected tsc frequency format");
+					continue;
+				}
+
+				tsc_freq const * boot_freq = reinterpret_cast<tsc_freq const *>(reinterpret_cast<addr_t>(element) + sizeof(* element));
+
+				xml.node("hardware", [&] () {
+					xml.node("features", [&] () {
+						xml.attribute("svm", false);
+						xml.attribute("vmx", false);
+					});
+					xml.node("tsc", [&] () {
+						xml.attribute("freq_khz" , boot_freq->freq_mhz * 1000UL);
+					});
+				});
+			}
+
 			if (element->id == SEL4_BOOTINFO_HEADER_X86_FRAMEBUFFER) {
 				struct mbi2_framebuffer {
 					uint64_t addr;
@@ -525,7 +550,7 @@ Platform::Platform()
 	/* add some minor virtual region for dynamic usage by core */
 	addr_t const virt_size = 32 * 1024 * 1024;
 	void * virt_ptr = nullptr;
-	if (_unused_virt_alloc.alloc(virt_size, &virt_ptr)) {
+	if (_unused_virt_alloc.alloc_aligned(virt_size, &virt_ptr, get_page_size_log2()).ok()) {
 
 		addr_t const virt_addr = (addr_t)virt_ptr;
 
@@ -539,8 +564,10 @@ Platform::Platform()
 	/* add idle thread trace subjects */
 	for (unsigned cpu_id = 0; cpu_id < affinity_space().width(); cpu_id ++) {
 
-		struct Idle_trace_source : Trace::Source::Info_accessor, Trace::Control,
-		                           Trace::Source, Genode::Thread_info
+		struct Idle_trace_source : public  Trace::Source::Info_accessor,
+		                           private Trace::Control,
+		                           private Trace::Source,
+		                           private Thread_info
 		{
 			Affinity::Location const affinity;
 
@@ -549,8 +576,6 @@ Platform::Platform()
 			 */
 			Info trace_source_info() const override
 			{
-				Genode::String<8> name("idle", affinity.xpos());
-
 				Genode::Thread * me = Genode::Thread::myself();
 				addr_t const ipc_buffer = reinterpret_cast<addr_t>(me->utcb());
 				seL4_IPCBuffer * ipcbuffer = reinterpret_cast<seL4_IPCBuffer *>(ipc_buffer);
@@ -559,40 +584,53 @@ Platform::Platform()
 				seL4_BenchmarkGetThreadUtilisation(tcb_sel.value());
 				uint64_t execution_time = buf[BENCHMARK_IDLE_TCBCPU_UTILISATION];
 
-				return { Session_label("kernel"), Trace::Thread_name(name),
+				return { Session_label("kernel"), Trace::Thread_name("idle"),
 				         Trace::Execution_time(execution_time), affinity };
 			}
 
-			Idle_trace_source(Platform &platform, Range_allocator &phys_alloc,
+			Idle_trace_source(Trace::Source_registry &registry,
+			                  Platform &platform, Range_allocator &phys_alloc,
 			                  Affinity::Location affinity)
 			:
+				Trace::Control(),
 				Trace::Source(*this, *this), affinity(affinity)
 			{
 				Thread_info::init_tcb(platform, phys_alloc, 0, affinity.xpos());
+				registry.insert(this);
 			}
 		};
 
-		Idle_trace_source *source = new (core_mem_alloc())
-			Idle_trace_source(*this, *_core_mem_alloc.phys_alloc(),
+		new (core_mem_alloc())
+			Idle_trace_source(Trace::sources(), *this,
+			                  *_core_mem_alloc.phys_alloc(),
 			                  Affinity::Location(cpu_id, 0,
 			                                     affinity_space().width(),
 			                                     affinity_space().height()));
-
-		Trace::sources().insert(source);
 	}
 
 	/* I/O port allocator (only meaningful for x86) */
 	_io_port_alloc.add_range(0, 0x10000);
 
-	/*
-	 * Log statistics about allocator initialization
-	 */
-	if (verbose_boot_info) {
-		log(":phys_alloc:       ", *_core_mem_alloc.phys_alloc());
-		log(":unused_phys_alloc:",  _unused_phys_alloc);
-		log(":unused_virt_alloc:",  _unused_virt_alloc);
-		log(":virt_alloc:       ", *_core_mem_alloc.virt_alloc());
-		log(":io_mem_alloc:     ",  _io_mem_alloc);
+	/* core log as ROM module */
+	{
+		void * core_local_ptr = nullptr;
+		unsigned const pages  = 1;
+		size_t const log_size = pages << get_page_size_log2();
+
+		addr_t   const phys_addr = Untyped_memory::alloc_page(*ram_alloc());
+		Untyped_memory::convert_to_page_frames(phys_addr, pages);
+
+		/* let one page free after the log buffer */
+		region_alloc()->alloc_aligned(log_size + get_page_size(), &core_local_ptr, get_page_size_log2());
+		addr_t const core_local_addr = reinterpret_cast<addr_t>(core_local_ptr);
+
+		map_local(phys_addr, core_local_addr, pages, this);
+		memset(core_local_ptr, 0, log_size);
+
+		_rom_fs.insert(new (core_mem_alloc()) Rom_module(phys_addr, log_size,
+		                                                 "core_log"));
+
+		init_core_log(Core_log_range { core_local_addr, log_size } );
 	}
 
 	_init_rom_modules();

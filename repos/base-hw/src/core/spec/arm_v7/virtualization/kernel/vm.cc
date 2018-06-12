@@ -56,7 +56,10 @@ struct Host_context {
 
 struct Kernel::Vm_irq : Kernel::Irq
 {
-		Vm_irq(unsigned const irq) : Kernel::Irq(irq, *cpu_pool()->executing_cpu()) {}
+	Vm_irq(unsigned const irq)
+	:
+		Kernel::Irq(irq, cpu_pool()->executing_cpu()->irq_pool())
+	{ }
 
 	/**
 	 * A VM interrupt gets injected into the VM scheduled on the current CPU
@@ -85,7 +88,7 @@ struct Kernel::Virtual_pic : Genode::Mmio
 	template <unsigned SLOT>
 	struct Gich_lr : Register<0x100 + SLOT*4, 32> { };
 
-	Vm_irq irq = Board::VT_MAINTAINANCE_IRQ;
+	Vm_irq irq { Board::VT_MAINTAINANCE_IRQ };
 
 	Virtual_pic()
 	: Genode::Mmio(Genode::Platform::mmio_to_virt(Board::IRQ_CONTROLLER_VT_CTRL_BASE)) { }
@@ -136,7 +139,7 @@ struct Kernel::Virtual_pic : Genode::Mmio
 
 struct Kernel::Virtual_timer
 {
-	Vm_irq irq = Board::VT_TIMER_IRQ;
+	Vm_irq irq { Board::VT_TIMER_IRQ };
 
 	/**
 	 * Return virtual timer object of currently executing cpu

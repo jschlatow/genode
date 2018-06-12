@@ -20,9 +20,11 @@
 #include <util/string.h>
 #include <util/xml_generator.h>
 #include <trace/source_registry.h>
+#include <util/construct_at.h>
 
 /* core includes */
 #include <boot_modules.h>
+#include <core_log.h>
 #include <platform.h>
 #include <nova_util.h>
 #include <util.h>
@@ -71,14 +73,15 @@ extern unsigned _prog_img_beg, _prog_img_end;
  * This function uses the virtual-memory region allocator to find a region
  * fitting the desired mapping. Other allocators are left alone.
  */
-addr_t Platform::_map_pages(addr_t phys_page, addr_t const pages)
+addr_t Platform::_map_pages(addr_t const phys_addr, addr_t const pages,
+                            bool guard_page)
 {
-	addr_t const phys_addr = phys_page << get_page_size_log2();
-	addr_t const size      = pages << get_page_size_log2();
+	addr_t const size = pages << get_page_size_log2();
 
 	/* try to reserve contiguous virtual area */
 	void *core_local_ptr = 0;
-	if (!region_alloc()->alloc(size, &core_local_ptr))
+	if (region_alloc()->alloc_aligned(size + (guard_page ? get_page_size() : 0),
+	                                  &core_local_ptr, get_page_size_log2()).error())
 		return 0;
 
 	addr_t const core_local_addr = reinterpret_cast<addr_t>(core_local_ptr);
@@ -156,9 +159,9 @@ static void page_fault_handler()
 	/* dump stack trace */
 	struct Core_img
 	{
-		addr_t  _beg;
-		addr_t  _end;
-		addr_t *_ip;
+		addr_t  _beg = 0;
+		addr_t  _end = 0;
+		addr_t *_ip  = nullptr;
 
 		Core_img(addr_t sp)
 		{
@@ -214,7 +217,7 @@ static void startup_handler()
 }
 
 
-static void init_core_page_fault_handler(addr_t const core_pd_sel)
+static addr_t init_core_page_fault_handler(addr_t const core_pd_sel)
 {
 	/* create echo EC */
 	enum {
@@ -241,6 +244,8 @@ static void init_core_page_fault_handler(addr_t const core_pd_sel)
 	          Mtd(Mtd::EIP | Mtd::ESP),
 	          (addr_t)startup_handler);
 	revoke(Obj_crd(PT_SEL_STARTUP, 0, Obj_crd::RIGHT_PT_CTRL));
+
+	return ec_sel;
 }
 
 
@@ -383,7 +388,7 @@ Platform::Platform() :
 #endif
 
 	/* set up page fault handler for core - for debugging */
-	init_core_page_fault_handler(core_pd_sel());
+	addr_t const ec_echo_sel = init_core_page_fault_handler(core_pd_sel());
 
 	if (verbose_boot_info) {
 		if (hip->has_feature_vmx())
@@ -637,10 +642,9 @@ Platform::Platform() :
 
 		unsigned const pages = 1;
 		void * phys_ptr = 0;
-		ram_alloc()->alloc(get_page_size(), &phys_ptr);
+		ram_alloc()->alloc_aligned(get_page_size(), &phys_ptr, get_page_size_log2());
 		addr_t const phys_addr = reinterpret_cast<addr_t>(phys_ptr);
-		addr_t const core_local_addr = _map_pages(phys_addr >> get_page_size_log2(),
-		                                          pages);
+		addr_t const core_local_addr = _map_pages(phys_addr, pages);
 
 		Genode::Xml_generator xml(reinterpret_cast<char *>(core_local_addr),
 		                          pages << get_page_size_log2(),
@@ -669,6 +673,16 @@ Platform::Platform() :
 					xml.attribute("pitch",  boot_fb->aux);
 				});
 			});
+			xml.node("hardware", [&] () {
+				xml.node("features", [&] () {
+					xml.attribute("svm", hip->has_feature_svm());
+					xml.attribute("vmx", hip->has_feature_vmx());
+				});
+				xml.node("tsc", [&] () {
+					xml.attribute("invariant", cpuid_invariant_tsc());
+					xml.attribute("freq_khz" , hip->tsc_freq);
+				});
+			});
 		});
 
 		unmap_local(__main_thread_utcb, core_local_addr, pages);
@@ -679,22 +693,22 @@ Platform::Platform() :
 		               "platform_info"));
 	}
 
-	/* export hypervisor info page as ROM module */
+	/* core log as ROM module */
 	{
-		void * phys_ptr = 0;
-		ram_alloc()->alloc(get_page_size(), &phys_ptr);
-		addr_t phys_addr = reinterpret_cast<addr_t>(phys_ptr);
+		void * phys_ptr = nullptr;
+		unsigned const pages  = 1;
+		size_t const log_size = pages << get_page_size_log2();
 
-		addr_t core_local_addr = _map_pages(phys_addr >> get_page_size_log2(), 1);
+		ram_alloc()->alloc_aligned(log_size, &phys_ptr, get_page_size_log2());
+		addr_t const phys_addr = reinterpret_cast<addr_t>(phys_ptr);
 
-		memcpy(reinterpret_cast<void *>(core_local_addr), hip, get_page_size());
+		addr_t const core_local_addr = _map_pages(phys_addr, pages, true);
+		memset(reinterpret_cast<void *>(core_local_addr), 0, log_size);
 
-		unmap_local(__main_thread_utcb, core_local_addr, 1);
-		region_alloc()->free(reinterpret_cast<void *>(core_local_addr), get_page_size());
+		_rom_fs.insert(new (core_mem_alloc()) Rom_module(phys_addr, log_size,
+		                                                 "core_log"));
 
-		_rom_fs.insert(new (core_mem_alloc())
-		               Rom_module(phys_addr, get_page_size(),
-		                          "hypervisor_info_page"));
+		init_core_log( Core_log_range { core_local_addr, log_size } );
 	}
 
 	/* I/O port allocator (only meaningful for x86) */
@@ -704,12 +718,7 @@ Platform::Platform() :
 	_irq_alloc.add_range(0, hip->sel_gsi);
 	_gsi_base_sel = (hip->mem_desc_offset - hip->cpu_desc_offset) / hip->cpu_desc_size;
 
-	if (verbose_boot_info) {
-		log(":virt_alloc: ",  *_core_mem_alloc.virt_alloc());
-		log(":phys_alloc: ",  *_core_mem_alloc.phys_alloc());
-		log(":io_mem_alloc: ", _io_mem_alloc);
-		log(":rom_fs: ",       _rom_fs);
-	}
+	log(_rom_fs);
 
 	/* add capability selector ranges to map */
 	unsigned const first_index = 0x2000;
@@ -717,13 +726,13 @@ Platform::Platform() :
 	for (unsigned i = 0; i < 32; i++)
 	{
 		void * phys_ptr = 0;
-		ram_alloc()->alloc(4096, &phys_ptr);
+		ram_alloc()->alloc_aligned(get_page_size(), &phys_ptr, get_page_size_log2());
 
 		addr_t phys_addr = reinterpret_cast<addr_t>(phys_ptr);
-		addr_t core_local_addr = _map_pages(phys_addr >> get_page_size_log2(), 1);
+		addr_t core_local_addr = _map_pages(phys_addr, 1);
 		
 		Cap_range * range = reinterpret_cast<Cap_range *>(core_local_addr);
-		*range = Cap_range(index);
+		construct_at<Cap_range>(range, index);
 
 		cap_map()->insert(range);
 
@@ -739,39 +748,106 @@ Platform::Platform() :
 		if (!hip->is_cpu_enabled(kernel_cpu_id))
 			continue;
 
-		struct Idle_trace_source : Trace::Source::Info_accessor, Trace::Control,
-		                           Trace::Source
+		struct Trace_source : public  Trace::Source::Info_accessor,
+		                      private Trace::Control,
+		                      private Trace::Source
 		{
 			Affinity::Location const affinity;
 			unsigned           const sc_sel;
+			Genode::String<8>  const name;
 
 			/**
 			 * Trace::Source::Info_accessor interface
 			 */
 			Info trace_source_info() const override
 			{
-				Genode::String<8> name("idle", affinity.xpos());
+				uint64_t sc_time = 0;
 
-				uint64_t execution_time = 0;
-				Nova::sc_ctrl(sc_sel, execution_time);
+				enum SYSCALL_OP { IDLE_SC = 0, CROSS_SC = 1 };
+				uint8_t syscall_op = (name == "cross") ? CROSS_SC : IDLE_SC;
+
+				uint8_t res = Nova::sc_ctrl(sc_sel, sc_time, syscall_op);
+				if (res != Nova::NOVA_OK)
+					warning("sc_ctrl on idle SC cap, op=", syscall_op,
+				            ", res=", res);
 
 				return { Session_label("kernel"), Trace::Thread_name(name),
-				         Trace::Execution_time(execution_time), affinity };
+				         Trace::Execution_time(sc_time), affinity };
 			}
 
-			Idle_trace_source(Affinity::Location affinity, unsigned sc_sel)
+			Trace_source(Trace::Source_registry &registry,
+			             Affinity::Location const affinity,
+			             unsigned const sc_sel,
+			             char const * type_name)
 			:
-				Trace::Source(*this, *this), affinity(affinity), sc_sel(sc_sel)
-			{ }
+				Trace::Control(),
+				Trace::Source(*this, *this), affinity(affinity),
+				sc_sel(sc_sel), name(type_name)
+			{
+				registry.insert(this);
+			}
 		};
 
-		Idle_trace_source *source = new (core_mem_alloc())
-			Idle_trace_source(Affinity::Location(genode_cpu_id, 0,
-			                                     _cpus.width(), 1),
-			                  sc_idle_base + kernel_cpu_id);
+		new (core_mem_alloc()) Trace_source(Trace::sources(),
+		                                    Affinity::Location(genode_cpu_id, 0,
+		                                                       _cpus.width(), 1),
+		                                    sc_idle_base + kernel_cpu_id,
+		                                    "idle");
 
-		Trace::sources().insert(source);
+		new (core_mem_alloc()) Trace_source(Trace::sources(),
+		                                    Affinity::Location(genode_cpu_id, 0,
+		                                                       _cpus.width(), 1),
+		                                    sc_idle_base + kernel_cpu_id,
+		                                    "cross");
 	}
+
+	/* add echo thread and EC root thread to trace sources */
+	struct Core_trace_source : public  Trace::Source::Info_accessor,
+	                           private Trace::Control,
+	                           private Trace::Source
+	{
+		Affinity::Location const location;
+		addr_t const ec_sc_sel;
+		Genode::String<8>  const name;
+
+		/**
+		 * Trace::Source::Info_accessor interface
+		 */
+		Info trace_source_info() const override
+		{
+			uint64_t sc_time = 0;
+
+			if (name == "root") {
+				uint8_t res = Nova::sc_ctrl(ec_sc_sel + 1, sc_time);
+				if (res != Nova::NOVA_OK)
+					warning("sc_ctrl for ", name, " thread failed res=", res);
+			}
+
+			return { Session_label("core"), name,
+			         Trace::Execution_time(sc_time), location };
+		}
+
+		Core_trace_source(Trace::Source_registry &registry,
+		                  Affinity::Location loc, addr_t sel,
+		                  char const *name)
+		:
+			Trace::Control(),
+			Trace::Source(*this, *this), location(loc), ec_sc_sel(sel),
+			name(name)
+		{
+			registry.insert(this);
+		}
+	};
+
+	new (core_mem_alloc())
+		Core_trace_source(Trace::sources(),
+		                  Affinity::Location(0, 0, _cpus.width(), 1),
+		                  ec_echo_sel, "echo");
+
+	new (core_mem_alloc())
+		Core_trace_source(Trace::sources(),
+		                  Affinity::Location(0, 0, _cpus.width(), 1),
+		                  hip->sel_exc + 1, "root");
 }
 
 
@@ -805,8 +881,7 @@ bool Mapped_mem_allocator::_map_local(addr_t virt_addr, addr_t phys_addr,
 }
 
 
-bool Mapped_mem_allocator::_unmap_local(addr_t virt_addr, addr_t phys_addr,
-                                        unsigned size)
+bool Mapped_mem_allocator::_unmap_local(addr_t virt_addr, addr_t, unsigned size)
 {
 	unmap_local((Utcb *)Thread::myself()->utcb(),
 	            virt_addr, size / get_page_size());

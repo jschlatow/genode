@@ -1,4 +1,4 @@
-/*
+ /*
  * \brief  Front-end API for accessing a component-local virtual file system
  * \author Norman Feske
  * \date   2017-07-04
@@ -17,6 +17,7 @@
 /* Genode includes */
 #include <base/env.h>
 #include <base/allocator.h>
+#include <vfs/simple_env.h>
 #include <vfs/dir_file_system.h>
 #include <vfs/file_system_factory.h>
 
@@ -29,7 +30,7 @@ namespace Genode {
 }
 
 
-struct Genode::Directory : Noncopyable
+struct Genode::Directory : Noncopyable, Interface
 {
 	public:
 
@@ -40,7 +41,7 @@ struct Genode::Directory : Noncopyable
 		{
 			private:
 
-				Vfs::Directory_service::Dirent _dirent;
+				Vfs::Directory_service::Dirent _dirent { };
 
 				friend class Directory;
 
@@ -70,7 +71,20 @@ struct Genode::Directory : Noncopyable
 
 		typedef String<256> Path;
 
+		static Path join(Path const &x, Path const &y)
+		{
+			char const *p = y.string();
+			while (*p == '/') ++p;
+			return Path(x, "/", p);
+		}
+
 	private:
+
+		/*
+		 * Noncopyable
+		 */
+		Directory(Directory const &);
+		Directory &operator = (Directory const &);
 
 		Path const _path;
 
@@ -84,15 +98,6 @@ struct Genode::Directory : Noncopyable
 
 		friend class Readonly_file;
 		friend class Root_directory;
-
-		/**
-		 * Constructor used by 'Root_directory'
-		 *
-		 * \throw Open_failed
-		 */
-		Directory(Vfs::File_system &fs, Entrypoint &ep, Allocator &alloc)
-		: _path(""), _fs(fs), _ep(ep), _alloc(alloc)
-		{ }
 
 		/*
 		 * Operations such as 'file_size' that are expected to be 'const' at
@@ -113,7 +118,7 @@ struct Genode::Directory : Noncopyable
 			 * Ignore return value as the validity of the result is can be
 			 * checked by the caller via 'stat.mode != 0'.
 			 */
-			_nonconst_fs().stat(Path(_path, "/", rel_path).string(), stat);
+			_nonconst_fs().stat(join(_path, rel_path).string(), stat);
 			return stat;
 		}
 
@@ -123,12 +128,26 @@ struct Genode::Directory : Noncopyable
 		struct Nonexistent_directory : Exception { };
 
 		/**
+		 * Constructor used by 'Root_directory'
+		 *
+		 * \throw Open_failed
+		 */
+		Directory(Vfs::Env &vfs_env)
+		: _path(""), _fs(vfs_env.root_dir()),
+		  _ep(vfs_env.env().ep()), _alloc(vfs_env.alloc())
+		{
+			if (_fs.opendir("/", false, &_handle, _alloc) !=
+			    Vfs::Directory_service::OPENDIR_OK)
+				throw Nonexistent_directory();
+		}
+
+		/**
 		 * Open sub directory
 		 *
 		 * \throw Nonexistent_directory
 		 */
-		Directory(Directory &other, Path const &rel_path)
-		: _path(other._path, "/", rel_path), _fs(other._fs), _ep(other._ep),
+		Directory(Directory const &other, Path const &rel_path)
+		: _path(join(other._path, rel_path)), _fs(other._fs), _ep(other._ep),
 		  _alloc(other._alloc)
 		{
 			if (_fs.opendir(_path.string(), false, &_handle, _alloc) !=
@@ -136,7 +155,7 @@ struct Genode::Directory : Noncopyable
 				throw Nonexistent_directory();
 		}
 
-		~Directory() { _handle->ds().close(_handle); }
+		~Directory() { if (_handle) _handle->ds().close(_handle); }
 
 		template <typename FN>
 		void for_each_entry(FN const &fn)
@@ -179,9 +198,21 @@ struct Genode::Directory : Noncopyable
 			}
 		}
 
+		template <typename FN>
+		void for_each_entry(FN const &fn) const
+		{
+			auto const_fn = [&] (Entry const &e) { fn(e); };
+			const_cast<Directory &>(*this).for_each_entry(const_fn);
+		}
+
 		bool file_exists(Path const &rel_path) const
 		{
 			return _stat(rel_path).mode & Vfs::Directory_service::STAT_MODE_FILE;
+		}
+
+		bool directory_exists(Path const &rel_path) const
+		{
+			return _stat(rel_path).mode & Vfs::Directory_service::STAT_MODE_DIRECTORY;
 		}
 
 		/**
@@ -194,33 +225,27 @@ struct Genode::Directory : Noncopyable
 		Vfs::file_size file_size(Path const &rel_path) const
 		{
 			Vfs::Directory_service::Stat stat = _stat(rel_path);
+
 			if (!(stat.mode & Vfs::Directory_service::STAT_MODE_FILE))
 				throw Nonexistent_file();
-
 			return stat.size;
 		}
 };
 
 
-struct Genode::Root_directory : public  Vfs::Io_response_handler,
-                                private Vfs::Global_file_system_factory,
-                                private Vfs::Dir_file_system,
-                                public  Directory
+struct Genode::Root_directory : public Vfs::Simple_env,
+                                public Directory
 {
-	void handle_io_response(Vfs::Vfs_handle::Context*) override { }
-
-	Root_directory(Env &env, Allocator &alloc, Xml_node config)
+	Root_directory(Genode::Env &env, Allocator &alloc, Xml_node config)
 	:
-		Vfs::Global_file_system_factory(alloc),
-		Vfs::Dir_file_system(env, alloc, config, *this, *this),
-		Directory(*this, env.ep(), alloc)
+		Vfs::Simple_env(env, alloc, config), Directory((Vfs::Simple_env&)*this)
 	{ }
 
-	void apply_config(Xml_node config) { Vfs::Dir_file_system::apply_config(config); }
+	void apply_config(Xml_node config) { root_dir().apply_config(config); }
 };
 
 
-struct Genode::File : Noncopyable
+struct Genode::File : Noncopyable, Interface
 {
 	struct Open_failed : Exception { };
 
@@ -234,7 +259,14 @@ class Genode::Readonly_file : public File
 {
 	private:
 
-		Vfs::Vfs_handle    *_handle = nullptr;
+		/*
+		 * Noncopyable
+		 */
+		Readonly_file(Readonly_file const &);
+		Readonly_file &operator = (Readonly_file const &);
+
+		Vfs::Vfs_handle mutable *_handle = nullptr;
+
 		Genode::Entrypoint &_ep;
 
 		void _open(Vfs::File_system &fs, Allocator &alloc, Path const path)
@@ -249,6 +281,27 @@ class Genode::Readonly_file : public File
 			}
 		}
 
+		/**
+		 * Strip off constness of 'Directory const &'
+		 *
+		 * Since the 'Readonly_file' API provides an abstraction over the
+		 * low-level VFS operations, the intuitive meaning of 'const' is
+		 * different between the 'Readonly_file' API and the VFS.
+		 *
+		 * At the VFS level, opening a file changes the internal state of the
+		 * VFS. Hence the operation is non-const. However, the user of the
+		 * 'Readonly_file' API expects the constness of a directory to
+		 * correspond to whether the directory can be modified or not. In the
+		 * case of instantiating a 'Readonly_file', one would expect that a
+		 * 'Directory const &' would suffice. The fact that - under the hood -
+		 * the 'Readonly_file' has to perform the nonconst 'open' operation at
+		 * the VFS is of not of interest.
+		 */
+		static Directory &_mutable(Directory const &dir)
+		{
+			return const_cast<Directory &>(dir);
+		}
+
 	public:
 
 		/**
@@ -256,22 +309,27 @@ class Genode::Readonly_file : public File
 		 *
 		 * \throw File::Open_failed
 		 */
-		Readonly_file(Directory &dir, Path const &rel_path)
-		: _ep(dir._ep)
+		Readonly_file(Directory const &dir, Path const &rel_path)
+		: _ep(_mutable(dir)._ep)
 		{
-			_open(dir._fs, dir._alloc, Path(dir._path, "/", rel_path));
+			_open(_mutable(dir)._fs, _mutable(dir)._alloc,
+			      Directory::join(dir._path, rel_path));
 		}
 
 		~Readonly_file() { _handle->ds().close(_handle); }
+
+		struct At { Vfs::file_size value; };
 
 		/**
 		 * Read number of 'bytes' from file into local memory buffer 'dst'
 		 *
 		 * \throw Truncated_during_read
 		 */
-		size_t read(char *dst, size_t bytes)
+		size_t read(At at, char *dst, size_t bytes) const
 		{
 			Vfs::file_size out_count = 0;
+
+			_handle->seek(at.value);
 
 			while (!_handle->fs().queue_read(_handle, bytes))
 				_ep.wait_and_dispatch_one_io_signal();
@@ -297,6 +355,17 @@ class Genode::Readonly_file : public File
 
 			return out_count;
 		}
+
+		/**
+		 * Read number of 'bytes' from the start of the file into local memory
+		 * buffer 'dst'
+		 *
+		 * \throw Truncated_during_read
+		 */
+		size_t read(char *dst, size_t bytes) const
+		{
+			return read(At{0}, dst, bytes);
+		}
 };
 
 
@@ -308,6 +377,12 @@ class Genode::File_content
 		size_t const _size;
 
 		char *_buffer = (char *)_alloc.alloc(_size);
+
+		/*
+		 * Noncopyable
+		 */
+		File_content(File_content const &);
+		File_content &operator = (File_content const &);
 
 	public:
 
@@ -325,7 +400,7 @@ class Genode::File_content
 		 * \throw Truncated_during_read  number of readable bytes differs
 		 *                               from file status information
 		 */
-		File_content(Allocator &alloc, Directory &dir, Path const &rel_path,
+		File_content(Allocator &alloc, Directory const &dir, Path const &rel_path,
 		             Limit limit)
 		:
 			_alloc(alloc),
@@ -362,10 +437,10 @@ class Genode::File_content
 			char const *curr_line     = src;
 			size_t      curr_line_len = 0;
 
-			for (size_t n = 0; n < _size; n++) {
+			for (size_t n = 0; ; n++) {
 
 				char const c = *src++;
-				bool const end_of_data = (c == 0 || n + 1 == _size);
+				bool const end_of_data = (c == 0 || n == _size);
 				bool const end_of_line = (c == '\n');
 
 				if (!end_of_data && !end_of_line) {
@@ -373,15 +448,22 @@ class Genode::File_content
 					continue;
 				}
 
-				fn(STRING(Cstring(curr_line, curr_line_len)));
+				if (!end_of_data || curr_line_len > 0)
+					fn(STRING(Cstring(curr_line, curr_line_len)));
 
 				if (end_of_data)
-					return;
+					break;
 
 				curr_line     = src;
 				curr_line_len = 0;
 			}
 		}
+
+		/**
+		 * Call functor 'fn' with the data pointer and size in bytes
+		 */
+		template <typename FN>
+		void bytes(FN const &fn) const { fn((char const *)_buffer, _size); }
 };
 
 #endif /* _INCLUDE__GEMS__VFS_H_ */

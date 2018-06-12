@@ -1,7 +1,9 @@
 set use_usb_driver   [expr [have_spec omap4] || [have_spec arndale] || [have_spec rpi]]
-set use_nic_driver   [expr !$use_usb_driver && ![have_spec imx53] && ![have_spec linux] && ![have_spec odroid_xu] && ![have_spec wand_quad]]
+set use_nic_driver   [expr !$use_usb_driver && ![have_spec linux] && ![have_spec odroid_xu]]
 
-if {[expr !$use_usb_driver && !$use_nic_driver || [expr [have_include "power_on/qemu"] && [have_spec zynq]]]} {
+if {[expr !$use_usb_driver && !$use_nic_driver] ||
+    [expr [have_include "power_on/qemu"] && [have_spec zynq]] ||
+    [expr [have_spec imx53] && [have_spec trustzone]]} {
 	puts "\n Run script is not supported on this platform. \n"; exit 0 }
 
 
@@ -114,9 +116,10 @@ append config {
 }
 
 append_if $use_nic_driver config {
-	<start name="nic_drv">
-		<resource name="RAM" quantum="8M"/>
+	<start name="nic_drv" caps="130">
+		<resource name="RAM" quantum="20M"/>
 		<provides> <service name="Nic"/> </provides>
+		} [nic_drv_config] {
 	</start>}
 
 append_if [have_spec gpio] config "
@@ -171,8 +174,8 @@ install_config $config
 # generic modules
 set boot_modules {
 	core init timer tcp_terminal nic_bridge
-	ld.lib.so noux_net libc.lib.so libm.lib.so libc_pipe.lib.so pthread.lib.so
-	libc_noux.lib.so lwip.lib.so netcat.tar posix.lib.so
+	ld.lib.so noux_net libc.lib.so vfs.lib.so libm.lib.so libc_pipe.lib.so pthread.lib.so
+	libc_noux.lib.so lwip_legacy.lib.so netcat.tar posix.lib.so
 }
 
 # platform-specific modules

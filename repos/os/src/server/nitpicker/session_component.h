@@ -42,7 +42,7 @@ namespace Nitpicker {
 }
 
 
-struct Nitpicker::Visibility_controller
+struct Nitpicker::Visibility_controller : Interface
 {
 	typedef Session::Label Suffix;
 
@@ -52,12 +52,20 @@ struct Nitpicker::Visibility_controller
 };
 
 
-class Nitpicker::Session_component : public Rpc_object<Session>,
-                                     public View_owner,
-                                     public Buffer_provider,
-                                     public Session_list::Element
+class Nitpicker::Session_component : public  Rpc_object<Session>,
+                                     public  View_owner,
+                                     public  Buffer_provider,
+                                     private Session_list::Element
 {
 	private:
+
+		friend class List<Session_component>;
+
+		/*
+		 * Noncopyable
+		 */
+		Session_component(Session_component const &);
+		Session_component &operator = (Session_component const &);
 
 		Env &_env;
 
@@ -91,15 +99,17 @@ class Nitpicker::Session_component : public Rpc_object<Session>,
 
 		View_stack &_view_stack;
 
-		Focus_controller &_focus_controller;
+		Font const &_font;
 
-		Signal_context_capability _mode_sigh;
+		Focus_updater &_focus_updater;
+
+		Signal_context_capability _mode_sigh { };
 
 		View_component &_pointer_origin;
 
 		View_component &_builtin_background;
 
-		List<Session_view_list_elem> _view_list;
+		List<Session_view_list_elem> _view_list { };
 
 		Tslab<View_component, 4000> _view_alloc { &_session_alloc };
 
@@ -125,6 +135,8 @@ class Nitpicker::Session_component : public Rpc_object<Session>,
 
 		Visibility_controller &_visibility_controller;
 
+		Session_component *_forwarded_focus = nullptr;
+
 		/**
 		 * Calculate session-local coordinate to physical screen position
 		 *
@@ -147,8 +159,6 @@ class Nitpicker::Session_component : public Rpc_object<Session>,
 		 */
 		bool _views_are_equal(View_handle, View_handle);
 
-		bool _focus_change_permitted() const;
-
 		void _execute_command(Command const &);
 
 		void _destroy_view(View_component &);
@@ -158,7 +168,8 @@ class Nitpicker::Session_component : public Rpc_object<Session>,
 		Session_component(Env                   &env,
 		                  Session_label   const &label,
 		                  View_stack            &view_stack,
-		                  Focus_controller      &focus_controller,
+		                  Font            const &font,
+		                  Focus_updater         &focus_updater,
 		                  View_component        &pointer_origin,
 		                  View_component        &builtin_background,
 		                  Framebuffer::Session  &framebuffer,
@@ -173,7 +184,7 @@ class Nitpicker::Session_component : public Rpc_object<Session>,
 			_session_alloc(&session_alloc, ram_quota),
 			_framebuffer(framebuffer),
 			_framebuffer_session_component(view_stack, *this, framebuffer, *this),
-			_view_stack(view_stack), _focus_controller(focus_controller),
+			_view_stack(view_stack), _font(font), _focus_updater(focus_updater),
 			_pointer_origin(pointer_origin),
 			_builtin_background(builtin_background),
 			_framebuffer_session_cap(_env.ep().manage(_framebuffer_session_component)),
@@ -195,6 +206,8 @@ class Nitpicker::Session_component : public Rpc_object<Session>,
 
 			_release_buffer();
 		}
+
+		using Session_list::Element::next;
 
 
 		/**************************
@@ -282,6 +295,8 @@ class Nitpicker::Session_component : public Rpc_object<Session>,
 				xml.attribute("domain", _domain->name());
 		}
 
+		View_owner &forwarded_focus() override;
+
 
 		/****************************************
 		 ** Interface used by the main program **
@@ -331,6 +346,12 @@ class Nitpicker::Session_component : public Rpc_object<Session>,
 		void submit_sync()
 		{
 			_framebuffer_session_component.submit_sync();
+		}
+
+		void forget(Session_component &session)
+		{
+			if (_forwarded_focus == &session)
+				_forwarded_focus = nullptr;
 		}
 
 

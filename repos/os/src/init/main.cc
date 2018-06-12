@@ -30,9 +30,9 @@ struct Init::Main : State_reporter::Producer, Child::Default_route_accessor,
 {
 	Env &_env;
 
-	Registry<Init::Parent_service> _parent_services;
-	Registry<Routed_service>       _child_services;
-	Child_registry                 _children;
+	Registry<Init::Parent_service> _parent_services { };
+	Registry<Routed_service>       _child_services  { };
+	Child_registry                 _children        { };
 
 	Heap _heap { _env.ram(), _env.rm() };
 
@@ -42,7 +42,7 @@ struct Init::Main : State_reporter::Producer, Child::Default_route_accessor,
 
 	Reconstructible<Verbose> _verbose { _config_xml };
 
-	Constructible<Buffered_xml> _default_route;
+	Constructible<Buffered_xml> _default_route { };
 
 	Cap_quota _default_caps { 0 };
 
@@ -182,8 +182,8 @@ void Init::Main::_update_parent_services_from_config()
 			service.abandon();
 	});
 
-	if (_verbose->enabled())
-		log("parent provides");
+	/* used to prepend the list of new parent services with title */
+	bool first_log = true;
 
 	/* register new services */
 	node.for_each_sub_node("service", [&] (Xml_node service) {
@@ -197,8 +197,12 @@ void Init::Main::_update_parent_services_from_config()
 
 		if (!registered) {
 			new (_heap) Init::Parent_service(_parent_services, _env, name);
-			if (_verbose->enabled())
+			if (_verbose->enabled()) {
+				if (first_log)
+					log("parent provides");
 				log("  service \"", name, "\"");
+				first_log = false;
+			}
 		}
 	});
 }
@@ -269,7 +273,7 @@ void Init::Main::_update_children_config()
 				node.attribute_value("name", Child_policy::Name());
 
 			_children.for_each_child([&] (Child &child) {
-				if (child.name() == start_node_name) {
+				if (!child.abandoned() && child.name() == start_node_name) {
 					switch (child.apply_config(node)) {
 					case Child::NO_SIDE_EFFECTS: break;
 					case Child::MAY_HAVE_SIDE_EFFECTS: side_effects = true; break;
@@ -314,7 +318,16 @@ void Init::Main::_handle_config()
 
 	/* kill abandoned children */
 	_children.for_each_child([&] (Child &child) {
-		if (child.abandoned()) {
+
+		if (!child.abandoned())
+			return;
+
+		/* make the child's services unavailable */
+		child.destroy_services();
+		child.close_all_sessions();
+
+		/* destroy child once all environment sessions are gone */
+		if (child.env_sessions_closed()) {
 			_children.remove(&child);
 			destroy(_heap, &child);
 		}
@@ -337,7 +350,8 @@ void Init::Main::_handle_config()
 			/* skip start node if corresponding child already exists */
 			bool exists = false;
 			_children.for_each_child([&] (Child const &child) {
-				if (child.name() == start_node.attribute_value("name", Child_policy::Name()))
+				if (!child.abandoned()
+				 && child.name() == start_node.attribute_value("name", Child_policy::Name()))
 					exists = true; });
 			if (exists) {
 				return;
@@ -345,12 +359,12 @@ void Init::Main::_handle_config()
 
 			if (used_ram.value > avail_ram.value) {
 				error("RAM exhausted while starting childen");
-				throw Out_of_ram();
+				return;
 			}
 
 			if (used_caps.value > avail_caps.value) {
 				error("capabilities exhausted while starting childen");
-				throw Out_of_caps();
+				return;
 			}
 
 			try {
@@ -405,13 +419,15 @@ void Init::Main::_handle_config()
 	 * Initiate RAM sessions of all new children
 	 */
 	_children.for_each_child([&] (Child &child) {
-		child.initiate_env_ram_session(); });
+		if (!child.abandoned())
+			child.initiate_env_ram_session(); });
 
 	/*
 	 * Initiate remaining environment sessions of all new children
 	 */
 	_children.for_each_child([&] (Child &child) {
-		child.initiate_env_sessions(); });
+		if (!child.abandoned())
+			child.initiate_env_sessions(); });
 
 	/*
 	 * (Re-)distribute RAM among the childen, given their resource assignments

@@ -53,6 +53,8 @@ class Genode::Thread
 
 		struct Stack_info { addr_t base; addr_t top; };
 
+		struct Tls { struct Base; Base *ptr; };
+
 	private:
 
 		/**
@@ -87,6 +89,12 @@ class Genode::Thread
 		 */
 		void _deinit_platform_thread();
 
+		/*
+		 * Noncopyable
+		 */
+		Thread(Thread const &);
+		Thread &operator = (Thread const &);
+
 	protected:
 
 		/**
@@ -94,7 +102,7 @@ class Genode::Thread
 		 *
 		 * Used if thread creation involves core's CPU service.
 		 */
-		Thread_capability _thread_cap;
+		Thread_capability _thread_cap { };
 
 		/**
 		 * Pointer to cpu session used for this thread
@@ -136,7 +144,7 @@ class Genode::Thread
 
 	private:
 
-		Trace::Logger _trace_logger;
+		Trace::Logger _trace_logger { };
 
 		/**
 		 * Return 'Trace::Logger' instance of calling thread
@@ -144,6 +152,17 @@ class Genode::Thread
 		 * This method is used by the tracing framework internally.
 		 */
 		static Trace::Logger *_logger();
+
+		/**
+		 * Base pointer to thread-local storage
+		 *
+		 * The opaque pointer allows higher-level thread libraries (i.e.,
+		 * pthread) to implement TLS. It should never be used outside such
+		 * libraries.
+		 */
+		Tls _tls { };
+
+		friend class Tls::Base;
 
 		/**
 		 * Hook for platform-specific constructor supplements

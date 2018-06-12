@@ -95,6 +95,51 @@ struct Test
 };
 
 
+struct Lock_test : Test
+{
+	static constexpr char const *brief = "Test locks in handlers";
+
+	bool                                stop     { false };
+	Microseconds                        us       { 1000 };
+	Lock                                lock     { };
+	Timer::One_shot_timeout<Lock_test>  ot1      { timer, *this, &Lock_test::handle_ot1 };
+	Timer::One_shot_timeout<Lock_test>  ot2      { timer, *this, &Lock_test::handle_ot2 };
+	Timer::One_shot_timeout<Lock_test>  ot3      { timer, *this, &Lock_test::handle_ot3 };
+
+	Lock_test(Env                       &env,
+	          unsigned                  &error_cnt,
+	          Signal_context_capability  done,
+	          unsigned                   id)
+	:
+		Test(env, error_cnt, done, id, brief)
+	{
+		ot1.schedule(us);
+		ot2.schedule(us);
+		ot3.schedule(us);
+	}
+
+	void handle(Timer::One_shot_timeout<Lock_test> &ot)
+	{
+		if (stop)
+			return;
+
+		if (!us.value) {
+			log("good");
+			done.submit();
+			stop = true;
+			return;
+		}
+		Lock_guard<Lock> lock_guard(lock);
+		us.value--;
+		ot.schedule(us);
+	}
+
+	void handle_ot1(Duration) { handle(ot1); }
+	void handle_ot2(Duration) { handle(ot2); }
+	void handle_ot3(Duration) { handle(ot3); }
+};
+
+
 struct Duration_test : Test
 {
 	static constexpr char const *brief = "Test operations on durations";
@@ -394,7 +439,7 @@ struct Fast_polling : Test
 	static constexpr char const *brief = "poll time pretty fast";
 
 	enum { NR_OF_ROUNDS          = 4 };
-	enum { MIN_ROUND_DURATION_MS = 2000 };
+	enum { MIN_ROUND_DURATION_MS = 2500 };
 	enum { MAX_NR_OF_POLLS       = 10000000 };
 	enum { MIN_NR_OF_POLLS       = 1000 };
 	enum { STACK_SIZE            = 4 * 1024 * sizeof(addr_t) };
@@ -412,6 +457,14 @@ struct Fast_polling : Test
 		unsigned long volatile *value { ram.local_addr<unsigned long>() };
 
 		Result_buffer(Env &env) : env(env) { }
+
+		private:
+
+			/*
+			 * Noncopyable
+			 */
+			Result_buffer(Result_buffer const &);
+			Result_buffer &operator = (Result_buffer const &);
 	};
 
 	Entrypoint                   main_ep;
@@ -768,15 +821,23 @@ struct Main
 {
 	Env                           &env;
 	unsigned                       error_cnt   { 0 };
-	Constructible<Duration_test>   test_1;
-	Constructible<Fast_polling>    test_2;
-	Constructible<Mixed_timeouts>  test_3;
+	Constructible<Lock_test>       test_0      { };
+	Constructible<Duration_test>   test_1      { };
+	Constructible<Fast_polling>    test_2      { };
+	Constructible<Mixed_timeouts>  test_3      { };
+	Signal_handler<Main>           test_0_done { env.ep(), *this, &Main::handle_test_0_done };
 	Signal_handler<Main>           test_1_done { env.ep(), *this, &Main::handle_test_1_done };
 	Signal_handler<Main>           test_2_done { env.ep(), *this, &Main::handle_test_2_done };
 	Signal_handler<Main>           test_3_done { env.ep(), *this, &Main::handle_test_3_done };
 
 	Main(Env &env) : env(env)
 	{
+		test_0.construct(env, error_cnt, test_0_done, 0);
+	}
+
+	void handle_test_0_done()
+	{
+		test_0.destruct();
 		test_1.construct(env, error_cnt, test_1_done, 1);
 	}
 
@@ -789,7 +850,7 @@ struct Main
 	void handle_test_2_done()
 	{
 		test_2.destruct();
-		test_3.construct(env, error_cnt, test_3_done, 2);
+		test_3.construct(env, error_cnt, test_3_done, 3);
 	}
 
 	void handle_test_3_done()

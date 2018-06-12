@@ -64,11 +64,6 @@ namespace Net { class Dhcp_packet; }
  */
 class Net::Dhcp_packet
 {
-	public:
-
-		struct No_dhcp_packet   : Genode::Exception { };
-		struct Option_not_found : Genode::Exception { };
-
 	private:
 
 		Genode::uint8_t   _op;
@@ -105,20 +100,9 @@ class Net::Dhcp_packet
 			BOOTPC = 68
 		};
 
-
-		Dhcp_packet(Genode::size_t size) {
-			/* dhcp packet needs to fit in */
-			if (size < sizeof(Dhcp_packet))
-				throw No_dhcp_packet();
-		}
-
 		void default_magic_cookie() {
 			_magic_cookie = host_to_big_endian(0x63825363);
 		}
-
-		void zero_fill_sname() { Genode::memset(_sname, 0, sizeof(_sname)); }
-
-		void zero_fill_file()  { Genode::memset(_file,  0, sizeof(_file)); }
 
 
 		/*******************************
@@ -146,25 +130,16 @@ class Net::Dhcp_packet
 					BROADCAST_ADDR = 28,
 					REQ_IP_ADDR    = 50,
 					IP_LEASE_TIME  = 51,
-					OPT_OVERLOAD   = 52,
 					MSG_TYPE       = 53,
 					SERVER         = 54,
-					REQ_PARAMETER  = 55,
-					MESSAGE        = 56,
+					PARAM_REQ_LIST = 55,
 					MAX_MSG_SZ     = 57,
-					RENEWAL        = 58,
-					REBINDING      = 59,
-					VENDOR         = 60,
 					CLI_ID         = 61,
-					TFTP_SRV_NAME  = 66,
-					BOOT_FILE      = 67,
 					END            = 255,
 				};
 
 				Option(Code code, Genode::uint8_t len)
 				: _code((Genode::uint8_t)code), _len(len) { }
-
-				Option() { }
 
 				Code             code() const { return (Code)_code; }
 				Genode::uint8_t len()   const { return _len; }
@@ -178,6 +153,12 @@ class Net::Dhcp_packet
 
 		} __attribute__((packed));
 
+		struct Option_not_found : Genode::Exception
+		{
+			Option::Code const code;
+
+			Option_not_found(Option::Code code) : code(code) { }
+		};
 
 		/**
 		 * DHCP option that contains a payload of type T
@@ -208,6 +189,16 @@ class Net::Dhcp_packet
 			: Option_tpl(CODE, host_to_big_endian(time)) { }
 
 			unsigned long value() const { return host_to_big_endian(_value); }
+		};
+
+		/**
+		 * DHCP option to request specific option type values from the server
+		 */
+		struct Parameter_request_list : Option
+		{
+			static constexpr Code CODE = Code::PARAM_REQ_LIST;
+
+			Parameter_request_list(Genode::size_t len) : Option(CODE, len) { }
 		};
 
 		enum class Message_type : Genode::uint8_t {
@@ -322,6 +313,34 @@ class Net::Dhcp_packet
 
 			public:
 
+				class Parameter_request_list_data
+				{
+					private:
+
+						Genode::uint8_t *const  _base;
+						Genode::size_t          _size { 0 };
+						SIZE_GUARD             &_size_guard;
+
+					public:
+
+						Parameter_request_list_data(Genode::uint8_t *base,
+						                            SIZE_GUARD      &size_guard)
+						:
+							_base       { base },
+							_size_guard { size_guard }
+						{ }
+
+						template <typename OPTION>
+						void append_param_req()
+						{
+							_size_guard.consume_head(sizeof(_base[0]));
+							_base[_size] = (Genode::uint8_t)OPTION::CODE;
+							_size++;
+						}
+
+						Genode::size_t size() const { return _size; }
+				};
+
 				Options_aggregator(Dhcp_packet &packet,
 				                   SIZE_GUARD  &size_guard)
 				:
@@ -332,10 +351,25 @@ class Net::Dhcp_packet
 				template <typename OPTION, typename... ARGS>
 				void append_option(ARGS &&... args)
 				{
-					_size_guard.add(sizeof(OPTION));
+					_size_guard.consume_head(sizeof(OPTION));
 					Genode::construct_at<OPTION>((void *)_base,
 					                             static_cast<ARGS &&>(args)...);
 					_base += sizeof(OPTION);
+				}
+
+				template <typename INIT_DATA>
+				void append_param_req_list(INIT_DATA && init_data)
+				{
+					_size_guard.consume_head(sizeof(Parameter_request_list));
+					Parameter_request_list_data
+						data((Genode::uint8_t *)(_base + sizeof(Parameter_request_list)),
+						     _size_guard);
+
+					init_data(data);
+					Genode::construct_at<Parameter_request_list>((void *)_base,
+					                                             data.size());
+
+					_base += sizeof(Parameter_request_list) + data.size();
 				}
 		};
 
@@ -369,11 +403,11 @@ class Net::Dhcp_packet
 		{
 			void *ptr = &_opts;
 			while (true) {
-				Option &opt = *Genode::construct_at<Option>(ptr);
+				Option &opt = *reinterpret_cast<Option *>(ptr);
 				if (opt.code() == Option::Code::INVALID ||
 				    opt.code() == Option::Code::END)
 				{
-					throw Option_not_found();
+					throw Option_not_found(T::CODE);
 				}
 				if (opt.code() == T::CODE) {
 					return *reinterpret_cast<T *>(ptr);
@@ -432,16 +466,6 @@ class Net::Dhcp_packet
 			        (udp->dst_port() == Port(Dhcp_packet::BOOTPC) ||
 			         udp->dst_port() == Port(Dhcp_packet::BOOTPS)));
 		}
-
-
-		/***************
-		 ** Operators **
-		 ***************/
-
-		/**
-		 * Placement new.
-		 */
-		void * operator new(__SIZE_TYPE__ size, void* addr) { return addr; }
 
 
 		/*********

@@ -23,19 +23,32 @@ using namespace Net;
 using namespace Genode;
 
 
-Net::Uplink::Uplink(Env               &env,
-                    Timer::Connection &timer,
-                    Genode::Allocator &alloc,
-                    Configuration     &config)
+Net::Uplink::Uplink(Env                 &env,
+                    Timer::Connection   &timer,
+                    Genode::Allocator   &alloc,
+                    Interface_list      &interfaces,
+                    Configuration       &config,
+                    Session_label const &label)
 :
 	Nic::Packet_allocator(&alloc),
-	Nic::Connection(env, this, BUF_SIZE, BUF_SIZE),
-	Interface(env.ep(), timer, mac_address(), alloc, Mac_address(),
-	          config.domains().find_by_name(Cstring("uplink")))
+	Nic::Connection(env, this, BUF_SIZE, BUF_SIZE, label.string()),
+	Net::Interface(env.ep(), timer, mac_address(), alloc, Mac_address(),
+	               config, interfaces, _intf_policy),
+	_label(label),
+	_link_state_handler(env.ep(), *this, &Uplink::_handle_link_state)
 {
 	rx_channel()->sigh_ready_to_ack(_sink_ack);
 	rx_channel()->sigh_packet_avail(_sink_submit);
 	tx_channel()->sigh_ack_avail(_source_ack);
 	tx_channel()->sigh_ready_to_submit(_source_submit);
-	Interface::_init();
+	Nic::Connection::link_state_sigh(_link_state_handler);
+	_link_state_ = link_state();
+}
+
+
+void Net::Uplink::_handle_link_state()
+{
+	_link_state_ = link_state();
+	try { domain().discard_ip_config(); }
+	catch (Domain::Ip_config_static) { }
 }

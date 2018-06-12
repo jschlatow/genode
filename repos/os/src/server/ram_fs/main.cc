@@ -50,7 +50,7 @@ class Ram_fs::Session_component : public File_system::Session_rpc_object
 		Genode::Ram_session              &_ram;
 		Genode::Allocator                &_alloc;
 		Directory                        &_root;
-		Id_space<File_system::Node>       _open_node_registry;
+		Id_space<File_system::Node>       _open_node_registry { };
 		bool                              _writable;
 
 		Signal_handler<Session_component> _process_packet_handler;
@@ -72,6 +72,7 @@ class Ram_fs::Session_component : public File_system::Session_rpc_object
 
 			/* resulting length */
 			size_t res_length = 0;
+			bool succeeded = false;
 
 			switch (packet.operation()) {
 
@@ -82,6 +83,9 @@ class Ram_fs::Session_component : public File_system::Session_rpc_object
 						break; 
 					res_length = node->read((char *)content, length,
 					                        packet.position());
+
+					/* read data or EOF is a success */
+					succeeded = res_length || (packet.position() >= node->status().size);
 				}
 				break;
 
@@ -92,21 +96,26 @@ class Ram_fs::Session_component : public File_system::Session_rpc_object
 						break; 
 					res_length = node->write((char const *)content, length,
 					                         packet.position());
+
+					/* File system session can't handle partial writes */
+					if (res_length != length) {
+						Genode::error("partial write detected ",
+						              res_length, " vs ", length);
+						/* don't acknowledge */
+						return;
+					}
+					succeeded = true;
 				}
 				open_node.mark_as_written();
 				break;
 
-			case Packet_descriptor::CONTENT_CHANGED: {
-				open_node.register_notify(*tx_sink());
-				Locked_ptr<Node> node { open_node.node() };
-				if (!node.valid())
-					return; 
-				node->notify_listeners();
+			case Packet_descriptor::CONTENT_CHANGED:
+				Genode::error("CONTENT_CHANGED packets from clients have no effect");
 				return;
-			}
 
 			case Packet_descriptor::READ_READY:
 				/* not supported */
+				succeeded = true;
 				break;
 
 			case Packet_descriptor::SYNC: {
@@ -114,12 +123,13 @@ class Ram_fs::Session_component : public File_system::Session_rpc_object
 				if (!node.valid())
 					break; 
 				node->notify_listeners();
+				succeeded = true;
 				break;
 			}
 			}
 
 			packet.length(res_length);
-			packet.succeeded(res_length > 0);
+			packet.succeeded(succeeded);
 			tx_sink()->acknowledge_packet(packet);
 		}
 
@@ -246,7 +256,6 @@ class Ram_fs::Session_component : public File_system::Session_rpc_object
 							File(_alloc, name.string());
 
 						dir->adopt_unsynchronized(file);
-						open_node.mark_as_written();
 					}
 					catch (Allocator::Out_of_memory) { throw No_space(); }
 				}
@@ -365,6 +374,24 @@ class Ram_fs::Session_component : public File_system::Session_rpc_object
 			return open_node->id();
 		}
 
+		Watch_handle watch(Path const &path) override
+		{
+			_assert_valid_path(path.string());
+
+			Node *node = _root.lookup(path.string() + 1);
+
+			Open_node *watcher = new (_alloc)
+				Open_node(node->weak_ptr(), _open_node_registry);
+
+			/*
+			 * like other open nodes, just the only
+			 * kind registered for notifications
+			 */
+			watcher->register_notify(*tx_sink());
+
+			return Watch_handle { watcher->id().value };
+		}
+
 		void close(Node_handle handle)
 		{
 			auto close_fn = [&] (Open_node &open_node) {
@@ -416,7 +443,6 @@ class Ram_fs::Session_component : public File_system::Session_rpc_object
 				dir->discard(node);
 
 				destroy(_alloc, node);
-				open_node.mark_as_written();
 			};
 
 			try {
@@ -479,20 +505,6 @@ class Ram_fs::Session_component : public File_system::Session_rpc_object
 
 						from_dir->discard(node);
 						to_dir->adopt_unsynchronized(node);
-
-						/*
-						 * If the file was moved from one directory to another we
-						 * need to inform the new directory 'to_dir'. The original
-						 * directory 'from_dir' will always get notified (i.e.,
-						 * when just the file name was changed) below.
-						 */
-						to_dir->mark_as_updated();
-						open_to_dir_node.mark_as_written();
-						to_dir->notify_listeners();
-
-						from_dir->mark_as_updated();
-						open_from_dir_node.mark_as_written();
-						from_dir->notify_listeners();
 
 						node->mark_as_updated();
 						node->notify_listeners();

@@ -21,43 +21,44 @@
 #include <component.h>
 
 using namespace Net;
+using namespace Genode;
 
 
-bool Net::Nic::handle_arp(Ethernet_frame *eth, Genode::size_t size) {
-	Arp_packet *arp = new (eth->data<void>())
-		Arp_packet(size - sizeof(Ethernet_frame));
-
+bool Net::Nic::handle_arp(Ethernet_frame &eth,
+                          Size_guard     &size_guard)
+{
 	/* ignore broken packets */
-	if (!arp->ethernet_ipv4())
+	Arp_packet &arp = eth.data<Arp_packet>(size_guard);
+	if (!arp.ethernet_ipv4())
 		return true;
 
 	/* look whether the IP address is one of our client's */
 	Ipv4_address_node *node = vlan().ip_tree.first();
 	if (node)
-		node = node->find_by_address(arp->dst_ip());
+		node = node->find_by_address(arp.dst_ip());
 	if (node) {
-		if (arp->opcode() == Arp_packet::REQUEST) {
+		if (arp.opcode() == Arp_packet::REQUEST) {
 			/*
 			 * The ARP packet gets re-written, we interchange source
 			 * and destination MAC and IP addresses, and set the opcode
 			 * to reply, and then push the packet back to the NIC driver.
 			 */
-			Ipv4_address old_src_ip = arp->src_ip();
-			arp->opcode(Arp_packet::REPLY);
-			arp->dst_mac(arp->src_mac());
-			arp->src_mac(mac());
-			arp->src_ip(arp->dst_ip());
-			arp->dst_ip(old_src_ip);
-			eth->dst(arp->dst_mac());
+			Ipv4_address old_src_ip = arp.src_ip();
+			arp.opcode(Arp_packet::REPLY);
+			arp.dst_mac(arp.src_mac());
+			arp.src_mac(mac());
+			arp.src_ip(arp.dst_ip());
+			arp.dst_ip(old_src_ip);
+			eth.dst(arp.dst_mac());
 
 			/* set our MAC as sender */
-			eth->src(mac());
-			send(eth, size);
+			eth.src(mac());
+			send(&eth, size_guard.total_size());
 		} else {
 			/* overwrite destination MAC */
-			arp->dst_mac(node->component().mac_address().addr);
-			eth->dst(node->component().mac_address().addr);
-			node->component().send(eth, size);
+			arp.dst_mac(node->component().mac_address().addr);
+			eth.dst(node->component().mac_address().addr);
+			node->component().send(&eth, size_guard.total_size());
 		}
 		return false;
 	}
@@ -65,27 +66,24 @@ bool Net::Nic::handle_arp(Ethernet_frame *eth, Genode::size_t size) {
 }
 
 
-bool Net::Nic::handle_ip(Ethernet_frame *eth, Genode::size_t size) {
-	Ipv4_packet *ip = new (eth->data<void>())
-		Ipv4_packet(size - sizeof(Ethernet_frame));
-
+bool Net::Nic::handle_ip(Ethernet_frame &eth,
+                         Size_guard     &size_guard)
+{
 	/* is it an UDP packet ? */
-	if (ip->protocol() == Ipv4_packet::Protocol::UDP)
+	Ipv4_packet &ip = eth.data<Ipv4_packet>(size_guard);
+	if (ip.protocol() == Ipv4_packet::Protocol::UDP)
 	{
-		Udp_packet *udp = new (ip->data<void>())
-			Udp_packet(size - sizeof(Ipv4_packet));
-
 		/* is it a DHCP packet ? */
-		if (Dhcp_packet::is_dhcp(udp)) {
-			Dhcp_packet *dhcp = new (udp->data<void>())
-				Dhcp_packet(size - sizeof(Ipv4_packet) - sizeof(Udp_packet));
+		Udp_packet &udp = ip.data<Udp_packet>(size_guard);
+		if (Dhcp_packet::is_dhcp(&udp)) {
 
 			/* check for DHCP ACKs containing new client ips */
-			if (dhcp->op() == Dhcp_packet::REPLY) {
+			Dhcp_packet &dhcp = udp.data<Dhcp_packet>(size_guard);
+			if (dhcp.op() == Dhcp_packet::REPLY) {
 
 				try {
 					Dhcp_packet::Message_type const msg_type =
-						dhcp->option<Dhcp_packet::Message_type_option>().value();
+						dhcp.option<Dhcp_packet::Message_type_option>().value();
 
 					/*
 					 * Extract the IP address and set it in the client's
@@ -95,9 +93,9 @@ bool Net::Nic::handle_ip(Ethernet_frame *eth, Genode::size_t size) {
 						Mac_address_node *node =
 							vlan().mac_tree.first();
 						if (node)
-							node = node->find_by_address(dhcp->client_mac());
+							node = node->find_by_address(dhcp.client_mac());
 						if (node)
-							node->component().set_ipv4_address(dhcp->yiaddr());
+							node->component().set_ipv4_address(dhcp.yiaddr());
 					}
 				}
 				catch (Dhcp_packet::Option_not_found) { }
@@ -106,16 +104,16 @@ bool Net::Nic::handle_ip(Ethernet_frame *eth, Genode::size_t size) {
 	}
 
 	/* is it an unicast message to one of our clients ? */
-	if (eth->dst() == mac()) {
+	if (eth.dst() == mac()) {
 		Ipv4_address_node *node = vlan().ip_tree.first();
 		if (node) {
-			node = node->find_by_address(ip->dst());
+			node = node->find_by_address(ip.dst());
 			if (node) {
 				/* overwrite destination MAC */
-				eth->dst(node->component().mac_address().addr);
+				eth.dst(node->component().mac_address().addr);
 
 				/* deliver the packet to the client */
-				node->component().send(eth, size);
+				node->component().send(&eth, size_guard.total_size());
 				return false;
 			}
 		}

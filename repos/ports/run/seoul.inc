@@ -45,6 +45,7 @@ lappend_if $use_fancy_stuff     build_components server/nitlog
 lappend_if $use_fancy_stuff     build_components server/report_rom
 lappend_if $use_genode_iso      build_components server/iso9660
 lappend_if $use_genode_iso      build_components server/rom_blk
+lappend_if $use_top             build_components app/top
 
 append_platform_drv_build_components
 
@@ -68,7 +69,7 @@ puts $vm_cfg_fd {<config colocate="1" >
 		<rtc io_base="0x70" irq="8"/>
 		<serial io_base="0x3f8" irq="0x4" host_serial="0x4711"/>
 		<hostsink host_dev="0x4712" buffer="80"/>
-		<vga io_base="0x03c0" fb_size="4096" readonly="1"/>}
+		<vga io_base="0x03c0"/>}
 
 if {!$use_multiboot} {
 	puts $vm_cfg_fd {
@@ -119,6 +120,7 @@ if {!$use_multiboot} {
 
 if {$use_nic_session} {
 	puts $vm_cfg_fd {
+		<!-- <rtl8029 irq="9" port="0x300"/> -->
 		<intel82576vf/>
 	}
 }
@@ -152,7 +154,12 @@ append config {
 		<service name="PD"/>
 		<service name="RM"/>
 		<service name="CPU"/>
-		<service name="LOG"/>
+		<service name="LOG"/>}
+
+append_if $use_top config {
+		<service name="TRACE"/>}
+
+append config {
 	</parent-provides>
 	<default-route>
 		<any-service> <parent/> <any-child/> </any-service>
@@ -187,7 +194,7 @@ append_if $use_block_sata config {
 
 append_if $use_block_ram config {
 	<start name="ram_blk" priority="-1">
-		<resource name="RAM" quantum="1M" />
+		<resource name="RAM" quantum="162M" />
 		<provides><service name="Block"/></provides>
 		<config file="seoul-disc.raw" block_size="512"/>
 	</start>}
@@ -257,10 +264,10 @@ append_if [expr $use_nic_session && !$use_nic_bridge] config {
 append_if $use_framebuffer config {
 			<service name="Framebuffer"><child name="fb_drv"/></service>}
 append_if $use_genode_iso config {
-			<service name="ROM" label="vm_seoul.cfg">
-				<parent/> </service>
-			<service name="ROM" label="hypervisor_info_page">
-				<parent/> </service>
+			<service name="ROM" label="vm_seoul.cfg"> <parent/> </service>
+			<service name="ROM" label="platform_info"> <parent/> </service>
+			<service name="ROM" unscoped_label="seoul"> <parent/> </service>
+			<service name="ROM" unscoped_label="ld.lib.so"> <parent/> </service>
 			<service name="ROM"><child name="iso9660"/></service>}
 append config {
 			<service name="Rtc"><child name="rtc_drv"/></service>
@@ -324,6 +331,12 @@ append_if $use_fancy_stuff config {
 			<service name="Nic"><child name="nic_bridge"/></service>
 			<any-service><parent/><any-child/></any-service>
 		</route>
+	</start>}
+
+append_if $use_top config {
+	<start name="top">
+		<resource name="RAM" quantum="2M"/>
+		<config period_ms="10000"/>
 	</start>}
 
 append config {
@@ -424,6 +437,8 @@ lappend_if $use_genode_iso    boot_modules iso9660
 lappend_if $use_genode_iso    boot_modules genode.iso
 
 lappend_if $use_block_ram     boot_modules seoul-disc.raw
+
+lappend_if $use_top           boot_modules top
 
 #
 # Add OS binaries of guest

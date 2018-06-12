@@ -16,10 +16,22 @@
 #include <kernel/thread.h>
 #include <kernel/pd.h>
 
-extern int __tss;
 extern int __idt;
-extern int __gdt_start;
-extern int __gdt_end;
+extern int __idt_end;
+
+/**
+ * Pseudo Descriptor
+ *
+ * See Intel SDM Vol. 3A, section 3.5.1
+ */
+struct Pseudo_descriptor
+{
+	Genode::uint16_t const limit = 0;
+	Genode::uint64_t const base  = 0;
+
+	constexpr Pseudo_descriptor(Genode::uint16_t l, Genode::uint64_t b)
+	: limit(l), base(b) {}
+} __attribute__((packed));
 
 
 Genode::Cpu::Context::Context(bool core)
@@ -44,18 +56,24 @@ void Genode::Cpu::Tss::init()
 void Genode::Cpu::Idt::init()
 {
 	Pseudo_descriptor descriptor {
-		(uint16_t)((addr_t)&__tss - (addr_t)&__idt),
+		(uint16_t)((addr_t)&__idt_end - (addr_t)&__idt),
 		(uint64_t)(&__idt) };
 	asm volatile ("lidt %0" : : "m" (descriptor));
 }
 
 
-void Genode::Cpu::Gdt::init()
+void Genode::Cpu::Gdt::init(addr_t tss_addr)
 {
-	addr_t const   start = (addr_t)&__gdt_start;
-	uint16_t const limit = __gdt_end - __gdt_start - 1;
-	uint64_t const base  = start;
-	asm volatile ("lgdt %0" :: "m" (Pseudo_descriptor(limit, base)));
+	tss_desc[0] = ((((tss_addr >> 24) & 0xff) << 24 |
+	                ((tss_addr >> 16) & 0xff)       |
+	               0x8900) << 32)                   |
+	              ((tss_addr &  0xffff) << 16 | 0x68);
+	tss_desc[1] = tss_addr >> 32;
+
+	Pseudo_descriptor descriptor {
+		(uint16_t)(sizeof(Gdt)),
+		(uint64_t)(this) };
+	asm volatile ("lgdt %0" :: "m" (descriptor));
 }
 
 
@@ -76,12 +94,23 @@ void Genode::Cpu::mmu_fault(Context & regs, Kernel::Thread_fault & fault)
 	};
 
 	auto fault_lambda = [] (addr_t err) {
-		if (!(err & ERR_P)) return Fault::PAGE_MISSING;
 		if (err & ERR_W)    return Fault::WRITE;
+		if (!(err & ERR_P)) return Fault::PAGE_MISSING;
 		if (err & ERR_I)    return Fault::EXEC;
 		else                return Fault::UNKNOWN;
 	};
 
 	fault.addr = Genode::Cpu::Cr2::read();
 	fault.type = fault_lambda(regs.errcode);
+}
+
+
+void Genode::Cpu::switch_to(Context & context, Mmu_context &mmu_context)
+{
+	_fpu.switch_to(context);
+
+	if ((context.cs != 0x8) && (mmu_context.cr3 != Cr3::read()))
+		Cr3::write(mmu_context.cr3);
+
+	tss.ist[0] = (addr_t)&context + sizeof(Genode::Cpu_state);
 }

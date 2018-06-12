@@ -103,7 +103,7 @@ class Genode::Vm_space
 				 * objects (where we cannot pass any arguments to the
 				 * constructors of the individual objects).
 				 */
-				Constructible<Cnode> _cnode;
+				Constructible<Cnode> _cnode { };
 
 			public:
 
@@ -130,7 +130,8 @@ class Genode::Vm_space
 		/**
 		 * Allocator for the selectors within '_vm_cnodes'
 		 */
-		Bit_allocator<1UL << NUM_VM_SEL_LOG2> _sel_alloc;
+		using Selector_allocator = Bit_allocator<1UL << NUM_VM_SEL_LOG2>;
+		Selector_allocator _sel_alloc { };
 
 		/**
 		 * Return leaf CNode that contains an index allocated from '_sel_alloc'
@@ -148,12 +149,49 @@ class Genode::Vm_space
 			return Cnode_index(idx & (LEAF_CNODE_SIZE - 1));
 		}
 
-		Lock _lock;
+		Lock _lock { };
 
 		/**
 		 * Return selector for a capability slot within '_vm_cnodes'
 		 */
 		addr_t _idx_to_sel(addr_t idx) const { return (_id << 20) | idx; }
+
+
+		void _flush(bool const flush_support)
+		{
+			if (!flush_support) {
+				warning("mapping cache full, but can't flush");
+				throw;
+			}
+
+			warning("flush page table entries - mapping cache full - PD: ",
+			        _pd_label.string());
+
+			_page_table_registry.flush_pages([&] (Cap_sel const &idx,
+			                                      addr_t const v_addr)
+			{
+				/* XXX - INITIAL_IPC_BUFFER can't be re-mapped currently */
+				if (v_addr == 0x1000)
+					return false;
+				/* XXX - UTCB can't be re-mapped currently */
+				if (stack_area_virtual_base() <= v_addr
+				    && (v_addr < stack_area_virtual_base() +
+				                 stack_area_virtual_size())
+				    && !((v_addr + 0x1000) & (stack_virtual_size() - 1)))
+						return false;
+
+				long err = _unmap_page(idx);
+				if (err != seL4_NoError)
+					error("unmap failed, idx=", idx, " res=", err);
+
+				_leaf_cnode(idx.value()).remove(_leaf_cnode_entry(idx.value()));
+
+				_sel_alloc.free(idx.value());
+
+				return true;
+			});
+		}
+
 
 		bool _map_frame(addr_t const from_phys, addr_t const to_virt,
 		                Cache_attribute const cacheability,
@@ -171,9 +209,15 @@ class Genode::Vm_space
 				 */
 				return false;
 			}
+			/* allocate page-table-entry selector */
+			addr_t pte_idx;
+			try { pte_idx = _sel_alloc.alloc(); }
+			catch (Selector_allocator::Out_of_indices) {
 
-			/* allocate page-table entry selector */
-			addr_t pte_idx = _sel_alloc.alloc();
+				/* free all page-table-entry selectors and retry once */
+				_flush(flush_support);
+				pte_idx = _sel_alloc.alloc();
+			}
 
 			/*
 			 * Copy page-frame selector to pte_sel
@@ -186,42 +230,11 @@ class Genode::Vm_space
 			                          Cnode_index(_leaf_cnode_entry(pte_idx)));
 
 			/* remember relationship between pte_sel and the virtual address */
-			try {
-				_page_table_registry.insert_page_frame(to_virt, Cap_sel(pte_idx));
-			} catch (Page_table_registry::Mapping_cache_full) {
-				if (!flush_support) {
-					warning("mapping cache full, but can't flush");
-					throw;
-				}
+			try { _page_table_registry.insert_page_frame(to_virt, Cap_sel(pte_idx)); }
+			catch (Page_table_registry::Mapping_cache_full) {
 
-				warning("flush page table entries - mapping cache full - PD: ",
-				        _pd_label.string());
-
-				_page_table_registry.flush_pages([&] (Cap_sel const &idx,
-				                                      addr_t const v_addr)
-				{
-					/* XXX - INITIAL_IPC_BUFFER can't be re-mapped currently */
-					if (v_addr == 0x1000)
-						return false;
-					/* XXX - UTCB can't be re-mapped currently */
-					if (stack_area_virtual_base() <= v_addr
-					    && (v_addr < stack_area_virtual_base() +
-					                 stack_area_virtual_size())
-					    && !((v_addr + 0x1000) & (stack_virtual_size() - 1)))
-							return false;
-
-					long err = _unmap_page(idx);
-					if (err != seL4_NoError)
-						error("unmap failed, idx=", idx, " res=", err);
-
-					_leaf_cnode(idx.value()).remove(_leaf_cnode_entry(idx.value()));
-
-					_sel_alloc.free(idx.value());
-
-					return true;
-				});
-
-				/* re-try once */
+				/* free all entries of mapping cache and re-try once */
+				_flush(flush_support);
 				_page_table_registry.insert_page_frame(to_virt, Cap_sel(pte_idx));
 			}
 
@@ -245,6 +258,8 @@ class Genode::Vm_space
 		               Cache_attribute const cacheability, bool const write,
 		               bool const writable);
 		long _unmap_page(Genode::Cap_sel const &idx);
+		long _invalidate_page(Genode::Cap_sel const &, seL4_Word const,
+		                      seL4_Word const);
 
 		class Alloc_page_table_failed : Exception { };
 
@@ -392,7 +407,8 @@ class Genode::Vm_space
 			}
 		}
 
-		bool unmap(addr_t virt, size_t num_pages)
+		bool unmap(addr_t const virt, size_t const num_pages,
+		           bool const invalidate = false)
 		{
 			bool unmap_success = true;
 
@@ -402,6 +418,14 @@ class Genode::Vm_space
 				off_t const offset = i << get_page_size_log2();
 
 				_page_table_registry.flush_page(virt + offset, [&] (Cap_sel const &idx, addr_t) {
+
+					if (invalidate) {
+						long result = _invalidate_page(idx, virt + offset,
+						                               virt + offset + 4096);
+						if (result != seL4_NoError)
+							error("invalidating ", Hex(virt + offset),
+							      " failed, idx=", idx, " result=", result);
+					}
 
 					long result = _unmap_page(idx);
 					if (result != seL4_NoError) {

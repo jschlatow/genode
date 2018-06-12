@@ -104,6 +104,7 @@ SRC_CC += Runtime/common/string/RTStrNCmp.cpp
 SRC_CC += Runtime/common/string/RTStrNLen.cpp
 SRC_CC += Runtime/common/string/RTStrNLenEx.cpp
 SRC_CC += Runtime/common/string/RTStrPrintHexBytes.cpp
+SRC_CC += Runtime/common/string/RTStrStartsWith.cpp
 SRC_CC += Runtime/common/string/simplepattern.cpp
 SRC_CC += Runtime/common/string/straprintf.cpp
 SRC_CC += Runtime/common/string/strformat.cpp
@@ -153,6 +154,7 @@ SRC_CC += Runtime/r3/posix/RTTimeNow-posix.cpp
 SRC_CC += Runtime/r3/posix/semeventmulti-posix.cpp
 SRC_CC += Runtime/r3/posix/semevent-posix.cpp
 SRC_CC += Runtime/r3/posix/semmutex-posix.cpp
+SRC_CC += Runtime/r3/posix/symlink-posix.cpp
 SRC_CC += Runtime/r3/posix/thread2-posix.cpp
 SRC_CC += Runtime/r3/posix/thread-posix.cpp
 SRC_CC += Runtime/r3/posix/time-posix.cpp
@@ -179,3 +181,5 @@ errmsgdata.h: $(VIRTUALBOX_DIR)/include/iprt/err.h \
 	$(MSG_CONVERT)$@
 	$(VERBOSE)sed -f $(VBOX_DIR)/Runtime/common/err/errmsg.sed $^ > $@
 
+
+CC_CXX_WARN_STRICT =

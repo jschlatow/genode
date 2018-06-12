@@ -250,8 +250,9 @@ class Genode::Path_base
 			import(path, pwd);
 		}
 
-		char       *base()       { return _path; }
-		char const *base() const { return _path; }
+		char       *base()         { return _path; }
+		char const *base()   const { return _path; }
+		char const *string() const { return _path; }
 
 		size_t max_len() { return _path_max_len; }
 
@@ -326,6 +327,16 @@ class Genode::Path_base
 		bool operator != (char const *other) const
 		{
 			return strcmp(_path, other) != 0;
+		}
+
+		bool operator == (Path_base const &other) const
+		{
+			return strcmp(_path, other._path) == 0;
+		}
+
+		bool operator != (Path_base const &other) const
+		{
+			return strcmp(_path, other._path) != 0;
 		}
 
 		char const *last_element()

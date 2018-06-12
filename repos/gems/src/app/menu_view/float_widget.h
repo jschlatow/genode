@@ -40,7 +40,7 @@ struct Menu_view::Float_widget : Widget
 		int const h = (_north && _south) ? geometry().h() : child_min.h();
 
 		/* align / center child position */
-		int const x = _east  ? 0 : _west  ? w_space : w_space / 2;
+		int const x = _west  ? 0 : _east  ? w_space : w_space / 2;
 		int const y = _north ? 0 : _south ? h_space : h_space / 2;
 
 		child.geometry(Rect(Point(x, y), Area(w, h)));
@@ -54,16 +54,17 @@ struct Menu_view::Float_widget : Widget
 		_south = node.attribute_value("south", false),
 		_east  = node.attribute_value("east",  false),
 		_west  = node.attribute_value("west",  false);
-
-		if (Widget *child = _children.first())
-			_place_child(*child);
 	}
 
 	Area min_size() const override
 	{
+		Area result(0, 0);
+
 		/* determine minimum child size */
-		Widget const * const child = _children.first();
-		return child ? child->min_size() : Area(0, 0);
+		_children.for_each([&] (Widget const &child) {
+			result = child.min_size(); });
+
+		return result;
 	}
 
 	void draw(Surface<Pixel_rgb888> &pixel_surface,
@@ -75,10 +76,10 @@ struct Menu_view::Float_widget : Widget
 
 	void _layout() override
 	{
-		if (Widget *child = _children.first()) {
-			_place_child(*child);
-			child->size(child->geometry().area());
-		}
+		_children.for_each([&] (Widget &child) {
+			_place_child(child);
+			child.size(child.geometry().area());
+		});
 	}
 };
 

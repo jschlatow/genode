@@ -1,4 +1,4 @@
-build { app/depot_query app/depot_deploy }
+build { init app/depot_query app/depot_deploy }
 
 create_boot_directory
 
@@ -12,7 +12,7 @@ create_tar_from_depot_binaries [run_dir]/genode/depot.tar \
                                genodelabs/pkg/test-fs_report
 
 proc query_pkg {} {
-	return [_versioned_depot_archive_name genodelabs pkg test-fs_report] }
+	return test-fs_report/[_current_depot_archive_version pkg test-fs_report] }
 
 install_config {
 <config>
@@ -43,7 +43,8 @@ install_config {
 		<provides> <service name="Report"/> <service name="ROM"/> </provides>
 		<config verbose="yes">
 			<policy label="depot_deploy -> blueprint" report="depot_query -> blueprint"/>
-			<policy label="subinit -> config"         report="depot_deploy -> init.config"/>
+			<policy label="depot_query -> query"      report="depot_deploy -> query"/>
+			<policy label="dynamic -> config"         report="depot_deploy -> init.config"/>
 		</config>
 	</start>
 
@@ -63,21 +64,19 @@ install_config {
 	</start>
 
 	<start name="depot_query">
-		<resource name="RAM" quantum="1M"/>
-		<config arch="} [depot_spec] {">
+		<resource name="RAM" quantum="2M"/>
+		<config query="rom">
 			<vfs> <dir name="depot"> <fs label="depot"/> </dir> </vfs>
-			<env>
-				<rom label="ld.lib.so"/>
-				<rom label="init"/>
-			</env>
-			<scan user="genodelabs"/>
-			<query pkg="genodelabs/pkg/} [query_pkg] {"/>
 		</config>
+		<route>
+			<service name="ROM" label="query"> <child name="report_rom"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</route>
 	</start>
 
 	<start name="depot_deploy">
 		<resource name="RAM" quantum="1M"/>
-		<config>
+		<config arch="} [depot_spec] {">
 			<static>
 				<parent-provides>
 					<service name="ROM"/>
@@ -88,15 +87,14 @@ install_config {
 				</parent-provides>
 			</static>
 			<common_routes>
-				<service name="ROM" unscoped_label="init">       <parent/> </service>
-				<service name="ROM" unscoped_label="ld.lib.so">  <parent/> </service>
-				<service name="ROM" label_suffix="init">      <parent/> </service>
-				<service name="ROM" label_suffix="ld.lib.so"> <parent/> </service>
+				<service name="ROM" label_last="ld.lib.so"> <parent/> </service>
+				<service name="ROM" label_last="init">      <parent/> </service>
 				<service name="CPU">   <parent/> </service>
 				<service name="PD">    <parent/> </service>
 				<service name="LOG">   <parent/> </service>
 				<service name="Timer"> <parent/> </service>
 			</common_routes>
+			<start name="test" pkg="genodelabs/pkg/} [query_pkg] {"/>
 		</config>
 		<route>
 			<service name="ROM" label="blueprint"> <child name="report_rom"/> </service>
@@ -104,14 +102,12 @@ install_config {
 		</route>
 	</start>
 
-	<start name="subinit" caps="8000">
+	<start name="dynamic" caps="8000">
 		<resource name="RAM" quantum="64M"/>
 		<binary name="init"/>
 		<route>
-			<service name="ROM" unscoped_label="ld.lib.so">  <parent/> </service>
-			<service name="ROM" unscoped_label="init">       <parent/> </service>
-			<service name="ROM" label_suffix="ld.lib.so"> <parent/> </service>
-			<service name="ROM" label_suffix="init">      <parent/> </service>
+			<service name="ROM" label_last="ld.lib.so"> <parent/> </service>
+			<service name="ROM" label_last="init">      <parent/> </service>
 			<service name="ROM" label="config"> <child name="report_rom"/> </service>
 			<service name="ROM">   <child name="fs_rom"/> </service>
 			<service name="Timer"> <child name="timer"/>  </service>
@@ -121,7 +117,9 @@ install_config {
 
 </config>}
 
-build_boot_image { depot_query depot_deploy }
+build_boot_image { init depot_query depot_deploy vfs.lib.so }
+
+append qemu_args " -nographic "
 
 run_genode_until {.*child "test-fs_report" exited with exit value 0.*\n} 30
 
