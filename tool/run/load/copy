@@ -18,7 +18,7 @@ proc run_load { } {
 	set image_name [load_image_name]
 
 	if {[string length $base_dir] > 0} {
-		exec cp "[run_dir]/$image_name" "$base_dir/$image_name"
+		exec cp "[run_dir]/boot/$image_name" "$base_dir/$image_name"
 	} else {
 		puts "Warning, base directory not set."
 		return false
