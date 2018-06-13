@@ -46,7 +46,7 @@ class Vfs::Rom_file_system : public Single_file_system
 
 		struct Size
 		{
-			unsigned value;
+			unsigned value { 0 };
 
 			Size(Xml_node config)
 			{
