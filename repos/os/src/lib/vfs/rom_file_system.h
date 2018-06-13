@@ -44,18 +44,6 @@ class Vfs::Rom_file_system : public Single_file_system
 			}
 		} _label;
 
-		struct Size
-		{
-			unsigned value { 0 };
-
-			Size(Xml_node config)
-			{
-				/* obtain label from config */
-				try { config.attribute("size").value(&value); }
-				catch (...)	{ value = 0; }
-			}
-		} _size;
-
 		Genode::Attached_rom_dataspace _rom;
 
 		class Rom_vfs_handle : public Single_vfs_handle
@@ -119,7 +107,6 @@ class Vfs::Rom_file_system : public Single_file_system
 		:
 			Single_file_system(NODE_TYPE_FILE, name(), config),
 			_label(config),
-			_size(config),
 			_rom(env.env(), _label.string)
 		{ }
 
