@@ -40,6 +40,7 @@ struct Sculpt::Network : Network_dialog::Action
 	Runtime_config_generator &_runtime_config_generator;
 
 	Runtime_info const &_runtime_info;
+	Pci_info     const &_pci_info;
 
 	Nic_target _nic_target { };
 	Nic_state  _nic_state  { };
@@ -94,7 +95,8 @@ struct Sculpt::Network : Network_dialog::Action
 
 	Network_dialog dialog {
 		_env, _dialog_generator, _nic_target, _access_points,
-		_wifi_connection, _nic_state, wpa_passphrase, _wlan_config_policy };
+		_wifi_connection, _nic_state, wpa_passphrase, _wlan_config_policy,
+		_pci_info };
 
 	Managed_config<Network> _wlan_config {
 		_env, "selected_network", "wlan", *this, &Network::_handle_wlan_config };
@@ -133,8 +135,8 @@ struct Sculpt::Network : Network_dialog::Action
 		if (type == Nic_target::WIFI)  _use_wifi_drv = true;
 		if (type == Nic_target::WIRED) _use_nic_drv  = true;
 
-		if (type != _nic_target.type) {
-			_nic_target.type = type;
+		if (type != _nic_target.managed_type) {
+			_nic_target.managed_type = type;
 			_generate_nic_router_config();
 			_runtime_config_generator.generate_runtime_config();
 			_dialog_generator.generate_dialog();
@@ -183,11 +185,11 @@ struct Sculpt::Network : Network_dialog::Action
 
 	Network(Env &env, Allocator &alloc, Dialog::Generator &dialog_generator,
 	        Runtime_config_generator &runtime_config_generator,
-	        Runtime_info const &runtime_info)
+	        Runtime_info const &runtime_info, Pci_info const &pci_info)
 	:
 		_env(env), _alloc(alloc), _dialog_generator(dialog_generator),
 		_runtime_config_generator(runtime_config_generator),
-		_runtime_info(runtime_info)
+		_runtime_info(runtime_info), _pci_info(pci_info)
 	{
 		_generate_nic_router_config();
 

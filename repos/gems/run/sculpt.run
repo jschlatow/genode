@@ -5,6 +5,10 @@ if {![have_spec x86] || [have_spec linux]} {
 
 proc depot_user {} { return [get_cmd_arg --depot-user genodelabs] }
 
+if {[have_spec nova]} {
+	proc kernel_output { } { return "novga serial logmem" }
+}
+
 create_boot_directory
 
 import_from_depot [depot_user]/src/[base_src] \
@@ -192,6 +196,18 @@ install_config {
 		</route>
 	</start>
 
+	<start name="log_kernel">
+		<binary name="log_core"/>
+		<resource name="RAM" quantum="1M"/>
+		<config period_ms="2000"/>
+		<route>
+			<service name="ROM" label="log"> <parent label="kernel_log"/> </service>
+			<service name="Timer"> <child name="timer"/> </service>
+			<service name="LOG" label="log"> <child name="log" label="kernel"/> </service>
+			<any-service> <parent/> </any-service>
+		</route>
+	</start>
+
 	<start name="fs_report">
 		<resource name="RAM" quantum="1M"/>
 		<provides> <service name="Report"/> </provides>
@@ -355,6 +371,7 @@ install_config {
 				<child name="config_fs_rom"/> </service>
 			<service name="ROM" label="manager -> nitpicker_hover">
 				<child name="report_rom"/> </service>
+			<service name="Report"> <child name="fs_report"/> </service>
 			<service name="Nitpicker"> <child name="nitpicker"/> </service>
 			<service name="Timer"> <child name="timer"/> </service>
 			<service name="File_system" label="config">
@@ -446,6 +463,7 @@ file copy -force [genode_dir]/repos/gems/recipes/raw/depot_download/depot_downlo
 file copy -force [genode_dir]/VERSION [run_dir]/genode/
 
 file copy -force [genode_dir]/repos/gems/src/app/backdrop/genode_logo.png [run_dir]/genode/
+file copy -force [genode_dir]/repos/gems/run/sculpt/drop_shadow.png       [run_dir]/genode/
 
 exec gzip -dc [genode_dir]/repos/gems/run/sculpt/machine.vdi.gz > [run_dir]/genode/machine.vdi
 
@@ -454,7 +472,7 @@ exec gzip -dc [genode_dir]/repos/gems/run/sculpt/machine.vdi.gz > [run_dir]/geno
 # Define 'VERSION' ROM module
 #
 proc sculpt_version { } {
-	return "[string trim [exec cat [genode_dir]/VERSION]]" }
+	return "18.06" }
 
 # write file with newline (for producing nice output when using 'cat /VERSION')
 set fd [open [run_dir]/genode/VERSION w]
@@ -580,7 +598,21 @@ append manual_deploy_config {
 		</route>
 		<config> <default-policy path="/vm/debian" writeable="yes"/> </config>
 	</start>
+	-->
 
+<!--
+	<start name="download_debian" pkg="cnuke/pkg/download_debian/2018-06-13">
+		<route>
+			<service name="File_system" label="fonts">  <child name="fonts_fs"/> </service>
+			<service name="File_system" label="target"> <child name="vm_fs"/> </service>
+			<service name="Nic">       <child name="nic_router"/> </service>
+			<service name="Nitpicker"> <child name="wm"/> </service>
+			<service name="RM">        <parent/> </service>
+		</route>
+	</start>
+-->
+
+<!--
 	<start name="vm" ram="4300M" pkg="} [depot_user]/pkg/[current_pkg vbox5-nova-sculpt] {">
 		<route>
 			<service name="ROM"    label="capslock"> <parent label="capslock"/> </service>
@@ -595,18 +627,6 @@ append manual_deploy_config {
 			<service name="Usb">    <parent/> </service>
 			<service name="File_system" label="vm">     <child name="vm_fs"/>     </service>
 			<service name="File_system" label="shared"> <child name="shared_fs"/> </service>
-		</route>
-	</start>
--->
-
-<!--
-	<start name="download_debian" pkg="cnuke/pkg/download_debian/2018-05-30">
-		<route>
-			<service name="File_system" label="fonts">  <child name="fonts_fs"/> </service>
-			<service name="File_system" label="target"> <child name="vm_fs"/> </service>
-			<service name="Nic">       <child name="nic_router"/> </service>
-			<service name="Nitpicker"> <child name="wm"/> </service>
-			<service name="RM">        <parent/> </service>
 		</route>
 	</start>
 -->
@@ -632,11 +652,11 @@ append manual_deploy_config {
 	-->
 
 <!--
-	<start name="vbox5-tc-browser" pkg="alex-ab/pkg/vbox5-tc-firefox-nova-sculpt/2018-05-30">
+	<start name="vbox5-tc-browser" pkg="alex-ab/pkg/vbox5-tc-firefox-nova-sculpt/2018-06-11">
 		<route>
 			<service name="ROM"    label="capslock"> <parent label="capslock"/> </service>
 			<service name="ROM"    label="platform_info"> <parent/> </service>
-			<service name="Report" label="shape"> <parent label="wm -> wm -> vm -> shape"/> </service>
+			<service name="Report" label="shape"> <parent label="wm -> wm -> vbox5-tc-browser -> shape"/> </service>
 			<service name="RM">        <parent/> </service>
 			<service name="Rtc">       <parent/> </service>
 			<service name="Nitpicker"> <child name="wm"/> </service>
@@ -647,7 +667,7 @@ append manual_deploy_config {
 	-->
 
 <!--
-	<start name="seoul-vmm-browser" pkg="alex-ab/pkg/seoul-nova-sculpt/2018-05-30">
+	<start name="seoul-vmm-browser" pkg="alex-ab/pkg/seoul-nova-sculpt/2018-06-11">
 		<route>
 			<service name="ROM" label="platform_info"> <parent/> </service>
 			<service name="RM">        <parent/> </service>
@@ -659,7 +679,7 @@ append manual_deploy_config {
 	-->
 
 <!--
-	<start name="qt5_textedit" pkg="cproc/pkg/qt5_textedit/2018-05-30">
+	<start name="qt5_textedit" pkg="genodelabs/pkg/qt5_textedit/2018-06-12">
 		<route>
 			<service name="File_system" label="rw"> <parent label="config"/> </service>
 			<service name="Nitpicker"> <child name="wm"/> </service>

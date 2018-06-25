@@ -26,17 +26,6 @@ using namespace Net;
 using namespace Genode;
 
 
-/***********************
- ** Domain_avl_member **
- ***********************/
-
-Domain_avl_member::Domain_avl_member(Domain_name const &name,
-                                     Domain            &domain)
-:
-	Avl_string_base(name.string()), _domain(domain)
-{ }
-
-
 /*****************
  ** Domain_base **
  *****************/
@@ -143,13 +132,18 @@ void Domain::_read_forward_rules(Cstring  const    &protocol,
 			Forward_rule &rule = *new (_alloc) Forward_rule(domains, node);
 			rules.insert(&rule);
 			if (_config.verbose()) {
-				log("[", *this, "] forward rule: ", protocol, " ", rule); }
+				log("[", *this, "] ", protocol, " forward rule: ", rule); }
 		}
-		catch (Rule::Invalid) {
-			log("[", *this, "] invalid domain (invalid forward rule)");
-			throw Invalid();
-		}
+		catch (Forward_rule::Invalid) { _invalid("invalid forward rule"); }
 	});
+}
+
+
+void Domain::_invalid(char const *reason) const
+{
+	if (_config.verbose()) {
+		log("[", *this, "] invalid domain (", reason, ")"); }
+	throw Invalid();
 }
 
 
@@ -161,13 +155,12 @@ void Domain::_read_transport_rules(Cstring  const      &protocol,
 {
 	node.for_each_sub_node(type, [&] (Xml_node const node) {
 		try {
-			rules.insert(*new (_alloc) Transport_rule(domains, node, _alloc,
-			                                          protocol, _config));
+			rules.insert(*new (_alloc)
+				Transport_rule(domains, node, _alloc, protocol, _config, *this));
 		}
-		catch (Rule::Invalid) {
-			log("[", *this, "] invalid domain (invalid transport rule)");
-			throw Invalid();
-		}
+		catch (Transport_rule::Invalid)     { _invalid("invalid transport rule"); }
+		catch (Permit_any_rule::Invalid)    { _invalid("invalid permit-any rule"); }
+		catch (Permit_single_rule::Invalid) { _invalid("invalid permit rule"); }
 	});
 }
 
@@ -180,7 +173,7 @@ void Domain::print(Output &output) const
 
 Domain::Domain(Configuration &config, Xml_node const node, Allocator &alloc)
 :
-	Domain_base(node), _avl_member(_name, *this), _config(config),
+	Domain_base(node), Avl_string_base(_name.string()), _config(config),
 	_node(node), _alloc(alloc),
 	_ip_config(_node.attribute_value("interface",  Ipv4_address_prefix()),
 	           _node.attribute_value("gateway",    Ipv4_address()),
@@ -211,18 +204,7 @@ Link_side_tree &Domain::links(L3_protocol const protocol)
 
 Domain::~Domain()
 {
-	/* destroy rules */
-	_ip_rules.destroy_each(_alloc);
-	_nat_rules.destroy_each(_alloc);
-	_icmp_rules.destroy_each(_alloc);
-	_udp_rules.destroy_each(_alloc);
-	_tcp_rules.destroy_each(_alloc);
-	_udp_forward_rules.destroy_each(_alloc);
-	_tcp_forward_rules.destroy_each(_alloc);
-
-	/* destroy DHCP server and IP config */
-	try { destroy(_alloc, &_dhcp_server()); }
-	catch (Pointer<Dhcp_server>::Invalid) { }
+	deinit();
 	_ip_config.destruct();
 }
 
@@ -253,9 +235,8 @@ void Domain::init(Domain_tree &domains)
 	try {
 		Xml_node const dhcp_server_node = _node.sub_node("dhcp-server");
 		if (_ip_config_dynamic) {
-			log("[", *this, "] invalid domain (DHCP server and client at once)");
-			throw Invalid();
-		}
+			_invalid("DHCP server and client at once"); }
+
 		Dhcp_server &dhcp_server = *new (_alloc)
 			Dhcp_server(dhcp_server_node, *this, _alloc,
 			            ip_config().interface, domains);
@@ -268,11 +249,7 @@ void Domain::init(Domain_tree &domains)
 			log("[", *this, "] DHCP server: ", _dhcp_server()); }
 	}
 	catch (Xml_node::Nonexistent_sub_node) { }
-	catch (Dhcp_server::Invalid) {
-		if (_config.verbose()) {
-			log("[", *this, "] invalid domain (invalid DHCP server)"); }
-		throw Invalid();
-	}
+	catch (Dhcp_server::Invalid) { _invalid("invalid DHCP server"); }
 
 	/* read forward rules */
 	_read_forward_rules(tcp_name(), domains, _node, "tcp-forward",
@@ -287,32 +264,39 @@ void Domain::init(Domain_tree &domains)
 	/* read NAT rules */
 	_node.for_each_sub_node("nat", [&] (Xml_node const node) {
 		try {
-			_nat_rules.insert(
-				new (_alloc) Nat_rule(domains, _tcp_port_alloc,
-				                      _udp_port_alloc, _icmp_port_alloc,
-				                      node));
+			Nat_rule &rule = *new (_alloc)
+				Nat_rule(domains, _tcp_port_alloc, _udp_port_alloc,
+				         _icmp_port_alloc, node);
+			_nat_rules.insert(&rule);
+			if (_config.verbose()) {
+				log("[", *this, "] NAT rule: ", rule); }
 		}
-		catch (Rule::Invalid) {
-			log("[", *this, "] invalid domain (invalid NAT rule)");
-			throw Invalid();
-		}
+		catch (Nat_rule::Invalid) { _invalid("invalid NAT rule"); }
 	});
 	/* read ICMP rules */
 	_node.for_each_sub_node("icmp", [&] (Xml_node const node) {
 		try { _icmp_rules.insert(*new (_alloc) Ip_rule(domains, node)); }
-		catch (Rule::Invalid) {
-			log("[", *this, "] invalid domain (invalid ICMP rule)");
-			throw Invalid();
-		}
+		catch (Ip_rule::Invalid) { _invalid("invalid ICMP rule"); }
 	});
 	/* read IP rules */
 	_node.for_each_sub_node("ip", [&] (Xml_node const node) {
 		try { _ip_rules.insert(*new (_alloc) Ip_rule(domains, node)); }
-		catch (Rule::Invalid) {
-			log("[", *this, "] invalid domain (invalid IP rule)");
-			throw Invalid();
-		}
+		catch (Ip_rule::Invalid) { _invalid("invalid IP rule"); }
 	});
+}
+
+
+void Domain::deinit()
+{
+	_ip_rules.destroy_each(_alloc);
+	_nat_rules.destroy_each(_alloc);
+	_icmp_rules.destroy_each(_alloc);
+	_udp_rules.destroy_each(_alloc);
+	_tcp_rules.destroy_each(_alloc);
+	_udp_forward_rules.destroy_each(_alloc);
+	_tcp_forward_rules.destroy_each(_alloc);
+	try { destroy(_alloc, &_dhcp_server()); }
+	catch (Pointer<Dhcp_server>::Invalid) { }
 }
 
 
@@ -365,37 +349,4 @@ void Domain::report(Xml_generator &xml)
 			xml.attribute("dns",  String<16>(ip_config().dns_server));
 		}
 	});
-}
-
-
-/*****************
- ** Domain_tree **
- *****************/
-
-Domain &Domain_tree::domain(Avl_string_base const &node)
-{
-	return static_cast<Domain_avl_member const *>(&node)->domain();
-}
-
-
-Domain &Domain_tree::find_by_name(Domain_name name)
-{
-	if (name == Domain_name() || !first()) {
-		throw No_match(); }
-
-	Avl_string_base *node = first()->find_by_name(name.string());
-	if (!node) {
-		throw No_match(); }
-
-	return domain(*node);
-}
-
-
-void Domain_tree::destroy_each(Deallocator &dealloc)
-{
-	while (Avl_string_base *first_ = first()) {
-		Domain &domain_ = domain(*first_);
-		Avl_tree::remove(first_);
-		destroy(dealloc, &domain_);
-	}
 }

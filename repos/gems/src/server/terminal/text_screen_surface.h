@@ -175,11 +175,15 @@ class Terminal::Text_screen_surface
 
 			/* clear border */
 			{
+				Color const bg_color =
+					_palette.background(Color_palette::Index{0},
+					                    Color_palette::Highlighted{false},
+					                    Color_palette::Inverse{false});
 				Rect r[4] { };
 				Rect const all(Point(0, 0), _geometry.fb_size);
 				_geometry.fb_rect().cut(_geometry.used_rect(), &r[0], &r[1], &r[2], &r[3]);
 				for (unsigned i = 0; i < 4; i++)
-					Box_painter::paint(surface, r[i], Color(0, 0, 0));
+					Box_painter::paint(surface, r[i], bg_color);
 			}
 
 			int const clip_top  = 0, clip_bottom = _geometry.fb_size.h(),
@@ -257,11 +261,14 @@ class Terminal::Text_screen_surface
 			}
 
 			int const num_dirty_lines = last_dirty_line - first_dirty_line + 1;
-			if (num_dirty_lines > 0)
-				_framebuffer.refresh(Rect(Point(0, first_dirty_line*_geometry.char_height),
-				                          Area(_geometry.fb_size.w(),
-				                               num_dirty_lines*_geometry.char_height +
-				                               _geometry.unused_pixels().h())));
+			if (num_dirty_lines > 0) {
+				int      const y = _geometry.start().y()
+				                 + first_dirty_line*_geometry.char_height;
+				unsigned const h = num_dirty_lines*_geometry.char_height
+				                 + _geometry.unused_pixels().h();
+				_framebuffer.refresh(Rect(Point(0, y),
+				                          Area(_geometry.fb_size.w(), h)));
+			}
 		}
 
 		void apply_character(Character c)

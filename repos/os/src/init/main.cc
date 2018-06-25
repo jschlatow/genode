@@ -25,8 +25,9 @@
 namespace Init { struct Main; }
 
 
-struct Init::Main : State_reporter::Producer, Child::Default_route_accessor,
-                    Child::Default_caps_accessor, Child::Ram_limit_accessor
+struct Init::Main : State_reporter::Producer,
+                    Child::Default_route_accessor, Child::Default_caps_accessor,
+                    Child::Ram_limit_accessor, Child::Cap_limit_accessor
 {
 	Env &_env;
 
@@ -59,7 +60,7 @@ struct Init::Main : State_reporter::Producer, Child::Default_route_accessor,
 		return Ram_quota { preserve };
 	}
 
-	Ram_quota _avail_ram()
+	Ram_quota _avail_ram() const
 	{
 		Ram_quota const preserved_ram = _preserved_ram_from_config(_config_xml);
 
@@ -85,7 +86,7 @@ struct Init::Main : State_reporter::Producer, Child::Default_route_accessor,
 		return Cap_quota { preserve };
 	}
 
-	Cap_quota _avail_caps()
+	Cap_quota _avail_caps() const
 	{
 		Cap_quota const preserved_caps = _preserved_caps_from_config(_config_xml);
 
@@ -103,7 +104,12 @@ struct Init::Main : State_reporter::Producer, Child::Default_route_accessor,
 	/**
 	 * Child::Ram_limit_accessor interface
 	 */
-	Ram_quota ram_limit() override { return _avail_ram(); }
+	Ram_quota resource_limit(Ram_quota const &) const override { return _avail_ram(); }
+
+	/**
+	 * Child::Cap_limit_accessor interface
+	 */
+	Cap_quota resource_limit(Cap_quota const &) const override { return _avail_caps(); }
 
 	void _handle_resource_avail() { }
 
@@ -290,6 +296,8 @@ void Init::Main::_update_children_config()
 
 void Init::Main::_handle_config()
 {
+	bool update_state_report = false;
+
 	_config.update();
 
 	_config_xml = _config.xml();
@@ -325,6 +333,7 @@ void Init::Main::_handle_config()
 		/* make the child's services unavailable */
 		child.destroy_services();
 		child.close_all_sessions();
+		update_state_report = true;
 
 		/* destroy child once all environment sessions are gone */
 		if (child.env_sessions_closed()) {
@@ -347,15 +356,26 @@ void Init::Main::_handle_config()
 	try {
 		_config_xml.for_each_sub_node("start", [&] (Xml_node start_node) {
 
-			/* skip start node if corresponding child already exists */
 			bool exists = false;
+
+			unsigned num_abandoned = 0;
+
 			_children.for_each_child([&] (Child const &child) {
-				if (!child.abandoned()
-				 && child.name() == start_node.attribute_value("name", Child_policy::Name()))
-					exists = true; });
-			if (exists) {
+				if (child.name() == start_node.attribute_value("name", Child_policy::Name())) {
+					if (child.abandoned())
+						num_abandoned++;
+					else
+						exists = true;
+				}
+			});
+
+			/* skip start node if corresponding child already exists */
+			if (exists)
 				return;
-			}
+
+			/* prevent queuing up abandoned children with the same name */
+			if (num_abandoned > 1)
+				return;
 
 			if (used_ram.value > avail_ram.value) {
 				error("RAM exhausted while starting childen");
@@ -374,9 +394,11 @@ void Init::Main::_handle_config()
 					            start_node, *this, *this, _children,
 					            Ram_quota { avail_ram.value  - used_ram.value },
 					            Cap_quota { avail_caps.value - used_caps.value },
-					             *this, prio_levels, affinity_space,
+					             *this, *this, prio_levels, affinity_space,
 					            _parent_services, _child_services);
 				_children.insert(&child);
+
+				update_state_report = true;
 
 				/* account for the start XML node buffered in the child */
 				size_t const metadata_overhead = start_node.size()
@@ -430,15 +452,18 @@ void Init::Main::_handle_config()
 			child.initiate_env_sessions(); });
 
 	/*
-	 * (Re-)distribute RAM among the childen, given their resource assignments
-	 * and the available slack memory. We first apply possible downgrades to
-	 * free as much memory as we can. This memory is then incorporated in the
-	 * subsequent upgrade step.
+	 * (Re-)distribute RAM and capability quota among the childen, given their
+	 * resource assignments and the available slack memory. We first apply
+	 * possible downgrades to free as much resources as we can. These resources
+	 * are then incorporated in the subsequent upgrade step.
 	 */
-	_children.for_each_child([&] (Child &child) { child.apply_ram_downgrade(); });
-	_children.for_each_child([&] (Child &child) { child.apply_ram_upgrade(); });
+	_children.for_each_child([&] (Child &child) { child.apply_downgrade(); });
+	_children.for_each_child([&] (Child &child) { child.apply_upgrade(); });
 
 	_server.apply_config(_config_xml);
+
+	if (update_state_report)
+		_state_reporter.trigger_immediate_report_update();
 }
 
 
