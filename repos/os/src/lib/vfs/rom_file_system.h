@@ -24,13 +24,17 @@ class Vfs::Rom_file_system : public Single_file_system
 {
 	private:
 
+		enum Rom_type { ROM_TEXT, ROM_BINARY };
+
 		struct Label
 		{
 			enum { LABEL_MAX_LEN = 64 };
 			char string[LABEL_MAX_LEN];
-			bool binary { true };
+			bool const binary;
 
 			Label(Xml_node config)
+			:
+				binary(config.attribute_value("binary", true))
 			{
 				/* obtain label from config */
 				string[0] = 0;
@@ -40,10 +44,6 @@ class Vfs::Rom_file_system : public Single_file_system
 					/* use VFS node name if label was not provided */
 					string[0] = 0;
 					try { config.attribute("name").value(string, sizeof(string)); }
-					catch (...) { }
-
-					/* obtain binary boolean (in order to enable/disable detection) */
-					try { config.attribute("binary").value(&binary); }
 					catch (...) { }
 				}
 			}
@@ -57,7 +57,18 @@ class Vfs::Rom_file_system : public Single_file_system
 
 				Genode::Attached_rom_dataspace &_rom;
 
-				file_size _content_size = 0;
+				file_size const _content_size;
+
+				file_size _init_content_size(Rom_type type)
+				{
+					if (type == ROM_TEXT) {
+						for (file_size pos = 0; pos < _rom.size(); pos++) 
+							if (_rom.local_addr<char>()[pos] == 0x00)
+								return pos;
+					}
+
+					return _rom.size();
+				}
 
 			public:
 
@@ -65,17 +76,8 @@ class Vfs::Rom_file_system : public Single_file_system
 				               File_io_service                &fs,
 				               Genode::Allocator              &alloc,
 				               Genode::Attached_rom_dataspace &rom,
-				               bool                            binary)
-				: Single_vfs_handle(ds, fs, alloc, 0), _rom(rom) {
-					if (!binary) {
-						for (_content_size = 0; _content_size < _rom.size(); _content_size++) {
-							if (_rom.local_addr<char>()[_content_size] == 0x00)
-								break;
-						}
-					}
-					else
-						_content_size = _rom.size();
-				}
+				               Rom_type                        type)
+				: Single_vfs_handle(ds, fs, alloc, 0), _rom(rom), _content_size(_init_content_size(type)) { }
 
 				Read_result read(char *dst, file_size count,
 				                 file_size &out_count) override
@@ -145,7 +147,7 @@ class Vfs::Rom_file_system : public Single_file_system
 
 			try {
 				*out_handle = new (alloc)
-					Rom_vfs_handle(*this, *this, alloc, _rom, _label.binary);
+					Rom_vfs_handle(*this, *this, alloc, _rom, _label.binary ? ROM_BINARY : ROM_TEXT);
 				return OPEN_OK;
 			}
 			catch (Genode::Out_of_ram)  { return OPEN_ERR_OUT_OF_RAM; }
