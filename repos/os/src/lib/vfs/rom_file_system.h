@@ -28,6 +28,7 @@ class Vfs::Rom_file_system : public Single_file_system
 		{
 			enum { LABEL_MAX_LEN = 64 };
 			char string[LABEL_MAX_LEN];
+			bool binary { true };
 
 			Label(Xml_node config)
 			{
@@ -39,6 +40,10 @@ class Vfs::Rom_file_system : public Single_file_system
 					/* use VFS node name if label was not provided */
 					string[0] = 0;
 					try { config.attribute("name").value(string, sizeof(string)); }
+					catch (...) { }
+
+					/* obtain binary boolean (in order to enable/disable detection) */
+					try { config.attribute("binary").value(&binary); }
 					catch (...) { }
 				}
 			}
@@ -52,19 +57,31 @@ class Vfs::Rom_file_system : public Single_file_system
 
 				Genode::Attached_rom_dataspace &_rom;
 
+				file_size _content_size = 0;
+
 			public:
 
 				Rom_vfs_handle(Directory_service              &ds,
 				               File_io_service                &fs,
 				               Genode::Allocator              &alloc,
-				               Genode::Attached_rom_dataspace &rom)
-				: Single_vfs_handle(ds, fs, alloc, 0), _rom(rom) { }
+				               Genode::Attached_rom_dataspace &rom,
+				               bool                            binary)
+				: Single_vfs_handle(ds, fs, alloc, 0), _rom(rom) {
+					if (!binary) {
+						for (_content_size = 0; _content_size < _rom.size(); _content_size++) {
+							if (_rom.local_addr<char>()[_content_size] == 0x00)
+								break;
+						}
+					}
+					else
+						_content_size = _rom.size();
+				}
 
 				Read_result read(char *dst, file_size count,
 				                 file_size &out_count) override
 				{
 					/* file read limit is the size of the dataspace */
-					file_size const max_size = _rom.size();
+					file_size const max_size = _content_size;
 
 					/* current read offset */
 					file_size const read_offset = seek();
@@ -128,7 +145,7 @@ class Vfs::Rom_file_system : public Single_file_system
 
 			try {
 				*out_handle = new (alloc)
-					Rom_vfs_handle(*this, *this, alloc, _rom);
+					Rom_vfs_handle(*this, *this, alloc, _rom, _label.binary);
 				return OPEN_OK;
 			}
 			catch (Genode::Out_of_ram)  { return OPEN_ERR_OUT_OF_RAM; }
