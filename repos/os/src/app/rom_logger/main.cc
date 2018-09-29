@@ -59,6 +59,27 @@ template <typename T>
 inline Genode::Hex mkhex(T value) {
 	return Genode::Hex(value, Genode::Hex::OMIT_PREFIX, Genode::Hex::PAD); }
 
+/**
+ * Calculating checksum compatible to POSIX cksum
+ *
+ * \param buf   pointer to buffer containing data
+ * \param size  length of buffer in bytes
+ *
+ * \return CRC32 checksum of data
+ */
+inline Genode::uint32_t cksum(void const * const buf, Genode::size_t size)
+{
+	Genode::uint8_t const *p = static_cast<Genode::uint8_t const*>(buf);
+	Genode::uint32_t crc = ~0U;
+
+	while (size--) {
+		crc ^= *p++;
+		for (Genode::uint32_t j = 0; j < 8; j++)
+			crc = (-Genode::int32_t(crc & 1) & 0xedb88320) ^ (crc >> 1);
+	}
+
+	return crc ^ ~0U;
+}
 
 void Rom_logger::Main::_handle_update()
 {
@@ -115,6 +136,11 @@ void Rom_logger::Main::_handle_update()
 			             " ",mkhex(data[i+2])," ",mkhex(data[i+3]),
 			             " ",mkhex(data[i+4])," ",mkhex(data[i+5]),
 			             " ",mkhex(data[i+6])," ",mkhex(data[i+7]));
+	} else if (format == "hash") {
+		Genode::uint32_t const bytes = _rom_ds->size();
+		Genode::log("ROM size is ",  bytes, " bytes");
+		Genode::log("ROM cksum is ", Genode::Hex(cksum(_rom_ds->local_addr<void>(), bytes)));
+
 	} else {
 		error("unknown format specified by '", _config_rom.xml(),"'");
 	}
