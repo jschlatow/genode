@@ -405,6 +405,10 @@ namespace Genode
 				if ( Interrupt_status::Rx_complete::get(status) ) {
 
 					while (_rx_buffer.package_available()) {
+
+						while (_rx.source()->ack_avail())
+							_rx.source()->release_packet(_rx.source()->get_acked_packet());
+
 						// TODO use this buffer directly as the destination for the DMA controller
 						// to minimize the overrun errors
 						const size_t buffer_size = _rx_buffer.package_length();
@@ -413,7 +417,10 @@ namespace Genode
 						Nic::Packet_descriptor p;
 						try {
 							p = _rx.source()->alloc_packet(buffer_size);
-						} catch (Session::Rx::Source::Packet_alloc_failed) { return; }
+						} catch (Session::Rx::Source::Packet_alloc_failed) {
+							Genode::error("Packet alloc failed");
+							return;
+						}
 
 						char *dst = (char *)_rx.source()->packet_content(p);
 

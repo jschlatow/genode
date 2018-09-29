@@ -58,16 +58,20 @@ class Tx_buffer_descriptor : public Buffer_descriptor
 			}
 
 			/* wait until the used bit is set (timeout after 200ms) */
-			uint32_t timeout = 200;
+			uint32_t timeout = 200000;
 			while ( !Status::Used::get(_current_descriptor().status) ) {
-				if (timeout <= 0) {
+				if (timeout == 0) {
+					warning("Timed out waiting for tx buffer");
 					throw Package_send_timeout();
 				}
-				timeout--;
+				timeout-=10;
 
-				_timer.msleep(1);
+				/*  TODO replace with MODERN API (One_shot_timeout) */
+				_timer.usleep(10);
 			}
 
+//			if (timeout < 200000)
+//				Genode::warning("resumed after ", timeout, "us");
 
 			memcpy(_current_buffer(), packet, size);
 
