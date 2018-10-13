@@ -37,7 +37,7 @@ class Genode::Trace::Buffer
 			char   data[0];
 		};
 
-		_Entry _entries[0];
+		_Entry _entries[0] __attribute((aligned(8)));
 
 		_Entry *_head_entry() { return (_Entry *)((addr_t)_entries + _head_offset); }
 
@@ -53,6 +53,12 @@ class Genode::Trace::Buffer
 		/*
 		 * The 'entries' member marks the beginning of the trace buffer
 		 * entries. No other member variables must follow.
+		 * Moreover, it should be 8byte aligned (at least on ARMv7) as,
+		 * otherwise, we observed an occasional endianess error when
+		 * reading the length of the first buffer entry.
+		 * In our test case, the length should always be 0x24 but we read
+		 * 0x2400 occasionally. The read length only changed after the
+		 * buffer wrapped.
 		 */
 
 	public:
