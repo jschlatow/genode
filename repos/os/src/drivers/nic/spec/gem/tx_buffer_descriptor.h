@@ -25,7 +25,7 @@ using namespace Genode;
 class Tx_buffer_descriptor : public Buffer_descriptor
 {
 	private:
-		enum { BUFFER_COUNT = 2 };
+		enum { BUFFER_COUNT = 4 };
 
 		struct Addr : Register<0x00, 32> {};
 		struct Status : Register<0x04, 32> {
@@ -33,6 +33,7 @@ class Tx_buffer_descriptor : public Buffer_descriptor
 			struct Last_buffer  : Bitfield<15, 1> {};
 			struct Wrap  : Bitfield<30, 1> {};
 			struct Used  : Bitfield<31, 1> {};
+			struct Chksum_err : Bitfield<20, 2> {};
 		};
 
 		class Package_send_timeout : public Genode::Exception {};
@@ -43,35 +44,37 @@ class Tx_buffer_descriptor : public Buffer_descriptor
 		Tx_buffer_descriptor(Genode::Env &env, Timer::Connection &timer)
 		: Buffer_descriptor(env, BUFFER_COUNT), _timer(timer)
 		{
+			/* set all buffers used by SW, also we do not use frame scattering */
 			for (unsigned int i=0; i<BUFFER_COUNT; i++) {
 				_descriptors[i].status = Status::Used::bits(1) | Status::Last_buffer::bits(1);
 			}
 			_descriptors[BUFFER_COUNT-1].status |= Status::Wrap::bits(1);
 		}
 
-
 		void add_to_queue(const char* const packet, const size_t size)
 		{
-			if (size > MAX_PACKAGE_SIZE) {
+			if (size > BUFFER_SIZE) {
 				warning("Ethernet package to big. Not sent!");
 				return;
 			}
 
-			/* wait until the used bit is set (timeout after 200ms) */
-			uint32_t timeout = 200000;
+			/* wait until the used bit is set (timeout after 10ms) */
+			uint32_t timeout = 10000;
 			while ( !Status::Used::get(_current_descriptor().status) ) {
 				if (timeout == 0) {
 					warning("Timed out waiting for tx buffer");
 					throw Package_send_timeout();
 				}
-				timeout-=10;
+				timeout -= 10;
 
-				/*  TODO replace with MODERN API (One_shot_timeout) */
+				/*  TODO buffer is full, instead of sleeping we should
+				 *       therefore wait for tx_complete interrupt */
 				_timer.usleep(10);
 			}
 
-//			if (timeout < 200000)
-//				Genode::warning("resumed after ", timeout, "us");
+			uint8_t chksum_err = Status::Chksum_err::get(_current_descriptor().status);
+			if (chksum_err)
+				Genode::log("Checksum offloading error", Genode::Hex(chksum_err));
 
 			memcpy(_current_buffer(), packet, size);
 

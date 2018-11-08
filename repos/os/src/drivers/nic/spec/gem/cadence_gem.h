@@ -52,6 +52,7 @@ namespace Genode
 				struct Mgmt_port_en  : Bitfield<4, 1> {};
 				struct Clear_statistics  : Bitfield<5, 1> {};
 				struct Start_tx  : Bitfield<9, 1> {};
+				struct Tx_pause  : Bitfield<11, 1> {};
 
 				static access_t init() {
 					return Mgmt_port_en::bits(1) |
@@ -75,6 +76,7 @@ namespace Genode
 				struct No_broadcast  : Bitfield<5, 1> {};
 				struct Multi_hash_en  : Bitfield<6, 1> {};
 				struct Gige_en  : Bitfield<10, 1> {};
+				struct Pause_en  : Bitfield<13, 1> {};
 				struct Fcs_remove  : Bitfield<17, 1> {};
 				struct Mdc_clk_div  : Bitfield<18, 3> {
 					enum {
@@ -82,6 +84,8 @@ namespace Genode
 						DIV_224 = 0b111,
 					};
 				};
+				struct Dis_cp_pause   : Bitfield<23, 1> {};
+				struct Rx_chksum_en   : Bitfield<24, 1> {};
 				struct Ignore_rx_fcs  : Bitfield<26, 1> {};
 			};
 
@@ -115,15 +119,24 @@ namespace Genode
 						BUFFER_1600B = 0x19,
 					};
 				};
+				struct Csum_gen_en : Bitfield<11, 1> { };
+				struct Burst_len : Bitfield<0, 5> {
+					enum {
+						INCR16 = 0x10,
+						INCR8  = 0x08,
+						INCR4  = 0x04,
+						SINGLE = 0x01
+					};
+				};
 
 				static access_t init()
 				{
 					return Ahb_mem_rx_buf_size::bits(Ahb_mem_rx_buf_size::BUFFER_1600B) |
 						Rx_pktbuf_memsz_sel::bits(Rx_pktbuf_memsz_sel::SPACE_8KB) |
-						Tx_pktbuf_memsz_sel::bits(Tx_pktbuf_memsz_sel::SPACE_4KB);
+						Tx_pktbuf_memsz_sel::bits(Tx_pktbuf_memsz_sel::SPACE_4KB) |
+						Csum_gen_en::bits(1) |
+						Burst_len::bits(Burst_len::INCR16);
 				}
-
-				// TODO possibly enable transmition check sum offloading
 			};
 
 			/**
@@ -278,10 +291,14 @@ namespace Genode
 
 				/* 1. Program the Network Configuration register (gem.net_cfg) */
 				write<Config>(
+					Config::Gige_en::bits(1) |
 					Config::Speed_100::bits(1) |
+					Config::Pause_en::bits(1) |
 					Config::Full_duplex::bits(1) |
 					Config::Multi_hash_en::bits(1) |
 					Config::Mdc_clk_div::bits(Config::Mdc_clk_div::DIV_32) |
+					Config::Dis_cp_pause::bits(1) |
+					Config::Rx_chksum_en::bits(1) |
 					Config::Fcs_remove::bits(1)
 				);
 
@@ -312,12 +329,14 @@ namespace Genode
 					write<Config::Gige_en>(1);
 					rclk = (0 << 4) | (1 << 0);
 					clk = (1 << 20) | (8 << 8) | (0 << 4) | (1 << 0);
+					log("Autonegotiation result: 1Gbit/s");
 					break;
 				case SPEED_100:
 					write<Config::Gige_en>(0);
 					write<Config::Speed_100>(1);
 					rclk = 1 << 0;
 					clk = (5 << 20) | (8 << 8) | (0 << 4) | (1 << 0);
+					log("Autonegotiation result: 100Mbit/s");
 					break;
 				case SPEED_10:
 					write<Config::Gige_en>(0);
@@ -325,6 +344,7 @@ namespace Genode
 					rclk = 1 << 0;
 					/* FIXME untested */
 					clk = (5 << 20) | (8 << 8) | (0 << 4) | (1 << 0);
+					log("Autonegotiation result: 10Mbit/s");
 					break;
 				default:
 					throw Unkown_ethernet_speed();
@@ -418,6 +438,8 @@ namespace Genode
 						try {
 							p = _rx.source()->alloc_packet(buffer_size);
 						} catch (Session::Rx::Source::Packet_alloc_failed) {
+							/* transmit pause frame and drop packet */
+							write<Control::Tx_pause>(1);
 							Genode::error("Packet alloc failed");
 							return;
 						}
@@ -445,6 +467,8 @@ namespace Genode
 					/* check, if there was lost some packages */
 					const uint16_t lost_packages = read<Rx_overrun_errors::Counter>();
 					if (lost_packages > 0) {
+						/* transmit pause frame */
+						write<Control::Tx_pause>(1);
 						PWRN("%d packages lost (%d packages successfully received)!",
 							 lost_packages, read<Frames_received>());
 					}

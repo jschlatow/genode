@@ -33,7 +33,7 @@ class Rx_buffer_descriptor : public Buffer_descriptor
 			struct End_of_frame : Bitfield<15, 1> {};
 		};
 
-		enum { BUFFER_COUNT = 16 };
+		enum { BUFFER_COUNT = 512 };
 
 
 		/**
