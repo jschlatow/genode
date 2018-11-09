@@ -24,9 +24,9 @@ class Rx_buffer_descriptor : public Buffer_descriptor
 	private:
 
 		struct Addr : Register<0x00, 32> {
-			struct Addr31to2 : Bitfield<2, 28> {};
+			struct Addr31to2 : Bitfield<2, 30> {};
 			struct Wrap : Bitfield<1, 1> {};
-			struct Package_available : Bitfield<0, 1> {};
+			struct Used : Bitfield<0, 1> {};
 		};
 		struct Status : Register<0x04, 32> {
 			struct Length : Bitfield<0, 13> {};
@@ -34,9 +34,17 @@ class Rx_buffer_descriptor : public Buffer_descriptor
 			struct End_of_frame : Bitfield<15, 1> {};
 		};
 
-		enum { BUFFER_COUNT = 1024 };
+		enum { MAX_BUFFER_COUNT = 1024 };
 
-		void _reset_descriptor(unsigned const i) {
+		addr_t _phys_base { 0 };
+		size_t _current_ack_index { 0 };
+
+		void _increment_ack_index()
+		{
+			_current_ack_index = (_current_ack_index+1) % (_max_index()+1);
+		}
+
+		void _reset_descriptor(unsigned const i, addr_t phys_addr) {
 			if (i > _max_index())
 				return;
 
@@ -46,27 +54,61 @@ class Rx_buffer_descriptor : public Buffer_descriptor
 			/* set physical buffer address and set not used by SW
 			 * last descriptor must be marked by Wrap bit
 			 */
-			_descriptors[i].addr   = (_phys_addr_buffer(i) & Addr::Addr31to2::reg_mask())
-			                       | Addr::Wrap::bits(i == _max_index());
+			_descriptors[i].addr =
+				(phys_addr & Addr::Addr31to2::reg_mask())
+				| Addr::Wrap::bits(i == _max_index());
 		}
 
-		inline bool _current_package_available()
+		inline bool _current_buffer_available()
 		{
-			return Addr::Package_available::get(_current_descriptor().addr);
+			return Addr::Used::get(_current_descriptor().addr)
+			    && Status::Length::get(_current_descriptor().status);
 		}
 
 	public:
-		Rx_buffer_descriptor(Genode::Env &env) : Buffer_descriptor(env, BUFFER_COUNT)
+		Rx_buffer_descriptor(Genode::Env &env,
+		                     Nic::Session::Tx::Source &source)
+		: Buffer_descriptor(env, MAX_BUFFER_COUNT)
 		{
-			for (unsigned int i=0; i <= _max_index(); i++) {
-				_reset_descriptor(i);
+			for (size_t i=0; i <= _max_index(); i++) {
+				try {
+					Nic::Packet_descriptor p = source.alloc_packet(BUFFER_SIZE);
+					addr_t phys_addr = (addr_t)source.packet_content_phys(p);
+					if (i == 0) {
+						_phys_base = phys_addr - p.offset();
+					}
+					else if (phys_addr - p.offset() != _phys_base) {
+						Genode::error("physical base error");
+					}
+					_reset_descriptor(i, phys_addr);
+				} catch (Nic::Session::Rx::Source::Packet_alloc_failed) {
+					/* set new _buffer_count */
+					_max_index(i-1);
+					/* set wrap bit */
+					_descriptors[_max_index()].addr |= Addr::Wrap::bits(1);
+					break;
+				}
 			}
+
+			Genode::log("Initialised ", _max_index()+1, " RX buffer descriptors");
+		}
+
+		bool reset_descriptor_by_addr(addr_t phys)
+		{
+			for (size_t i=0; i <= _max_index(); i++) {
+				_increment_ack_index();
+				if (Addr::Addr31to2::masked(_descriptors[_current_ack_index].addr) == phys) {
+					_reset_descriptor(_current_ack_index, phys);
+					return true;
+				}
+			}
+			return false;
 		}
 
 		bool next_packet()
 		{
 			for (unsigned int i=0; i < _max_index(); i++) {
-				if (_current_package_available())
+				if (_current_buffer_available())
 					return true;
 
 				_increment_descriptor_index();
@@ -75,41 +117,25 @@ class Rx_buffer_descriptor : public Buffer_descriptor
 			return false;
 		}
 
-		size_t package_length()
+		Nic::Packet_descriptor get_packet_descriptor()
 		{
-			if (!_current_package_available())
-				return 0;
-
-			return Status::Length::get(_current_descriptor().status);
-		}
-
-		size_t get_package(char* const package, const size_t max_length)
-		{
-			if (!_current_package_available())
-				return 0;
+			if (!_current_buffer_available())
+				return Nic::Packet_descriptor(0, 0);
 
 			const Status::access_t status = _current_descriptor().status;
 			if (!Status::Start_of_frame::get(status) || !Status::End_of_frame::get(status)) {
-				warning("Package split over more than one descriptor. Package ignored!");
+				warning("Packet split over more than one descriptor. Packet ignored!");
 
-				_reset_descriptor(_current_index());
-				return 0;
+				_reset_descriptor(_current_index(), _current_descriptor().addr);
+				return Nic::Packet_descriptor(0, 0);
 			}
 
 			const size_t length = Status::Length::get(status);
-			if (length > max_length) {
-				warning("Buffer for received package to small. Package ignored!");
+			
+			/* reset status */
+			_current_descriptor().status = 0;
 
-				_reset_descriptor(_current_index());
-				return 0;
-			}
-
-			const char* const src_buffer = _current_buffer();
-			memcpy(package, src_buffer, length);
-
-			_reset_descriptor(_current_index());
-
-			return length;
+			return Nic::Packet_descriptor((addr_t)Addr::Addr31to2::masked(_current_descriptor().addr) - _phys_base, length);
 		}
 
 };

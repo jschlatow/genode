@@ -30,9 +30,9 @@ class Buffer_descriptor : protected Attached_ram_dataspace, protected Mmio
 	private:
 		Attached_ram_dataspace _buffer_ds;
 
-		const size_t _buffer_count;
+		size_t _buffer_count;
 
-		unsigned int _descriptor_index;
+		size_t _descriptor_index;
 
 		char* const _buffers;
 
@@ -43,6 +43,8 @@ class Buffer_descriptor : protected Attached_ram_dataspace, protected Mmio
 		} descriptor_t;
 
 		descriptor_t* const _descriptors;
+
+		void _max_index(size_t max_index) { _buffer_count = max_index+1; };
 
 		inline unsigned _max_index() { return _buffer_count-1; }
 

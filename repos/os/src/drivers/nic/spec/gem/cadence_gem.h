@@ -477,10 +477,9 @@ namespace Genode
 			inline void _handle_acks()
 			{
 				while (_rx.source()->ack_avail()) {
-					_rx.source()->release_packet(_rx.source()->get_acked_packet());
-
-					/* TODO for each ack, allocate a new package and configure
-					 * buffer descriptor */
+					Nic::Packet_descriptor p = _rx.source()->get_acked_packet();
+					_rx_buffer.reset_descriptor_by_addr(
+						(addr_t)_rx.source()->packet_content_phys(p));
 				}
 			}
 
@@ -497,35 +496,12 @@ namespace Genode
 
 						_handle_acks();
 
-						// TODO use this buffer directly as the destination for the DMA controller
-						// to minimize the overrun errors
-						const size_t buffer_size = _rx_buffer.package_length();
-
-						/* allocate rx packet buffer */
-						Nic::Packet_descriptor p;
-						try {
-							p = _rx.source()->alloc_packet(buffer_size);
-						} catch (Session::Rx::Source::Packet_alloc_failed) {
-							/* transmit pause frame and drop packet */
-							write<Control::Tx_pause>(1);
-							Genode::error("Packet alloc failed");
-							return;
-						}
-
-						char *dst = (char *)_rx.source()->packet_content(p);
-
-						/*
-						 * copy data from rx buffer to new allocated buffer.
-						 * Has to be copied,
-						 * because the extern allocater possibly is using the cache.
-						 */
-						if ( _rx_buffer.get_package(dst, buffer_size) != buffer_size ) {
-							PWRN("Package not fully copiied. Package ignored.");
-							break;
-						}
-
-						/* comit buffer to system services */
-						_rx.source()->submit_packet(p);
+						Nic::Packet_descriptor p = _rx_buffer.get_packet_descriptor();
+						if (_rx.source()->packet_valid(p))
+							_rx.source()->submit_packet(p);
+						else
+							Genode::error("invalid packet descriptor ", Genode::Hex(p.offset()),
+											  " size ", Genode::Hex(p.size()));
 					}
 
 					/* reset receive complete interrupt */
@@ -609,7 +585,9 @@ namespace Genode
 				Genode::Attached_mmio(env, base, size),
 				Session_component(tx_buf_size, rx_buf_size, rx_block_md_alloc, env),
 				_timer(env),
-				_sys_ctrl(env, _timer), _tx_buffer(env, _timer), _rx_buffer(env),
+				_sys_ctrl(env, _timer),
+				_tx_buffer(env, _timer),
+				_rx_buffer(env, *_rx.source()),
 				_irq(env, irq),
 				_irq_handler(env.ep(), *this, &Cadence_gem::_handle_irq),
 				_phy(*this, _timer)
