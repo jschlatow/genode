@@ -25,7 +25,7 @@ using namespace Genode;
 class Tx_buffer_descriptor : public Buffer_descriptor
 {
 	private:
-		enum { BUFFER_COUNT = 4 };
+		enum { BUFFER_COUNT = 1024 };
 
 		struct Addr : Register<0x00, 32> {};
 		struct Status : Register<0x04, 32> {

@@ -104,6 +104,7 @@ namespace Genode
 			*/
 			struct Dma_config : Register<0x10, 32>
 			{
+				struct Disc_when_no_ahb : Bitfield<24,1> {};
 				struct Rx_pktbuf_memsz_sel  : Bitfield<8, 2> {
 					enum {
 						SPACE_8KB = 0x3,
@@ -134,6 +135,7 @@ namespace Genode
 					return Ahb_mem_rx_buf_size::bits(Ahb_mem_rx_buf_size::BUFFER_1600B) |
 						Rx_pktbuf_memsz_sel::bits(Rx_pktbuf_memsz_sel::SPACE_8KB) |
 						Tx_pktbuf_memsz_sel::bits(Tx_pktbuf_memsz_sel::SPACE_4KB) |
+						Disc_when_no_ahb::bits(1) |
 						Csum_gen_en::bits(1) |
 						Burst_len::bits(Burst_len::INCR16);
 				}
@@ -164,35 +166,39 @@ namespace Genode
 				struct Addr : Bitfield<0, 32> {};
 			};
 
-
 			/**
 			* Receive status register
 			*/
 			struct Rx_status : Register<0x20, 32>
 			{
-				struct Frame_reveived : Bitfield<1, 1> {};
+				struct Rx_overrun     : Bitfield<2, 1> {};
+				struct Frame_received : Bitfield<1, 1> {};
 				struct Buffer_not_available : Bitfield<0, 1> {};
 			};
-
 
 			/**
 			* Interrupt status register
 			*/
 			struct Interrupt_status : Register<0x24, 32>
 			{
-				struct Rx_used_read : Bitfield<3, 1> {};
-				struct Rx_complete : Bitfield<1, 1> {};
+				struct Rx_used_read   : Bitfield<2, 1> {};
+				struct Rx_complete    : Bitfield<1, 1> {};
+				struct Pause_zero     : Bitfield<13,1> {};
+				struct Pause_received : Bitfield<12,1> {};
+				struct Rx_overrun     : Bitfield<10,1> {};
 			};
-
 
 			/**
 			* Interrupt enable register
 			*/
 			struct Interrupt_enable : Register<0x28, 32>
 			{
-				struct Rx_complete : Bitfield<1, 1> {};
+				struct Rx_used_read   : Bitfield<2, 1> {};
+				struct Rx_complete    : Bitfield<1, 1> {};
+				struct Pause_zero     : Bitfield<13,1> {};
+				struct Pause_received : Bitfield<12,1> {};
+				struct Rx_overrun     : Bitfield<10,1> {};
 			};
-
 
 			/**
 			* Interrupt disable register
@@ -201,7 +207,6 @@ namespace Genode
 			{
 				struct Rx_complete : Bitfield<1, 1> {};
 			};
-
 
 			/**
 			* PHY maintenance register
@@ -223,7 +228,6 @@ namespace Genode
 				struct Data : Bitfield<0, 16> {};
 			};
 
-
 			/**
 			* MAC hash register
 			*/
@@ -232,7 +236,6 @@ namespace Genode
 				struct Low_hash   : Bitfield<0, 32> { };
 				struct High_hash   : Bitfield<32, 16> { };
 			};
-
 
 			/**
 			* MAC Addresse
@@ -243,7 +246,6 @@ namespace Genode
 				struct High_addr   : Bitfield<32, 16> { };
 			};
 
-
 			/**
 			* Counter for the successfully transmitted frames
 			*/
@@ -252,6 +254,13 @@ namespace Genode
 				struct Counter : Bitfield<0, 32> { };
 			};
 
+			/**
+			* Counter for the transmitted pause frames
+			*/
+			struct Pause_transmitted : Register<0x114, 32>
+			{
+				struct Counter : Bitfield<0, 16> { };
+			};
 
 			/**
 			* Counter for the successfully received frames
@@ -261,13 +270,60 @@ namespace Genode
 				struct Counter : Bitfield<0, 32> { };
 			};
 
+			/**
+			* Counter for resource error statistics
+			*/
+			struct Rx_resource_errors : Register<0x1A0, 32>
+			{
+				struct Counter : Bitfield<0, 18> { };
+			};
 
 			/**
-			* Counter for the successfully received frames
+			* Counter for overrun statistics
 			*/
 			struct Rx_overrun_errors : Register<0x1A4, 32>
 			{
 				struct Counter : Bitfield<0, 10> { };
+			};
+
+			/**
+			* Counter for IP checksum errors
+			*/
+			struct Rx_ip_chksum_errors : Register<0x1A8, 32>
+			{
+				struct Counter : Bitfield<0, 8> { };
+			};
+
+			/**
+			* Counter for TCP checksum errors
+			*/
+			struct Rx_tcp_chksum_errors : Register<0x1AC, 32>
+			{
+				struct Counter : Bitfield<0, 8> { };
+			};
+
+			/**
+			* Counter for UDP checksum errors
+			*/
+			struct Rx_udp_chksum_errors : Register<0x1B0, 32>
+			{
+				struct Counter : Bitfield<0, 8> { };
+			};
+
+			/**
+			* Counter for FCS errors
+			*/
+			struct Rx_fcs_errors : Register<0x190, 32>
+			{
+				struct Counter : Bitfield<0, 10> { };
+			};
+
+			/**
+			* Counter for pause frames received
+			*/
+			struct Pause_received : Register<0x164, 32>
+			{
+				struct Counter : Bitfield<0, 16> { };
 			};
 
 
@@ -353,7 +409,11 @@ namespace Genode
 
 
 				/* 16.3.6 Configure Interrupts */
-				write<Interrupt_enable>(Interrupt_enable::Rx_complete::bits(1));
+				write<Interrupt_enable>(Interrupt_enable::Rx_complete::bits(1) |
+				                        Interrupt_enable::Rx_overrun::bits(1) |
+				                        Interrupt_enable::Pause_received::bits(1) |
+				                        Interrupt_enable::Pause_zero::bits(1) |
+				                        Interrupt_enable::Rx_used_read::bits(1));
 			}
 
 			void _deinit()
@@ -456,26 +516,68 @@ namespace Genode
 							break;
 						}
 
-						/* clearing error flags */
-						write<Interrupt_status::Rx_used_read>(1);
-						write<Rx_status::Buffer_not_available>(1);
-
 						/* comit buffer to system services */
 						_rx.source()->submit_packet(p);
 					}
 
-					/* check, if there was lost some packages */
-					const uint16_t lost_packages = read<Rx_overrun_errors::Counter>();
-					if (lost_packages > 0) {
-						/* transmit pause frame */
-						write<Control::Tx_pause>(1);
-						PWRN("%d packages lost (%d packages successfully received)!",
-							 lost_packages, read<Frames_received>());
-					}
-
-					/* reset reveive complete interrupt */
-					write<Rx_status>(Rx_status::Frame_reveived::bits(1));
+					/* reset receive complete interrupt */
+					write<Rx_status>(Rx_status::Frame_received::bits(1));
 					write<Interrupt_status>(Interrupt_status::Rx_complete::bits(1));
+				}
+				
+				bool print_stats = false;
+				if (Interrupt_status::Rx_overrun::get(status)) {
+					write<Control::Tx_pause>(1);
+					write<Interrupt_status>(Interrupt_status::Rx_overrun::bits(1));
+					write<Rx_status>(Rx_status::Rx_overrun::bits(1));
+					print_stats = true;
+					Genode::error("Rx overrun");
+				}
+				if (Interrupt_status::Rx_used_read::get(status)) {
+					/* tried to use buffer descriptor with used bit set */
+					/* we sent a pause frame because the buffer appears to
+					 * be full
+					 */
+					write<Control::Tx_pause>(1);
+					write<Interrupt_status>(Interrupt_status::Rx_used_read::bits(1));
+					write<Rx_status>(Rx_status::Buffer_not_available::bits(1));
+					print_stats = true;
+					Genode::error("Rx used");
+				}
+				if (Interrupt_status::Pause_zero::get(status)) {
+					Genode::warning("Pause ended.");
+					write<Interrupt_status>(Interrupt_status::Pause_zero::bits(1));
+					print_stats = true;
+				}
+				if (Interrupt_status::Pause_received::get(status)) {
+					Genode::warning("Pause frame received.");
+					write<Interrupt_status>(Interrupt_status::Pause_received::bits(1));
+					print_stats = true;
+				}
+
+				if (print_stats) {
+					/* check, if there was lost some packages */
+					const uint32_t received  = read<Frames_received>();
+					const uint32_t pause_rx  = read<Pause_received::Counter>();
+					const uint32_t res_err   = read<Rx_resource_errors::Counter>();
+					const uint32_t overrun   = read<Rx_overrun_errors::Counter>();
+					const uint32_t fcs_err   = read<Rx_fcs_errors::Counter>();
+					const uint32_t ip_chk    = read<Rx_ip_chksum_errors::Counter>();
+					const uint32_t udp_chk   = read<Rx_udp_chksum_errors::Counter>();
+					const uint32_t tcp_chk   = read<Rx_tcp_chksum_errors::Counter>();
+					const uint32_t transmit  = read<Frames_transmitted>();
+					const uint32_t pause_tx  = read<Pause_transmitted::Counter>();
+
+					Genode::warning("Received:          ", received);
+					Genode::warning("  pause frames:    ", pause_rx);
+					Genode::warning("  resource errors: ", res_err);
+					Genode::warning("  overrun errors:  ", overrun);
+					Genode::warning("  FCS errors:      ", fcs_err);
+					Genode::warning("  IP chk failed:   ", ip_chk);
+					Genode::warning("  UDP chk failed:  ", udp_chk);
+					Genode::warning("  TCP chk failed:  ", tcp_chk);
+					Genode::warning("Transmitted:       ", transmit);
+					Genode::warning("  pause frames:    ", pause_tx);
 				}
 
 				_irq.ack_irq();

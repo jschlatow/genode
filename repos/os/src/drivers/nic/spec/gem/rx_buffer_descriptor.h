@@ -33,7 +33,7 @@ class Rx_buffer_descriptor : public Buffer_descriptor
 			struct End_of_frame : Bitfield<15, 1> {};
 		};
 
-		enum { BUFFER_COUNT = 512 };
+		enum { BUFFER_COUNT = 1024 };
 
 
 		/**
@@ -45,7 +45,8 @@ class Rx_buffer_descriptor : public Buffer_descriptor
 		void _set_package_processed()
 		{
 			/* reset package available for new package */
-			_current_descriptor().addr &= ~Addr::Package_available::bits(1);
+			_current_descriptor().addr  &= ~Addr::Package_available::bits(1);
+			_current_descriptor().status = 0;
 			/* use next buffer descriptor for next package */
 			_increment_descriptor_index();
 		}
