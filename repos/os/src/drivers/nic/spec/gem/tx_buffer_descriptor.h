@@ -40,15 +40,30 @@ class Tx_buffer_descriptor : public Buffer_descriptor
 
 		Timer::Connection &_timer;
 
+		void _reset_descriptor(unsigned const i) {
+			if (i > _max_index())
+				return;
+
+			/* set physical buffer address */
+			_descriptors[i].addr   = _phys_addr_buffer(i);
+
+			/* set used by SW, also we do not use frame scattering */
+			_descriptors[i].status = Status::Used::bits(1) |
+			                         Status::Last_buffer::bits(1);
+
+			/* last buffer must be marked by Wrap bit */
+			if (i == _max_index())
+				_descriptors[i].status |= Status::Wrap::bits(1);
+		}
+
 	public:
+
 		Tx_buffer_descriptor(Genode::Env &env, Timer::Connection &timer)
 		: Buffer_descriptor(env, BUFFER_COUNT), _timer(timer)
 		{
-			/* set all buffers used by SW, also we do not use frame scattering */
-			for (unsigned int i=0; i<BUFFER_COUNT; i++) {
-				_descriptors[i].status = Status::Used::bits(1) | Status::Last_buffer::bits(1);
+			for (unsigned int i=0; i <= _max_index(); i++) {
+				_reset_descriptor(i);
 			}
-			_descriptors[BUFFER_COUNT-1].status |= Status::Wrap::bits(1);
 		}
 
 		void add_to_queue(const char* const packet, const size_t size)

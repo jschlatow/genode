@@ -474,6 +474,16 @@ namespace Genode
 				_mdio_wait();
 			}
 
+			inline void _handle_acks()
+			{
+				while (_rx.source()->ack_avail()) {
+					_rx.source()->release_packet(_rx.source()->get_acked_packet());
+
+					/* TODO for each ack, allocate a new package and configure
+					 * buffer descriptor */
+				}
+			}
+
 			virtual void _handle_irq()
 			{
 				/* 16.3.9 Receiving Frames */
@@ -481,13 +491,11 @@ namespace Genode
 				const Interrupt_status::access_t status = read<Interrupt_status>();
 				const Rx_status::access_t rxStatus = read<Rx_status>();
 
-				/* FIXME strangely, this handler is also called without any status bit set in Interrupt_status */
 				if ( Interrupt_status::Rx_complete::get(status) ) {
 
-					while (_rx_buffer.package_available()) {
+					while (_rx_buffer.next_packet()) {
 
-						while (_rx.source()->ack_avail())
-							_rx.source()->release_packet(_rx.source()->get_acked_packet());
+						_handle_acks();
 
 						// TODO use this buffer directly as the destination for the DMA controller
 						// to minimize the overrun errors
@@ -523,6 +531,9 @@ namespace Genode
 					/* reset receive complete interrupt */
 					write<Rx_status>(Rx_status::Frame_received::bits(1));
 					write<Interrupt_status>(Interrupt_status::Rx_complete::bits(1));
+				}
+				else {
+					_handle_acks();
 				}
 				
 				bool print_stats = false;
@@ -690,8 +701,7 @@ namespace Genode
 
 			void _handle_packet_stream() override
 			{
-				while (_rx.source()->ack_avail())
-					_rx.source()->release_packet(_rx.source()->get_acked_packet());
+				_handle_acks();
 
 				while (_send()) ;
 			}

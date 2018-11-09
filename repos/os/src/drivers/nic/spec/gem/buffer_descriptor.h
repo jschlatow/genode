@@ -44,13 +44,16 @@ class Buffer_descriptor : protected Attached_ram_dataspace, protected Mmio
 
 		descriptor_t* const _descriptors;
 
-		void _increment_descriptor_index()
+		inline unsigned _max_index() { return _buffer_count-1; }
+
+		inline void _increment_descriptor_index()
 		{
-			_descriptor_index++;
-			_descriptor_index %= _buffer_count;
+			_descriptor_index = (_descriptor_index+1) % _buffer_count;
 		}
 
-		descriptor_t& _current_descriptor()
+		inline unsigned _current_index() { return _descriptor_index; }
+
+		inline descriptor_t& _current_descriptor()
 		{
 			return _descriptors[_descriptor_index];
 		}
@@ -61,6 +64,12 @@ class Buffer_descriptor : protected Attached_ram_dataspace, protected Mmio
 			return buffer;
 		}
 
+		addr_t _phys_addr_buffer(const unsigned int index)
+		{
+			return Dataspace_client(_buffer_ds.cap()).phys_addr() + BUFFER_SIZE * index;
+		}
+
+
 	private:
 
 		/*
@@ -69,10 +78,6 @@ class Buffer_descriptor : protected Attached_ram_dataspace, protected Mmio
 		Buffer_descriptor(Buffer_descriptor const &);
 		Buffer_descriptor &operator = (Buffer_descriptor const &);
 
-		addr_t phys_addr_buffer(const unsigned int index)
-		{
-			return Dataspace_client(_buffer_ds.cap()).phys_addr() + BUFFER_SIZE * index;
-		}
 
 	public:
 		/*
@@ -88,18 +93,7 @@ class Buffer_descriptor : protected Attached_ram_dataspace, protected Mmio
 			_descriptor_index(0),
 			_buffers(_buffer_ds.local_addr<char>()),
 			_descriptors(local_addr<descriptor_t>())
-		{
-			/*
-			 * Save address of _buffers.
-			 * Has to be the physical address and not the virtual address,
-			 * because the dma controller of the nic will use it.
-			 * Ignore lower two bits,
-			 * because these are status bits.
-			 */
-			for (unsigned int i=0; i<buffer_count; i++) {
-				_descriptors[i].addr = (phys_addr_buffer(i)) & ~0x3;
-			}
-		}
+		{ }
 
 		addr_t phys_addr() { return Dataspace_client(cap()).phys_addr(); }
 };
