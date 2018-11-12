@@ -889,6 +889,19 @@ class Genode::Packet_stream_sink : private Packet_stream_base
 		}
 
 		/**
+		 * Get physical address to the content of the specified packet
+		 *
+		 * \return 0 if the packet is invalid
+		 */
+		Content_type *packet_content_phys(Packet_descriptor packet)
+		{
+			if (!packet_valid(packet) || packet.size() < sizeof(Content_type))
+				return 0;
+
+			return (Content_type *)((Genode::addr_t)_ds_phys_base + packet.offset());
+		}
+
+		/**
 		 * Returns true if no further acknowledgements can be submitted
 		 */
 		bool ready_to_ack() { return _ack_transmitter.ready_for_tx(); }
