@@ -28,13 +28,9 @@ class Buffer_descriptor : protected Attached_ram_dataspace, protected Mmio
 		static const size_t BUFFER_SIZE      = 1600;
 
 	private:
-		Attached_ram_dataspace _buffer_ds;
-
 		size_t _buffer_count;
-
-		size_t _descriptor_index;
-
-		char* const _buffers;
+		size_t _head_idx { 0 };
+		size_t _tail_idx { 0 };
 
 	protected:
 		typedef struct {
@@ -44,33 +40,48 @@ class Buffer_descriptor : protected Attached_ram_dataspace, protected Mmio
 
 		descriptor_t* const _descriptors;
 
+		/* set the maximum descriptor index */
+		inline
 		void _max_index(size_t max_index) { _buffer_count = max_index+1; };
 
-		inline unsigned _max_index() { return _buffer_count-1; }
+		/* get the maximum descriptor index */
+		inline
+		unsigned _max_index() { return _buffer_count-1; }
 
-		inline void _increment_descriptor_index()
+		inline
+		void _advance_head()
 		{
-			_descriptor_index = (_descriptor_index+1) % _buffer_count;
+			_head_idx = (_head_idx+1) % _buffer_count;
 		}
 
-		inline unsigned _current_index() { return _descriptor_index; }
-
-		inline descriptor_t& _current_descriptor()
+		inline
+		void _advance_tail()
 		{
-			return _descriptors[_descriptor_index];
+			_tail_idx = (_tail_idx+1) % (_buffer_count);
 		}
 
-		char * _current_buffer()
+		inline
+		descriptor_t& _head()
 		{
-			char * const buffer = &_buffers[BUFFER_SIZE * _descriptor_index];
-			return buffer;
+			return _descriptors[_head_idx];
 		}
 
-		addr_t _phys_addr_buffer(const unsigned int index)
+		inline
+		descriptor_t& _tail()
 		{
-			return Dataspace_client(_buffer_ds.cap()).phys_addr() + BUFFER_SIZE * index;
+			return _descriptors[_tail_idx];
 		}
 
+		size_t _queued() const
+		{
+			if (_head_idx >= _tail_idx)
+				return _head_idx - _tail_idx;
+			else
+				return _head_idx + _buffer_count - _tail_idx;
+		}
+
+		size_t _head_index() const { return _head_idx; }
+		size_t _tail_index() const { return _tail_idx; }
 
 	private:
 
@@ -90,10 +101,7 @@ class Buffer_descriptor : protected Attached_ram_dataspace, protected Mmio
 		:
 			Attached_ram_dataspace(env.ram(), env.rm(), BUFFER_DESC_SIZE * buffer_count, UNCACHED),
 			Genode::Mmio( reinterpret_cast<addr_t>(local_addr<void>()) ),
-			_buffer_ds(env.ram(), env.rm(), BUFFER_SIZE * buffer_count),
 			_buffer_count(buffer_count),
-			_descriptor_index(0),
-			_buffers(_buffer_ds.local_addr<char>()),
 			_descriptors(local_addr<descriptor_t>())
 		{ }
 

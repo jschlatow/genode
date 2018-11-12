@@ -36,16 +36,16 @@ class Tx_buffer_descriptor : public Buffer_descriptor
 			struct Chksum_err : Bitfield<20, 2> {};
 		};
 
-		class Package_send_timeout : public Genode::Exception {};
-
 		Timer::Connection &_timer;
 
-		void _reset_descriptor(unsigned const i) {
+		addr_t _phys_base { 0 };
+
+		void _reset_descriptor(unsigned const i, addr_t phys_addr) {
 			if (i > _max_index())
 				return;
 
 			/* set physical buffer address */
-			_descriptors[i].addr   = _phys_addr_buffer(i);
+			_descriptors[i].addr   = phys_addr;
 
 			/* set used by SW, also we do not use frame scattering */
 			_descriptors[i].status = Status::Used::bits(1) |
@@ -58,48 +58,88 @@ class Tx_buffer_descriptor : public Buffer_descriptor
 
 	public:
 
+		class Package_send_timeout : public Genode::Exception {};
+
 		Tx_buffer_descriptor(Genode::Env &env, Timer::Connection &timer)
 		: Buffer_descriptor(env, BUFFER_COUNT), _timer(timer)
 		{
-			for (unsigned int i=0; i <= _max_index(); i++) {
-				_reset_descriptor(i);
+			for (size_t i=0; i <= _max_index(); i++) {
+				/* configure all descriptors with address 0, which we
+				 * interpret as invalid */
+				_reset_descriptor(i, 0x0);
 			}
 		}
 
-		void add_to_queue(const char* const packet, const size_t size)
+		void submit_acks(Nic::Session::Rx::Sink &sink)
 		{
-			if (size > BUFFER_SIZE) {
+			/* the tail marks the descriptor for which we wait to
+			 * be handed over to software */
+			for (size_t i=0; i <= _queued(); i++) {
+				/* stop if still in use by hardware */
+				if (!Status::Used::get(_tail().status))
+					break;
+
+				/* if descriptor has been configured properly */
+				if (_tail().addr != 0) {
+
+					/* build packet descriptor from buffer descriptor
+					 * and acknowledge packet */
+					const size_t length = Status::Length::get(_tail().status);
+					Nic::Packet_descriptor p((addr_t)_tail().addr - _phys_base, length);
+					if (sink.packet_valid(p))
+						sink.acknowledge_packet(p);
+
+					/* erase address so that we don't send an ack again */
+					_tail().addr = 0;
+
+					/* TODO optionally, we may evaluate the Tx status here */
+				}
+
+				_advance_tail();
+			}
+		}
+
+		void add_to_queue(Nic::Session::Rx::Sink &sink, Nic::Packet_descriptor p)
+		{
+			/* the head marks the descriptor that we use next for
+			 * handing over the packet to hardware */
+			if (p.size() > BUFFER_SIZE) {
 				warning("Ethernet package to big. Not sent!");
 				return;
 			}
 
+			addr_t packet_phys = (addr_t)sink.packet_content_phys(p);
+			if (packet_phys & 0x1f) {
+				warning("Packet is not aligned properly.");
+			}
+
 			/* wait until the used bit is set (timeout after 10ms) */
 			uint32_t timeout = 10000;
-			while ( !Status::Used::get(_current_descriptor().status) ) {
+			while ( !Status::Used::get(_head().status) ) {
 				if (timeout == 0) {
-					warning("Timed out waiting for tx buffer");
 					throw Package_send_timeout();
 				}
-				timeout -= 10;
+				timeout -= 1000;
 
 				/*  TODO buffer is full, instead of sleeping we should
 				 *       therefore wait for tx_complete interrupt */
-				_timer.usleep(10);
+				_timer.usleep(1000);
 			}
 
-			uint8_t chksum_err = Status::Chksum_err::get(_current_descriptor().status);
-			if (chksum_err)
-				Genode::log("Checksum offloading error", Genode::Hex(chksum_err));
+			if (_phys_base == 0) {
+				_phys_base = packet_phys - p.offset();
+			}
+			else if (packet_phys - p.offset() != _phys_base) {
+				Genode::error("physical base error");
+			}
 
-			memcpy(_current_buffer(), packet, size);
+			_reset_descriptor(_head_index(), packet_phys);
+			_head().status |=  Status::Length::bits(p.size());
 
-			_current_descriptor().status &=  Status::Length::clear_mask();
-			_current_descriptor().status |=  Status::Length::bits(size);
+			/* unset the used bit */
+			_head().status &=  Status::Used::clear_mask();
 
-			/* unset the unset bit */
-			_current_descriptor().status &=  Status::Used::clear_mask();
-
-			_increment_descriptor_index();
+			_advance_head();
 		}
 };
 

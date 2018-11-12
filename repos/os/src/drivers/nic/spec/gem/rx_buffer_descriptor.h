@@ -37,12 +37,6 @@ class Rx_buffer_descriptor : public Buffer_descriptor
 		enum { MAX_BUFFER_COUNT = 1024 };
 
 		addr_t _phys_base { 0 };
-		size_t _current_ack_index { 0 };
-
-		void _increment_ack_index()
-		{
-			_current_ack_index = (_current_ack_index+1) % (_max_index()+1);
-		}
 
 		void _reset_descriptor(unsigned const i, addr_t phys_addr) {
 			if (i > _max_index())
@@ -59,10 +53,10 @@ class Rx_buffer_descriptor : public Buffer_descriptor
 				| Addr::Wrap::bits(i == _max_index());
 		}
 
-		inline bool _current_buffer_available()
+		inline bool _head_available()
 		{
-			return Addr::Used::get(_current_descriptor().addr)
-			    && Status::Length::get(_current_descriptor().status);
+			return Addr::Used::get(_head().addr)
+			    && Status::Length::get(_head().status);
 		}
 
 	public:
@@ -96,9 +90,9 @@ class Rx_buffer_descriptor : public Buffer_descriptor
 		bool reset_descriptor_by_addr(addr_t phys)
 		{
 			for (size_t i=0; i <= _max_index(); i++) {
-				_increment_ack_index();
-				if (Addr::Addr31to2::masked(_descriptors[_current_ack_index].addr) == phys) {
-					_reset_descriptor(_current_ack_index, phys);
+				_advance_tail();
+				if (Addr::Addr31to2::masked(_tail().addr) == phys) {
+					_reset_descriptor(_tail_index(), phys);
 					return true;
 				}
 			}
@@ -107,11 +101,12 @@ class Rx_buffer_descriptor : public Buffer_descriptor
 
 		bool next_packet()
 		{
+			/* Find next available descriptor (head) holding a packet. */
 			for (unsigned int i=0; i < _max_index(); i++) {
-				if (_current_buffer_available())
+				if (_head_available())
 					return true;
 
-				_increment_descriptor_index();
+				_advance_head();
 			}
 
 			return false;
@@ -119,23 +114,23 @@ class Rx_buffer_descriptor : public Buffer_descriptor
 
 		Nic::Packet_descriptor get_packet_descriptor()
 		{
-			if (!_current_buffer_available())
+			if (!_head_available())
 				return Nic::Packet_descriptor(0, 0);
 
-			const Status::access_t status = _current_descriptor().status;
+			const Status::access_t status = _head().status;
 			if (!Status::Start_of_frame::get(status) || !Status::End_of_frame::get(status)) {
 				warning("Packet split over more than one descriptor. Packet ignored!");
 
-				_reset_descriptor(_current_index(), _current_descriptor().addr);
+				_reset_descriptor(_head_index(), _head().addr);
 				return Nic::Packet_descriptor(0, 0);
 			}
 
 			const size_t length = Status::Length::get(status);
 			
 			/* reset status */
-			_current_descriptor().status = 0;
+			_head().status = 0;
 
-			return Nic::Packet_descriptor((addr_t)Addr::Addr31to2::masked(_current_descriptor().addr) - _phys_base, length);
+			return Nic::Packet_descriptor((addr_t)Addr::Addr31to2::masked(_head().addr) - _phys_base, length);
 		}
 
 };

@@ -633,6 +633,10 @@ namespace Genode
 
 			bool _send()
 			{
+				/* first, see whether we can acknowledge any
+				 * previously sent packet */
+				_tx_buffer.submit_acks(*_tx.sink());
+
 				if (!_tx.sink()->ready_to_ack())
 					return false;
 
@@ -645,12 +649,14 @@ namespace Genode
 					return true;
 				}
 
-				char *src = (char *)_tx.sink()->packet_content(packet);
+				try {
+					_tx_buffer.add_to_queue(*_tx.sink(), packet);
+					write<Control>(Control::start_tx());
+				} catch (Tx_buffer_descriptor::Package_send_timeout) {
+					Genode::warning("Package Tx timeout");
+					return false;
+				}
 
-				_tx_buffer.add_to_queue(src, packet.size());
-				write<Control>(Control::start_tx());
-
-				_tx.sink()->acknowledge_packet(packet);
 				return true;
 			}
 
@@ -681,7 +687,7 @@ namespace Genode
 			{
 				_handle_acks();
 
-				while (_send()) ;
+				while (_send());
 			}
 	};
 }
