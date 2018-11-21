@@ -5,7 +5,7 @@
  */
 
 /*
- * Copyright (C) 2015-2017 Genode Labs GmbH
+ * Copyright (C) 2015-2018 Genode Labs GmbH
  *
  * This file is part of the Genode OS framework, which is distributed
  * under the terms of the GNU Affero General Public License version 3.
@@ -832,7 +832,13 @@ class Vfs::Ram_file_system : public Vfs::File_system
 					if (dir->length() || (!dynamic_cast<Directory*>(from_node)))
 						return RENAME_ERR_NO_PERM;
 
+				/* detach node to be replaced from directory */
 				to_dir->release(to_node);
+
+				/* notify the node being replaced */
+				to_node->notify(_env.watch_handler());
+
+				/* free the node that is replaced */
 				remove(to_node);
 			}
 
@@ -859,6 +865,7 @@ class Vfs::Ram_file_system : public Vfs::File_system
 
 			node->lock();
 			parent->release(node);
+			node->notify(_env.watch_handler());
 			parent->notify(_env.watch_handler());
 			remove(node);
 			return UNLINK_OK;

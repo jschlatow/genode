@@ -215,19 +215,22 @@ int    strcmp(const char *s1, const char *s2)
 size_t strlen(const char *s) { return Genode::strlen(s); }
 
 
-size_t strlcat(char *dest, const char *src, size_t dest_size)
+size_t strlcat(char *dest, const char *src, size_t count)
 {
-	size_t len_d = strlen(dest);
-	size_t len_s = strlen(src);
+	size_t dsize = strlen(dest);
+	size_t len = strlen(src);
+	size_t res = dsize + len;
 
-	if (len_d > dest_size)
-		return 0;
+	/* This would be a bug */
+	BUG_ON(dsize >= count);
 
-	size_t len = dest_size - len_d - 1;
-
-	memcpy(dest + len_d, src, len);
-	dest[len_d + len] = 0;
-	return len;
+	dest += dsize;
+	count -= dsize;
+	if (len >= count)
+		len = count-1;
+	memcpy(dest, src, len);
+	dest[len] = 0;
+	return res;
 }
 
 
@@ -741,11 +744,6 @@ void *sg_virt(struct scatterlist *sg)
  ** linux/ioport.h **
  ********************/
 
-resource_size_t resource_size(const struct resource *res)
-{
-	return res->end - res->start + 1;
-}
-
 struct resource * devm_request_mem_region(struct device *dev, resource_size_t start,
                                           resource_size_t n, const char *name)
 {
@@ -989,9 +987,9 @@ signed long schedule_timeout_uninterruptible(signed long timeout)
 #include <lx_emul/impl/completion.h>
 
 
-static void _completion_timeout(unsigned long t)
+static void _completion_timeout(struct timer_list *t)
 {
-	Lx::Task *task = (Lx::Task *)t;
+	Lx::Task *task = (Lx::Task *)t->data;
 	task->unblock();
 }
 
@@ -1002,7 +1000,8 @@ long __wait_completion(struct completion *work, unsigned long timeout)
 	unsigned long j = timeout ? jiffies + timeout : 0;
 
 	if (timeout) {
-		setup_timer(&t, _completion_timeout, (unsigned long)Lx::scheduler().current());
+		timer_setup(&t, _completion_timeout, 0u);
+		t.data = (unsigned long)Lx::scheduler().current();
 		mod_timer(&t, timeout);
 	}
 
@@ -1119,4 +1118,19 @@ int hex2bin(u8 *dst, const char *src, size_t count)
 		*dst++ = (hi << 4) | lo;
 	}
 	return 0;
+}
+
+
+/*******************
+ ** linux/timer.h **
+ *******************/
+
+extern "C" void init_timer(struct timer_list *) { }
+
+
+extern "C" void setup_timer(struct timer_list *timer, void (*function)(unsigned long),
+                            unsigned long data)
+{
+	timer_setup(timer, function, 0u);
+	timer->data = data;
 }

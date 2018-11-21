@@ -140,6 +140,12 @@ class Net::Interface : private Interface_list::Element
 		                      Genode::uint32_t                 xid,
 		                      Ipv4_address_prefix       const &local_intf);
 
+		void _send_icmp_echo_reply(Ethernet_frame &eth,
+		                           Ipv4_packet    &ip,
+		                           Icmp_packet    &icmp,
+		                           Genode::size_t  icmp_sz,
+		                           Size_guard     &size_guard);
+
 		Forward_rule_tree &_forward_rules(Domain            &local_domain,
 		                                  L3_protocol const  prot) const;
 
@@ -190,14 +196,15 @@ class Net::Interface : private Interface_list::Element
 		                        Icmp_packet             &icmp,
 		                        Genode::size_t           icmp_sz);
 
-		void _handle_icmp(Ethernet_frame          &eth,
-		                  Size_guard              &size_guard,
-		                  Ipv4_packet             &ip,
-		                  Packet_descriptor const &pkt,
-		                  L3_protocol              prot,
-		                  void                    *prot_base,
-		                  Genode::size_t           prot_size,
-		                  Domain                  &local_domain);
+		void _handle_icmp(Ethernet_frame            &eth,
+		                  Size_guard                &size_guard,
+		                  Ipv4_packet               &ip,
+		                  Packet_descriptor   const &pkt,
+		                  L3_protocol                prot,
+		                  void                      *prot_base,
+		                  Genode::size_t             prot_size,
+		                  Domain                    &local_domain,
+		                  Ipv4_address_prefix const &local_intf);
 
 		void _adapt_eth(Ethernet_frame          &eth,
 		                Ipv4_address      const &dst_ip,
@@ -232,7 +239,8 @@ class Net::Interface : private Interface_list::Element
 		              Size_guard           &size_guard,
 		              Ipv4_packet          &ip);
 
-		void _continue_handle_eth(Packet_descriptor const &pkt);
+		void _continue_handle_eth(Domain            const &domain,
+		                          Packet_descriptor const &pkt);
 
 		Ipv4_address const &_router_ip() const;
 
@@ -274,8 +282,6 @@ class Net::Interface : private Interface_list::Element
 
 		void _detach_from_domain();
 
-		void _attach_to_domain(Domain_name const &domain_name);
-
 		void _attach_to_domain_raw(Domain &domain);
 
 		void _apply_foreign_arp();
@@ -307,20 +313,11 @@ class Net::Interface : private Interface_list::Element
 		struct Packet_postponed             : Genode::Exception { };
 		struct Alloc_dhcp_msg_buffer_failed : Genode::Exception { };
 
-		struct Drop_packet_inform : Genode::Exception
+		struct Drop_packet : Genode::Exception
 		{
-			Genode::String<128> msg;
+			char const *reason;
 
-			template <typename... ARGS>
-			Drop_packet_inform(ARGS... args) : msg({args...}) { }
-		};
-
-		struct Drop_packet_warn : Genode::Exception
-		{
-			Genode::String<128> msg;
-
-			template <typename... ARGS>
-			Drop_packet_warn(ARGS... args) : msg({args...}) { }
+			Drop_packet(char const *reason) : reason(reason) { }
 		};
 
 		Interface(Genode::Entrypoint     &ep,
@@ -375,6 +372,8 @@ class Net::Interface : private Interface_list::Element
 
 		void handle_config_3();
 
+		void attach_to_domain();
+
 		void detach_from_ip_config();
 
 		void attach_to_ip_config(Domain            &domain,
@@ -388,19 +387,22 @@ class Net::Interface : private Interface_list::Element
 
 		bool link_state() const;
 
+		void handle_link_state();
+
 
 		/***************
 		 ** Accessors **
 		 ***************/
 
-		Domain            &domain()           { return _domain(); }
-		Mac_address const &router_mac() const { return _router_mac; }
-		Mac_address const &mac()        const { return _mac; }
-		Arp_waiter_list   &own_arp_waiters()  { return _own_arp_waiters; }
-		Signal_handler    &sink_ack()         { return _sink_ack; }
-		Signal_handler    &sink_submit()      { return _sink_submit; }
-		Signal_handler    &source_ack()       { return _source_ack; }
-		Signal_handler    &source_submit()    { return _source_submit; }
+		Configuration const &config()     const { return _config(); }
+		Domain              &domain()           { return _domain(); }
+		Mac_address   const &router_mac() const { return _router_mac; }
+		Mac_address   const &mac()        const { return _mac; }
+		Arp_waiter_list     &own_arp_waiters()  { return _own_arp_waiters; }
+		Signal_handler      &sink_ack()         { return _sink_ack; }
+		Signal_handler      &sink_submit()      { return _sink_submit; }
+		Signal_handler      &source_ack()       { return _source_ack; }
+		Signal_handler      &source_submit()    { return _source_submit; }
 
 		void session_link_state_sigh(Genode::Signal_context_capability sigh);
 };

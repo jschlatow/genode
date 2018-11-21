@@ -17,6 +17,7 @@
 /* local includes */
 #include <domain.h>
 #include <report.h>
+#include <uplink.h>
 
 /* Genode includes */
 #include <os/duration.h>
@@ -35,7 +36,9 @@ class Net::Configuration
 		Genode::Allocator          &_alloc;
 		bool                 const  _verbose                 { false };
 		bool                 const  _verbose_packets         { false };
+		bool                 const  _verbose_packet_drop     { false };
 		bool                 const  _verbose_domain_state    { false };
+		bool                 const  _icmp_echo_server        { true };
 		Genode::Microseconds const  _dhcp_discover_timeout   { DEFAULT_DHCP_DISCOVER_TIMEOUT_SEC };
 		Genode::Microseconds const  _dhcp_request_timeout    { DEFAULT_DHCP_REQUEST_TIMEOUT_SEC  };
 		Genode::Microseconds const  _dhcp_offer_timeout      { DEFAULT_DHCP_OFFER_TIMEOUT_SEC    };
@@ -46,7 +49,11 @@ class Net::Configuration
 		Pointer<Report>             _report                  { };
 		Pointer<Genode::Reporter>   _reporter                { };
 		Domain_tree                 _domains                 { };
+		Uplink_tree                 _uplinks                 { };
 		Genode::Xml_node     const  _node;
+
+		void _invalid_uplink(Uplink     &uplink,
+		                     char const *reason);
 
 		void _invalid_domain(Domain     &domain,
 		                     char const *reason);
@@ -69,7 +76,8 @@ class Net::Configuration
 		              Genode::Xml_node const  node,
 		              Genode::Allocator      &alloc,
 		              Timer::Connection      &timer,
-		              Configuration          &legacy);
+		              Configuration          &old_config,
+		              Interface_list         &interfaces);
 
 		~Configuration();
 
@@ -80,7 +88,9 @@ class Net::Configuration
 
 		bool                  verbose()               const { return _verbose; }
 		bool                  verbose_packets()       const { return _verbose_packets; }
+		bool                  verbose_packet_drop()   const { return _verbose_packet_drop; }
 		bool                  verbose_domain_state()  const { return _verbose_domain_state; }
+		bool                  icmp_echo_server()      const { return _icmp_echo_server; }
 		Genode::Microseconds  dhcp_discover_timeout() const { return _dhcp_discover_timeout; }
 		Genode::Microseconds  dhcp_request_timeout()  const { return _dhcp_request_timeout; }
 		Genode::Microseconds  dhcp_offer_timeout()    const { return _dhcp_offer_timeout; }

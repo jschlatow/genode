@@ -27,6 +27,9 @@ namespace Genode {
 	struct File;
 	struct Readonly_file;
 	struct File_content;
+	struct Watcher;
+	template <typename>
+	struct Watch_handler;
 }
 
 
@@ -67,9 +70,13 @@ struct Genode::Directory : Noncopyable, Interface
 				typedef String<Vfs::Directory_service::DIRENT_MAX_NAME_LEN> Name;
 
 				Name name() const { return Name(Cstring(_dirent.name)); }
+
+				Vfs::Directory_service::Dirent_type type() const { return _dirent.type; }
 		};
 
-		typedef String<256> Path;
+		enum { MAX_PATH_LEN = 256 };
+
+		typedef String<MAX_PATH_LEN> Path;
 
 		static Path join(Path const &x, Path const &y)
 		{
@@ -98,6 +105,7 @@ struct Genode::Directory : Noncopyable, Interface
 
 		friend class Readonly_file;
 		friend class Root_directory;
+		friend class Watcher;
 
 		/*
 		 * Operations such as 'file_size' that are expected to be 'const' at
@@ -229,6 +237,51 @@ struct Genode::Directory : Noncopyable, Interface
 			if (!(stat.mode & Vfs::Directory_service::STAT_MODE_FILE))
 				throw Nonexistent_file();
 			return stat.size;
+		}
+
+		/**
+		 * Return symlink content at specified directory-relative path
+		 *
+		 * \throw Nonexistent_file  symlink at path does not exist or
+		 *                          access is denied
+		 *
+		 */
+		Path read_symlink(Path const &rel_path) const
+		{
+			using namespace Vfs;
+			Vfs_handle *link_handle;
+
+			auto open_res = _nonconst_fs().openlink(
+				join(_path, rel_path).string(),
+				false, &link_handle, _alloc);
+			if (open_res != Directory_service::OPENLINK_OK)
+				throw Nonexistent_file();
+			Vfs_handle::Guard guard(link_handle);
+
+			char buf[MAX_PATH_LEN];
+
+			Vfs::file_size count = sizeof(buf)-1;
+			Vfs::file_size out_count = 0;
+			while (!link_handle->fs().queue_read(link_handle, count)) {
+				_ep.wait_and_dispatch_one_io_signal();
+			}
+
+			File_io_service::Read_result result;
+
+			for (;;) {
+				result = link_handle->fs().complete_read(
+					link_handle, buf, count, out_count);
+
+				if (result != File_io_service::READ_QUEUED)
+					break;
+
+				_ep.wait_and_dispatch_one_io_signal();
+			};
+
+			if (result != File_io_service::READ_OK)
+				throw Nonexistent_file();
+
+			return Path(Genode::Cstring(buf, out_count));
 		}
 };
 
@@ -373,16 +426,26 @@ class Genode::File_content
 {
 	private:
 
-		Allocator &_alloc;
-		size_t const _size;
+		class Buffer
+		{
+			private:
 
-		char *_buffer = (char *)_alloc.alloc(_size);
+				/*
+				 * Noncopyable
+				 */
+				Buffer(Buffer const &);
+				Buffer &operator = (Buffer const &);
 
-		/*
-		 * Noncopyable
-		 */
-		File_content(File_content const &);
-		File_content &operator = (File_content const &);
+			public:
+
+				Allocator   &alloc;
+				size_t const size;
+				char * const ptr = size ? (char *)alloc.alloc(size) : nullptr;
+
+				Buffer(Allocator &alloc, size_t size) : alloc(alloc), size(size) { }
+				~Buffer() { if (ptr) alloc.free(ptr, size); }
+
+		} _buffer;
 
 	public:
 
@@ -403,14 +466,11 @@ class Genode::File_content
 		File_content(Allocator &alloc, Directory const &dir, Path const &rel_path,
 		             Limit limit)
 		:
-			_alloc(alloc),
-			_size(min(dir.file_size(rel_path), (Vfs::file_size)limit.value))
+			_buffer(alloc, min(dir.file_size(rel_path), (Vfs::file_size)limit.value))
 		{
-			if (Readonly_file(dir, rel_path).read(_buffer, _size) != _size)
+			if (Readonly_file(dir, rel_path).read(_buffer.ptr, _buffer.size) != _buffer.size)
 				throw Truncated_during_read();
 		}
-
-		~File_content() { _alloc.free(_buffer, _size); }
 
 		/**
 		 * Call functor 'fn' with content as 'Xml_node' argument
@@ -421,7 +481,7 @@ class Genode::File_content
 		template <typename FN>
 		void xml(FN const &fn) const
 		{
-			try { fn(Xml_node(_buffer, _size)); }
+			try { fn(Xml_node(_buffer.ptr, _buffer.size)); }
 			catch (Xml_node::Invalid_syntax) { fn(Xml_node("<empty/>")); }
 		}
 
@@ -433,14 +493,14 @@ class Genode::File_content
 		template <typename STRING, typename FN>
 		void for_each_line(FN const &fn) const
 		{
-			char const *src           = _buffer;
+			char const *src           = _buffer.ptr;
 			char const *curr_line     = src;
 			size_t      curr_line_len = 0;
 
 			for (size_t n = 0; ; n++) {
 
 				char const c = *src++;
-				bool const end_of_data = (c == 0 || n == _size);
+				bool const end_of_data = (c == 0 || n == _buffer.size);
 				bool const end_of_line = (c == '\n');
 
 				if (!end_of_data && !end_of_line) {
@@ -463,7 +523,68 @@ class Genode::File_content
 		 * Call functor 'fn' with the data pointer and size in bytes
 		 */
 		template <typename FN>
-		void bytes(FN const &fn) const { fn((char const *)_buffer, _size); }
+		void bytes(FN const &fn) const { fn((char const *)_buffer.ptr, _buffer.size); }
+};
+
+
+class Genode::Watcher : Interface, Vfs::Vfs_watch_handle::Context
+{
+	private:
+
+		/*
+		 * Noncopyable
+		 */
+		Watcher(Watcher const &);
+		Watcher &operator = (Watcher const &);
+
+		Vfs::Vfs_watch_handle mutable *_handle = nullptr;
+
+		void _watch(Vfs::File_system &fs, Allocator &alloc, Directory::Path const path)
+		{
+			Vfs::Directory_service::Watch_result res =
+				fs.watch(path.string(), &_handle, alloc);
+
+			if (res != Vfs::Directory_service::WATCH_OK)
+				error("failed to watch '", path, "'");
+		}
+
+		static Directory &_mutable(Directory const &dir)
+		{
+			return const_cast<Directory &>(dir);
+		}
+
+	public:
+
+		Watcher(Directory const &dir, Directory::Path const &rel_path)
+		{
+			_watch(_mutable(dir)._fs, _mutable(dir)._alloc,
+			       Directory::join(dir._path, rel_path));
+			_handle->context(this);
+		}
+
+		~Watcher() { _handle->fs().close(_handle); }
+
+		virtual void handle_watch_notification() { }
+};
+
+
+template <typename T>
+class Genode::Watch_handler : Watcher
+{
+	private:
+
+		T  &_obj;
+		void (T::*_member) ();
+
+	public:
+
+		Watch_handler(Directory &dir, Directory::Path const &rel_path,
+		              T &obj, void (T::*member)())
+		:
+			Watcher(dir, rel_path), _obj(obj), _member(member)
+		{ }
+
+		void handle_watch_notification() override { (_obj.*_member)(); }
 };
 
 #endif /* _INCLUDE__GEMS__VFS_H_ */

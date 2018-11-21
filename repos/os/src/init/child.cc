@@ -26,7 +26,7 @@ void Init::Child::destroy_services()
 Init::Child::Apply_config_result
 Init::Child::apply_config(Xml_node start_node)
 {
-	if (_state == STATE_ABANDONED)
+	if (_state == STATE_ABANDONED || _exited)
 		return NO_SIDE_EFFECTS;
 
 	/*
@@ -494,6 +494,10 @@ Init::Child::Route Init::Child::resolve_session_request(Service::Name const &ser
 	 */
 	if (service_name == Rom_session::service_name() &&
 	    label == _unique_name && _unique_name != _binary_name)
+		return resolve_session_request(service_name, _binary_name);
+
+	/* supply binary as dynamic linker if '<start ld="no">' */
+	if (!_use_ld && service_name == Rom_session::service_name() && label == "ld.lib.so")
 		return resolve_session_request(service_name, _binary_name);
 
 	/* check for "session_requests" ROM request */

@@ -106,8 +106,8 @@ bool Genode::Irq_object::associate(unsigned irq, bool msi,
 		return false;
 	}
 
-	if (l4_error(l4_irq_attach(_capability(), reinterpret_cast<l4_umword_t>(this),
-	                           Interrupt_handler::handler_cap()))) {
+	if (l4_error(l4_rcv_ep_bind_thread(_capability(), Interrupt_handler::handler_cap(),
+	                                   reinterpret_cast<l4_umword_t>(this)))) {
 		error("cannot attach to IRQ ", _irq);
 		return false;
 	}
@@ -199,8 +199,18 @@ Irq_session_component::Irq_session_component(Range_allocator *irq_alloc,
 	}
 
 	Irq_args const irq_args(args);
-	_irq_object.associate(_irq_number, msi, irq_args.trigger(),
-	                      irq_args.polarity());
+	if (_irq_object.associate(_irq_number, msi, irq_args.trigger(),
+	                          irq_args.polarity()))
+		return;
+
+	/* cleanup */
+	if (msi)
+		msi_alloc.clear(_irq_number, 1);
+	else {
+		addr_t const free_irq = _irq_number;
+		_irq_alloc->free((void *)free_irq);
+	}
+	throw Service_denied();
 }
 
 

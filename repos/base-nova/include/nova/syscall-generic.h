@@ -135,6 +135,13 @@ namespace Nova {
 			uint8_t thread;
 			uint8_t core;
 			uint8_t package;
+			uint8_t acpi_id;
+			uint8_t family;
+			uint8_t model;
+			uint8_t stepping:4;
+			uint8_t platform:3;
+			uint8_t reserved:1;
+			uint32_t patch;
 		} __attribute__((packed));
 
 		unsigned cpu_max() const {
@@ -442,6 +449,7 @@ namespace Nova {
 				RIGHT_EC_RECALL = 0x1U,
 				RIGHT_PT_CALL   = 0x2U,
 				RIGHT_PT_CTRL   = 0x1U,
+				RIGHT_PT_XCPU   = 0x10U,
 				RIGHT_SM_UP     = 0x1U,
 				RIGHT_SM_DOWN   = 0x2U
 			};

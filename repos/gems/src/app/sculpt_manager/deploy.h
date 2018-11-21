@@ -47,11 +47,14 @@ struct Sculpt::Deploy
 
 	struct Query_version { unsigned value; } _query_version { 0 };
 
-	struct Depot_rom_state { Ram_quota ram_quota; };
+	struct Depot_rom_state { Ram_quota ram_quota; Cap_quota cap_quota; };
 
-	Depot_rom_state depot_rom_state { 32*1024*1024 };
+	Depot_rom_state cached_depot_rom_state   { 24*1024*1024, 200 };
+	Depot_rom_state uncached_depot_rom_state {  8*1024*1024, 200 };
 
 	Attached_rom_dataspace _manual_deploy_rom { _env, "config -> deploy" };
+
+	Attached_rom_dataspace _launcher_listing_rom { _env, "report -> /runtime/launcher_query/listing" };
 
 	Attached_rom_dataspace _blueprint_rom { _env, "report -> runtime/depot_query/blueprint" };
 
@@ -80,6 +83,7 @@ struct Sculpt::Deploy
 	void _handle_manual_deploy()
 	{
 		_manual_deploy_rom.update();
+		_launcher_listing_rom.update();
 		_query_version.value++;
 		handle_deploy();
 	}
@@ -124,13 +128,16 @@ struct Sculpt::Deploy
 	 */
 	bool update_child_conditions();
 
-	void _gen_missing_dependencies(Xml_generator &, Xml_node, int &) const;
+	void _gen_missing_dependencies(Xml_generator &, Start_name const &, Xml_node, int &) const;
 
 	void gen_child_diagnostics(Xml_generator &xml) const;
 
 	void gen_runtime_start_nodes(Xml_generator &) const;
 
 	Signal_handler<Deploy> _manual_deploy_handler {
+		_env.ep(), *this, &Deploy::_handle_manual_deploy };
+
+	Signal_handler<Deploy> _launcher_listing_handler {
 		_env.ep(), *this, &Deploy::_handle_manual_deploy };
 
 	Signal_handler<Deploy> _blueprint_handler {
@@ -159,6 +166,7 @@ struct Sculpt::Deploy
 		_runtime_config_generator(runtime_config_generator)
 	{
 		_manual_deploy_rom.sigh(_manual_deploy_handler);
+		_launcher_listing_rom.sigh(_launcher_listing_handler);
 		_blueprint_rom.sigh(_blueprint_handler);
 	}
 };

@@ -27,7 +27,7 @@ if {[expr !$use_usb_driver && !$use_nic_driver] ||
     [expr [have_spec imx53] && [have_spec trustzone]]} {
 	puts "\n Run script is not supported on this platform. \n"; exit 0 }
 
-requires_installation_of lynx
+set lynx [installed_command lynx]
 
 #
 # Build
@@ -37,6 +37,7 @@ set build_components {
 	core init
 	drivers/timer drivers/nic
 	test/lwip/http_srv
+	lib/vfs/lwip
 }
 
 lappend_if $use_usb_driver              build_components drivers/usb
@@ -77,16 +78,19 @@ set config {
 		<resource name="RAM" quantum="1M"/>
 		<provides> <service name="Timer"/> </provides>
 	</start>
-	<start name="test-lwip_httpsrv">
-		<resource name="RAM" quantum="5M"/>
+	<start name="test-lwip_httpsrv" caps="120">
+		<resource name="RAM" quantum="4M"/>
 		<config>
-			<vfs> <dir name="dev"> <log/> </dir> </vfs>
-			<libc stdout="/dev/log" stderr="/dev/log"/>
+			<vfs>
+				<dir name="dev">    <log/>             </dir>
+				<dir name="socket"> <lwip dhcp="yes"/> </dir>
+			</vfs>
+			<libc stdout="/dev/log" stderr="/dev/log" socket="/socket"/>
 		</config>
 	</start>}
 
 append_if [have_spec gpio] config "
-	<start name=\"[gpio_drv]\">
+	<start name=\"[gpio_drv]\" caps=\"140\">
 		<resource name=\"RAM\" quantum=\"4M\"/>
 		<provides><service name=\"Gpio\"/></provides>
 		<config/>
@@ -125,7 +129,7 @@ install_config $config
 # generic modules
 set boot_modules {
 	core init timer
-	ld.lib.so libc.lib.so vfs.lib.so libm.lib.so lwip_legacy.lib.so test-lwip_httpsrv posix.lib.so
+	ld.lib.so libc.lib.so vfs.lib.so vfs_lwip.lib.so test-lwip_httpsrv
 }
 
 # platform-specific modules
@@ -149,12 +153,12 @@ append_if [have_spec lan9118] qemu_args " -net nic,model=lan9118 "
 
 append qemu_args " -net user -redir tcp:5555::80 "
 
-run_genode_until {.*got IP address .*\n} 30
+run_genode_until {.*lwIP Nic interface up.*\n} 30
 
 if {[have_include "power_on/qemu"]} {
 	set uri "http://localhost:5555/"
 } else {
-	set match_string "got IP address (.*)\033.*\n"
+	set match_string "lwIP Nic interface up address=.* netmask.*\n"
 	regexp $match_string $output ip_addr
 	regexp {[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+} $ip_addr ip_addr 
 
@@ -163,7 +167,7 @@ if {[have_include "power_on/qemu"]} {
 
 puts "http server is up, try to query website $uri"
 
-set website [exec lynx -dump $uri]
+set website [exec $lynx -dump $uri]
 
 puts "response:\n$website"
 

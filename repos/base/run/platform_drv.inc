@@ -31,6 +31,20 @@ proc need_usb_hid { } {
 
 
 ##
+# Return name of the USB driver binary
+#
+proc usb_host_drv_binary { } {
+	if {[have_spec arndale]}   { return arndale_usb_host_drv   }
+	if {[have_spec panda]}     { return panda_usb_host_drv     }
+	if {[have_spec rpi]}       { return rpi_usb_host_drv       }
+	if {[have_spec wand_quad]} { return wand_quad_usb_host_drv }
+	if {[have_spec odroid_x2]} { return odroid_x2_usb_host_drv }
+	if {[have_spec x86]}       { return x86_pc_usb_host_drv    }
+	return no_usb_drv_available
+}
+
+
+##
 # Return name of the NIC driver binary
 #
 proc nic_drv_binary { } {
@@ -137,7 +151,7 @@ proc platform_drv_policy {} {
 			<policy label_prefix="ahci_drv"> <pci class="AHCI"/> </policy>
 			<policy label_prefix="nvme_drv"> <pci class="NVME"/> </policy>
 			<policy label_prefix="audio_drv"> <pci class="AUDIO"/> <pci class="HDAUDIO"/> </policy>
-			<policy label_prefix="intel_fb_drv" irq_mode="nomsi">
+			<policy label_prefix="intel_fb_drv">
 				<pci class="VGA"/>
 				<pci bus="0" device="0" function="0"/>
 				<pci class="ISABRIDGE"/>

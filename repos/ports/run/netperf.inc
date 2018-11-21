@@ -80,12 +80,14 @@ if {$use_usb_driver}    { set network_driver "usb_drv" }
 if {$use_nic_driver}    { set network_driver "nic_drv" }
 if {$use_wifi_driver}   { set network_driver "wifi_drv" }
 
-set build_components {
+append build_components {
 	core init
 	drivers/timer
+	app/netperf
 }
 
-append     build_components     " $netperf_target "
+append_socket_fs_build_components
+
 lappend_if $use_nic_driver      build_components drivers/nic
 lappend_if $use_usb_driver      build_components drivers/usb
 lappend_if $use_nic_bridge      build_components server/nic_bridge
@@ -136,7 +138,7 @@ set config {
 	</start> }
 
 append_if [have_spec gpio] config "
-	<start name=\"[gpio_drv]\" caps=\"120\">
+	<start name=\"[gpio_drv]\" caps=\"140\">
 		<resource name=\"RAM\" quantum=\"4M\"/>
 		<provides><service name=\"Gpio\"/></provides>
 		<config/>
@@ -149,6 +151,7 @@ append_if $use_nic_router config {
 		<config verbose_domain_state="yes">
 
 			<policy label_prefix="netserver_genode" domain="server"/>
+			<uplink                                 domain="uplink"/>
 
 			<domain name="uplink"}
 append_if [expr $use_nic_router && [have_spec linux]] config "
@@ -215,8 +218,14 @@ append_if $use_usb_driver config {
 		</config>
 	</start>}
 
+# don't use the dynamic linker for loading the lx_hybrid nic_drv on Linux
+proc nic_drv_ld_attr {} {
+	if {[have_spec linux]} { return {ld="no"} }
+	return ""
+}
+
 append_if $use_nic_driver config {
-	<start name="nic_drv" caps="130">
+	<start name="nic_drv" caps="130" } [nic_drv_ld_attr] {>
 		<binary name="} [nic_drv_binary] {"/>
 		<resource name="RAM" quantum="20M"/>
 		<provides><service name="Nic"/></provides>
@@ -235,14 +244,14 @@ append_if $use_wifi_driver config {
 		<provides> <service name="File_system"/> </provides>
 		<config>
 			<policy label_prefix="config_rom" root="/"/>
-			<policy label="wifi_drv -> config" root="/" writeable="yes"/>
 			<content>
-				<inline name="wlan_configuration">}
+				<inline name="wifi_config">
+<wifi_config connected_scan_interval="30" scan_interval="10" rfkill="no" verbose="no">}
 append_if $use_wifi_driver config "
-<selected_network ssid=\"$wifi_ssid\" protection=\"WPA-PSK\" psk=\"$wifi_psk\"/>"
+		<accesspoint enabled=\"true\" ssid=\"$wifi_ssid\" protection=\"WPA2\" passphrase=\"$wifi_psk\"/>"
 append_if $use_wifi_driver config {
+</wifi_config>
 				</inline>
-				<inline name="wpa_supplicant.conf"></inline>
 			</content>
 		</config>
 	</start>
@@ -255,25 +264,24 @@ append_if $use_wifi_driver config {
 			<any-service> <parent/> <any-child/> </any-service>
 		</route>
 	</start>
-	<start name="wifi_drv" caps="250">
-		<resource name="RAM" quantum="32M"/>
+	<start name="wifi_drv" caps="200">
+		<resource name="RAM" quantum="24M"/>
 		<provides> <service name="Nic"/> </provides>
-		<config use_11n="no">
-			<libc stdout="/dev/log" stderr="/dev/log" rtc="/dev/rtc"/>
+		<config>
+			<libc stdout="/dev/null" stderr="/dev/log" rtc="/dev/rtc"/>
 			<vfs>
 				<dir name="dev">
-					<log/>
+					<log/> <null/>
 					<jitterentropy name="random"/>
 					<jitterentropy name="urandom"/>
 					<inline name="rtc">2018-01-01 00:01</inline>
 				</dir>
-				<dir name="config"> <fs label="config"/> </dir>
 			</vfs>
 		</config>
 		<route>
 			<service name="Rtc"> <any-child/> </service>
 			<service name="File_system"> <child name="config_fs"/> </service>
-			<service name="ROM" label="wlan_configuration"> <child name="config_rom" /> </service>
+			<service name="ROM" label="wifi_config"> <child name="config_rom" /> </service>
 			<service name="Report"> <child name="report_rom"/> </service>
 			<any-service> <parent/> <any-child /> </any-service>
 		</route>
@@ -283,22 +291,26 @@ append_platform_drv_config
 
 append config {
 	<start name="netserver_genode" caps="220" priority="-1">
-}
-append config "<binary name=\"$netperf_app\"/>"
-append config {
+	<binary name="netserver"/>
 		<resource name="RAM" quantum="32M"/>
 		<config>
 			<arg value="netserver"/>
 			<arg value="-D"/>
 			<arg value="-4"/>
 			<arg value="-f"/>
-			<libc tx_buf_size="2M" rx_buf_size="2M"}
-append_if [expr [have_spec linux] && !$use_nic_router] config " ip_addr=\"$lx_ip_addr\" netmask=\"255.255.255.0\" gateway=\"10.0.2.1\""
-append config {
-			      stdout="/dev/log" stderr="/dev/log" rtc="/dev/rtc"/>
+			<libc stdout="/dev/log" stderr="/dev/log" rtc="/dev/rtc" socket="/socket"/>
 			<vfs>
 				<dir name="dev">
 					<log/> <inline name="rtc">2018-01-01 00:01</inline>
+				</dir>
+				<dir name="socket">
+					<} [socket_fs_plugin] { }
+if {[expr [have_spec linux] && !$use_nic_router]} {
+	append config " ip_addr=\"$lx_ip_addr\" netmask=\"255.255.255.0\" gateway=\"10.0.2.1\""
+} else {
+	append config " dhcp=\"yes\""
+}
+append config {/>
 				</dir>
 			</vfs>
 		</config>}
@@ -324,13 +336,14 @@ install_config $config
 #
 
 # generic modules
-set boot_modules {
+append boot_modules {
 	core init timer
 	ld.lib.so libc.lib.so vfs.lib.so libm.lib.so posix.lib.so
+	netserver
 }
 
-append                     boot_modules " $netperf_app "
-append                     boot_modules " $netperf_stack "
+append_socket_fs_boot_modules
+
 lappend_if $use_nic_bridge boot_modules nic_bridge
 lappend_if $use_nic_router boot_modules nic_router
 
@@ -349,10 +362,12 @@ append_if $use_wifi_driver boot_modules {
 	iwlwifi-6000-4.ucode
 	iwlwifi-6000g2a-6.ucode
 	iwlwifi-6000g2b-6.ucode
-	iwlwifi-7260-16.ucode
-	iwlwifi-7265-16.ucode
-	iwlwifi-7265D-16.ucode
-	iwlwifi-8000C-16.ucode
+	iwlwifi-7260-17.ucode
+	iwlwifi-7265-17.ucode
+	iwlwifi-7265D-29.ucode
+	iwlwifi-8000C-36.ucode
+	iwlwifi-8265-36.ucode
+	regulatory.db
 }
 
 append_platform_drv_boot_modules
@@ -373,7 +388,7 @@ append qemu_args " -net user -redir tcp:12865::12865 -redir tcp:49153::49153 "
 
 set force_ports ""
 if $use_nic_router {
-	set ip_match_string "nic_router\\\] \\\[uplink\\\] IP config: interface (\[0-9]{1,3}.\[0-9]{1,3}.\[0-9]{1,3}.\[0-9]{1,3}).*\n"
+	set ip_match_string "nic_router\\\] \\\[uplink\\\] dynamic IP config: interface (\[0-9]{1,3}.\[0-9]{1,3}.\[0-9]{1,3}.\[0-9]{1,3}).*\n"
 	set force_ports "-P 12864,12864"
 }
 

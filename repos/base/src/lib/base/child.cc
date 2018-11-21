@@ -125,8 +125,11 @@ create_session(Child_policy::Name const &child_name, Service &service,
 		error(child_name, " requested conflicting session ID ", id, " "
 		      "(service=", service.name(), " args=", args, ")");
 
-		id_space.apply<Session_state>(id, [&] (Session_state &session) {
-			error("existing session: ", session); });
+		try {
+			id_space.apply<Session_state>(id, [&] (Session_state &session) {
+				error("existing session: ", session); });
+		}
+		catch (Id_space<Parent::Client>::Unknown_id) { }
 	}
 	throw Service_denied();
 }
@@ -165,7 +168,7 @@ Session_capability Child::session(Parent::Client::Id id,
                                   Parent::Session_args const &args,
                                   Affinity             const &affinity)
 {
-	if (!name.valid_string() || !args.valid_string())
+	if (!name.valid_string() || !args.valid_string() || _pd.closed())
 		throw Service_denied();
 
 	char argbuf[Parent::Session_args::MAX_SIZE];
@@ -338,9 +341,13 @@ Parent::Upgrade_result Child::upgrade(Client::Id id, Parent::Upgrade_args const 
 		return UPGRADE_DONE;
 	}
 
+	/* ignore suprious request that may arrive after 'close_all_sessions' */
+	if (_pd.closed())
+		return UPGRADE_PENDING;
+
 	Upgrade_result result = UPGRADE_PENDING;
 
-	_id_space.apply<Session_state>(id, [&] (Session_state &session) {
+	auto upgrade_session = [&] (Session_state &session) {
 
 		if (session.phase != Session_state::CAP_HANDED_OUT) {
 			warning("attempt to upgrade session in invalid state");
@@ -395,7 +402,11 @@ Parent::Upgrade_result Child::upgrade(Client::Id id, Parent::Upgrade_args const 
 		}
 
 		session.service().wakeup();
-	});
+	};
+
+	try { _id_space.apply<Session_state>(id, upgrade_session); }
+	catch (Id_space<Parent::Client>::Unknown_id) { }
+
 	_policy.session_state_changed();
 	return result;
 }
@@ -612,7 +623,10 @@ void Child::session_response(Server::Id id, Session_response response)
 				break;
 			}
 		});
-	} catch (Child_policy::Nonexistent_id_space) { }
+	}
+	catch (Child_policy::Nonexistent_id_space) { }
+	catch (Id_space<Parent::Client>::Unknown_id) {
+		warning("unexpected session response for unknown session"); }
 }
 
 
@@ -621,8 +635,26 @@ void Child::deliver_session_cap(Server::Id id, Session_capability cap)
 	try {
 		_policy.server_id_space().apply<Session_state>(id, [&] (Session_state &session) {
 
+			/* ignore responses after 'close_all_sessions' of the client */
+			if (session.phase != Session_state::CREATE_REQUESTED)
+				return;
+
 			if (session.cap.valid()) {
 				_error("attempt to assign session cap twice");
+				return;
+			}
+
+			/*
+			 * If the client vanished during the session creation, the
+			 * session-close state change must be reflected to the server
+			 * as soon as the session becomes available. This enables the
+			 * server to wind down the session. If we just discarded the
+			 * session, the server's ID space would become inconsistent
+			 * with ours.
+			 */
+			if (!session.client_exists()) {
+				session.phase = Session_state::CLOSE_REQUESTED;
+				session.service().initiate_request(session);
 				return;
 			}
 
@@ -632,7 +664,9 @@ void Child::deliver_session_cap(Server::Id id, Session_capability cap)
 			if (session.ready_callback)
 				session.ready_callback->session_ready(session);
 		});
-	} catch (Child_policy::Nonexistent_id_space) { }
+	}
+	catch (Child_policy::Nonexistent_id_space) { }
+	catch (Id_space<Parent::Client>::Unknown_id) { }
 }
 
 
@@ -737,10 +771,11 @@ void Child::_try_construct_env_dependent_members()
 
 	_policy.init(_cpu.session(), _cpu.cap());
 
+	Process::Type const type = _policy.forked()
+	                         ? Process::TYPE_FORKED : Process::TYPE_LOADED;
 	try {
 		_initial_thread.construct(_cpu.session(), _pd.cap(), _policy.name());
-		_process.construct(_binary.session().dataspace(), _linker_dataspace(),
-		                   _pd.cap(), _pd.session(), _pd.session(),
+		_process.construct(type, _linker_dataspace(), _pd.session(),
 		                   *_initial_thread, _local_rm,
 		                   Child_address_space(_pd.session(), _policy).region_map(),
 		                   cap());
@@ -854,13 +889,13 @@ void Child::close_all_sessions()
 
 	/*
 	 * Issue close requests to the providers of the environment sessions,
-	 * which may be async services. Don't close the PD session since it
-	 * is still needed for reverting session quotas.
+	 * which may be async services.
 	 */
 	_log.close();
 	_binary.close();
 	if (_linker.constructed())
 		_linker->close();
+	_pd.close();
 
 	/*
 	 * Remove statically created env sessions from the child's ID space.

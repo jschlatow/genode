@@ -15,13 +15,11 @@
 
 void Sculpt::gen_wifi_drv_start_content(Xml_generator &xml)
 {
-	gen_common_start_content(xml, "wifi_drv", Cap_quota{300}, Ram_quota{54*1024*1024});
+	gen_common_start_content(xml, "wifi_drv", Cap_quota{200}, Ram_quota{24*1024*1024});
 
 	gen_provides<Nic::Session>(xml);
 
 	xml.node("config", [&] () {
-		xml.attribute("connected_scan_interval", "0");
-		xml.attribute("use_11n", "no");
 
 		xml.node("vfs", [&] () {
 			gen_named_node(xml, "dir", "dev", [&] () {
@@ -29,16 +27,14 @@ void Sculpt::gen_wifi_drv_start_content(Xml_generator &xml)
 				xml.node("zero", [&] () {});
 				xml.node("rtc",  [&] () {});
 				xml.node("log",  [&] () {});
+				xml.node("null", [&] () {});
 				gen_named_node(xml, "jitterentropy", "random");
 				gen_named_node(xml, "jitterentropy", "urandom"); });
-
-			gen_named_node(xml, "dir", "config", [&] () {
-				xml.node("ram", [&] () {}); });
 		});
 
 		xml.node("libc", [&] () {
 			xml.attribute("stdout", "/dev/null");
-			xml.attribute("stderr", "/dev/log");
+			xml.attribute("stderr", "/dev/null");
 			xml.attribute("rtc",    "/dev/rtc");
 		});
 	});
@@ -56,14 +52,17 @@ void Sculpt::gen_wifi_drv_start_content(Xml_generator &xml)
 		gen_parent_rom_route(xml, "wpa_driver_nl80211.lib.so");
 		gen_parent_rom_route(xml, "wpa_supplicant.lib.so");
 		gen_parent_rom_route(xml, "iwlwifi-1000-5.ucode");
-		gen_parent_rom_route(xml, "iwlwifi-3160-16.ucode");
+		gen_parent_rom_route(xml, "iwlwifi-3160-17.ucode");
+		gen_parent_rom_route(xml, "iwlwifi-3168-17.ucode");
 		gen_parent_rom_route(xml, "iwlwifi-6000-4.ucode");
 		gen_parent_rom_route(xml, "iwlwifi-6000g2a-6.ucode");
 		gen_parent_rom_route(xml, "iwlwifi-6000g2b-6.ucode");
-		gen_parent_rom_route(xml, "iwlwifi-7260-16.ucode");
-		gen_parent_rom_route(xml, "iwlwifi-7265-16.ucode");
-		gen_parent_rom_route(xml, "iwlwifi-7265D-16.ucode");
-		gen_parent_rom_route(xml, "iwlwifi-8000C-16.ucode");
+		gen_parent_rom_route(xml, "iwlwifi-7260-17.ucode");
+		gen_parent_rom_route(xml, "iwlwifi-7265-17.ucode");
+		gen_parent_rom_route(xml, "iwlwifi-7265D-29.ucode");
+		gen_parent_rom_route(xml, "iwlwifi-8000C-36.ucode");
+		gen_parent_rom_route(xml, "iwlwifi-8265-36.ucode");
+		gen_parent_rom_route(xml, "regulatory.db");
 		gen_parent_route<Cpu_session>      (xml);
 		gen_parent_route<Pd_session>       (xml);
 		gen_parent_route<Rm_session>       (xml);
@@ -73,9 +72,9 @@ void Sculpt::gen_wifi_drv_start_content(Xml_generator &xml)
 		gen_parent_route<Report::Session>  (xml);
 
 		gen_service_node<Rom_session>(xml, [&] () {
-			xml.attribute("label", "wlan_configuration");
+			xml.attribute("label", "wifi_config");
 			xml.node("parent", [&] () {
-				xml.attribute("label", "config -> managed/wlan"); }); });
+				xml.attribute("label", "config -> managed/wifi"); }); });
 
 		gen_service_node<Platform::Session>(xml, [&] () {
 			xml.node("parent", [&] () {

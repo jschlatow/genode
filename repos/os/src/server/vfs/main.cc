@@ -227,8 +227,7 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 				 */
 				try {
 					_apply(packet.handle(), [&] (Io_node &node) {
-						node.sync();
-						succeeded = true;
+						succeeded = node.sync();
 					});
 				} catch (Operation_incomplete) {
 					throw Not_ready();
@@ -301,6 +300,8 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 		 */
 		void _process_packets()
 		{
+			using namespace Genode;
+
 			/*
 			 * XXX Process client backlog before looking at new requests. This
 			 *     limits the number of simultaneously addressed handles (which
@@ -311,7 +312,19 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 				/* backlog not cleared - block for next condition change */
 				return;
 
+			/**
+			 * Process packets in batches, otherwise a client that
+			 * submits packets as fast as they are processed will
+			 * starve the signal handler.
+			 */
+			int quantum = TX_QUEUE_SIZE;
+
 			while (tx_sink()->packet_avail()) {
+				if (--quantum == 0) {
+					/* come back to this later */
+					Signal_transmitter(_process_packet_handler).submit();
+					break;
+				}
 
 				/*
 				 * Make sure that the '_process_packet' function does not
@@ -437,9 +450,12 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 
 		void handle_node_io(Io_node &node) override
 		{
-			if (!tx_sink()->ready_to_ack())
+			_process_backlog();
+
+			if (!tx_sink()->ready_to_ack()) {
 				Genode::error(
 					"dropping I/O notfication, congested packet buffer to '", _label, "'");
+			}
 
 			if (node.notify_read_ready() && node.read_ready()
 			 && tx_sink()->ready_to_ack()) {
@@ -451,23 +467,20 @@ class Vfs_server::Session_component : public File_system::Session_rpc_object,
 				tx_sink()->acknowledge_packet(packet);
 				node.notify_read_ready(false);
 			}
-			_process_packets();
 		}
 
 		void handle_node_watch(Watch_node &node) override
 		{
-			if (!tx_sink()->ready_to_ack())
+			if (!tx_sink()->ready_to_ack()) {
 				Genode::error(
 					"dropping watch notfication, congested packet buffer to '", _label, "'");
-
-			if (tx_sink()->ready_to_ack()) {
+			} else {
 				Packet_descriptor packet(Packet_descriptor(),
 				                         Node_handle { node.id().value },
 				                         Packet_descriptor::CONTENT_CHANGED,
 				                         0, 0);
 				tx_sink()->acknowledge_packet(packet);
 			}
-			_process_packets();
 		}
 
 		/***************************

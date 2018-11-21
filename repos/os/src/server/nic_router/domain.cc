@@ -40,6 +40,26 @@ Domain_base::Domain_base(Xml_node const node)
  ** Domain **
  ************/
 
+void Domain::_log_ip_config() const
+{
+	Ipv4_config const &ip_config = *_ip_config;
+	if (_config.verbose()) {
+		if (!ip_config.valid &&
+			(ip_config.interface_valid ||
+			 ip_config.gateway_valid ||
+			 ip_config.dns_server_valid))
+		{
+			log("[", *this, "] malformed ", _ip_config_dynamic ? "dynamic" :
+			    "static", "IP config: ", ip_config);
+		}
+	}
+	if (_config.verbose_domain_state()) {
+		log("[", *this, "] ", _ip_config_dynamic ? "dynamic" : "static",
+		    " IP config: ", ip_config);
+	}
+}
+
+
 void Domain::ip_config(Ipv4_config const &new_ip_config)
 {
 	if (!_ip_config_dynamic) {
@@ -60,13 +80,15 @@ void Domain::ip_config(Ipv4_config const &new_ip_config)
 				interface.detach_from_remote_ip_config();
 			});
 		});
+		/* dissolve foreign ARP waiters */
+		while (_foreign_arp_waiters.first()) {
+			Arp_waiter &waiter = *_foreign_arp_waiters.first()->object();
+			waiter.src().cancel_arp_waiting(waiter);
+		}
 	}
 	/* overwrite old with new IP config */
 	_ip_config.construct(new_ip_config);
-
-	/* log the event */
-	if (_config.verbose_domain_state()) {
-		log("[", *this, "] IP config: ", ip_config()); }
+	_log_ip_config();
 
 	/* attach all dependent interfaces to new IP config if it is valid */
 	if (ip_config().valid) {
@@ -167,7 +189,10 @@ void Domain::_read_transport_rules(Cstring  const      &protocol,
 
 void Domain::print(Output &output) const
 {
-	Genode::print(output, _name);
+	if (_name == Domain_name()) {
+		Genode::print(output, "?");
+	} else {
+		Genode::print(output, _name); }
 }
 
 
@@ -178,17 +203,21 @@ Domain::Domain(Configuration &config, Xml_node const node, Allocator &alloc)
 	_ip_config(_node.attribute_value("interface",  Ipv4_address_prefix()),
 	           _node.attribute_value("gateway",    Ipv4_address()),
 	           Ipv4_address()),
-	_verbose_packets(_node.attribute_value("verbose_packets", false) ||
-	                 _config.verbose_packets()),
+	_verbose_packets(_node.attribute_value("verbose_packets",
+	                                       _config.verbose_packets())),
+	_verbose_packet_drop(_node.attribute_value("verbose_packet_drop",
+	                                           _config.verbose_packet_drop())),
+	_icmp_echo_server(_node.attribute_value("icmp_echo_server",
+	                                        _config.icmp_echo_server())),
 	_label(_node.attribute_value("label", String<160>()).string())
 {
+	_log_ip_config();
+
 	if (_name == Domain_name()) {
-		log("[?] Missing name attribute in domain node");
-		throw Invalid();
-	}
+		_invalid("missing name attribute"); }
+
 	if (_config.verbose_domain_state()) {
-		log("[", *this, "] NIC sessions: ", _interface_cnt);
-	}
+		log("[", *this, "] NIC sessions: ", _interface_cnt); }
 }
 
 
@@ -206,16 +235,6 @@ Domain::~Domain()
 {
 	deinit();
 	_ip_config.destruct();
-}
-
-
-void Domain::__FIXME__dissolve_foreign_arp_waiters()
-{
-	/* let other interfaces destroy their ARP waiters that wait for us */
-	while (_foreign_arp_waiters.first()) {
-		Arp_waiter &waiter = *_foreign_arp_waiters.first()->object();
-		waiter.src().cancel_arp_waiting(waiter);
-	}
 }
 
 
@@ -295,7 +314,13 @@ void Domain::deinit()
 	_tcp_rules.destroy_each(_alloc);
 	_udp_forward_rules.destroy_each(_alloc);
 	_tcp_forward_rules.destroy_each(_alloc);
-	try { destroy(_alloc, &_dhcp_server()); }
+	try {
+		Dhcp_server &dhcp_server = _dhcp_server();
+		_dhcp_server = Pointer<Dhcp_server>();
+		try { dhcp_server.dns_server_from().ip_config_dependents().remove(this); }
+		catch (Pointer<Domain>::Invalid) { }
+		destroy(_alloc, &dhcp_server);
+	}
 	catch (Pointer<Dhcp_server>::Invalid) { }
 }
 

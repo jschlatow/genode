@@ -3,7 +3,7 @@ set use_linux [have_spec linux]
 #
 # Check used commands
 #
-set dd [check_installed dd]
+set dd [installed_command dd]
 
 #
 # Build
@@ -71,7 +71,7 @@ append_if [expr !$use_linux] config {
 
 append_if $use_linux config {
 	<start name="ahci_drv">
-		<binary name="lx_block"/>
+		<binary name="lx_block" ld="no"/>
 		<resource name="RAM" quantum="2G"/>
 		<provides><service name="Block"/></provides>
 		<config file="block.raw" block_size="512" writeable="yes"/>

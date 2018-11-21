@@ -13,9 +13,12 @@ ds_ownership
 extract
 fault_detection
 fb_bench
-fetchurl
+fetchurl_lxip
+fetchurl_lwip
 fpu
 fs_log
+fs_packet
+fs_query
 fs_report
 gdb_monitor
 init
@@ -29,6 +32,7 @@ libc_pipe
 libc_vfs
 libc_vfs_block
 libc_vfs_fs
+libc_vfs_fs_chained
 libc_vfs_ram
 log
 log_core
@@ -53,6 +57,7 @@ nic_bridge
 nic_dump
 nic_loopback
 nic_router
+nic_router_flood
 nic_router_uplinks
 noux
 noux_net_netcat
@@ -67,6 +72,7 @@ pthread
 python
 ram_fs_chunk
 reconstructible
+registry
 report_rom
 resource_request
 resource_yield
@@ -87,7 +93,6 @@ sub_rm
 synced_interface
 tar_rom
 thread
-thread_join
 timed_semaphore
 timeout
 timer
@@ -121,7 +126,9 @@ vbox5_win7_64_multiple
 vbox5_win7_64_raw
 vbox5_win7_64_share
 verify
+vfs_import
 vmm
 weak_ptr
 xml_generator
 xml_node
+microcode

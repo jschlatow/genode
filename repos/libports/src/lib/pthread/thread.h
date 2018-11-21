@@ -17,6 +17,7 @@
 #define _INCLUDE__SRC_LIB_PTHREAD_THREAD_H_
 
 /* Genode includes */
+#include <libc/component.h>
 #include <util/reconstructible.h>
 
 #include <pthread.h>
@@ -50,10 +51,8 @@ extern "C" {
 
 	struct pthread_attr
 	{
-		pthread_t pthread;
-		size_t stack_size;
-
-		pthread_attr() : pthread(0), stack_size(0) { }
+		void   *stack_addr { nullptr };
+		size_t  stack_size { Libc::Component::stack_size() };
 	};
 
 	/*
@@ -61,8 +60,6 @@ extern "C" {
 	 * defined as 'struct pthread*' in '_pthreadtypes.h'
 	 */
 	struct pthread;
-
-	void pthread_cleanup();
 }
 
 
@@ -105,17 +102,22 @@ struct pthread : Genode::Noncopyable, Genode::Thread::Tls::Base
 		{
 			start_routine_t _start_routine;
 			void           *_arg;
-			bool            _exiting = false;
+
+			void          *&_stack_addr;
+			size_t         &_stack_size;
 
 			enum { WEIGHT = Genode::Cpu_session::Weight::DEFAULT_WEIGHT };
 
+			/* 'stack_addr_out' and 'stack_size_out' are written when the thread starts */
 			Thread_object(char const *name, size_t stack_size,
 			              Genode::Cpu_session *cpu,
 			              Genode::Affinity::Location location,
-			              start_routine_t start_routine, void *arg)
+			              start_routine_t start_routine, void *arg,
+			              void *&stack_addr_out, size_t &stack_size_out)
 			:
 				Genode::Thread(WEIGHT, name, stack_size, Type::NORMAL, cpu, location),
-				_start_routine(start_routine), _arg(arg)
+				_start_routine(start_routine), _arg(arg),
+				_stack_addr(stack_addr_out), _stack_size(stack_size_out)
 			{ }
 
 			void entry() override;
@@ -144,6 +146,27 @@ struct pthread : Genode::Noncopyable, Genode::Thread::Tls::Base
 			pthread_registry().insert(this);
 		}
 
+		bool _exiting = false;
+
+		/*
+		 * The join lock is needed because 'Libc::resume_all()' uses a
+		 * 'Signal_transmitter' which holds a reference to a signal context
+		 * capability, which needs to be released before the thread can be
+		 * destroyed.
+		 *
+		 * Also, we cannot use 'Genode::Thread::join()', because it only
+		 * returns when the thread entry function returns, which does not
+		 * happen with 'pthread_cancel()'.
+		 */
+		Genode::Lock _join_lock { Genode::Lock::LOCKED };
+
+		/* return value for 'pthread_join()' */
+		void *_retval = PTHREAD_CANCELED;
+
+		/* attributes for 'pthread_attr_get_np()' */
+		void   *_stack_addr = nullptr;
+		size_t  _stack_size = 0;
+
 	public:
 
 		/**
@@ -154,7 +177,8 @@ struct pthread : Genode::Noncopyable, Genode::Thread::Tls::Base
 		        Genode::Cpu_session * cpu, Genode::Affinity::Location location)
 		:
 			_thread(_construct_thread_object(name, stack_size, cpu, location,
-			                                 start_routine, arg))
+			                                 start_routine, arg,
+			                                 _stack_addr, _stack_size))
 		{
 			_associate_thread_with_pthread();
 		}
@@ -167,6 +191,11 @@ struct pthread : Genode::Noncopyable, Genode::Thread::Tls::Base
 		:
 			_thread(existing_thread)
 		{
+			/* obtain stack attributes of main thread */
+			Genode::Thread::Stack_info info = Genode::Thread::mystack();
+			_stack_addr = (void *)info.base;
+			_stack_size = info.top - info.base;
+
 			_associate_thread_with_pthread();
 		}
 
@@ -176,15 +205,23 @@ struct pthread : Genode::Noncopyable, Genode::Thread::Tls::Base
 		}
 
 		void start() { _thread.start(); }
-		bool exiting() const
+
+		void join(void **retval);
+
+		/*
+		 * Inform the thread calling 'pthread_join()' that this thread can be
+		 * destroyed.
+		 */
+		void cancel();
+
+		void exit(void *retval)
 		{
-			return _thread_object->_exiting;
+			_retval = retval;
+			cancel();
 		}
 
-		void join() { _thread.join(); }
-
-		void *stack_top()  const { return _thread.stack_top();  }
-		void *stack_base() const { return _thread.stack_base(); }
+		void   *stack_addr() const { return _stack_addr; }
+		size_t  stack_size() const { return _stack_size; }
 };
 
 #endif /* _INCLUDE__SRC_LIB_PTHREAD_THREAD_H_ */

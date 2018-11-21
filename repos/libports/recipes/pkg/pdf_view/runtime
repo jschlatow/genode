@@ -1,9 +1,8 @@
-<runtime ram="64M" caps="2000" binary="init" config="pdf_view.config">
+<runtime ram="64M" caps="2000" binary="pdf_view">
 
-	<requires> <timer/> <nitpicker/> <rom label="slides.pdf"/> </requires>
+	<requires> <timer/> <nitpicker/> <file-system/> </requires>
 
 	<content>
-		<rom label="pdf_view.config"/>
 		<rom label="ld.lib.so"/>
 		<rom label="libc.lib.so"/>
 		<rom label="libm.lib.so"/>
@@ -11,12 +10,19 @@
 		<rom label="zlib.lib.so"/>
 		<rom label="pdf_view"/>
 		<rom label="mupdf.lib.so"/>
-		<rom label="nit_fb"/>
 		<rom label="freetype.lib.so"/>
 		<rom label="jbig2dec.lib.so"/>
 		<rom label="jpeg.lib.so"/>
 		<rom label="openjpeg.lib.so"/>
 		<rom label="vfs.lib.so"/>
 	</content>
+
+	<config>
+		<vfs>
+			<fs writeable="no"/>
+			<dir name="dev"> <log/> </dir>
+		</vfs>
+		<libc stdout="/dev/log" stderr="/dev/log"/>
+	</config>
 
 </runtime>

@@ -777,13 +777,14 @@ class Platform::Session_component : public Genode::Rpc_object<Session>
 				if (base_ecam + base_offset != device->config_space())
 					throw 1;
 
-				_device_pd.assign_pci(_pciconf.cap(), base_offset, device->config().bdf());
-
 				for (Rmrr *r = Rmrr::list()->first(); r; r = r->next()) {
 					Io_mem_dataspace_capability rmrr_cap = r->match(_env, device->config());
 					if (rmrr_cap.valid())
 						_device_pd.attach_dma_mem(rmrr_cap);
 				}
+
+				_device_pd.assign_pci(_pciconf.cap(), base_offset, device->config().bdf());
+
 			} catch (...) {
 				Genode::error("assignment to device pd or of RMRR region failed");
 			}
@@ -835,7 +836,7 @@ class Platform::Root : public Genode::Root_component<Session_component>
 
 		Genode::Constructible<Genode::Attached_io_mem_dataspace> _pci_confspace { };
 
-		Genode::Reporter _pci_reporter { _env, "pci" };
+		Genode::Constructible<Genode::Expanding_reporter> _pci_reporter { };
 
 		Genode::Heap _heap { _env.ram(), _env.rm() };
 
@@ -1086,17 +1087,16 @@ class Platform::Root : public Genode::Root_component<Session_component>
 
 			_construct_buses();
 
-			_pci_reporter.enabled(config.xml().has_sub_node("report") &&
-			                      config.xml().sub_node("report")
-			                                  .attribute_value("pci", true));
+			if (config.xml().has_sub_node("report")
+			 && config.xml().sub_node("report").attribute_value("pci", true)) {
 
-			if (_pci_reporter.enabled()) {
+				_pci_reporter.construct(_env, "pci", "pci");
 
 				Config_access config_access(*_pci_confspace);
 				Device_config config;
 				int bus = 0, device = 0, function = -1;
 
-				Genode::Reporter::Xml_generator xml(_pci_reporter, [&] () {
+				_pci_reporter->generate([&] (Genode::Reporter::Xml_generator &xml) {
 					/* iterate over pci devices */
 					while (true) {
 						function += 1;

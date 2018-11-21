@@ -35,6 +35,17 @@ Configuration::Configuration(Xml_node const  node,
 { }
 
 
+void Configuration::_invalid_uplink(Uplink     &uplink,
+                                    char const *reason)
+{
+	if (_verbose) {
+		log("[", uplink.domain(), "] invalid uplink: ", uplink, " (", reason, ")"); }
+
+	_uplinks.remove(uplink);
+	destroy(_alloc, &uplink);
+}
+
+
 void Configuration::_invalid_domain(Domain     &domain,
                                     char const *reason)
 {
@@ -50,12 +61,15 @@ Configuration::Configuration(Env               &env,
                              Xml_node const     node,
                              Allocator         &alloc,
                              Timer::Connection &timer,
-                             Configuration     &legacy)
+                             Configuration     &old_config,
+                             Interface_list    &interfaces)
 :
 	_alloc(alloc),
 	_verbose              (node.attribute_value("verbose",              false)),
 	_verbose_packets      (node.attribute_value("verbose_packets",      false)),
+	_verbose_packet_drop  (node.attribute_value("verbose_packet_drop",  false)),
 	_verbose_domain_state (node.attribute_value("verbose_domain_state", false)),
+	_icmp_echo_server     (node.attribute_value("icmp_echo_server",     true)),
 	_dhcp_discover_timeout(read_sec_attr(node, "dhcp_discover_timeout_sec", DEFAULT_DHCP_DISCOVER_TIMEOUT_SEC)),
 	_dhcp_request_timeout (read_sec_attr(node, "dhcp_request_timeout_sec",  DEFAULT_DHCP_REQUEST_TIMEOUT_SEC )),
 	_dhcp_offer_timeout   (read_sec_attr(node, "dhcp_offer_timeout_sec",    DEFAULT_DHCP_OFFER_TIMEOUT_SEC   )),
@@ -75,7 +89,7 @@ Configuration::Configuration(Env               &env,
 				_invalid_domain(exception.object, "name not unique");
 			}
 		}
-		catch (Domain::Invalid) { log("[?] invalid domain"); }
+		catch (Domain::Invalid) { }
 	});
 	/* do parts of domain initialization that may lookup other domains */
 	while (true) {
@@ -96,16 +110,16 @@ Configuration::Configuration(Env               &env,
 		}
 		catch (Retry_without_domain exception) {
 
-			/* deinitialize all domains again */
+			/* destroy domain that became invalid during initialization */
+			_domains.remove(exception.domain);
+			destroy(_alloc, &exception.domain);
+
+			/* deinitialize the remaining domains again */
 			_domains.for_each([&] (Domain &domain) {
 				domain.deinit();
 				if (_verbose) {
 					log("[", domain, "] deinitiated domain"); }
 			});
-			/* destroy domain that became invalid during initialization */
-			_domains.remove(exception.domain);
-			destroy(_alloc, &exception.domain);
-
 			/* retry to initialize the remaining domains */
 			continue;
 		}
@@ -116,8 +130,8 @@ Configuration::Configuration(Env               &env,
 		Xml_node const report_node = node.sub_node("report");
 		try {
 			/* try to re-use existing reporter */
-			_reporter = legacy._reporter();
-			legacy._reporter = Pointer<Reporter>();
+			_reporter = old_config._reporter();
+			old_config._reporter = Pointer<Reporter>();
 		}
 		catch (Pointer<Reporter>::Invalid) {
 
@@ -126,14 +140,38 @@ Configuration::Configuration(Env               &env,
 		}
 		/* create report generator */
 		_report = *new (_alloc)
-			Report(report_node, timer, _domains, _reporter());
+			Report(_verbose, report_node, timer, _domains, _reporter());
 	}
 	catch (Genode::Xml_node::Nonexistent_sub_node) { }
+
+	/* initialize uplinks */
+	_node.for_each_sub_node("uplink", [&] (Xml_node const node) {
+		try {
+			Uplink &uplink = *new (_alloc)
+				Uplink { node, alloc, old_config._uplinks, env, timer,
+				         interfaces, *this };
+
+			try { _uplinks.insert(uplink); }
+			catch (Uplink_tree::Name_not_unique exception) {
+				_invalid_uplink(uplink,           "label not unique");
+				_invalid_uplink(exception.object, "label not unique");
+			}
+		}
+		catch (Uplink::Invalid) { }
+	});
+	/*
+	 * Destroy old uplinks to ensure that uplink interfaces that were not
+	 * re-used are not re-attached to the new domains.
+	 */
+	old_config._uplinks.destroy_each(_alloc);
 }
 
 
 Configuration::~Configuration()
 {
+	/* destroy uplinks */
+	_uplinks.destroy_each(_alloc);
+
 	/* destroy reporter */
 	try { destroy(_alloc, &_reporter()); }
 	catch (Pointer<Reporter>::Invalid) { }

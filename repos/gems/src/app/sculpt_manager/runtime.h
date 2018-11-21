@@ -39,15 +39,22 @@ namespace Sculpt {
 	                              Path const &, Writeable);
 
 	void gen_depot_query_start_content(Xml_generator &);
+	void gen_launcher_query_start_content(Xml_generator &);
+
+	void gen_runtime_view_start_content(Xml_generator &, float font_size);
 
 	struct File_browser_version { unsigned value; };
 	void gen_file_browser(Xml_generator &, Storage_devices const &,
 	                      Ram_fs_state const &, File_browser_version);
 
+	void gen_runtime_view(Xml_generator &);
+
 	void gen_fs_start_content(Xml_generator &, Storage_target const &,
 	                          File_system::Type);
 
-	void gen_fs_rom_start_content(Xml_generator &, Start_name const &, Start_name const &, Ram_quota);
+	void gen_fs_rom_start_content(Xml_generator &, Start_name const &,
+	                              Start_name const &, Start_name const &,
+	                              Ram_quota, Cap_quota);
 
 	void gen_gpt_relabel_start_content(Xml_generator &, Storage_device const &);
 	void gen_gpt_expand_start_content (Xml_generator &, Storage_device const &);
@@ -55,7 +62,7 @@ namespace Sculpt {
 	void gen_nic_drv_start_content(Xml_generator &);
 	void gen_wifi_drv_start_content(Xml_generator &);
 
-	void gen_nic_router_start_content(Xml_generator &);
+	void gen_nic_router_start_content(Xml_generator &, Nic_target const &);
 	void gen_nic_router_uplink(Xml_generator &, char const *);
 
 	struct Prepare_version { unsigned value; };

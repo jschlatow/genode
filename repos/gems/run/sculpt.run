@@ -70,6 +70,10 @@ install_config {
 			        report="global_keys_handler -> slides"/>
 			<policy label="leitzentrale -> manager -> displays"
 			        report="nitpicker -> displays"/>
+			<policy label="runtime -> runtime_view -> dialog"
+			        report="leitzentrale -> manager -> runtime_view_dialog"/>
+			<policy label="leitzentrale -> manager -> runtime_view_hover"
+			        report="runtime -> runtime_view -> hover"/>
 		</config>
 	</start>
 
@@ -81,36 +85,42 @@ install_config {
 	</start>
 
 	<start name="config_fs" caps="200">
-		<binary name="ram_fs"/>
-		<resource name="RAM" quantum="10M"/>
+		<binary name="vfs"/>
+		<resource name="RAM" quantum="12M"/>
 		<provides> <service name="File_system"/> </provides>
 		<config>
-			<content>
-				<dir name="managed">
-					<rom name="fonts.config"         as="fonts"/>
-					<rom name="fb_drv.config"        as="fb_drv"/>
-					<rom name="wlan.config"          as="wlan"/>
-					<rom name="installation"/>
-					<rom name="empty_runtime.config" as="runtime"/>
-					<rom name="input_filter.config"  as="input_filter"/>
-					<inline name="depot_query"><query/></inline>
-				</dir>
-				<rom name="input_filter.config"  as="input_filter"/>
-				<rom name="fb_drv.config"        as="fb_drv"/>
-				<rom name="nitpicker.config"     as="nitpicker"/>
-				<rom name="numlock_remap.config" as="numlock_remap"/>
-				<rom name="leitzentrale.config"  as="leitzentrale"/>
-				<rom name="drivers.config"       as="drivers"/>
-				<rom name="manual_deploy.config" as="deploy"/>
-				<rom name="en_us.chargen"/>
-				<rom name="de.chargen"/>
-				<rom name="special.chargen"/>
-				<rom name="vimrc"/>
-				<inline name="system">} [config_system_content] {
-				</inline>
-			</content>
+			<vfs>
+				<ram/>
+				<import>
+					<dir name="managed">
+						<rom name="fonts"  label="fonts.config"/>
+						<rom name="fb_drv" label="fb_drv.config"/>
+						<rom name="wifi"   label="wifi.config"/>
+						<rom name="installation"/>
+						<rom name="runtime"      label="empty_runtime.config"/>
+						<rom name="input_filter" label="input_filter.config"/>
+						<inline name="depot_query"><query/></inline>
+					</dir>
+					<rom name="input_filter"  label="input_filter.config"/>
+					<rom name="fb_drv"        label="fb_drv.config"/>
+					<rom name="nitpicker"     label="nitpicker.config"/>
+					<rom name="numlock_remap" label="numlock_remap.config"/>
+					<rom name="leitzentrale"  label="leitzentrale.config"/>
+					<rom name="drivers"       label="drivers.config"/>
+					<rom name="deploy"        label="manual_deploy.config"/>
+					<rom name="usb"           label="usb.config"/>
+					<rom name="en_us.chargen"/>
+					<rom name="de.chargen"/>
+					<rom name="de_ch.chargen"/>
+					<rom name="special.chargen"/>
+					<rom name="vimrc"/>
+					<tar name="launcher.tar"/>
+					<inline name="system">} [config_system_content] {
+					</inline>
+				</import>
+			</vfs>
 			<policy label="config_fs_rom -> " root="/" />
-			<policy label="rw" root="/" writeable="yes" />
+			<policy label="rw"                root="/" writeable="yes" />
 		</config>
 	</start>
 
@@ -144,8 +154,8 @@ install_config {
 				<dir name="runtime">
 					<inline name="state"><empty/></inline>
 					<dir name="wifi_drv">
-						<inline name="wlan_accesspoints"><empty/></inline>
-						<inline name="wlan_state">       <empty/>       </inline>
+						<inline name="accesspoints"><empty/></inline>
+						<inline name="state">       <empty/></inline>
 					</dir>
 					<dir name="nic_router"> <inline name="state">    <empty/></inline> </dir>
 					<dir name="update">     <inline name="state">    <empty/></inline> </dir>
@@ -228,10 +238,14 @@ install_config {
 			<service name="ROM" label_last="capslock"> <child name="report_rom"/> </service>
 			<service name="ROM" label_last="input_filter.config">
 				<child name="config_fs_rom" label="managed/input_filter"/> </service>
+			<service name="ROM" label_prefix="input_filter" label_suffix=".chargen">
+				<child name="config_fs_rom"/> </service>
 			<service name="ROM" label_last="fb_drv.config">
 				<child name="config_fs_rom" label="managed/fb_drv"/> </service>
 			<service name="ROM" label_last="numlock_remap.config">
 				<child name="config_fs_rom" label="numlock_remap"/> </service>
+			<service name="ROM" label_last="usb_policy">
+				<child name="config_fs_rom" label="usb"/> </service>
 			<service name="ROM" label_last="numlock">  <child name="report_rom"/> </service>
 			<service name="Timer"> <child name="timer"/> </service>
 			<service name="Report"> <child name="fs_report"/> </service>
@@ -371,6 +385,10 @@ install_config {
 				<child name="config_fs_rom"/> </service>
 			<service name="ROM" label="manager -> nitpicker_hover">
 				<child name="report_rom"/> </service>
+			<service name="ROM" label="manager -> runtime_view_hover">
+				<child name="report_rom"/> </service>
+			<service name="Report" label="manager -> runtime_view_dialog">
+				<child name="report_rom"/> </service>
 			<service name="Report"> <child name="fs_report"/> </service>
 			<service name="Nitpicker"> <child name="nitpicker"/> </service>
 			<service name="Timer"> <child name="timer"/> </service>
@@ -401,6 +419,8 @@ install_config {
 				<child name="report_rom"/> </service>
 			<service name="ROM" label="clicked">
 				<child name="report_rom"/> </service>
+			<service name="ROM" label="runtime_view -> dialog">
+				<child name="report_rom"/> </service>
 			<service name="File_system" label="config">
 				<child name="config_fs" label="rw"/> </service>
 			<service name="File_system" label="report">
@@ -417,13 +437,12 @@ install_config {
 			<service name="Nitpicker"> <child name="nitpicker"/> </service>
 			<service name="Timer"> <child name="timer"/> </service>
 			<service name="Report" label_suffix="-> shape"> <child name="pointer"/> </service>
+			<service name="Report" label="runtime_view -> hover">
+				<child name="report_rom"/> </service>
 			<service name="Report"> <child name="fs_report"/> </service>
 			<service name="LOG" label="unlogged"> <parent/> </service>
 			<service name="LOG"> <child name="log"/> </service>
 			<service name="Rtc"> <child name="rtc_drv"/> </service>
-			<service name="IO_MEM"  label_prefix="acpica"> <parent/> </service>
-			<service name="IO_PORT" label_prefix="acpica"> <parent/> </service>
-			<service name="IRQ"     label_prefix="acpica"> <parent/> </service>
 			<any-service> <parent/> </any-service>
 		</route>
 	</start>
@@ -450,7 +469,7 @@ file copy -force [genode_dir]/repos/gems/run/sculpt/machine.vbox [run_dir]/genod
 file copy -force [genode_dir]/repos/gems/recipes/raw/drivers_managed-pc/drivers.config \
                  [run_dir]/genode/drivers.config
 
-foreach file { en_us.chargen de.chargen special.chargen } {
+foreach file { en_us.chargen de.chargen de_ch.chargen special.chargen } {
 	file copy -force [genode_dir]/repos/os/src/server/input_filter/$file \
 	                 [run_dir]/genode/$file }
 
@@ -472,7 +491,7 @@ exec gzip -dc [genode_dir]/repos/gems/run/sculpt/machine.vdi.gz > [run_dir]/geno
 # Define 'VERSION' ROM module
 #
 proc sculpt_version { } {
-	return "18.06" }
+	return "18.08" }
 
 # write file with newline (for producing nice output when using 'cat /VERSION')
 set fd [open [run_dir]/genode/VERSION w]
@@ -508,7 +527,7 @@ close $fd
 
 
 #
-# Manual configuration of deploy runtime
+# Configuration of deploy runtime
 #
 # This configuration is not provided as a file at run/sculpt/ because some
 # parts need to be filled in at run-script execution time, in particular the
@@ -526,173 +545,75 @@ append manual_deploy_config {
 		<service name="Timer"> <parent/> </service>
 	</common_routes>
 
-<!--
-	<start name="fonts_fs" pkg="} [depot_user]/pkg/[current_pkg fonts_fs] {">
-		<route>
-			<service name="ROM" label="config"> <parent label="config -> managed/fonts"/> </service>
-		</route>
-	</start>
-
-	<start name="wm" pkg="} [depot_user]/pkg/[current_pkg themed_wm] {">
-		<route>
-			<service name="Nitpicker" label="wm -> "> <parent label="focus"/> </service>
-			<service name="Nitpicker"> <parent/> </service>
-		</route>
-	</start>
-
-	<start name="backdrop" pkg="} [depot_user]/pkg/[current_pkg sticks_blue_backdrop] {">
-		<route>
-			<service name="Nitpicker"> <parent label="backdrop"/> </service>
-		</route>
-	</start>
-	-->
-
-<!--
-	<start name="nano3d" pkg="} [depot_user]/pkg/[current_pkg nano3d] {">
-		<route>
-			<service name="Nitpicker"> <child name="wm"/> </service>
-		</route>
-	</start>
-	-->
-
-<!--
-	<start name="noux" pkg="} [depot_user]/pkg/[current_pkg noux-system] {">
-		<route>
-			<service name="Nitpicker"> <child name="wm"/> </service>
-			<service name="File_system" label="config">
-				<parent label="config"/> </service>
-			<service name="File_system" label="report">
-				<parent label="report"/> </service>
-			<service name="File_system" label="fonts">
-				<child name="fonts_fs"/> </service>
-			<service name="File_system" label="target">
-				<child name="default_fs_rw"/> </service>
-			<service name="ROM" label_last="vimrc">
-				<parent label="config -> vimrc"/> </service>
-		</route>
-	</start>
-	-->
-
-<!--
-	<start name="shared_fs" pkg="} [depot_user]/pkg/[current_pkg chroot] {">
-		<route>
-			<service name="File_system"> <child name="default_fs_rw"/> </service>
-		</route>
-		<config> <default-policy path="/shared" writeable="yes"/> </config>
-	</start>
-
-	<start name="usb_devices_rom" pkg="} [depot_user]/pkg/[current_pkg rom_filter] {">
-		<config>
-			<output node="devices">
-				<inline>
-				</inline>
-			</output>
-		</config>
-	</start>
-	-->
-
-<!--
-	<start name="vm_fs" pkg="} [depot_user]/pkg/[current_pkg chroot] {">
-		<route>
-			<service name="File_system"> <child name="default_fs_rw"/> </service>
-		</route>
-		<config> <default-policy path="/vm/debian" writeable="yes"/> </config>
-	</start>
-	-->
-
-<!--
-	<start name="download_debian" pkg="cnuke/pkg/download_debian/2018-06-13">
-		<route>
-			<service name="File_system" label="fonts">  <child name="fonts_fs"/> </service>
-			<service name="File_system" label="target"> <child name="vm_fs"/> </service>
-			<service name="Nic">       <child name="nic_router"/> </service>
-			<service name="Nitpicker"> <child name="wm"/> </service>
-			<service name="RM">        <parent/> </service>
-		</route>
-	</start>
--->
-
-<!--
-	<start name="vm" ram="4300M" pkg="} [depot_user]/pkg/[current_pkg vbox5-nova-sculpt] {">
-		<route>
-			<service name="ROM"    label="capslock"> <parent label="capslock"/> </service>
-			<service name="ROM"    label="platform_info"> <parent/> </service>
-			<service name="ROM"    label="usb_devices"> <child name="usb_devices_rom"/> </service>
-			<service name="Report" label="shape"> <parent label="wm -> wm -> vm -> shape"/> </service>
-			<service name="Nitpicker"> <child name="wm"/> </service>
-			<service name="Nic">       <child name="nic_router"/> </service>
-			<service name="Report"> <parent/> </service>
-			<service name="RM">     <parent/> </service>
-			<service name="Rtc">    <parent/> </service>
-			<service name="Usb">    <parent/> </service>
-			<service name="File_system" label="vm">     <child name="vm_fs"/>     </service>
-			<service name="File_system" label="shared"> <child name="shared_fs"/> </service>
-		</route>
-	</start>
--->
-
-<!--
-	<start name="top_view" pkg="alex-ab/pkg/top_view/2018-05-29-a">
-		<route>
-			<service name="TRACE"> <parent/> </service>
-			<service name="Timer"> <parent/> </service>
-			<service name="Nitpicker"> <child name="wm"/> </service>
-			<service name="File_system" label="fonts">
-				<child name="fonts_fs"/> </service>
-		</route>
-	</start>
-	-->
-
-<!--
-	<start name="2048" pkg="ehmry/pkg/2048/18.05">
-		<route>
-			<service name="Nitpicker"> <child name="wm"/> </service>
-		</route>
-	</start>
-	-->
-
-<!--
-	<start name="vbox5-tc-browser" pkg="alex-ab/pkg/vbox5-tc-firefox-nova-sculpt/2018-06-11">
-		<route>
-			<service name="ROM"    label="capslock"> <parent label="capslock"/> </service>
-			<service name="ROM"    label="platform_info"> <parent/> </service>
-			<service name="Report" label="shape"> <parent label="wm -> wm -> vbox5-tc-browser -> shape"/> </service>
-			<service name="RM">        <parent/> </service>
-			<service name="Rtc">       <parent/> </service>
-			<service name="Nitpicker"> <child name="wm"/> </service>
-			<service name="Nic"> <child name="nic_router"/> </service>
-			<service name="File_system" label="shared"> <child name="shared_fs"/> </service>
-		</route>
-	</start>
-	-->
-
-<!--
-	<start name="seoul-vmm-browser" pkg="alex-ab/pkg/seoul-nova-sculpt/2018-06-11">
-		<route>
-			<service name="ROM" label="platform_info"> <parent/> </service>
-			<service name="RM">        <parent/> </service>
-			<service name="Rtc">       <parent/> </service>
-			<service name="Nitpicker"> <child name="wm"/> </service>
-			<service name="Nic"> <child name="nic_router"/> </service>
-		</route>
-	</start>
-	-->
-
-<!--
-	<start name="qt5_textedit" pkg="genodelabs/pkg/qt5_textedit/2018-06-12">
-		<route>
-			<service name="File_system" label="rw"> <parent label="config"/> </service>
-			<service name="Nitpicker"> <child name="wm"/> </service>
-			<service name="Report" label="shape"> <parent label="wm -> wm -> qt5_textedit -> shape"/> </service>
-		</route>
-	</start>
--->
+	<!-- <start name="shared_fs"/> -->
+	<!-- <start name="usb_devices_rom"/> -->
+	<!-- <start name="vm_fs"/> -->
+	<!-- <start name="fonts_fs"/> -->
+	<!-- <start name="wm"/> -->
+	<!-- <start name="backdrop"/> -->
+	<!-- <start name="nano3d"/> -->
+	<!-- <start name="noux" launcher="noux-system"/> -->
+	<!-- <start name="download_debian"/> --> 
+	<!-- <start name="vm"/> -->
+	<!-- <start name="top_view"/> -->
+	<!-- <start name="2048"/> -->
+	<!-- <start name="vbox5-tc-browser"/> -->
+	<!-- <start name="seoul-vmm-browser"/> -->
+	<!-- <start name="config_editor"/> -->
+	<!-- <start name="report_dump"/> -->
+	<!-- <start name="acpica"/> -->
+	<!-- <start name="gambatte"/> -->
 
 </config>}
 
 set fd [open [run_dir]/genode/manual_deploy.config w]
 puts $fd $manual_deploy_config
 close $fd
+
+
+#
+# Install launcher snippets
+#
+# The launcher snippets are wrapped into a tar archive to be loaded as boot
+# module. This procedure involves the following steps:
+#
+# The launcher snippets are copied from run/sculpt/launcher/ to
+# [run_dir]/genode/launcher. Each launcher is inspected regarding its 'pkg'
+# attribute. If its 'pkg' attribute contains a single identifier (rather than
+# a valid pkg path), the attribute value is replaced by a valid pkg path
+# referring to the current version of the pkg and the [depot_user]. The
+# filtered launchers are archived into 'launcher.tar' and removed from the
+# [run_dir].
+#
+
+set launchers [glob -tails -directory [genode_dir]/repos/gems/run/sculpt/launcher/ *]
+
+foreach file $launchers {
+
+	# skip backup files
+	if {[regexp {~$} $file dummy]} { continue }
+
+	set fd [open [genode_dir]/repos/gems/run/sculpt/launcher/$file r]
+	set content [read $fd]
+	close $fd
+
+	# filter 'pkg' attribute
+	set pattern {(\<launcher[^\>]+?pkg=")([^/]+)(")}
+	if {[regexp $pattern $content dummy head pkg tail]} {
+		set pkg_path [depot_user]/pkg/[current_pkg $pkg]
+		regsub $pattern $content "$head$pkg_path$tail" content
+	}
+
+	# write filtered launcher snippet
+	file mkdir [run_dir]/genode/launcher
+	set fd [open [run_dir]/genode/launcher/$file w]
+	puts $fd $content
+	close $fd
+}
+
+# wrap launcher snippets into tar archive and remove individual snippets
+exec tar cf [run_dir]/genode/launcher.tar -C [run_dir]/genode launcher
+exec rm -r [run_dir]/genode/launcher
 
 
 #

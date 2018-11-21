@@ -91,14 +91,10 @@ static void vfs_stat_to_libc_stat_struct(Vfs::Directory_service::Stat const &src
 
 static Genode::Xml_node *_config_node;
 
+char const *libc_resolv_path;
+
 
 namespace Libc {
-
-	void libc_config_init(Genode::Xml_node node)
-	{
-		static Genode::Xml_node config = node;
-		_config_node = &config;
-	}
 
 	Genode::Xml_node config() __attribute__((weak));
 	Genode::Xml_node config()
@@ -143,6 +139,22 @@ namespace Libc {
 		return socket.string();
 	}
 
+	char const *config_nameserver_file() __attribute__((weak));
+	char const *config_nameserver_file()
+	{
+		static Config_attr ns_file("nameserver_file",
+		                           "/socket/nameserver");
+		return ns_file.string();
+	}
+
+	void libc_config_init(Genode::Xml_node node)
+	{
+		static Genode::Xml_node config = node;
+		_config_node = &config;
+
+		libc_resolv_path = config_nameserver_file();
+	}
+
 	void notify_read_ready(Vfs::Vfs_handle *handle)
 	{
 		struct Check : Libc::Suspend_functor
@@ -171,7 +183,7 @@ namespace Libc {
 
 int Libc::Vfs_plugin::access(const char *path, int amode)
 {
-	if (_root_dir.leaf_path(path))
+	if (VFS_THREAD_SAFE(_root_dir.leaf_path(path)))
 		return 0;
 
 	errno = ENOENT;
@@ -182,7 +194,7 @@ int Libc::Vfs_plugin::access(const char *path, int amode)
 Libc::File_descriptor *Libc::Vfs_plugin::open(char const *path, int flags,
                                               int libc_fd)
 {
-	if (_root_dir.directory(path)) {
+	if (VFS_THREAD_SAFE(_root_dir.directory(path))) {
 
 		if (((flags & O_ACCMODE) != O_RDONLY)) {
 			errno = EISDIR;
@@ -195,7 +207,7 @@ Libc::File_descriptor *Libc::Vfs_plugin::open(char const *path, int flags,
 
 		typedef Vfs::Directory_service::Opendir_result Opendir_result;
 
-		switch (_root_dir.opendir(path, false, &handle, _alloc)) {
+		switch (VFS_THREAD_SAFE(_root_dir.opendir(path, false, &handle, _alloc))) {
 		case Opendir_result::OPENDIR_OK:                      break;
 		case Opendir_result::OPENDIR_ERR_LOOKUP_FAILED:       errno = ENOENT;       return nullptr;
 		case Opendir_result::OPENDIR_ERR_NAME_TOO_LONG:       errno = ENAMETOOLONG; return nullptr;
@@ -410,6 +422,10 @@ ssize_t Libc::Vfs_plugin::write(Libc::File_descriptor *fd, const void *buf,
 
 		try {
 			out_result = VFS_THREAD_SAFE(handle->fs().write(handle, (char const *)buf, count, out_count));
+
+			/* wake up threads blocking for 'queue_*()' or 'write()' */
+			Libc::resume_all();
+
 		} catch (Vfs::File_io_service::Insufficient_buffer) { }
 
 	} else {
@@ -449,6 +465,9 @@ ssize_t Libc::Vfs_plugin::write(Libc::File_descriptor *fd, const void *buf,
 			Libc::suspend(check);
 		} while (check.retry);
 	}
+
+	/* wake up threads blocking for 'queue_*()' or 'write()' */
+	Libc::resume_all();
 
 	switch (out_result) {
 	case Result::WRITE_ERR_AGAIN:       return Errno(EAGAIN);
@@ -540,6 +559,9 @@ ssize_t Libc::Vfs_plugin::read(Libc::File_descriptor *fd, void *buf,
 		} while (check.retry);
 	}
 
+	/* wake up threads blocking for 'queue_*()' or 'write()' */
+	Libc::resume_all();
+
 	switch (out_result) {
 	case Result::READ_ERR_AGAIN:       return Errno(EAGAIN);
 	case Result::READ_ERR_WOULD_BLOCK: return Errno(EWOULDBLOCK);
@@ -585,7 +607,7 @@ ssize_t Libc::Vfs_plugin::getdirentries(Libc::File_descriptor *fd, char *buf,
 
 			bool suspend() override
 			{
-				retry = !handle->fs().queue_read(handle, sizeof(Dirent));
+				retry = !VFS_THREAD_SAFE(handle->fs().queue_read(handle, sizeof(Dirent)));
 				return retry;
 			}
 		} check(handle);
@@ -632,6 +654,9 @@ ssize_t Libc::Vfs_plugin::getdirentries(Libc::File_descriptor *fd, char *buf,
 			Libc::suspend(check);
 		} while (check.retry);
 	}
+
+	/* wake up threads blocking for 'queue_*()' or 'write()' */
+	Libc::resume_all();
 
 	if ((out_result != Result::READ_OK) ||
 	    (out_count < sizeof(Dirent))) {
@@ -777,7 +802,7 @@ int Libc::Vfs_plugin::ioctl(Libc::File_descriptor *fd, int request, char *argp)
 
 	Vfs::Vfs_handle *handle = vfs_handle(fd);
 
-	switch (handle->fs().ioctl(handle, opcode, arg, out)) {
+	switch (VFS_THREAD_SAFE(handle->fs().ioctl(handle, opcode, arg, out))) {
 	case Result::IOCTL_ERR_INVALID: errno = EINVAL; return -1;
 	case Result::IOCTL_ERR_NOTTY:   errno = ENOTTY; return -1;
 	case Result::IOCTL_OK:                          break;
@@ -967,6 +992,9 @@ int Libc::Vfs_plugin::symlink(const char *oldpath, const char *newpath)
 		Libc::suspend(check);
 	} while (check.retry);
 
+	/* wake up threads blocking for 'queue_*()' or 'write()' */
+	Libc::resume_all();
+
 	_vfs_sync(handle);
 	VFS_THREAD_SAFE(handle->close());
 
@@ -982,7 +1010,7 @@ ssize_t Libc::Vfs_plugin::readlink(const char *path, char *buf, ::size_t buf_siz
 	Vfs::Vfs_handle *symlink_handle { 0 };
 
 	Vfs::Directory_service::Openlink_result openlink_result =
-		_root_dir.openlink(path, false, &symlink_handle, _alloc);
+		VFS_THREAD_SAFE(_root_dir.openlink(path, false, &symlink_handle, _alloc));
 
 	switch (openlink_result) {
 	case Vfs::Directory_service::OPENLINK_OK:
@@ -1015,7 +1043,7 @@ ssize_t Libc::Vfs_plugin::readlink(const char *path, char *buf, ::size_t buf_siz
 			bool suspend() override
 			{
 				retry =
-					!symlink_handle->fs().queue_read(symlink_handle, buf_size);
+					!VFS_THREAD_SAFE(symlink_handle->fs().queue_read(symlink_handle, buf_size));
 				return retry;
 			}
 		} check(symlink_handle, buf_size);
@@ -1066,6 +1094,9 @@ ssize_t Libc::Vfs_plugin::readlink(const char *path, char *buf, ::size_t buf_siz
 		} while (check.retry);
 	}
 
+	/* wake up threads blocking for 'queue_*()' or 'write()' */
+	Libc::resume_all();
+
 	switch (out_result) {
 	case Result::READ_ERR_AGAIN:       return Errno(EAGAIN);
 	case Result::READ_ERR_WOULD_BLOCK: return Errno(EWOULDBLOCK);
@@ -1107,19 +1138,19 @@ int Libc::Vfs_plugin::rename(char const *from_path, char const *to_path)
 {
 	typedef Vfs::Directory_service::Rename_result Result;
 
-	if (_root_dir.leaf_path(to_path)) {
+	if (VFS_THREAD_SAFE(_root_dir.leaf_path(to_path))) {
 
-		if (_root_dir.directory(to_path)) {
-			if (!_root_dir.directory(from_path)) {
+		if (VFS_THREAD_SAFE(_root_dir.directory(to_path))) {
+			if (!VFS_THREAD_SAFE(_root_dir.directory(from_path))) {
 				errno = EISDIR; return -1;
 			}
 
-			if (_root_dir.num_dirent(to_path)) {
+			if (VFS_THREAD_SAFE(_root_dir.num_dirent(to_path))) {
 				errno = ENOTEMPTY; return -1;
 			}
 
 		} else {
-			if (_root_dir.directory(from_path)) {
+			if (VFS_THREAD_SAFE(_root_dir.directory(from_path))) {
 				errno = ENOTDIR; return -1;
 			}
 		}
