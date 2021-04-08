@@ -37,6 +37,7 @@ class Event_filter::Remap_source : public Source, Source::Filter
 		};
 
 		Key _keys[Input::KEY_MAX];
+		bool _ignore_keys[Input::KEY_MAX];
 
 		Owner _owner;
 
@@ -62,12 +63,15 @@ class Event_filter::Remap_source : public Source, Source::Filter
 			 * so it is safe to use as array index.
 			 */
 			auto remap = [&] (Input::Keycode key) { return _keys[key].code; };
+			auto ignore = [&] (Input::Keycode key) { return _ignore_keys[key]; };
 
 			event.handle_press([&] (Input::Keycode key, Codepoint codepoint) {
-				destination.submit(Input::Press_char{remap(key), codepoint}); });
+				if (!ignore(key))
+					destination.submit(Input::Press_char{remap(key), codepoint}); });
 
 			event.handle_release([&] (Input::Keycode key) {
-				destination.submit(Input::Release{remap(key)}); });
+				if (!ignore(key))
+					destination.submit(Input::Release{remap(key)}); });
 		}
 
 		void _apply_config(Xml_node const config, unsigned const max_recursion = 4)
@@ -118,6 +122,22 @@ class Event_filter::Remap_source : public Source, Source::Filter
 					warning("invalid key name ", key_name); }
 				return;
 			}
+
+			/*
+			 * Handle ignore-key nodes
+			 */
+			if (node.type() == "ignore-key") {
+				Key_name const key_name = node.attribute_value("name", Key_name());
+
+				try {
+					for_each_key_with_name(key_name, [&] (Input::Keycode code) {
+						_ignore_keys[code] = true;
+					});
+				}
+				catch (Unknown_key) {
+					warning("invalid key name ", key_name); }
+				return;
+			}
 		}
 
 	public:
@@ -131,8 +151,10 @@ class Event_filter::Remap_source : public Source, Source::Filter
 			_include_accessor(include_accessor), _owner(factory),
 			_source(factory.create_source(_owner, input_sub_node(config)))
 		{
-			for (unsigned i = 0; i < Input::KEY_MAX; i++)
+			for (unsigned i = 0; i < Input::KEY_MAX; i++) {
 				_keys[i].code = Input::Keycode(i);
+				_ignore_keys[i] = false;
+			}
 
 			_apply_config(config);
 		}
