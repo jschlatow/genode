@@ -148,7 +148,7 @@ class Genodefb :
 			bool ok = (w <= (ULONG)_fb_mode.area.w()) &&
 			          (h <= (ULONG)_fb_mode.area.h());
 
-			bool changed = (w != (ULONG)_virtual_fb_mode.area.w()) &&
+			bool changed = (w != (ULONG)_virtual_fb_mode.area.w()) ||
 			               (h != (ULONG)_virtual_fb_mode.area.h());
 
 			if (ok && changed) {
