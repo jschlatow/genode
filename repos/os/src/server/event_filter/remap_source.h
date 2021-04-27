@@ -37,7 +37,7 @@ class Event_filter::Remap_source : public Source, Source::Filter
 		};
 
 		Key _keys[Input::KEY_MAX];
-		bool _ignore_keys[Input::KEY_MAX];
+		bool _ignore_keys[Input::KEY_MAX] { };
 
 		Owner _owner;
 
@@ -62,7 +62,7 @@ class Event_filter::Remap_source : public Source, Source::Filter
 			 * The range of the 'key' is checked by the 'Event' handle methods,
 			 * so it is safe to use as array index.
 			 */
-			auto remap = [&] (Input::Keycode key) { return _keys[key].code; };
+			auto remap  = [&] (Input::Keycode key) { return _keys[key].code; };
 			auto ignore = [&] (Input::Keycode key) { return _ignore_keys[key]; };
 
 			event.handle_press([&] (Input::Keycode key, Codepoint codepoint) {
@@ -153,7 +153,6 @@ class Event_filter::Remap_source : public Source, Source::Filter
 		{
 			for (unsigned i = 0; i < Input::KEY_MAX; i++) {
 				_keys[i].code = Input::Keycode(i);
-				_ignore_keys[i] = false;
 			}
 
 			_apply_config(config);
