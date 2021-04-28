@@ -514,5 +514,44 @@ int phy_ethtool_nway_reset(struct net_device *ndev)
 	return -1;
 }
 
+void spin_lock(spinlock_t *lock)
+{
+	TRACE;
+}
+
+void *skb_gro_header_fast(struct sk_buff *skb, unsigned int offset)
+{
+	TRACE;
+	return NULL;
+}
+
+void *skb_gro_header_hard(struct sk_buff *skb, unsigned int hlen)
+{
+	TRACE;
+	return NULL;
+}
+
+
+void *skb_gro_header_slow(struct sk_buff *skb, unsigned int hlen, unsigned int offset)
+{
+	TRACE;
+	return NULL;
+}
+
+void skb_gro_flush_final(struct sk_buff *skb, struct sk_buff **pp, int flush)
+{
+	TRACE;
+}
+
+void skb_gro_postpull_rcsum(struct sk_buff *skb, const void *start, unsigned int len)
+{
+	TRACE;
+}
+
+void skb_gro_pull(struct sk_buff *skb, unsigned int len)
+{
+	TRACE;
+}
+
 int sysctl_tstamp_allow_data;
 struct user_namespace init_user_ns;

@@ -185,6 +185,7 @@ void Driver::main_task_entry(void * arg)
 	module_ax88179_178a_driver_init();
 	module_cdc_driver_init();
 	module_rndis_driver_init();
+	module_rtl8152_driver_init();
 
 	static Device dev(*driver, Label(""));
 

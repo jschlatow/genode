@@ -222,6 +222,8 @@ PATCH_OPT(patches/usb_hid_input.patch)     := $(USB_HID_OPT)
 # USB NET
 USB_NET_OPT = -p1 -d$(SRC_DIR_USB_NET)
 PATCH_OPT(patches/usb_net_skbuff_cast.patch) := $(USB_NET_OPT)
+PATCH_OPT(patches/usb_net_cdc_ether.patch)   := $(USB_NET_OPT)
+PATCH_OPT(patches/usb_net_r8152.patch)       := $(USB_NET_OPT)
 
 # USB MODEM
 USB_MODEM_OPT = -p1 -d$(SRC_DIR_USB_MODEM)

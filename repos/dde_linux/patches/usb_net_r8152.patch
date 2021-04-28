@@ -1,0 +1,19 @@
+--- a/drivers/net/usb/r8152.c	2021-04-28 16:54:03.683110797 +0200
++++ b/drivers/net/usb/r8152.c	2021-04-28 16:56:59.343117024 +0200
+@@ -1156,6 +1156,7 @@ out1:
+  */
+ static int vendor_mac_passthru_addr_read(struct r8152 *tp, struct sockaddr *sa)
+ {
++#if 0
+ 	acpi_status status;
+ 	struct acpi_buffer buffer = { ACPI_ALLOCATE_BUFFER, NULL };
+ 	union acpi_object *obj;
+@@ -1206,6 +1207,8 @@ static int vendor_mac_passthru_addr_read
+ amacout:
+ 	kfree(obj);
+ 	return ret;
++#endif
++	return -ENODEV;
+ }
+ 
+ static int set_ethernet_addr(struct r8152 *tp)

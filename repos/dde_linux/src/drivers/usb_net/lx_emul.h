@@ -110,6 +110,8 @@ int    dev_set_drvdata(struct device *dev, void *data);
 
 #define netif_info(priv, type, dev, fmt, args...) lx_printf("netif_info: " fmt, ## args);
 #define netif_dbg(priv, type, dev, fmt, args...)
+#define netif_warn(priv, type, dev, fmt, args...) lx_printf("netif_warn: " fmt, ## args);
+#define netif_notice(priv, type, dev, fmt, args...)
 #define netif_err(priv, type, dev, fmt, args...)  lx_printf("netif_err: "  fmt, ## args);
 
 #define pr_debug(fmt, ...)
@@ -247,6 +249,7 @@ struct net_device_ops {
 	int (*ndo_do_ioctl)(struct net_device *dev, struct ifreq *ifr, int cmd);
 	int (*ndo_set_features)(struct net_device *dev, netdev_features_t features);
 	void (*ndo_get_stats64)(struct net_device *dev, struct rtnl_link_stats64 *storage);
+	netdev_features_t (*ndo_features_check)(struct skbuff *skb, struct net_dev *dev, netdev_features_t features);
 };
 
 struct net_device_stats
@@ -282,6 +285,7 @@ struct net_device
 	netdev_features_t            features;
 	struct net_device_stats      stats;
 	netdev_features_t            hw_features;
+	netdev_features_t            vlan_features;
 	const struct net_device_ops *netdev_ops;
 	const struct ethtool_ops    *ethtool_ops;
 	const struct header_ops     *header_ops;
@@ -996,6 +1000,7 @@ enum {
 	IPPROTO_TCP = 6,
 	IPPROTO_UDP = 17,
 	IPPROTO_AH  = 51,
+	IPPROTO_RAW = 255,
 };
 
 enum {
@@ -1203,6 +1208,8 @@ struct header_ops
 
 #define DEFAULT_TX_QUEUE_LEN 1000
 
+#define VLAN_ETH_FRAME_LEN 1518
+
 struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name, unsigned char name_assign_type, void (*setup)(struct net_device *), unsigned int txqs, unsigned int rxqs);
 
 enum { NET_NAME_UNKNOWN = 0 };
@@ -1275,10 +1282,12 @@ int module_asix_driver_init();
 int module_ax88179_178a_driver_init();
 int module_cdc_driver_init();
 int module_rndis_driver_init();
+int module_rtl8152_driver_init();
 
 #include <uapi/linux/capability.h>
 #include <uapi/linux/libc-compat.h>
 #include <uapi/linux/if.h>
+#include <uapi/linux/sockios.h>
 #include <uapi/linux/usb/cdc.h>
 #include <uapi/linux/if_link.h>
 #include <uapi/linux/if_packet.h>

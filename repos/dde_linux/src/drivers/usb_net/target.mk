@@ -17,6 +17,7 @@ SRC_C += drivers/net/usb/asix_devices.c
 SRC_C += drivers/net/usb/ax88172a.c
 SRC_C += drivers/net/usb/ax88179_178a.c
 SRC_C += drivers/net/usb/cdc_ether.c
+SRC_C += drivers/net/usb/r8152.c
 SRC_C += drivers/net/usb/rndis_host.c
 SRC_C += drivers/net/usb/smsc95xx.c
 SRC_C += drivers/net/usb/usbnet.c
