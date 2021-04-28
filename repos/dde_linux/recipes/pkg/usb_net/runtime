@@ -1,0 +1,14 @@
+<runtime ram="15M" caps="300" binary="usb_net_drv">
+	<requires>
+		<timer/>
+		<uplink/>
+		<usb/>
+		<rm/>
+	</requires>
+
+	<config mode="uplink_client" />
+
+	<content>
+		<rom label="usb_net_drv"/>
+	</content>
+</runtime>
