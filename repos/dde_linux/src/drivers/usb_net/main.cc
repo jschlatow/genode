@@ -92,6 +92,7 @@ void Driver::Device::register_device()
 	udev = (usb_device*) kzalloc(sizeof(usb_device), GFP_KERNEL);
 	udev->bus = (usb_bus*) kzalloc(sizeof(usb_bus), GFP_KERNEL);
 	udev->config = (usb_host_config*) kzalloc(sizeof(usb_host_config), GFP_KERNEL);
+	udev->actconfig = udev->config;
 	udev->bus->bus_name = "usbbus";
 	udev->bus->controller = (device*) (&usb);
 
