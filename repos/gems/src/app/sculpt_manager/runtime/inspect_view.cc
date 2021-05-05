@@ -29,7 +29,7 @@ static void for_each_inspected_storage_target(Storage_devices const &devices, FN
 static void gen_terminal_start(Xml_generator &xml)
 {
 	gen_common_start_content(xml, "terminal",
-	                         Cap_quota{110}, Ram_quota{18*1024*1024},
+	                         Cap_quota{110}, Ram_quota{24*1024*1024},
 	                         Priority::LEITZENTRALE);
 
 	gen_provides<Terminal::Session>(xml);
@@ -274,8 +274,8 @@ void Sculpt::gen_inspect_view(Xml_generator         &xml,
 			gen_parent_rom_route(xml, "depot_users.tar");
 			gen_parent_rom_route(xml, "vimrc", "config -> vimrc");
 			gen_parent_rom_route(xml, "VERSION");
-			gen_parent_rom_route(xml, "Vera.ttf");
-			gen_parent_rom_route(xml, "VeraMono.ttf");
+			gen_parent_rom_route(xml, "default.ttf",   "config -> style/default.ttf");
+			gen_parent_rom_route(xml, "monospace.ttf", "config -> style/monospace.ttf");
 			gen_parent_route<Cpu_session>    (xml);
 			gen_parent_route<Pd_session>     (xml);
 			gen_parent_route<Rm_session>     (xml);

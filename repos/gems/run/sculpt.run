@@ -113,6 +113,10 @@ install_config {
 						<rom name="fr_fr"   label="fr_fr.chargen"/>
 						<rom name="special" label="special.chargen"/>
 					</dir>
+					<dir name="style">
+						<rom name="default.ttf" label="Vera.ttf"/>
+						<rom name="monospace.ttf" label="VeraMono.ttf"/>
+					</dir>
 					<rom name="fb_drv"        label="fb_drv.config"/>
 					<rom name="nitpicker"     label="nitpicker.config"/>
 					<rom name="numlock_remap" label="numlock_remap.config"/>
@@ -134,7 +138,7 @@ install_config {
 
 	<start name="config_fs_rom">
 		<binary name="fs_rom"/>
-		<resource name="RAM" quantum="10M"/>
+		<resource name="RAM" quantum="14M"/>
 		<provides> <service name="ROM"/> </provides>
 		<route>
 			<service name="File_system"> <child name="config_fs"/> </service>
