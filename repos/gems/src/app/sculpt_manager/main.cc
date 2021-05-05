@@ -1407,8 +1407,8 @@ void Sculpt::Main::_handle_gui_mode()
 			xml.attribute("copy",  true);
 			xml.attribute("paste", true);
 			xml.node("vfs", [&] () {
-				gen_named_node(xml, "rom", "Vera.ttf");
-				gen_named_node(xml, "rom", "VeraMono.ttf");
+				gen_named_node(xml, "rom", "default.ttf");
+				gen_named_node(xml, "rom", "monospace.ttf");
 				gen_named_node(xml, "dir", "fonts", [&] () {
 
 					auto gen_ttf_dir = [&] (char const *dir_name,
@@ -1423,10 +1423,10 @@ void Sculpt::Main::_handle_gui_mode()
 						});
 					};
 
-					gen_ttf_dir("title",      "/Vera.ttf",     _font_size_px*1.25);
-					gen_ttf_dir("text",       "/Vera.ttf",     _font_size_px);
-					gen_ttf_dir("annotation", "/Vera.ttf",     _font_size_px*0.8);
-					gen_ttf_dir("monospace",  "/VeraMono.ttf", _font_size_px);
+					gen_ttf_dir("title",      "/default.ttf",   _font_size_px*1.25);
+					gen_ttf_dir("text",       "/default.ttf",   _font_size_px);
+					gen_ttf_dir("annotation", "/default.ttf",   _font_size_px*0.8);
+					gen_ttf_dir("monospace",  "/monospace.ttf", _font_size_px);
 				});
 			});
 			xml.node("default-policy", [&] () { xml.attribute("root", "/fonts"); });
