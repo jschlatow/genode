@@ -31,13 +31,13 @@ void Sculpt::gen_runtime_view_start_content(Xml_generator &xml,
 		xml.node("report", [&] () { xml.attribute("hover", "yes"); });
 		xml.node("vfs", [&] () {
 			gen_named_node(xml, "tar", "menu_view_styles.tar");
-			gen_named_node(xml, "rom", "Vera.ttf");
+			gen_named_node(xml, "rom", "default.ttf");
 			gen_named_node(xml, "dir", "fonts", [&] () {
 				gen_named_node(xml, "dir", "text", [&] () {
 					gen_named_node(xml, "ttf", "regular", [&] () {
 						xml.attribute("size_px", font_size);
 						xml.attribute("cache", "256K");
-						xml.attribute("path", "/Vera.ttf"); }); }); });
+						xml.attribute("path", "/default.ttf"); }); }); });
 
 			gen_named_node(xml, "dir", "dev", [&] () {
 				xml.node("log",  [&] () { }); });
@@ -69,7 +69,7 @@ void Sculpt::gen_runtime_view_start_content(Xml_generator &xml,
 		gen_parent_rom_route(xml, "libpng.lib.so");
 		gen_parent_rom_route(xml, "zlib.lib.so");
 		gen_parent_rom_route(xml, "menu_view_styles.tar");
-		gen_parent_rom_route(xml, "Vera.ttf");
+		gen_parent_rom_route(xml, "default.ttf", "config -> style/default.ttf");
 		gen_parent_rom_route(xml, "dialog");
 		gen_parent_route<Cpu_session>    (xml);
 		gen_parent_route<Pd_session>     (xml);
