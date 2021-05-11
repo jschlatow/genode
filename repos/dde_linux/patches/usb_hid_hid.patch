@@ -2,6 +2,16 @@ diff --git a/drivers/hid/hid-core.c b/drivers/hid/hid-core.c
 index c2560aa..0a45da0 100644
 --- a/drivers/hid/hid-core.c
 +++ b/drivers/hid/hid-core.c
+@@ -1551,6 +1551,9 @@
+ 	if (!list_empty(&hid->debug_list))
+ 		hid_dump_report(hid, type, data, size);
+ 
++	if (size > 8)
++		goto unlock;
++
+ 	report = hid_get_report(report_enum, data);
+ 
+ 	if (!report) {
 @@ -2179,6 +2180,7 @@ static void hid_remove_device(struct hid_device *hdev)
  	kfree(hdev->dev_rdesc);
  	hdev->dev_rdesc = NULL;
