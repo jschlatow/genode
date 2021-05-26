@@ -14,164 +14,48 @@
 Webcam support
 ##############
 
-; @alex-ab, @ssumpf, @cnuke
+https://libusb.info
+https://ken.tossell.net/libuvc/doc
+https://chromium.googlesource.com/libyuv/libyuv
 
-commit 7b90f8f857670b01a07962938bf735f8561b6ead
-Author: Alexander Boettcher <alexander.boettcher@genode-labs.com>
-Date:   Thu Apr 22 14:45:12 2021 +0200
+During 2020 the amount of home office and remote work took an unexpcted turn.
+Video conferences and video chats have become the norm on which people and
+companies rely upon. Even though, not to be found on our
+[https://genode.org/about/road-map - road map] for 2021 this development let the
+Genode team explore the field of webcam and video chat support on Genode.
 
-    libports: add libyuv support
-    
-    Issue #4078
+Webcams are generally connected via USB to a host device and implement the USB
+video device class
+([https://www.usb.org/sites/default/files/USB_Video_Class_1_5.zip - UVC]).
+Therefore, it becomes possible to drive many different webcam devices using the
+same USB interface. To support this protocol we enabled
+[https://ken.tossell.net/libuvc/doc - libuvc] which offers fine grained control
+over UVC exporting USB devices. In order to enable _libuvc_ on Genode we simply
+integrated the library into Genode's port system with no further changes
+required. _libuvc_ depends on
+[https://libusb.info - libusb] as a back end to access the actual webcam
+device. While there exists a port of _libusb_ for Genode - that connects through
+Genode's USB session interface to the USB host controller - the port still lacked
+support for isochronous USB transfers as required by UVC devices. Isochronous
+transfers represent a continuous stream of data (either input or output) with a
+constant rate without delivery guarantees. We extended _libusb_ to handle
+isochronous transfers which were already supported by Genode's USB session and
+because these kind of transfers can cause high load within the USB host driver
+optimized isochronous transfer support at the host driver level (Section [USB]).
 
-commit aa04c8e0c9136046947ae0c555e0251c1dbf6917
-Author: Sebastian Sumpf <sebastian.sumpf@genode-labs.com>
-Date:   Mon May 10 11:02:16 2021 +0200
+At the front end side we wrote a small _usb_webcam_ component that takes
+advantage of _libuvc_ in order to enable, disable, and configure the camera. The
+component provides a GUI session, and thus, can be connected directly, for
+example, to the Nitpicker component for rendering webcam images natively on
+screen. While Genode's pixel format is 24 Bit with added alpha channel, webcams
+stream data in the YUV2, MJPEG, or H.264 formats. To handle the conversion of
+these formats to Genode's pixel format we take advantage of
+https://chromium.googlesource.com/libyuv/libyuv - libyuv] and currently support
+the YUV2 as well as the MJPEG pixel format for webcams.
 
-    libyuv: enable MJPEG support
-    
-    issue #4158
-
-
-commit b2792a8c276bc59d9ee5b2c8752764da139b35af
-Author: Josef Söntgen <josef.soentgen@genode-labs.com>
-Date:   Tue Jan 26 11:19:30 2021 +0100
-
-    libports: update jpeg library to v9d
-    
-    issue #4158
-
-commit 50d0df501acc5fed6f3f88cc38c0ca8d552c9763
-Author: Sebastian Sumpf <sebastian.sumpf@genode-labs.com>
-Date:   Wed May 5 14:28:35 2021 +0200
-
-    libusb: Make USB library more robust
-    
-    - Add reference count for open/close
-    - Add cancel transfer support
-    - Handle packet stream correctly
-    
-    issue #4158
-
-commit 573b75a5307d7b811475e9232ae09969f7183794
-Author: Sebastian Sumpf <sebastian.sumpf@genode-labs.com>
-Date:   Tue May 18 12:34:35 2021 +0200
-
-    libports: port of libuvc
-    
-    by Josef Soentgen
-    
-    issue #4158
-
-commit 7b90f8f857670b01a07962938bf735f8561b6ead
-Author: Alexander Boettcher <alexander.boettcher@genode-labs.com>
-Date:   Thu Apr 22 14:45:12 2021 +0200
-
-    libports: add libyuv support
-    
-    Issue #4078
-
-commit aa04c8e0c9136046947ae0c555e0251c1dbf6917
-Author: Sebastian Sumpf <sebastian.sumpf@genode-labs.com>
-Date:   Mon May 10 11:02:16 2021 +0200
-
-    libyuv: enable MJPEG support
-    
-    issue #4158
-
-
-commit b2792a8c276bc59d9ee5b2c8752764da139b35af
-Author: Josef Söntgen <josef.soentgen@genode-labs.com>
-Date:   Tue Jan 26 11:19:30 2021 +0100
-
-    libports: update jpeg library to v9d
-    
-    issue #4158
-
-commit 50d0df501acc5fed6f3f88cc38c0ca8d552c9763
-Author: Sebastian Sumpf <sebastian.sumpf@genode-labs.com>
-Date:   Wed May 5 14:28:35 2021 +0200
-
-    libusb: Make USB library more robust
-    
-    - Add reference count for open/close
-    - Add cancel transfer support
-    - Handle packet stream correctly
-    
-    issue #4158
-
-commit 573b75a5307d7b811475e9232ae09969f7183794
-Author: Sebastian Sumpf <sebastian.sumpf@genode-labs.com>
-Date:   Tue May 18 12:34:35 2021 +0200
-
-    libports: port of libuvc
-    
-    by Josef Soentgen
-    
-    issue #4158
-
-
-commit 58db8c647af10ba7bdaf429119f3a67fe0686334
-Author: Alexander Boettcher <alexander.boettcher@genode-labs.com>
-Date:   Tue Mar 16 09:44:23 2021 +0100
-
-    qemu-usb: add usb webcam model
-    
-    Fixes #4078
-
-commit 910ea164055d2c7068487f1a4a499330661e308a
-Author: Alexander Boettcher <alexander.boettcher@genode-labs.com>
-Date:   Mon May 3 11:37:34 2021 +0200
-
-    qemu-usb: restrict build to x86
-    
-    Issue #4078
-commit 58db8c647af10ba7bdaf429119f3a67fe0686334
-Author: Alexander Boettcher <alexander.boettcher@genode-labs.com>
-Date:   Tue Mar 16 09:44:23 2021 +0100
-
-    qemu-usb: add usb webcam model
-    
-    Fixes #4078
-
-commit 910ea164055d2c7068487f1a4a499330661e308a
-Author: Alexander Boettcher <alexander.boettcher@genode-labs.com>
-Date:   Mon May 3 11:37:34 2021 +0200
-
-    qemu-usb: restrict build to x86
-    
-    Issue #4078
-
-commit 146599067085f98e5d8137c38a0ff4d71bab4261
-Author: Sebastian Sumpf <sebastian.sumpf@genode-labs.com>
-Date:   Tue May 18 12:52:09 2021 +0200
-
-    usb_webcam: An app using libuvc for USB webcams
-    
-    issue #4158
-
-commit f182f6a4fe76ee7b1e5685cedce7a3ff96aeaba9
-Author: Sebastian Sumpf <sebastian.sumpf@genode-labs.com>
-Date:   Thu May 20 20:03:52 2021 +0200
-
-    fixup "usb_webcam: An app using libuvc for USB webcams" (skip incomplete frames)
-    
-    During startup frames might be incomplete which is not covered in the
-    YUV case and may lead to a page fault. Therefore, copy complete frames
-    only.
-    
-    issue #4158
-
-commit db9b02100efd797eeb83e8e23a910a9d9531681a
-Author: Alexander Boettcher <alexander.boettcher@genode-labs.com>
-Date:   Fri May 21 14:41:38 2021 +0200
-
-    qemu-usb/webcam: signal capturing off earlier
-    
-    based on comment in Linux sources. Reduce fallback off-capturing detection
-    to 1s.
-    
-    Issue #4078
+Additionally we wanted to be able to transfer the webcam data directly into our
+VirtualBox port, thus enabling, sophisticated video conference systems like
+Jitsi or Skype.
 
 
 Performance optimizations
@@ -664,150 +548,26 @@ Date:   Fri May 21 16:08:17 2021 +0200
 USB
 ===
 
-; @ssumpf
+The USB-driver system has received quite a few refinements, performance
+improvements, and robustness handling efforts during the current release cycle.
+The HID subsystem is now capable of handling devices where the HID USB interface
+is at an arbitrary location within the device descriptors - as opposed to the
+assumption that the HID interface is always at the first position in interface
+list of the device. Also the HID drivers now handles session destruction more
+gracefully and supports unlimited plug and unplug events of an associated HID
+device.
 
-commit e1bb0e8e150d1ff6597ddde5cf49bb1e65ffda92
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Tue Mar 2 14:50:10 2021 +0100
+For the USB host driver various fixes of newer Linux kernel versions have been
+back ported which concern the handling of DMA memory, error code and timeout
+handling have been improved in order to support more corner cases, and the USB
+session handles outstanding USB requests (synchronous and asynchronous) on
+sudden session disconnects gracefully.
 
-    usb_host: refine class heuristics on device report
-    
-    This patch is an interim fix for using HID devices that offer a HID
-    interface as not the first interface. It also supplements the
-    interface classes as supplemental information to the USB-devices
-    report.
-    
-    Fixes #4035
-
-commit 0cfafa1c8f75d986a3c0138f07f7a91d648ccd3e
-Author: Christian Prochaska <christian.prochaska@genode-labs.com>
-Date:   Mon Mar 15 14:54:47 2021 +0100
-
-    usb_host_drv: support command timeouts and bool properties
-    
-    Fixes #4047
-
-commit d0f084d4491218092134bfb6bdd6b0918ffa17aa
-Author: Josef Söntgen <josef.soentgen@genode-labs.com>
-Date:   Thu Apr 29 13:13:00 2021 +0200
-
-    usb_host: backport xhci bounce-buffer fix
-    
-    This commit backports the Linux upstream commit (d4a6106) [*]
-    that introduces a check to prevent the sglist from being used
-    unconditionally.
-    
-    [*] 'xhci: fix bounce buffer usage for non-sg list case'
-    
-    Fixes #4116.
-
-commit 0f0edc0134d71b0f30abc11bcb1615f7e7feabd3
-Author: Josef Söntgen <josef.soentgen@genode-labs.com>
-Date:   Thu Apr 29 13:30:51 2021 +0200
-
-    usb_host: implement sg_pcopy_* as TRACE dummies
-    
-    The former implementation called 'TRACE_AND_STOP' which led to the
-    'usb_host_drv' to stop whenever such a function was called. Rather
-    than stopping return '0' and let the contrib code deal with this
-    situation.
-    
-    Issue #4116.
-
-commit d0f084d4491218092134bfb6bdd6b0918ffa17aa
-Author: Josef Söntgen <josef.soentgen@genode-labs.com>
-Date:   Thu Apr 29 13:13:00 2021 +0200
-
-    usb_host: backport xhci bounce-buffer fix
-    
-    This commit backports the Linux upstream commit (d4a6106) [*]
-    that introduces a check to prevent the sglist from being used
-    unconditionally.
-    
-    [*] 'xhci: fix bounce buffer usage for non-sg list case'
-    
-    Fixes #4116.
-
-commit 0f0edc0134d71b0f30abc11bcb1615f7e7feabd3
-Author: Josef Söntgen <josef.soentgen@genode-labs.com>
-Date:   Thu Apr 29 13:30:51 2021 +0200
-
-    usb_host: implement sg_pcopy_* as TRACE dummies
-    
-    The former implementation called 'TRACE_AND_STOP' which led to the
-    'usb_host_drv' to stop whenever such a function was called. Rather
-    than stopping return '0' and let the contrib code deal with this
-    situation.
-    
-    Issue #4116.
-
-commit 60521c30bc282541223cc6e9583ffdcc6c0b16cd
-Author: Sebastian Sumpf <sebastian.sumpf@genode-labs.com>
-Date:   Sun May 9 05:04:04 2021 +0200
-
-    usb_host: Move task to device in USB session
-    
-    A Lx::Task is now associated to a USB device not the session any more.
-    This implies that a task lives as long as the device making it possible
-    to gracefully handle outstanding requests (i.e., synchronous) in case
-    the session has been closed.
-    
-    issue #4149
-
-commit 8d118ad46dd023236e86d6a31e418689b8329137
-Author: Sebastian Sumpf <sebastian.sumpf@genode-labs.com>
-Date:   Wed May 12 15:02:03 2021 +0200
-
-    fixup: 'usb_host: Move task to device in USB session'
-    
-    Remove `_udev_` check.
-    
-    issue #4149
-
-commit bf2c8b57106db807b1d15f2a3f024472394050e7
-Author: Sebastian Sumpf <sebastian.sumpf@genode-labs.com>
-Date:   Tue May 11 14:16:52 2021 +0200
-
-    usb_host: improve isochronous performance on Intel
-    
-    This patch takes advantage of block transfer interrupts on Intel XHCI
-    controllers which is used during isochronous transfers. Because of a bug
-    in hardware (see usb_host_isoc_bei.patch header), this feature has been
-    disabled for Intel leading to up to 8000 interrupts/s for isochronous
-    transfer causing severe CPU consumption on Genode. With this commit we
-    lower host driver consumption to normal levels.
-    
-    issue #4149
-
-commit 8dad06860460e7f6c860c772f4e1a62d8d9f4a59
-Author: Sebastian Sumpf <sebastian.sumpf@genode-labs.com>
-Date:   Thu May 20 18:40:59 2021 +0200
-
-    usb_host: make device creation/destruction robust
-    
-    - Signal device ready depending on state (ready or not) immediately or
-      when "actconfig" is set
-    - Report new devices when ready
-    - Drain packet stream in case there is no device present (needed for
-      synchronous operations at client side)
-    - Do not use 'session_device' on device destruction, check pointer
-      directly instead
-    
-    issue #4149
-
-commit ac83e820666df35f97eba57ffcdb866a46dc3dd4
-Author: Sebastian Sumpf <sebastian.sumpf@genode-labs.com>
-Date:   Thu May 20 18:57:58 2021 +0200
-
-    usb_hid: perform device destruction on unplug signal only
-    
-    - Do not perform desctruction on report updatea in EP because
-      'unregister_device' may block on Led state 'update' (synchronous
-      control message) leading to the driver being stuck because no more
-      signals are received
-    - Check if device is present in 'submit_urb' calls
-    
-    fixes #4166
+The CPU usage of the host driver for isochronous transfers has been reduced
+significantly for Intel XHCI controllers, by adding a fix that does not trigger
+an interrupt for every completed isochronous packet, but for every eighth,
+bringing the worst case scenario down to 1000 IRQ/s from a possible 8000 IRQ/s
+before.
 
 
 Platforms
@@ -931,20 +691,22 @@ Pine-A64-LTS single board computer
 RISC-V
 ======
 
-; @ssumpf
+The support for the RISC-V architecture has further been developed into the
+direction of a fully supported Genode platform. With this release we wanted to
+enable basic device driver support which requires a working interrupt
+controller. Since the "platform-level interrupt controller" (PLIC) is now
+present on most hardware as well and as on the Qemu emulator, we have added support
+for the PLIC within our base-hw kernel.
 
-commit 6223ae44133dda8395e21818d096cd7c5a6d1ea2
-Author: Sebastian Sumpf <sebastian.sumpf@genode-labs.com>
-Date:   Fri Mar 5 06:28:26 2021 +0100
+With the interrupt controller in place we implemented a driver for the
+[https://opencores.org - OpenCores] Ethernet device as present on the
+[https://hensoldt-cyber.com/mig-v - MiG-V] board. The driver component runs on
+Qemu (with OpenCores enabled) as well as on the MiG-V board itself. Our RISC-V
+board specific line of work can now be found within a separate
+[https://github.com/ssumpf/genode-riscv - repository].
 
-    riscv: Interrupt controller support
-    
-    - Enable the "platform-level interrupt controller" PLIC on base-hw
-    - The RISC-V specification offers only a register description, but no
-      layout for the register set. This implies the layout is platform
-      dependent, and therefore, implemented separately for Qemu
-    
-    issue #4042
+With driver support in place the final step for full RISC-V support in Genode is
+to our C library for this architecture.
 
 
 Build system and tools
