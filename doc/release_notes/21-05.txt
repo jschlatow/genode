@@ -431,14 +431,58 @@ Date:   Sat Mar 13 22:07:01 2021 +0100
     Ref #4032
 
 
-Libraries and applications
-##########################
+Applications
+############
 
-File fault based on the CBE block encrypter
+File vault based on the CBE block encrypter
 ===========================================
 
-; @m-stein
+Throughout many releases now
+([https://genode.org/documentation/release-notes/19.11#Preliminary_block-device_encrypter - 19.11],
+[https://genode.org/documentation/release-notes/20.05#Feature-completeness_of_the_consistent_block_encrypter - 20.05],
+[https://genode.org/documentation/release-notes/20.08#Consistent_Block_Encrypter - 20.08],
+[https://genode.org/documentation/release-notes/20.11#Consistent_Block_Encrypter__CBE_ - 20.11]),
+we persistently worked at a native solution for modern block encryption - the
+SPARK-based CBE-library - and its integration into Genode's VFS. This work was
+already in a shape that allowed for real-world scenarios like
+[https://genodians.org/m-stein/2020-06-12-cbe-linux-vm - hosting a Linux VM ontop of the encrypted block device].
+However, it still lacked a notable amount of operating hours because its
+integration into an end-user system like Sculpt was mainly low-level magic -
+complex and error-prone.
 
+This had to change, because we want to encourage as many people as possible to
+expose the codebase around the CBE to their workflow and let it mature.
+Therefore, we came up with the new file vault package. It is a graphical front
+end that aims for making it most intuitive and secure to create and maintain
+virtual file systems that are encrypted and managed through the CBE. We
+introduced the package recently in detail in
+[https://genodians.org/m-stein/2021-05-17-introducing-the-file-vault - this Genodians article].
+
+[image file_vault_setup]
+
+The file vault only requires two file system sessions from you (the Trust
+Anchor is stored separately). With that, it will automatically create and
+connect a Trust Anchor, set up a CBE image, prepare an ext2 FS ontop of the CBE
+image and provide it through a file system service - ready to be used like a
+simple directory. The directory can be locked by closing the file vault and
+unlocked by starting the file vault on the same Trust Anchor and entering the
+correct user passphrase. All controls regarding the CBE behind this directory,
+like re-sizing and re-keying, are presented though a simple and guiding UI that
+also provides you with the most relevant status information on your vault.
+
+The file vault package is accompanied by some notable improvements regarding
+the CBE key management. While in the last release, this aspect was still only a
+prototype with almost no protective value, the current implementation sets on
+well-known algorithms to generate and encrypt the keys used in the CBE
+respectively the file vault. This is also explained in detail in the above
+mentioned article.
+
+Of course, as the text already indicated, the purpose of the current version of
+the file vault is to lift native block encryption in Genode out of the
+comfort-zone of a mere proof-of-concept. Consequently, you should still use the
+application with great care and for non-critical data only! Furthermore, we
+would be more than happy to receive feedback on your experience with the file
+vault!
 
 
 VirtualBox
