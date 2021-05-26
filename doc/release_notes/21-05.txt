@@ -347,35 +347,46 @@ Date:   Wed Apr 7 19:13:32 2021 +0200
 Input-event handling
 ====================
 
-; @jschlatow
+A central component for Genode's input-event handling functionality is the event
+filter. It merges input events from multiple event sources and passes them to
+the event sink (typically the GUI server). In between, it performs low-level
+key remapping and applies character mapping rules. Character mapping rules are
+essential for supporting different keyboard layouts (including dead-key
+sequences). Low-level key remapping is, for instance, used for changing the
+emitted key codes of the numpad keys according to the numlock state. The
+different filter functionalities can be arbitrarily assembled into a filter
+chain and provided as a dynamic config ROM to the event filter component. The
+event sink then receives and processes the filtered events.
 
-commit e86387d5571ff5a272f5e397a4714a54091c581f
-Author: Johannes Schlatow <johannes.schlatow@genode-labs.com>
-Date:   Thu Apr 8 16:37:44 2021 +0200
+However, some input devices emit unusual and/or extra key codes in certain
+situations, which impedes the event sink's ability to detect key combos
+correctly. We therefore added the functionality to completely mute certain key
+codes. In order to ignore all unknown key codes for instance, we can now add an
+'<ignore-key>' node to the config of the event filter.
 
-    event_filter: allow remapping of KEY_UNKNOWN
-    
-    KEY_UNKNOWN is a collective symbols for all unknown keycodes.
-    Remapping thus requires iterating through all corresponding codes
-    instead of only applying the policy to the first match.
-    
-    Issue genodelabs#4069
+! <remap>
+!   <ignore-key name="KEY_UNKNOWN"/>
+!   [...]
+! </remap>
 
-commit c802de2cf99a3a0aced705b544a8f3038e69f657
-Author: Johannes Schlatow <johannes.schlatow@genode-labs.com>
-Date:   Thu Apr 8 16:37:32 2021 +0200
+Note, that '<ignore-key>' is part of the '<remap>' filter. The name attribute
+refers to the low-level key name before any remapping rule has been applied.
 
-    event_filter: add <ignore-key> node
-    
-    Fixes genodelabs#4069
+As a second addition, we implemented a '<log>' filter that allows low-level
+debugging of the event filter component and its configuration. The '<log>'
+filter can appear at every stage in the filter chain. For instance, we can log
+the input events before and after the remap filter as follows.
 
-commit d80b2a150a4448ad5693a49c8130ab0337be18de
-Author: Johannes Schlatow <johannes.schlatow@genode-labs.com>
-Date:   Mon Apr 26 17:02:07 2021 +0200
+! <log prefix="REMAPPED ">
+!   <remap>
+!     <log prefix="RAW ">
+!       [...]
+!     </log>
+!   </remap>
+! </log>
 
-    event_filter: add <log> node
-    
-    genodelabs/genode#4069
+The optional 'prefix' attribute thereby helps distinguishing the log output from
+different stages.
 
 
 File-system helpers
