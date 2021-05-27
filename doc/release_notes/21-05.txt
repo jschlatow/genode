@@ -57,6 +57,34 @@ Additionally we wanted to be able to transfer the webcam data directly into our
 VirtualBox port, thus enabling, sophisticated video conference systems like
 Jitsi or Skype.
 
+Our USB support for our VirtualBox port is based on the ported Qemu USB XHCI
+model. Since no USB webcam model is available for Qemu, we were required
+to develop a model from scratch. The new USB webcam model is attached to the
+QEMU USB XHCI model and operates as a bulk entrypoint. In contrast to an
+isochonous entrypoint, the model causes less CPU load and fewer virtual
+interrupts. The announced supported formats to the guest are YUV2 and BGR3.
+By enabling the USB webcam model in the Genode VirtualBox configuration,
+an _Capture_ session is esablished and will catpure pictures in the
+rate of the configured _fps_. The following attributes are the default ones:
+
+!<config ...>
+!	...
+!	<webcam width="640" height="480" fps="15" vertical_flip="false" screen_size="false" report="false"/>
+!	...
+!</config>
+
+If the _screen_size_ attribute is set to _true_, the model will determine the
+resolution of the established capture session, otherwise the specified
+_width_ and _height_ values are used. The _vertical_flip_ attribute is useful
+for the BGR3 format, which is interpreted by Linux guests flipped vertically and
+can be re-flipped by setting the attribute to _true_.
+
+If the _report_ attribute is set to _true_, a Genode report will be generated
+whenever the guest changes the state of the capturing, either switching
+capturing on/off or changing the format.
+
+! <capture enabled="true/false" format="YUV2/BGR3"/>
+
 
 Performance optimizations
 #########################
