@@ -669,108 +669,29 @@ Platforms
 Genode/Linux on 64-bit ARM
 ==========================
 
-; @nfeske
+The release introduces the support for running the Linux version of Genode on
+64-bit ARM platforms. As a part of this line of work, Genode's system call
+bindings for Linux underwent a modernization to harmonize the system calls
+across the supported CPU architectures. Furthermore, we took the opportunity
+to simplify the use of the clone system call by eliminating the need for a TLS
+pointer.
 
-commit d477062c56b92e4323a2d923efe56237e9ddda65
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Tue May 4 12:13:46 2021 +0200
+Expecting that the 64-bit Genode/Linux version will remain a niche
+use case of Genode in the foreseeable future, we do not provide a pre-built
+tool chain. Hence, as a preparatory step of using this version of Genode, the
+tool chain must by built manually via Genode's _tool/tool_chain_ script.
 
-    base-linux: simplify clone syscall binding
-    
-    This patch simplifies the use of the clone system call for creating
-    processes and threads. Until now, the binding used an opaque pointer
-    argument to pass context information to the newly created process or
-    thread. However, upon close inspection, this is not a strict
-    requirement.
-    
-    A newly created thread accesses its contextual information by
-    using its stack pointer as key. The pointer argument is not used.
-    
-    The creation of processes is strictly serialized because the
-    intermediate stack used in-between clone and execve is a global
-    variable. Since we rely on the serialization anyway, we can pass the
-    context information of a new process via a global variable as well.
-    
-    This change simplifies the syscall binding for the upcoming AARCH64
-    support, which would otherwise require us to deal with the notion
-    of TLS on Linux.
-    
-    Issue #4136
+As a known limitation, Genode's 'Trace::timestamp' function is not available
+on this version of Genode because Linux prevents the user land from accessing
+the cycle counter (pmccntr_el0). So the accuracy of timing is somewhat impeded
+to the order of milliseconds. Also, the jitterentopy random-number generator
+cannot be used.
 
-commit fdb1a4dd886a25eb6ca792220182fad489a4b8cd
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Tue May 4 12:18:48 2021 +0200
+Those limitations notwithstanding, one can successfully execute scenarios as
+complex as _leitzentrale.run_. When using AARCH64 Linux as host, run scripts
+can be executed with the same convenience as on Linux on a PC.
 
-    base-linux: avoid legacy syscalls
-    
-    Until now, Genode's Linux system call bindings were based on original
-    Unix system calls that were later superseded by more flexibile variants.
-    E.g., 'openat' is a modern version of 'open'. Even though Linux upholds
-    the compatiblity with the original versions for existing architectures
-    like x86, the legacy syscalls are absent for the recently added AARCH64
-    architecture. A good overview of the system calls accross the prominent
-    architectures can be found at
-    
-    https://chromium.googlesource.com/chromiumos/docs/+/master/constants/syscalls.md
-    
-    This patch updates Genode's syscall bindings to avoid legacy versions,
-    thereby easing the support for AARCH64. The used "modern" versions
-    were introduced back in Linux version 2 days. So we are fine to rely
-    on them.
-    
-    The patch slightly changes the signature for lx_stat because this system
-    call is merely used to check for the existance of a file and its size.
-    The new name 'lx_stat_size' draws a closer connection to its use case.
-    That said, the stat syscall has not been updated to the modern statx
-    since statx is still a fairly recent addition.
-    
-    Issue #4136
-
-commit 2f9d430c00180f7616f82e5f0c8182e6f1170a64
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Wed May 5 19:20:37 2021 +0200
-
-    base-linux: 64-bit ARM support
-    
-    This patch adds support for running Genode/Linux on the AARCH64
-    architecture.
-    
-    - The kernel-agnostic startup code (crt0) had to be extended to
-      capture the initial stack pointer, which the Linux kernel uses
-      to pass the process environment. This is in line with the
-      existing startup code for x86_32 and x86_64.
-    
-    - The link order of the host libraries linked to lx_hybrid
-      programs had to be adjusted such that libgcc appears at last
-      because the other libraries depend on symbols provided by
-      libgcc.
-    
-    - When using AARCH64 Linux as host, one can execute run scripts
-      via 'make run/<script> KERNEL=linux BOARD=linux' now.
-    
-    Issue #4136
-
-commit a4115cfea9b70bcba9a339cd5911f309510b649c
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Sun May 2 11:53:34 2021 +0200
-
-    base-linux: discharge timestamp on AARCH64
-    
-    The kernel-agnostic 'Trace::timestamp' function for arm_64 executes the
-    'mrs %0, pmccntr_el0' instruction, which is not permitted for user-level
-    programs on Linux. This patch shadows the generic timestamp.h header
-    with dummy that returns zero. This return value prompts the timeout
-    framework to disable the interpolation of time based on timestamps. This
-    avoid the illegal-instruction abort but comes with two llimitations:
-    
-    First, time measurements are effectlively limited to a granulariry of 1
-    millisecond (deliberately constrained by the timer driver).
-    
-    The quirk is applied when using the base-linux API. Should a generic
-    application (that uses the base API only) call 'Trace::timestamp'
-    directly, the illegal instruction is executed.
-    
-    Issue #4136
+! $ make run/<script> KERNEL=linux BOARD=linux
 
 
 Pine-A64-LTS single board computer
