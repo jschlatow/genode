@@ -505,53 +505,32 @@ Device drivers
 Platform driver on ARM
 ======================
 
-; @nfeske, @skalk
+The current release largely streamlines Genode's API for interacting with the
+platform driver on ARM platforms. It eases the access to memory-mapped I/O
+registers and interrupts by introducing the notions of
 
-commit dc8c899c1dc4d613eaaab095313aaf3ab2264773
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Wed Apr 14 17:19:37 2021 +0200
+:'Platform::Device': one device obtained from a platform session
 
-    Streamline platform-device API on ARM
-    
-    This API rework eases the access to memory-mapped I/O registers and
-    interrupts when using the platform driver. It introduces the notions of
-    
-    - Platform::Device       - one device obtained from a platform session
-    - Platform::Device::Mmio - locally-mapped MMIO registers of a device
-    - Platform::Device::Irq  - interface for receiving device interrupts
-    
-    The patch touches several drivers. Some drivers would require a
-    significant structural change to adopt the new API (e.g., net/virtio,
-    dde_linux drivers, imx gpio). In these cases, the patch adds
-    compatibility shims meant to be temporary. In other cases (e.g., imx
-    i2c), the adaptation was simple enough to carry through.
-    
-    Fixes #4075
+:'Platform::Device::Mmio': locally-mapped MMIO registers of a device
 
-commit 421d2bed4032a45d68f388ceb07e3bb243465559
-Author: Stefan Kalkowski <stefan.kalkowski@genode-labs.com>
-Date:   Fri Apr 16 15:08:21 2021 +0200
+:'Platform::Device::Irq': interface for receiving device interrupts
 
-    platform driver: make device info XML optional
-    
-    * The device XML information dataspace is only provided,
-      when the client's policy states `info="yes"`
-    * The device XM information gets changed to include the
-      physical resource names (I/O memory and IRQ addresses)
-      instead of virtual ids and page offset
-    
-    Fix #4077
+The API is covered in detail the following article.
 
-commit fb3923ec849d8e8d9ca1a90d38577cc13eb442a6
-Author: Stefan Kalkowski <stefan.kalkowski@genode-labs.com>
-Date:   Mon May 17 15:43:30 2021 +0200
+:One Platform driver to rule them all:
 
-    os: add Platform::Device::sigh_omit_initial_signal
-    
-    Add possibility to register an interrupt handler without triggering
-    an initial spurious interrupt for ported device driver code.
-    
-    Fixes #4154
+  [https://genodians.org/nfeske/2021-04-29-platform-driver]
+
+It goes without saying that this change touches most drivers.
+Closely related, we also revised the concept of the XML based device-info
+mechanism provided by the platform driver to accommodate both complex drivers
+operating on multiple device simultaneously such as driver stacks ported from
+Linux as well as low-complexity drivers for simple devices. In the new
+version, the device XML information dataspace is only provided if the client's
+session policy states 'info="yes"'. The format of the XML information got
+refined to include the physical resource names (I/O memory and IRQ addresses)
+instead of virtual IDs and page offsets and by using a 'type' attribute
+instead of a '<compatible>' node to uniquely identify devices.
 
 
 Changes specific to i.MX8
