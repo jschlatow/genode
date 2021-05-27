@@ -776,9 +776,26 @@ Date:   Sun May 2 11:53:34 2021 +0200
 Pine-A64-LTS single board computer
 ==================================
 
-; @nfeske
+The current release continues
+[https://genode.org/documentation/release-notes/21.02#Pine-A64-LTS_single_board_computer - our story]
+of porting Genode to the
+[https://pine64.com/product-category/pine-a64-ltslong-term-supply/ - Pine-A64-LTS]
+board. We take the chance to document the process in great detail as we go.
 
-; refer to corresponding section of the previous release notes
+# [https://genodians.org/nfeske/2021-03-05-pine-fun-testing - Kernel packaging and testing]
+# [https://genodians.org/nfeske/2021-03-17-pine-fun-device-access - Device access from the user level]
+# [https://genodians.org/nfeske/2021-04-29-platform-driver - One Platform driver to rule them all]
+# [https://genodians.org/nfeske/2021-05-12-pine-fun-linux - Taking Linux out for a Walk]
+# [https://genodians.org/nfeske/2021-05-19-pine-dts-pruning - Pruning device trees]
+
+The accumulated material form the basis for the evolving Genode Platforms
+document introduced in Section [Updated and new documentation].
+
+The code of this line of work is available at a dedicated repository:
+
+:Genode board support for Allwinner SoCs:
+
+  [https://github.com/nfeske/genode-allwinner]
 
 
 RISC-V
