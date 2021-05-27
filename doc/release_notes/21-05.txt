@@ -489,47 +489,14 @@ vault!
 VirtualBox
 ==========
 
-; @chelmuth
+Since the last release, we continued the enablement of VirtualBox 6 on Genode
+and put efforts into stabilizing the port. Therefore, we updated to version
+6.1.18 and reorganized the internal structure for a more comprehensible
+execution model with less threads. Further, we improved synchronization in
+multi-processor use cases and added a Sculpt runtime package for vbox6.
 
-commit c67e78a7f0f2e0419415231cb96acb1d186e264c
-Author: Christian Helmuth <christian.helmuth@genode-labs.com>
-Date:   Thu Mar 11 17:50:38 2021 +0100
-
-    vbox6: update to version 6.1.18
-    
-    Issue #4031
-
-commit 839183d2b6596604ca1fbe2dfbcd1962e9c5616c
-Author: Christian Helmuth <christian.helmuth@genode-labs.com>
-Date:   Tue Mar 9 14:32:44 2021 +0100
-
-    vbox6: unify EMT and vCPU entrypoint
-    
-    Issue #4031
-
-commit 1a57a5a959011058521a3f525f92778466a35d23
-Author: Christian Helmuth <christian.helmuth@genode-labs.com>
-Date:   Tue Mar 23 16:22:37 2021 +0100
-
-    vbox6: refactor vcpu implementation
-    
-    Also add recent SVM changes from vbox5.
-    
-    Issue #4031
-
-commit 9ac23a18d42eaab8db96dcebe61694d474d7c745
-Author: Christian Helmuth <christian.helmuth@genode-labs.com>
-Date:   Wed Mar 31 11:26:59 2021 +0200
-
-    vbox6: synchronize guest-memory handling
-
-commit bf3ad3baff5eaaf01d954096bd7f1db9520f69a5
-Author: Johannes Schlatow <johannes.schlatow@genode-labs.com>
-Date:   Thu Apr 29 16:04:19 2021 +0200
-
-    vbox5/6: pass extra mouse buttons to VM
-    
-    Fixes #4120
+Finally as a little treat, our ports of VirtualBox now support to pass extra
+buttons of five-button mice to the guest.
 
 
 Device drivers
@@ -674,6 +641,26 @@ significantly for Intel XHCI controllers, by adding a fix that does not trigger
 an interrupt for every completed isochronous packet, but for every eighth,
 bringing the worst case scenario down to 1000 IRQ/s from a possible 8000 IRQ/s
 before.
+
+
+NIC drivers
+===========
+
+Drivers for iPXE-supported ethernet devices, WiFi adapters, and Linux
+TAP devices now support to report the MAC address of detected
+adapters. The feature can be enabled by a '<report>' node in the driver
+configuration like follows and requests a Report session with the
+label _devices_.
+
+! <config>
+!   <report mac_address="true"/>
+! </config>
+
+The resulting report is depicted below.
+
+! <devices>
+!   <nic mac_address="02:00:00:00:00:01"/>
+! </devices>
 
 
 Platforms
