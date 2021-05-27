@@ -344,55 +344,22 @@ File-system helpers
 ===================
 
 The fs_query component is a simple helper to query information from a file
-system. E.g., it is used by the file browser of Sculpt OS.
-; @nfeske
+system. E.g., it is used by the file browser of Sculpt OS to obtain the
+directory structure. The component received two welcome improvements. First,
+directory content is now reported in alphabetic order. Thereby, all consumers
+of the reports become able to rely on a deterministic output. For example, the
+file browser of Sculpt OS, the launcher menu items, and the depot-selection
+items will appear in a predictable way. Second, the size of files can be
+queried now. By adding an attribute 'size="yes"' to a query, fs_query is
+instructed to report the size of each queried file as attribute 'size' of the
+corresponding 'file' node.
 
-commit e9ac14ed491535b6e621a01b97ef8f31be8aaffe
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Fri Mar 19 13:56:51 2021 +0100
-
-    fs_query: report dir content in alphabetic order
-    
-    By sorting the reported output, all consumers of the reports become able
-    to rely on a deterministic order. For example, the file browser of
-    Sculpt OS, the launcher menu items, and the depot-selection items will
-    appear in a predictable order.
-    
-    Fixes #4054
-
-commit f33a5e14523e88e286eb944fdf59975f449a1111
-Author: Martin Stein <martin.stein@genode-labs.com>
-Date:   Sat Apr 24 10:48:36 2021 +0200
-
-    fs_query: support querying file sizes
-    
-    By adding an attribute 'size="yes"' to a query, one instructs fs_query to
-    report also the size of each queried file as attribute 'size' of the
-    corresponding 'file' node.
-    
-    Ref #4032
-
-
-commit b29f1497bf2d23bfd2fdc26c32162b8e2e395f70
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Sat Mar 20 18:31:01 2021 +0100
-
-    depot_query: sort depot-user scan results
-    
-    Related to issue #4054
-
-commit 42b269030e96d5854e286fbb0f134e651f287f64
-Author: Martin Stein <martin.stein@genode-labs.com>
-Date:   Sat Mar 13 22:07:01 2021 +0100
-
-    fs_tool: add <new-file> operation
-    
-    Adds the <new-file> operation to the fs_tool. When configured, the
-    <new-file path="...">...</new-file> tag will cause creation or overwriting of
-    the file given through the 'path' attribute. The file will contain the text
-    content of the tag.
-    
-    Ref #4032
+Whereas fs_query inspects a file system without changing it, its sister
+component fs_tool is able to perform file-system modifications. The new
+version adds a '<new-file path="...">' operation, which writes the content of
+the XML node into the file specified as 'path' attribute. The directory
+structure leading to the file is implicitly created if needed. Should a file
+with the specified name already exist, the original file gets overwritten.
 
 
 Applications
