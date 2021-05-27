@@ -89,88 +89,166 @@ capturing on/off or changing the format.
 Performance optimizations
 #########################
 
-; @nfeske
+One of the overarching topics of this year's
+[https://genode.org/about/road-map - roadmap] is optimization.
+As part of working on the Sculpt OS
+[https://genode.org/news/sculpt-os-21.03-boots-now-in-2.5-seconds - version 21.03],
+we identified several optimization vectors with the potential for user-visible
+improvements. In particular, while interacting with the system, a few effects
+made us curios.
 
-commit ed9487b45200541cf9614fd96c9ea9d925cdc6fb
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Tue Apr 6 14:26:10 2021 +0200
+Operations that involved changes of the runtime subsystem, e.g., adding or
+reconfiguring a component, seemed to interfere with multi-media workloads.
+When running a graphical animation, we could see it stutter in such
+situations.
 
-    rtc_drv: defer init until first use
-    
-    This patch avoids the RTC driver's aggressive polling during the
-    (CPU-bounded) boot of Sculpt OS. As the RTC is not needed during bootup,
-    this patch reduces the boot time (on Qemu) by 2-4 seconds.
-    
-    Fixes #4065
+The boot time of Sculpt OS has always been relatively quick compared to
+commodity operating systems. E.g., on a 5-years old laptop like a Lenovo
+x260, it used to boot in about 5 seconds to the graphical user interface.
+However, with the anticipation of Sculpt OS on lower-end platforms like the
+Pinephone and with the vision of instant-on systems, we wondered about the
+potential for improvement.
 
-commit ac07f9d08ea0bc377329968a7e168d17bbf108bb
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Mon Apr 5 19:41:03 2021 +0200
+While gathering a CPU-load profile of the boot process using the top tool,
+we learned that the boot time was bounded not by I/O but by the CPU load
+(the kernel's idle thread did not appear in the profile). Interestingly,
+a significant porting of the cycles were consumed by various instances of
+the init component, which prompted us to focus our attention to the
+implementation of init.
 
-    sculpt: skip GUI handling until framebuffer is up
-    
-    This avoids unneeded activity of the Leitzentrale GUI (e.g., the
-    decorator) at the early boot phase of Sculpt.
 
-commit 99f4b3cd07e882c9d7f6e413d1631387e1de89c5
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Sat Apr 3 17:42:38 2021 +0200
+Clock-cycle measurements
+------------------------
 
-    Debug macros for easy performance profiling
-    
-    The debug macros 'GENODE_LOG_TSC' and 'GENODE_LOG_TSC_NAMED' allow for
-    the easy gathering of the TSC ticks consumed by the calling scope.
-    
-    Fixes #4066
+The next natural step was the benchmarking of various code paths of init
+using precise a cycle-accurate time-stamp counter (TSC).
+Even though Genode has a 'Trace::timestamp' utility readily available, it remains
+barely used for manual instrumentation because such instrumentations require
+too much labor: allocation of state variables for gathering the statistics,
+computing time differences, traffic-shaping of the debug noise (needed
+whenever investigating highly frequently called code). These tasks should
+better be covered by a utility so that friction-less performance analysis can
+become a regular part of our development work. The current release
+introduces a simple utility called 'GENODE_LOG_TSC' to the API. This
+utility is covered by a dedicated article.
 
-commit b661459aca6d7e01b06a1ac0f81d3f92dded0ffa
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Thu Apr 1 18:05:23 2021 +0200
+:Performance analysis made easy:
 
-    sandbox/init: parse config using 'List_model'
-    
-    This commit replaces the hand-crafted config processing by the use of
-    the 'List_model' utility. This has the following advantages:
-    
-    - The parsing follows a common formalism that makes the code
-      easier to maintain and to understand. Several parts of the code
-      had to be changed (for the better) to make it fit the list model
-      approach. E.g., the child states have become more expressive
-      and logical.
-    
-    - In the common case, the XML data is traversed only once, which
-      increases the parsing speed in dynamic scenarios.
-    
-    - The code becomes easier to optimize. In particular, the patch skips
-      the re-evaluation of the session routing if no service is affected
-      by the config change.
-    
-    The patch also revisits the init test by removing overly long sleep
-    phases and extending a few sleep phases that were too short when
-    executing the test on Qemu.
-    
-    Issue #4068
+  [https://genodians.org/nfeske/2021-04-07-performance]
 
-commit f5f5b8c1f14c138defa3fa210c6fd33dd3bebbe0
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Mon Apr 5 18:46:51 2021 +0200
+Thanks to this utility, we were able identify three concrete opportunities
+for optimization in a course of one evening. First, the dynamic
+reconfiguration of init apparently did not scale well with a growing number of
+components. The code for analysing differences of configuration versions
+relied on doubly nested loops in order to stay as simple as possible. With the typical number
+of 30 or more components/subsystems hosted in Sculpt's runtime, we passed the
+tipping point where quadratic time complexity is justifiable.
+Second, during a
+configuration update, the XML data is evaluated in multiple passes, which puts
+pressure on Genode's XML parser, which could in principle be relieved. Third,
+the process of taking session-routing decisions involved XML parsing. In
+scenarios as sophisticated as Sculpt, the routing rules can become quite
+elaborate. Since the rules are consulted for each session route, the costs for
+the rule evaluations add up.
 
-    sandbox/init: route model
-    
-    This commit optimizes the 'Child::resolve_session_request'
-    implementation by introducing an internal 'Route_model' for quickly
-    traversing routing rules instead of parsing XML on each session request.
-    
-    Fixes #4068
+
+Init optimizations
+------------------
+
+These realizations motivated us to replace the hand-crafted config processing
+by the use of Genode's generic 'List_model' utility. This way, the parsing
+follows a common formalism that makes the code easier to maintain and to
+understand while reducing the XML parsing to a single pass. The increased
+formality cleared the way for further optimizations.
+In particular, init became able to skip
+the re-evaluation of the session routing whenever no service is affected
+by the config change. This is actually the common case in Sculpt.
+
+To alleviate the costs for evaluation session routes, we introduced
+an internal data model for the routing rules that is optimized for the
+matching of routes. With this model, the detection of a definite mismatch
+(the common case) comes down to a comparison of a single numeric value.
+
+Combined, those optimizations show a great effect. In a typical Sculpt
+system, the time of a dynamic reconfiguration got reduced by factor 10
+to the order of 10 to 20 ms. Hence, the visual stuttering we observed during
+structural changes of the runtime are completely eliminated.
+
+Besides the major optimization of init, we were able to shave off a few
+milliseconds here and there.
+For example, by deferring the initialization of the RTC driver to its
+first use, we avoid an (potentially expensive) active polling loop during
+the highly contended boot phase.
+Another obvious heuristic improvement is the skipping the GUI handling
+until the framebuffer driver is up because all the nice pixels would not
+be visible anyway.
+
+Combined, these optimizations were able to reduce the boot time of Sculpt from
+the starting time of the kernel up to the graphical user interface down to
+only 2.3 seconds. The improved performance of init is impactful beyond Sculpt
+OS because it is a central component of all Genode systems large and small.
+
+
+Updated and new documentation
+#############################
+
+Genode Platforms
+----------------
+
+We are proud to introduce the first version of a new "Genode Platforms"
+document, which complements the existing Genode Foundations book with
+low-level hardware-related topics. It is primarily intended for integrators
+and developers of device drivers.
+
+: <div class="visualClear"><!-- --></div>
+: <p>
+:  <div style="clear: both; float: left; margin-right:20px;">
+:   <a class="internal-link" href="https://genode.org">
+:    <img class="image-inline" src="https://genode.org/documentation/genode-platforms-title.png">
+:   </a>
+:  </div>
+: </p>
+
+In this first edition, the document features a practical guide for the steps
+needed to bring Genode to a new ARM SoC. The content is based on the ongoing
+Pine Fun article series at [https://genodians.org - Genodians.org].
+We plan to continuously extend it with further practical topics as we go.
+
+:Initial revision of the Genode Platforms document:
+
+  [https://genode.org/documentation/genode-platforms-21-05.pdf]
+
+
+Genode Foundations
+------------------
+
+The "Genode Foundations" book received its annual update. It is available at
+the [https://genode.org] website as a PDF document and an online version.
+The most noteworthy additions and changes are:
+
+: <div class="visualClear"><!-- --></div>
+: <p>
+:  <div style="clear: both; float: left; margin-right:20px;">
+:   <a class="internal-link" href="https://genode.org">
+:    <img class="image-inline" src="https://genode.org/documentation/genode-foundations-title.png">
+:   </a>
+:  </div>
+: </p>
+
+* Adaptation to the re-stacked GUI stack of
+  [https://genode.org/documentation/release-notes/20.08#The_GUI_stack__restacked version 20.08]
+* Coverage of the new uplink, capture, and event session interfaces
+* Updated API documentation
+
+: <div class="visualClear"><!-- --></div>
+
+To examine the changes in detail, please refer to the book's
+[https://github.com/nfeske/genode-manual/commits/master - revision history].
 
 
 Base framework and OS-level infrastructure
 ##########################################
 
-Updated Genode Foundations book
-===============================
-
-; @nfeske
 
 API refinements
 ===============
