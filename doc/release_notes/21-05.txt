@@ -964,42 +964,56 @@ Date:   Wed Mar 17 11:47:30 2021 +0100
 Device-tree source processing
 -----------------------------
 
-; @nfeske
+Device-tree source files as featured in the source tree of the Linux kernel
+contain valuable information about the structure and parameters of SoCs and
+boards. The porting and implementing of device drivers for Genode calls for
+tooling that is able to extract and convert this information to digestible
+forms. The current release introduces the first version of a new tool set at
+_tools/dts/_ for this purpose.
 
-commit 41d55effa78ece96066c0e793b1072e570dd9b1a
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Wed May 19 15:59:33 2021 +0200
+[image dts_extract]
 
-    tool/dts: for extracting content from dts files
-    
-    The new tool eases the inspection and pruning of device-tree source
-    files.
-    
-    Fixes #4165
+The tool aids the understanding of the hardware and allows for the pruning of
+device trees down to a manageable complexity. As an illustration, the
+spiderweb on the left shows the device-interdependency of the Pine-A64-LTS
+board on the left. On the right, the device tree is pruned to cover only
+what's needed to use Ethernet. The tool is covered in more detail by the
+following dedicated article.
+
+:Pruning device trees:
+
+  [http://genodians.org/nfeske/2021-05-19-pine-dts-pruning]
 
 
 Cache for downloaded ports
 ==========================
 
-; @nfeske
+When working with ports, it is not uncommon that a
+port hash is changed due to some minor change like adding a patch.
+A subsequent call of 'prepare_port' needs to download the same files
+that were downloaded for the preparing previous version of port even if
+the downloaded content remains the same. This wastes internet bandwidth
+and developer time. The current release introduces a simple cache for
+downloaded archives, which mitigates these costs.
 
-commit de6258290571377ba1e2c6a934ff9cb15d51df0a
-Author: Tomasz Gajewski <tomga@wp.pl>
-Date:   Fri Feb 19 23:51:04 2021 +0100
-
-    prepare_port: simple cache for downloads
-    
-    Fixes #4028
+_Thanks to Tomasz Gajewski for his continuous contributions to improve our_
+_development workflows._
 
 
 Common hook for custom build rules
 ==================================
 
-; @nfeske
+There are cases that call for building custom targets in addition to a regular
+library or or program. For example, the executable binary of an application
+may be accompanied by generated data files. The creation of such build
+artifacts can be expressed by custom make rules. However, a rule is triggered
+only if it is a dependency of the build target. This can be achieved by adding
+the rule to the 'CUSTOM_TARGET_DEPS' variable. For example,
 
-commit f3f8d9a6de32b44e20f6c9521f697cdad5ddcdba
-Author: Tomasz Gajewski <tomga@wp.pl>
-Date:   Thu Apr 1 00:31:39 2021 +0200
+! CUSTOM_TARGET_DEPS += menu_view_styles.tar
+!
+! menu_view_styles.tar:
+!    $(VERBOSE)cd $(PRG_DIR); tar cf $(PWD)/bin/$@ styles
 
-    build system: support for CUSTOM_TARGET_DEPS
+_Thanks to Tomasz Gajewski for this welcome contribution._
 
