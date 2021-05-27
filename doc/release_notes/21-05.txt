@@ -256,35 +256,18 @@ API refinements
 VFS-access utilities
 --------------------
 
-; @nfeske
+Low-complexity native Genode components do not depend on a C runtime. To allow
+such components to enjoy the power and flexibility of the our VFS
+infrastructure, the framework provides an evolving front-end API
+[https://github.com/genodelabs/genode/blob/master/repos/os/include/os/vfs.h - os/vfs.h]
+introduced in version
+[https://genode.org/documentation/release-notes/19.11#Virtual_file-system_infrastructure - 19.11].
 
-commit 5e6316ad1b2717f213cc508e9819d7cb90427677
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Tue May 18 16:11:00 2021 +0200
-
-    os/vfs.h: Directory::create_sub_directory
-    
-    This method can be used to create a directory hierarchy within a
-    'Directory'.
-    
-    Issue #4032
-
-commit ddb118b092b4866b4f2d6c0eab98c075c63bc637
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Tue May 18 12:16:44 2021 +0200
-
-    os/vfs.h: New_file utility
-    
-    This patch moves the utility from the app/text_area to os/vfs.h to make
-    it easier to use by other components. By hosting the 'New_file' as a
-    friend alongside the 'Directory', we can now pass a 'Directory' as
-    constructor argument, which is consistent with other utilities such as
-    'File_content'.
-    
-    As a further improvement, the new version supports the implicit creation
-    of the directory hierarchy leading to the new file.
-    
-    Issue #4032
+The API is tailored and refined according to the relatively simple use cases
+of low-complexity Genode components. The current release introduces a new
+utility for the creation of new files, appropriately named 'New_file'. The
+change is accompanied with a new 'Directory::create_sub_directory' method for
+the easy creation of directory hierarchies.
 
 
 Safeguarded arrays
@@ -302,36 +285,14 @@ Date:   Fri May 21 15:59:15 2021 +0200
 Cosmetic changes
 ----------------
 
-commit f925fef17b7b805d7aa933124f509614f4ba9755
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Tue Apr 6 16:20:01 2021 +0200
+The new version refines the 'Range_allocator::alloc_aligned' interface to make
+it more safe. The former 'from' and 'to' arguments are replaced by a single
+'range' argument. The distinction of the use cases of regular allocations vs.
+address-constrained allocations is now covered by a dedicated overload instead
+of relying on a default argument. The 'align' argument has been changed from
+'int' to 'unsigned' to be better compatible with 'addr_t' and 'size_t'.
 
-    base: Refine Range_allocator::alloc_aligned
-    
-    This patch changes the 'alloc_aligned' interface as follows:
-    
-    - The former 'from' and 'to' arguments are replaced by a single
-      'range' argument.
-    
-    - The distinction of the use cases of regular allocations vs.
-      address-constrained allocations is now overed by a dedicated
-      overload instead of relying on a default argument.
-    
-    - The 'align' argument has been changed from 'int' to 'unsigned'
-      to be better compatible with 'addr_t' and 'size_t'.
-    
-    Fixes #4067
-
-commit 468e7a825c8dad17338840f4a206fc3a17a40cae
-Author: Norman Feske <norman.feske@genode-labs.com>
-Date:   Wed Apr 7 19:13:32 2021 +0200
-
-    base/cache.h: rename Cache_attribute to Cache
-    
-    The short name is better because the type will become prominently
-    visible at the API.
-    
-    Issue #2243
+The 'Cache_attribute' type has been renamed to 'Cache'.
 
 
 Input-event handling
@@ -382,6 +343,8 @@ different stages.
 File-system helpers
 ===================
 
+The fs_query component is a simple helper to query information from a file
+system. E.g., it is used by the file browser of Sculpt OS.
 ; @nfeske
 
 commit e9ac14ed491535b6e621a01b97ef8f31be8aaffe
