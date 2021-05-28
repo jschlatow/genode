@@ -678,11 +678,16 @@ nevertheless we had to overcome some hurdles worth noting.
   of the Fiasco.OC kernel relied on this behavior and needed to be
   adapted by the upstream developers.
 
-* The new tool chain has not been enabled for RISC-V yet.
-  Until we finalized the new tool chain for RISC-V, we recommend using
-  the tool chain version 19.05 for this CPU architecture by adding the
-  following lines in your _etc/tools.conf_.
-  ; XXX
+The new tool chain has not been enabled for RISC-V yet, because of an unsolved
+issue on initialization (resp. initial relocation) of our dynamic linker. Until
+we finalized the RISC-V support, we recommend using the tool chain version 19.05
+for this CPU architecture by configuring 'CROSS_DEV_PREFIX' in the build
+directory's _etc/tools.conf_ and adding the appropriate 'REQUIRED_GCC_VERSION'
+parameter to your make command line like follows.
+
+! CROSS_DEV_PREFIX = /usr/local/genode/tool/19.05/bin/genode-riscv-
+
+! $ make run/log KERNEL=hw REQUIRED_GCC_VERSION=8.3.0
 
 The updated tool chain can be built from source or downloaded in binary form
 as described in this [https://genode.org/download/tool-chain - document].
