@@ -57,7 +57,7 @@ Our USB support for our VirtualBox port is based on the ported Qemu USB XHCI
 model. Since no USB webcam model is available for Qemu, we were required
 to develop a model from scratch. The new USB webcam model is attached to the
 QEMU USB XHCI model and operates as a bulk entrypoint. In contrast to an
-isochonous entrypoint, the model causes less CPU load and fewer virtual
+isochronous entrypoint, the model causes less CPU load and fewer virtual
 interrupts. The announced supported formats to the guest are YUV2 and BGR3.
 By enabling the USB webcam model in the Genode VirtualBox configuration,
 a _Capture_ session is used to capture pictures at the
@@ -394,7 +394,7 @@ connect a trust anchor, set up a CBE image, prepare an ext2 FS on top of the CBE
 image and provide it through a file system service - ready to be used like a
 simple directory. The directory can be locked by closing the file vault and
 unlocked by starting the file vault on the same trust anchor and entering the
-correct user passphrase. All controls for the file fault's underlying
+correct user passphrase. All controls for the file vault's underlying
 CBE encrypter - like for its re-sizing and re-keying functionality - are
 presented though a simple and guiding UI that
 also provides you with the most relevant status information of your vault.
@@ -455,7 +455,7 @@ Closely related, we also revised the concept of the XML based device-info
 mechanism provided by the platform driver to accommodate both complex drivers
 operating on multiple device simultaneously such as driver stacks ported from
 Linux as well as low-complexity drivers for simple devices. In the new
-version, the device XML information dataspace is only provided if the client's
+version, the device XML-information dataspace is only provided if the client's
 session policy states 'info="yes"'. The format of the XML information got
 refined to include the physical resource names (I/O memory and IRQ addresses)
 instead of virtual IDs and page offsets and by using a 'type' attribute
@@ -480,7 +480,7 @@ state. A sample configuration looks like the following:
 Technically, those reset domains map to pin settings of the System Reset
 Controller (SRC) that is part of the i.MX8 SoC. The SRC is under control of the
 platform driver now. Currently, only the pins for the MIPI DSI Phy get exported.
-They are used by the graphical subsytem to handle panels connected via MIPI DSI.
+They are used by the graphical subsystem to handle panels connected via MIPI DSI.
 
 
 I2C driver for i.MX8
@@ -700,7 +700,7 @@ Dummy-function generator
 While porting device drivers from the Linux kernel to Genode, one has to tailor
 the environment that replaces the original kernel code. Thereby, tons of
 missing function and variable implementations have to be written. Most of them
-won't even by called by the driver under normal circumstances, but nonetheless
+won't even be called by the driver under normal circumstances, but nonetheless
 they are needed to link the executable binary.
 
 The production of these dummy functions in the first place is a tiresome and
@@ -745,7 +745,7 @@ Cache for downloaded ports
 ==========================
 
 When working with ports, it is not uncommon that a
-port hash is changed due to some minor change like the addition of patch.
+port hash is changed due to some minor change like the addition of a patch.
 A subsequent call of 'prepare_port' would download the same files
 that were already downloaded while preparing a previous version of port even if
 the downloaded content remains the same. This wastes internet bandwidth
