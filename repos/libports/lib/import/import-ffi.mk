@@ -1,11 +1,1 @@
-ifeq ($(filter-out $(SPECS),x86_64),)
-INC_DIR += $(call select_from_ports,ffi)/include/ffi/x86_64
-endif
-
-ifeq ($(filter-out $(SPECS),arm),)
-INC_DIR += $(call select_from_ports,ffi)/include/ffi/arm
-endif
-
-ifeq ($(filter-out $(SPECS),arm_64),)
-INC_DIR += $(call select_from_ports,ffi)/include/ffi/arm_64
-endif
+INC_DIR += $(call default_port_includes,ffi)
