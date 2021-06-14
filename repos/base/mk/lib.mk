@@ -61,6 +61,15 @@ error_inc_dir_override:
 include $(foreach LIB,$(LIBS),$(call select_from_repositories,lib/import/import-$(LIB).mk))
 
 #
+# Check presence of INC_DIR
+#
+MISSING_INC_DIR := $(filter-out $(wildcard $(INC_DIR)),$(INC_DIR))
+
+ifneq ($(MISSING_INC_DIR),)
+$(foreach DIR,$(MISSING_INC_DIR),$(info missing include directory: $(DIR)))
+endif
+
+#
 # Include global definitions
 #
 include $(BASE_DIR)/mk/global.mk
