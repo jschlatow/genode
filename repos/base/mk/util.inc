@@ -66,3 +66,18 @@ select_from_ports = $(call _checked_port_dir,$1)
 else
 select_from_ports = $(REP_DIR)
 endif
+
+#
+# Set default lib include paths. If 'CONTRIB_DIR' is defined, the include dirs
+# are set to 'include/<portname>/' and 'include/<portname>/spec/<SPECS>'
+# according to the defined specs.
+# If, 'CONTRIB_DIR' is undefined, which is the case when executed by the depot-
+# tool. The include dirs are already set by the 'REP_INC_DIR'.
+#
+ifneq ($(CONTRIB_DIR),)
+_arch_inc_dir := ./ $(foreach SPEC,$(SPECS),spec/$(SPEC))
+
+default_port_includes = $(addprefix $(call select_from_ports,$1)/include/$1/,$(_arch_inc_dir))
+else
+default_port_includes =
+endif
