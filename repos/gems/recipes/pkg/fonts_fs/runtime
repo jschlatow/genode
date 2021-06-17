@@ -1,4 +1,4 @@
-<runtime ram="12M" caps="150" binary="vfs">
+<runtime ram="12M" caps="150" binary="vfs" config="fonts_fs.config">
 
 	<requires> <rom label="config"/> </requires>
 
@@ -13,6 +13,7 @@
 		<rom label="default.ttf"/>
 		<rom label="monospace.ttf"/>
 		<rom label="vfs.lib.so"/>
+		<rom label="fonts_fs.config"/>
 	</content>
 
 </runtime>
