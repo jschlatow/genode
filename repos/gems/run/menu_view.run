@@ -82,20 +82,20 @@ install_config {
 				<inline description="small">
 					<config>
 						<vfs>
-							<rom name="Vera.ttf"/>
-							<rom name="VeraMono.ttf"/>
+							<rom name="default.ttf"/>
+							<rom name="monospace.ttf"/>
 							<dir name="fonts">
 								<dir name="title">
-									<ttf name="regular" path="/Vera.ttf" size_px="18" cache="256K"/>
+									<ttf name="regular" path="/default.ttf" size_px="18" cache="256K"/>
 								</dir>
 								<dir name="text">
-									<ttf name="regular" path="/Vera.ttf" size_px="14" cache="256K"/>
+									<ttf name="regular" path="/default.ttf" size_px="14" cache="256K"/>
 								</dir>
 								<dir name="annotation">
-									<ttf name="regular" path="/Vera.ttf" size_px="11" cache="256K"/>
+									<ttf name="regular" path="/default.ttf" size_px="11" cache="256K"/>
 								</dir>
 								<dir name="monospace">
-									<ttf name="regular" path="/VeraMono.ttf" size_px="14" cache="256K"/>
+									<ttf name="regular" path="/monospace.ttf" size_px="14" cache="256K"/>
 								</dir>
 							</dir>
 						</vfs>
@@ -109,20 +109,20 @@ install_config {
 				<inline description="big">
 					<config>
 						<vfs>
-							<rom name="Vera.ttf"/>
-							<rom name="VeraMono.ttf"/>
+							<rom name="default.ttf"/>
+							<rom name="monospace.ttf"/>
 							<dir name="fonts">
 								<dir name="title">
-									<ttf name="regular" path="/Vera.ttf" size_px="28" cache="256K"/>
+									<ttf name="regular" path="/default.ttf" size_px="28" cache="256K"/>
 								</dir>
 								<dir name="text">
-									<ttf name="regular" path="/Vera.ttf" size_px="24" cache="256K"/>
+									<ttf name="regular" path="/default.ttf" size_px="24" cache="256K"/>
 								</dir>
 								<dir name="annotation">
-									<ttf name="regular" path="/Vera.ttf" size_px="21" cache="256K"/>
+									<ttf name="regular" path="/default.ttf" size_px="21" cache="256K"/>
 								</dir>
 								<dir name="monospace">
-									<ttf name="regular" path="/VeraMono.ttf" size_px="24" cache="256K"/>
+									<ttf name="regular" path="/monospace.ttf" size_px="24" cache="256K"/>
 								</dir>
 							</dir>
 						</vfs>
