@@ -1,0 +1,31 @@
+<runtime ram="48M" caps="300" binary="vfs">
+
+	<provides> <file_system/> </provides>
+	<requires>
+		<file_system label="target"/>
+		<trace/>
+		<rtc/>
+	</requires>
+
+	<content>
+		<rom label="vfs"/>
+		<rom label="ld.lib.so"/>
+		<rom label="vfs_ctf.lib.so"/>
+		<rom label="vfs_import.lib.so"/>
+		<rom label="vfs.lib.so"/>
+		<rom label="ctf_rpc_name"/>
+		<rom label="metadata"/>
+	</content>
+
+	<config>
+		<vfs>
+			<fs/>
+			<ctf/>
+			<import>
+				<rom name="metadata"/>
+			</import>
+		</vfs>
+		<default-policy root="/" writeable="yes"/>
+	</config>
+
+</runtime>
