@@ -1,0 +1,43 @@
+The VFS ctf plugin uses Genode's trace session to create CTF
+(common trace format) traces of component interactions. The plugin provides
+a file system that can be mounted at an arbitray location within a VFS and is
+used for controlling the plugin. For this purpose, the plugin offers two
+writeable files:
+
+:'enable': Starts or stops tracing when writing "true" or "false" into
+           the file.
+
+:'config': Sets the configuration (XML) used by the plugin (see below). The
+           config is read and applied when the plugin is enabled.
+
+In order to mount the file system configure the <vfs> of your component as
+follow:
+
+! <vfs>
+!   <ram/>
+!   <ctf/>
+! </vfs>
+
+Since the plugin stores the trace files in the VFS, the latter must also load
+a plugin that provides a writable file system (e.g. ram or fs).
+The config file must contain a valid XML with a '<config>' node, e.g.:
+
+! <config period_ms="5000" target_root="/">
+!    <policy label_suffix="dynamic_rom" policy="ctf_rpc_name"/>
+! </config>
+
+The mandatory arguments 'period_ms' and 'target_root' specify the trace-buffer
+sampling period in milliseconds and the root path where the output files shall
+be placed in the VFS respectively.
+The '<config>' node can contain an arbitray number of '<policy>' nodes by which
+the plugin determines what components and threads are traced.
+The specified 'label_suffix', 'label_prefix' and/or 'label' attributes are
+matched against the component labels. By default, all threads of the matching
+component(s) will be traced. The mandatory 'policy' attribute specifies the name
+of the trace policy to be applied to the matching threads.
+
+Furthermore, the '<policy>' nodes may take the following optional attributes:
+
+:'thread': Restricts the tracing to a certain thread of the matching component(s).
+
+:'buffer': Sets the size of the trace buffer (default: '64K').
