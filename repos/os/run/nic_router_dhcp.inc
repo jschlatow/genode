@@ -97,7 +97,7 @@ append config {
 				<sleep milliseconds="2000"/>
 				<inline>
 
-					<config>
+					<config verbose="yes">
 
 						<policy label="nic_router_2 -> " domain="downlink"/>
 
@@ -107,7 +107,7 @@ append config {
 							             ip_last="10.2.4.2">
 
 								<dns-server ip="6.7.8.9"/>
-								<dns-domain name="genode-labs.com"/>
+								<dns-domain name="this_is_a_way_to_long_dns_domain_name_that_should_be_rejected_by_the_router_and_cause_the_corresponding_dhcp_option_to_disappear_but_you_never_know_and_so_we_better_test_it"/>
 
 							</dhcp-server>
 
@@ -299,7 +299,6 @@ append done_string ".*  IP lease time: 3600 seconds.*\n"
 append done_string ".*  Interface: 10.0.3.2/24.*\n"
 append done_string ".*  Router: 10.0.3.1.*\n"
 append done_string ".*  DNS server #1: 6.7.8.9.*\n"
-append done_string ".*  DNS domain name: genode-labs.com.*\n"
 append done_string ".*DHCP request completed:.*\n"
 append done_string ".*  IP lease time: 3600 seconds.*\n"
 append done_string ".*  Interface: 10.0.3.2/24.*\n"

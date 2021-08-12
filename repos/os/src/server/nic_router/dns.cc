@@ -13,6 +13,8 @@
 
 /* local includes */
 #include <dns.h>
+#include <domain.h>
+#include <configuration.h>
 
 /* Genode includes */
 #include <util/xml_node.h>
@@ -61,25 +63,63 @@ void Dns_domain_name::set_to(Dns_domain_name const &name)
 }
 
 
+void Dns_domain_name::_reject_oversized_string(Domain const &domain,
+                                               char   const *src_type)
+{
+	if (domain.config().verbose()) {
+		log("[", domain, "] rejecting oversized DNS "
+		    "domain name from ", src_type);
+	}
+	set_invalid();
+}
+
+
 void Dns_domain_name::set_to(Xml_attribute const &name_attr)
 {
 	name_attr.with_raw_value([&] (char const *base, size_t size) {
-		if (_string.valid()) {
-			_string() = Cstring { base, size };
+		if (size < STRING_CAPACITY) {
+			if (_string.valid()) {
+				_string() = Cstring { base, size };
+			} else {
+				_string = *new (_alloc) String { Cstring { base, size } };
+			}
 		} else {
-			_string = *new (_alloc) String { Cstring { base, size } };
+			warning("rejecting oversized DNS domain name from XML attribute");
+			set_invalid();
 		}
 	});
 }
 
 
-void Dns_domain_name::set_to(Dhcp_packet::Domain_name const &name_option)
+void Dns_domain_name::set_to(Xml_attribute const &name_attr,
+                             Domain        const &domain)
+{
+	name_attr.with_raw_value([&] (char const *base, size_t size) {
+		if (size < STRING_CAPACITY) {
+			if (_string.valid()) {
+				_string() = Cstring { base, size };
+			} else {
+				_string = *new (_alloc) String { Cstring { base, size } };
+			}
+		} else {
+			_reject_oversized_string(domain, "XML configuration");
+		}
+	});
+}
+
+
+void Dns_domain_name::set_to(Dhcp_packet::Domain_name const &name_option,
+                             Domain                   const &domain)
 {
 	name_option.with_string([&] (char const *base, size_t size) {
-		if (_string.valid()) {
-			_string() = Cstring { base, size };
+		if (size < STRING_CAPACITY) {
+			if (_string.valid()) {
+				_string() = Cstring { base, size };
+			} else {
+				_string = *new (_alloc) String { Cstring { base, size } };
+			}
 		} else {
-			_string = *new (_alloc) String { Cstring { base, size } };
+			_reject_oversized_string(domain, "DHCP packet");
 		}
 	});
 }

@@ -30,6 +30,7 @@ namespace Genode {
 
 namespace Net {
 
+	class Domain;
 	class Dns_server;
 	class Dns_domain_name;
 
@@ -61,14 +62,21 @@ class Net::Dns_server : private Genode::Noncopyable,
 
 class Net::Dns_domain_name : private Genode::Noncopyable
 {
+	private:
+
+		enum { STRING_CAPACITY = 160 };
+
 	public:
 
-		using String = Genode::String<160>;
+		using String = Genode::String<STRING_CAPACITY>;
 
 	private:
 
 		Genode::Allocator &_alloc;
 		Pointer<String>    _string { };
+
+		void _reject_oversized_string(Domain const &domain,
+		                              char   const *src_type);
 
 	public:
 
@@ -80,7 +88,11 @@ class Net::Dns_domain_name : private Genode::Noncopyable
 
 		void set_to(Genode::Xml_attribute const &name_attr);
 
-		void set_to(Dhcp_packet::Domain_name const &name_option);
+		void set_to(Genode::Xml_attribute const &name_attr,
+		            Domain                const &domain);
+
+		void set_to(Dhcp_packet::Domain_name const &name_option,
+		            Domain                   const &domain);
 
 		void set_invalid();
 

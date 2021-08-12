@@ -53,8 +53,9 @@ Ipv4_config::Ipv4_config(Ipv4_config const &ip_config,
 }
 
 
-Ipv4_config::Ipv4_config(Dhcp_packet &dhcp_ack,
-                         Allocator   &alloc)
+Ipv4_config::Ipv4_config(Dhcp_packet  &dhcp_ack,
+                         Allocator    &alloc,
+                         Domain const &domain)
 :
 	_alloc      { alloc },
 	_interface  { dhcp_ack.yiaddr(),
@@ -71,7 +72,9 @@ Ipv4_config::Ipv4_config(Dhcp_packet &dhcp_ack,
 	}
 	catch (Dhcp_packet::Option_not_found) { }
 	try {
-		_dns_domain_name.set_to(dhcp_ack.option<Dhcp_packet::Domain_name>());
+		_dns_domain_name.set_to(
+			dhcp_ack.option<Dhcp_packet::Domain_name>(),
+			domain);
 	}
 	catch (Dhcp_packet::Option_not_found) { }
 }

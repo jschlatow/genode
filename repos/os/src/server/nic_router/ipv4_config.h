@@ -46,7 +46,8 @@ class Net::Ipv4_config
 	public:
 
 		Ipv4_config(Net::Dhcp_packet  &dhcp_ack,
-		            Genode::Allocator &alloc);
+		            Genode::Allocator &alloc,
+		            Domain      const &domain);
 
 		Ipv4_config(Genode::Xml_node const &domain_node,
 		            Genode::Allocator      &alloc);

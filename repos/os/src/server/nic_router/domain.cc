@@ -113,7 +113,7 @@ void Domain::discard_ip_config()
 void Domain::ip_config_from_dhcp_ack(Dhcp_packet &dhcp_ack)
 {
 	_reconstruct_ip_config([&] (Reconstructible<Ipv4_config> &ip_config) {
-		ip_config.construct(dhcp_ack, _alloc); });
+		ip_config.construct(dhcp_ack, _alloc, *this); });
 }
 
 
