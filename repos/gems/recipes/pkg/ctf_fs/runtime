@@ -5,6 +5,7 @@
 		<file_system label="target"/>
 		<trace/>
 		<rtc/>
+		<rom label="platform_info"/>
 	</requires>
 
 	<content>

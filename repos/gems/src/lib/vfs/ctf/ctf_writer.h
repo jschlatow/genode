@@ -19,6 +19,8 @@
 #include <timer_session/connection.h>
 #include <rtc_session/connection.h>
 #include <ctf/packet_types.h>
+#include <trace/timestamp.h>
+#include <base/attached_rom_dataspace.h>
 
 #include "packet_buffer.h"
 
@@ -97,12 +99,39 @@ class Ctf::Ctf_writer
 			});
 		}
 
+		uint64_t _timestamp_frequency()
+		{
+			using namespace Genode;
+
+			/* try getting tsc frequency from platform info, measure if failed */
+			try {
+				Attached_rom_dataspace const platform_info (_env.env(), "platform_info");
+				Xml_node const hardware  = platform_info.xml().sub_node("hardware");
+				uint64_t const tsc_freq  = hardware.sub_node("tsc").attribute_value("freq_khz", 0ULL);
+				bool     const invariant = hardware.sub_node("tsc").attribute_value("invariant", true);
+
+				if (!invariant)
+					error("No invariant TSC available");
+
+				if (tsc_freq)
+					return tsc_freq / 1000;
+			} catch (...) { }
+
+			warning("Falling back to measured timestamp frequency");
+			/* measure frequency using timer and round down to full Mhz */
+			Trace::Timestamp start = Trace::timestamp();
+			_timer.msleep(1000);
+			return (Trace::timestamp() - start) / (1000 * 1000);
+		}
+
 	public:
 
 		Ctf_writer(Vfs::Env &env, Trace_control &control)
 		: _env(env),
 		  _trace_control(control)
 		{
+			log("Timestamp frequency is ", _timestamp_frequency(), "MHz");
+
 			_timer.sigh(_timeout_handler);
 		}
 
@@ -119,6 +148,8 @@ class Ctf::Ctf_writer
 
 			/* set output path based on current time */
 			_cur_path = Directory::join(target_root, _rtc.current_time());
+
+			/* TODO copy/generate metadata file and append clock declaration */
 
 			/* start periodic timer */
 			_timer.trigger_periodic(period_ms * 1000);
