@@ -64,11 +64,12 @@ struct Test_mmio : public Mmio
 
 	struct Reg_64 : Register<0x00, 64>
 	{
-		struct Bits_0 : Bitfield<48,12> { };
-		struct Bits_1 : Bitfield<24,20> { };
-		struct Bits_2 : Bitfield<44,4> { };
-		struct Bits_3 : Bitfield<0,24> { };
-		struct Bits_4 : Bitfield<60,4> { };
+		struct Bits_0   : Bitfield<48,12> { };
+		struct Bits_1   : Bitfield<24,20> { };
+		struct Bits_2   : Bitfield<44,4> { };
+		struct Bits_3   : Bitfield<0,24> { };
+		struct Bits_4   : Bitfield<60,4> { };
+		struct Bits_all : Bitfield<0,64> { };
 	};
 	struct Bitset_64_0 : Bitset_2<Reg_64::Bits_0, Reg_64::Bits_1> { };
 	struct Bitset_64_1 : Bitset_3<Reg_64::Bits_4, Reg_64::Bits_3, Reg_64::Bits_2> { };
@@ -461,6 +462,12 @@ void Component::construct(Genode::Env &env)
 		if (mmio.read<Reg::Bits_1>() != BITS_1) { failed(__LINE__, env); }
 		if (mmio.read<Reg::Bits_2>() != BITS_2) { failed(__LINE__, env); }
 		if (mmio.read<Reg::Bits_3>() != BITS_3) { failed(__LINE__, env); }
+		if (compare_mem(mmio_mem, cmp_mem, MMIO_SIZE)) { failed(__LINE__, env); }
+
+		/* test 64bit-wide bitfield */
+		zero_mem(mmio_mem, MMIO_SIZE);
+		mmio.write<Reg::Bits_all>(*(uint64_t*)cmp_mem);
+		if (mmio.read<Reg::Bits_all>() != *(uint64_t*)cmp_mem) { failed(__LINE__, env); }
 		if (compare_mem(mmio_mem, cmp_mem, MMIO_SIZE)) { failed(__LINE__, env); }
 
 		/* bitsets */
