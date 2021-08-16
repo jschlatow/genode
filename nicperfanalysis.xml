@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tmfxml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="xmlDefinition.xsd">
+	<stateProvider version="0" id="genode.nicperfstate">
+		<head>
+			<label value="Genode Nic Perf Analysis"/>
+		</head>
+
+		<definedValue name="FULL"        value="full"/>
+		<definedValue name="EMPTY"       value="empty"/>
+		<definedValue name="NOT_EMPTY"   value="not_empty"/>
+
+		<eventHandler eventName="Checkpoint">
+			<stateChange>
+				<if>
+					<condition>
+						<!-- type == OBJ_STATE -->
+						<stateValue type="long" value="18"/>
+						<stateValue type="eventField" value="type"/>
+					</condition>
+				</if>
+				<then>
+					<stateAttribute type="eventField" value="name"/>
+					<stateAttribute type="constant" value="Component"/>
+					<stateAttribute type="eventField" value="context.session_label"/>
+					<stateAttribute type="constant" value="slots_free"/>
+					<stateValue type="eventField" value="data"/>
+				</then>
+			</stateChange>
+		</eventHandler>
+	</stateProvider>
+
+	<xyView id="genode.nicperfxyacktx">
+		<head>
+			<analysis id="genode.nicperfstate" ssid="nicperfstate"/>
+			<label value="Ack Queue Slots Free Before Sending" />
+		</head>
+
+		<entry path="tx_ack_queue_pre/Component/*">
+			<display type="constant" value="slots_free"/>
+			<name type="self"/>
+		</entry>
+	</xyView>
+
+	<xyView id="genode.nicperfxyackrx">
+		<head>
+			<analysis id="genode.nicperfstate" ssid="nicperfstate"/>
+			<label value="Ack Queue Slots Free Before Receiving" />
+		</head>
+
+		<entry path="rx_ack_queue_pre/Component/*">
+			<display type="constant" value="slots_free"/>
+			<name type="self"/>
+		</entry>
+	</xyView>
+
+	<xyView id="genode.nicperfxyacktxpost">
+		<head>
+			<analysis id="genode.nicperfstate" ssid="nicperfstate"/>
+			<label value="Ack Queue Slots Free After Sending" />
+		</head>
+
+		<entry path="tx_ack_queue_post/Component/*">
+			<display type="constant" value="slots_free"/>
+			<name type="self"/>
+		</entry>
+	</xyView>
+
+	<xyView id="genode.nicperfxyackrxpost">
+		<head>
+			<analysis id="genode.nicperfstate" ssid="nicperfstate"/>
+			<label value="Ack Queue Slots Free After Receiving" />
+		</head>
+
+		<entry path="rx_ack_queue_post/Component/*">
+			<display type="constant" value="slots_free"/>
+			<name type="self"/>
+		</entry>
+	</xyView>
+
+	<xyView id="genode.nicperfxysubmittx">
+		<head>
+			<analysis id="genode.nicperfstate" ssid="nicperfstate"/>
+			<label value="Submit Queue Slots Free Before Sending" />
+		</head>
+
+		<entry path="tx_submit_queue_pre/Component/*">
+			<display type="constant" value="slots_free"/>
+			<name type="self"/>
+		</entry>
+	</xyView>
+
+	<xyView id="genode.nicperfxysubmitrx">
+		<head>
+			<analysis id="genode.nicperfstate" ssid="nicperfstate"/>
+			<label value="Submit Queue Slots Free Before Receiving" />
+		</head>
+
+		<entry path="rx_submit_queue_pre/Component/*">
+			<display type="constant" value="slots_free"/>
+			<name type="self"/>
+		</entry>
+	</xyView>
+
+	<xyView id="genode.nicperfxysubmittxpost">
+		<head>
+			<analysis id="genode.nicperfstate" ssid="nicperfstate"/>
+			<label value="Submit Queue Slots Free After Sending" />
+		</head>
+
+		<entry path="tx_submit_queue_post/Component/*">
+			<display type="constant" value="slots_free"/>
+			<name type="self"/>
+		</entry>
+	</xyView>
+
+	<xyView id="genode.nicperfxysubmitrxpost">
+		<head>
+			<analysis id="genode.nicperfstate" ssid="nicperfstate"/>
+			<label value="Submit Queue Slots Free After Receiving" />
+		</head>
+
+		<entry path="rx_submit_queue_post/Component/*">
+			<display type="constant" value="slots_free"/>
+			<name type="self"/>
+		</entry>
+	</xyView>
+</tmfxml>

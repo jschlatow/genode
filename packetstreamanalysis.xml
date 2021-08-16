@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tmfxml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="xmlDefinition.xsd">
+	<stateProvider version="0" id="genode.packetstreamstate">
+		<head>
+			<label value="Genode Packet Stream Analysis"/>
+		</head>
+
+		<definedValue name="FULL"        value="full"/>
+		<definedValue name="EMPTY"       value="empty"/>
+		<definedValue name="NOT_EMPTY"   value="not_empty"/>
+
+		<eventHandler eventName="Checkpoint">
+			<stateChange>
+				<if>
+					<condition>
+						<!-- type == OBJ_STATE -->
+						<stateValue type="long" value="18"/>
+						<stateValue type="eventField" value="type"/>
+					</condition>
+				</if>
+				<then>
+					<stateAttribute type="constant" value="Genode"/>
+					<stateAttribute type="constant" value="Component"/>
+					<stateAttribute type="eventField" value="context.session_label"/>
+					<stateAttribute type="constant" value="Thread"/>
+					<stateAttribute type="eventField" value="context.thread_name"/>
+					<stateAttribute type="constant" value="Stream"/>
+					<stateAttribute type="eventField" value="addr"/>
+					<stateAttribute type="constant" value="Queue"/>
+					<stateAttribute type="eventField" value="name"/>
+					<stateAttribute type="constant" value="slots_free"/>
+					<stateValue type="eventField" value="data"/>
+				</then>
+			</stateChange>
+			<stateChange>
+				<if>
+					<and>
+						<condition>
+							<!-- type == OBJ_STATE -->
+							<stateValue type="long" value="18"/>
+							<stateValue type="eventField" value="type"/>
+						</condition>
+						<condition>
+							<stateValue type="long" value="1023"/>
+							<stateValue type="eventField" value="data"/>
+						</condition>
+						<not>
+							<condition>
+								<stateValue type="long" value="0"/>
+								<stateValue type="eventField" value="data"/>
+							</condition>
+						</not>
+					</and>
+				</if>
+				<then>
+					<stateAttribute type="constant" value="Genode"/>
+					<stateAttribute type="constant" value="Component"/>
+					<stateAttribute type="eventField" value="context.session_label"/>
+					<stateAttribute type="constant" value="Thread"/>
+					<stateAttribute type="eventField" value="context.thread_name"/>
+					<stateAttribute type="constant" value="Stream"/>
+					<stateAttribute type="eventField" value="addr"/>
+					<stateAttribute type="constant" value="Queue"/>
+					<stateAttribute type="eventField" value="name"/>
+					<stateAttribute type="constant" value="state"/>
+					<stateValue type="string" value="$EMPTY"/>
+				</then>
+				<else>
+					<stateAttribute type="constant" value="Genode"/>
+					<stateAttribute type="constant" value="Component"/>
+					<stateAttribute type="eventField" value="context.session_label"/>
+					<stateAttribute type="constant" value="Thread"/>
+					<stateAttribute type="eventField" value="context.thread_name"/>
+					<stateAttribute type="constant" value="Stream"/>
+					<stateAttribute type="eventField" value="addr"/>
+					<stateAttribute type="constant" value="Queue"/>
+					<stateAttribute type="eventField" value="name"/>
+					<stateAttribute type="constant" value="state"/>
+					<stateValue type="string" value="$NOT_EMPTY"/>
+				</else>
+			</stateChange>
+			<stateChange>
+				<if>
+					<and>
+						<condition>
+							<!-- type == OBJ_STATE -->
+							<stateValue type="long" value="18"/>
+							<stateValue type="eventField" value="type"/>
+						</condition>
+						<condition>
+							<stateValue type="long" value="0"/>
+							<stateValue type="eventField" value="data"/>
+						</condition>
+					</and>
+				</if>
+				<then>
+					<stateAttribute type="constant" value="Genode"/>
+					<stateAttribute type="constant" value="Component"/>
+					<stateAttribute type="eventField" value="context.session_label"/>
+					<stateAttribute type="constant" value="Thread"/>
+					<stateAttribute type="eventField" value="context.thread_name"/>
+					<stateAttribute type="constant" value="Stream"/>
+					<stateAttribute type="eventField" value="addr"/>
+					<stateAttribute type="constant" value="Queue"/>
+					<stateAttribute type="eventField" value="name"/>
+					<stateAttribute type="constant" value="state"/>
+					<stateValue type="string" value="$FULL"/>
+				</then>
+			</stateChange>
+		</eventHandler>
+	</stateProvider>
+
+	<timeGraphView id="genode.packetstreamgraph">
+		<head>
+			<analysis id="genode.packetstreamstate" ssid="packetstreamstate"/>
+			<label value="Packet Stream Gantt"/>
+		</head>
+
+		<entry path="Genode/Component">
+			<name type="constant" value="Context"/>
+			<entry path="*">
+				<name type="self" />
+				<entry path="Thread/*">
+					<name type="self" />
+					<entry path="Stream/*">
+						<name type="self" />
+						<entry path="Queue/*">
+							<entry path="state">
+								<display type="self"/>
+							</entry>
+						</entry>
+					</entry>
+				</entry>
+			</entry>
+		</entry>
+
+	</timeGraphView>
+</tmfxml>
