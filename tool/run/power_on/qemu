@@ -105,7 +105,7 @@ proc run_power_on { } {
 		append qemu_args " -M realview-pbx-a9"
 	}
 	if {[have_board vpb926]} { append qemu_args " -M versatilepb     -m 128 " }
-	if {[have_board zynq_qemu]}   { append qemu_args " -M xilinx-zynq-a9 -cpu cortex-a9 -m 256 " }
+	if {[have_board zynq_qemu]}   { append qemu_args " -M xilinx-zynq-a9 -cpu cortex-a9 -m 1024 " }
 	if {[have_board rpi3]}   { append qemu_args " -M raspi3 -m 512 " }
 
 	if {[have_board virt_qemu]} {
