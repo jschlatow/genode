@@ -19,9 +19,9 @@
 #include <util/xml_generator.h>
 
 #include <trace_session/connection.h>
+#include <trace/trace_buffer.h>
 
 #include "directory_tree.h"
-#include "trace_buffer.h"
 #include "value_file_system.h"
 
 
