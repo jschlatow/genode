@@ -60,10 +60,12 @@ proc run_boot_dir {binaries} {
 	if {$bootstrap_arg != ""} { copy_file bin/bootstrap-hw-[board].o [run_dir]/genode/ }
 
 	#
-	# Copy specified modules to the run directory, excluding core.
+	# Copy specified modules to the run directory, excluding core and ld.lib.so.
 	#
 	set idx [lsearch $binaries "core"]
 	set modules [lreplace $binaries $idx $idx]
+#	set idx [lsearch $modules "ld.lib.so"]
+#	set modules [lreplace $modules $idx $idx]
 	copy_genode_binaries_to_run_dir $modules
 
 	puts "core link address is [core_link_address]"
