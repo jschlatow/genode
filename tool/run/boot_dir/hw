@@ -64,8 +64,8 @@ proc run_boot_dir {binaries} {
 	#
 	set idx [lsearch $binaries "core"]
 	set modules [lreplace $binaries $idx $idx]
-#	set idx [lsearch $modules "ld.lib.so"]
-#	set modules [lreplace $modules $idx $idx]
+	set idx [lsearch $modules "ld.lib.so"]
+	set modules [lreplace $modules $idx $idx]
 	copy_genode_binaries_to_run_dir $modules
 
 	puts "core link address is [core_link_address]"
