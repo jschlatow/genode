@@ -25,6 +25,8 @@ proc run_boot_dir {binaries} {
 
 	if {[llength $targets]} { build $targets }
 
+	if {$ld_arg     != ""} { copy_file bin/[binary_name_ld_lib_so]  [run_dir]/genode/ld.lib.so }
+
 	if {$kernel_arg != ""} {
 		copy_file bin/pistachio           [run_dir]/genode/pistachio
 		copy_file bin/sigma0-pistachio    [run_dir]/genode/sigma0-pistachio

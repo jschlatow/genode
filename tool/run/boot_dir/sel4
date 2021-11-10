@@ -38,9 +38,8 @@ proc run_boot_dir {binaries} {
 
 	if {[llength $targets]} { build $targets }
 
-	if {$kernel_arg != ""} {
-		copy_file [pwd]/bin/sel4-[board] [run_dir]/genode/sel4
-	}
+	if {$ld_arg     != ""} { copy_file bin/[binary_name_ld_lib_so]  [run_dir]/genode/ld.lib.so }
+	if {$kernel_arg != ""} { copy_file [pwd]/bin/sel4-[board]       [run_dir]/genode/sel4 }
 
 	build_core_image $binaries
 

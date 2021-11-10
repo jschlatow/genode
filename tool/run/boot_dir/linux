@@ -8,7 +8,10 @@ proc binary_name_timer     { } { return "linux_timer_drv" }
 #
 proc run_boot_dir {binaries} {
 
-	if {![file exists [run_dir]/genode/ld.lib.so]} { build { lib/ld/linux } }
+	if {![file exists [run_dir]/genode/ld.lib.so]} {
+		build lib/ld/linux
+		copy_file bin/[binary_name_ld_lib_so]  [run_dir]/genode/ld.lib.so
+	}
 
 	set missing_boot_modules { }
 	foreach binary $binaries {
