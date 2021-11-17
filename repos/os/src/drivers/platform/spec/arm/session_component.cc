@@ -88,7 +88,7 @@ Session_component::acquire_device(Platform::Session::Device_name const &name)
 		}
 
 		/* account one device capability needed */
-		_cap_quota_guard().replenish(Cap_quota{1});
+		_cap_quota_guard().withdraw(Cap_quota{1});
 
 		return _env.env.ep().rpc_ep().manage(e->object());
 	}
@@ -212,6 +212,16 @@ Session_component::~Session_component()
 			_cap_quota_guard().replenish(Cap_quota{1});
 		}
 		destroy(_md_alloc, e->object());
+	}
+
+	/* also free up dma buffers */
+	while (_buffer_list.first()) {
+		Dma_buffer * e = _buffer_list.first();
+		_buffer_list.remove(e);
+		Ram_dataspace_capability const cap = e->cap;
+		destroy(_md_alloc, e);
+		if (cap.valid())
+			_env_ram.free(cap);
 	}
 
 	/* replenish quota for rom sessions, see constructor for explanation */
