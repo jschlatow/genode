@@ -200,6 +200,17 @@ Session_component::~Session_component()
 	while (_device_list.first()) {
 		Device_list_element * e = _device_list.first();
 		_device_list.remove(e);
+
+		/**
+		 * The destruction of the Device_component will release the device
+		 * if it was acquired before. However, we must not forget to dissolve
+		 * the Rpc_object and to replenish the cap quota as normally done by
+		 * release_device().
+		 */
+		if (e->object()->cap().valid()) {
+			_env.env.ep().rpc_ep().dissolve(e->object());
+			_cap_quota_guard().replenish(Cap_quota{1});
+		}
 		destroy(_md_alloc, e->object());
 	}
 
