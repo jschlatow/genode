@@ -25,6 +25,7 @@ namespace Genode { namespace Trace {
 	struct Rpc_reply;
 	struct Signal_submit;
 	struct Signal_received;
+	struct Checkpoint;
 } }
 
 
@@ -118,6 +119,22 @@ struct Genode::Trace::Signal_received
 
 	size_t generate(Policy_module &policy, char *dst) const {
 		return policy.signal_received(dst, signal_context, num); }
+};
+
+
+struct Genode::Trace::Checkpoint
+{
+	char               const *name;
+	unsigned long long const  data;
+
+	Checkpoint(char const *name, unsigned long long data)
+	: name(name), data(data)
+	{
+		Thread::trace(this);
+	}
+
+	size_t generate(Policy_module &policy, char *dst) const {
+		return policy.checkpoint(dst, name, data); }
 };
 
 
