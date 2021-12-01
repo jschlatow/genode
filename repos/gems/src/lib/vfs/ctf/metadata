@@ -107,3 +107,13 @@ event {
 		uint64_t _context;
 	};
 };
+
+event {
+	name = "Checkpoint";
+	id = 7;
+	stream_id = 0;
+	fields := struct {
+		uint64_t _data;
+		string _name;
+	};
+};

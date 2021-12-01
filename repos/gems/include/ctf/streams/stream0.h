@@ -26,6 +26,7 @@ namespace Ctf {
 	struct Rpc_reply;
 	struct Signal_submit;
 	struct Signal_receive;
+	struct Checkpoint;
 }
 
 
@@ -83,6 +84,18 @@ struct Ctf::Signal_receive : Ctf::Event_header<6>
 	Signal_receive(uint32_t number, void* context)
 	: _number(number),
 	  _context((uint64_t)context)
+	{ }
+} __attribute__((packed));
+
+
+struct Ctf::Checkpoint : Ctf::Event_header<7>
+{
+	uint64_t     _data;
+	Named_event  _named;
+
+	Checkpoint(const char *name, size_t len, uint64_t data)
+	: _data(data),
+	  _named(name, len)
 	{ }
 } __attribute__((packed));
 
