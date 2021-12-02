@@ -180,10 +180,13 @@ install_config {
 exec rm -rf bin/fs
 exec mkdir -p bin/fs
 
+exec cp ${genode_dir}/repos/gems/src/lib/vfs/ctf/metadata bin/
+
 build_boot_image { vfs_import.lib.so
                    vfs
                    lx_fs
                    fs
+                   metadata
                    vfs.lib.so
                    ctf_rpc_name
                    vfs_ctf.lib.so }
@@ -193,5 +196,5 @@ append qemu_args " -nographic "
 run_genode_until {<end/>} 60
 
 # check generated trace by reading CTF trace as fast as possible using a dummy output
-exec cp ${genode_dir}/repos/gems/src/lib/vfs/ctf/metadata bin/fs/0-0-0\ 0\:0\:0/init/rom_logger
+exec cp bin/fs/0-0-0\ 0\:0\:0/metadata bin/fs/0-0-0\ 0\:0\:0/init/rom_logger
 exec babeltrace2 bin/fs/0-0-0\ 0\:0\:0/init/rom_logger --output-format=dummy

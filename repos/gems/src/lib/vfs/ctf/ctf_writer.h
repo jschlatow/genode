@@ -22,6 +22,7 @@
 #include <trace/timestamp.h>
 #include <base/attached_rom_dataspace.h>
 
+#include "metadata_writer.h"
 #include "packet_buffer.h"
 
 namespace Ctf {
@@ -40,11 +41,12 @@ class Ctf::Ctf_writer
 
 		Vfs::Env                  &_env;
 		Trace_control             &_trace_control;
+		Timer::Connection          _timer           { _env.env() };
+		Metadata_writer            _metadata;
 		Buffer                     _packet_buf      { };
 		Directory                  _root_dir        { _env };
 		Directory::Path            _cur_path        { };
 		Rtc::Connection            _rtc             { _env.env() };
-		Timer::Connection          _timer           { _env.env() };
 		Signal_handler<Ctf_writer> _timeout_handler {
 		  _env.env().ep(), *this, &Ctf_writer::_handle_timeout  };
 
@@ -126,12 +128,11 @@ class Ctf::Ctf_writer
 
 	public:
 
-		Ctf_writer(Vfs::Env &env, Trace_control &control)
+		Ctf_writer(Vfs::Env &env, Trace_control &control, Attached_rom_dataspace &metadata_rom)
 		: _env(env),
-		  _trace_control(control)
+		  _trace_control(control),
+		  _metadata(metadata_rom, _timestamp_frequency())
 		{
-			log("Timestamp frequency is ", _timestamp_frequency(), "MHz");
-
 			_timer.sigh(_timeout_handler);
 		}
 
@@ -149,7 +150,10 @@ class Ctf::Ctf_writer
 			/* set output path based on current time */
 			_cur_path = Directory::join(target_root, _rtc.current_time());
 
-			/* TODO copy/generate metadata file and append clock declaration */
+			/* copy metadata file while adapting clock declaration */
+			Directory::Path metadata_path { Directory::join(_cur_path, "metadata") };
+			New_file        metadata_file { _root_dir, metadata_path };
+			_metadata.write_file(metadata_file);
 
 			/* start periodic timer */
 			_timer.trigger_periodic(period_ms * 1000);

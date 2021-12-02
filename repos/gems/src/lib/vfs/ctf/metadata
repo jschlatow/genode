@@ -20,7 +20,7 @@ trace {
 
 clock {
 	name = "monotonic";
-	freq = 1000000000; /* Frequency, in Hz */
+	freq = 1000000000; /* Frequency, in Hz (DO NOT REMOVE) */
 };
 
 typealias integer {
