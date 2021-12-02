@@ -32,11 +32,12 @@ class Ctf::Local_factory : public File_system_factory
 	private:
 		Vfs::Env         &_env;
 
-		Value_file_system<bool, 6>  _enable_fs { "enable", "false\n" };
-		Xml_file_system<1024>       _config_fs { "config", "<config/>\n" };
+		Value_file_system<bool, 6>  _enable_fs    { "enable", "false\n" };
+		Xml_file_system<1024>       _config_fs    { "config", "<config/>\n" };
+		Attached_rom_dataspace      _metadata_rom { _env.env(), "metadata" };
 
 		Trace_control     _trace_control { _env.env(), _env.alloc() };
-		Ctf_writer        _ctf_writer    { _env,       _trace_control };
+		Ctf_writer        _ctf_writer    { _env,       _trace_control, _metadata_rom };
 
 		Watch_handler<Local_factory> _enable_handler {
 		  _enable_fs, "/enable", _env.alloc(), *this, &Local_factory::_handle_enable };
