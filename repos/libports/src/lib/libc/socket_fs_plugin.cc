@@ -20,6 +20,7 @@
 #include <vfs/types.h>
 #include <util/string.h>
 #include <libc/allocator.h>
+#include <trace/probe.h>
 
 /* libc includes */
 #include <netinet/in.h>
@@ -517,6 +518,8 @@ static int read_sockaddr_in(Socket_fs::Sockaddr_functor &func,
 
 extern "C" int socket_fs_getpeername(int libc_fd, sockaddr *addr, socklen_t *addrlen)
 {
+	GENODE_TRACE_DURATION(libc_fd);
+
 	File_descriptor *fd = file_descriptor_allocator()->find_by_libc_fd(libc_fd);
 	if (!fd) return Errno(EBADF);
 
@@ -538,6 +541,8 @@ extern "C" int socket_fs_getpeername(int libc_fd, sockaddr *addr, socklen_t *add
 
 extern "C" int socket_fs_getsockname(int libc_fd, sockaddr *addr, socklen_t *addrlen)
 {
+	GENODE_TRACE_DURATION(libc_fd);
+
 	File_descriptor *fd = file_descriptor_allocator()->find_by_libc_fd(libc_fd);
 	if (!fd) return Errno(EBADF);
 
@@ -555,6 +560,8 @@ extern "C" int socket_fs_getsockname(int libc_fd, sockaddr *addr, socklen_t *add
 
 extern "C" int socket_fs_accept(int libc_fd, sockaddr *addr, socklen_t *addrlen)
 {
+	GENODE_TRACE_DURATION(libc_fd);
+
 	File_descriptor *fd = file_descriptor_allocator()->find_by_libc_fd(libc_fd);
 	if (!fd) return Errno(EBADF);
 
@@ -626,6 +633,8 @@ extern "C" int socket_fs_accept(int libc_fd, sockaddr *addr, socklen_t *addrlen)
 
 extern "C" int socket_fs_bind(int libc_fd, sockaddr const *addr, socklen_t addrlen)
 {
+	GENODE_TRACE_DURATION(libc_fd);
+
 	File_descriptor *fd = file_descriptor_allocator()->find_by_libc_fd(libc_fd);
 	if (!fd) return Errno(EBADF);
 
@@ -662,6 +671,8 @@ extern "C" int socket_fs_bind(int libc_fd, sockaddr const *addr, socklen_t addrl
 
 extern "C" int socket_fs_connect(int libc_fd, sockaddr const *addr, socklen_t addrlen)
 {
+	GENODE_TRACE_DURATION(libc_fd);
+
 	File_descriptor *fd = file_descriptor_allocator()->find_by_libc_fd(libc_fd);
 	if (!fd) return Errno(EBADF);
 
@@ -758,6 +769,8 @@ extern "C" int socket_fs_connect(int libc_fd, sockaddr const *addr, socklen_t ad
 
 extern "C" int socket_fs_listen(int libc_fd, int backlog)
 {
+	GENODE_TRACE_DURATION(libc_fd);
+
 	File_descriptor *fd = file_descriptor_allocator()->find_by_libc_fd(libc_fd);
 	if (!fd) return Errno(EBADF);
 
@@ -829,6 +842,8 @@ static ssize_t do_recvfrom(File_descriptor *fd,
 extern "C" ssize_t socket_fs_recvfrom(int libc_fd, void *buf, ::size_t len, int flags,
                                       sockaddr *src_addr, socklen_t *src_addrlen)
 {
+	GENODE_TRACE_DURATION(len);
+
 	File_descriptor *fd = file_descriptor_allocator()->find_by_libc_fd(libc_fd);
 	if (!fd) return Errno(EBADF);
 
@@ -907,6 +922,8 @@ static ssize_t do_sendto(File_descriptor *fd,
 extern "C" ssize_t socket_fs_sendto(int libc_fd, void const *buf, ::size_t len, int flags,
                                     sockaddr const *dest_addr, socklen_t dest_addrlen)
 {
+	GENODE_TRACE_DURATION(len);
+
 	File_descriptor *fd = file_descriptor_allocator()->find_by_libc_fd(libc_fd);
 	if (!fd) return Errno(EBADF);
 
@@ -924,6 +941,8 @@ extern "C" ssize_t socket_fs_send(int libc_fd, void const *buf, ::size_t len, in
 extern "C" int socket_fs_getsockopt(int libc_fd, int level, int optname,
                                     void *optval, socklen_t *optlen)
 {
+	GENODE_TRACE_DURATION(libc_fd);
+
 	File_descriptor *fd = file_descriptor_allocator()->find_by_libc_fd(libc_fd);
 	if (!fd) return Errno(EBADF);
 
@@ -975,6 +994,8 @@ extern "C" int socket_fs_getsockopt(int libc_fd, int level, int optname,
 extern "C" int socket_fs_setsockopt(int libc_fd, int level, int optname,
                                     void const *optval, socklen_t optlen)
 {
+	GENODE_TRACE_DURATION(libc_fd);
+
 	File_descriptor *fd = file_descriptor_allocator()->find_by_libc_fd(libc_fd);
 	if (!fd) return Errno(EBADF);
 
@@ -1011,6 +1032,8 @@ extern "C" int socket_fs_setsockopt(int libc_fd, int level, int optname,
 
 extern "C" int socket_fs_shutdown(int libc_fd, int how)
 {
+	GENODE_TRACE_DURATION(libc_fd);
+
 	File_descriptor *fd = file_descriptor_allocator()->find_by_libc_fd(libc_fd);
 	if (!fd) return Errno(EBADF);
 
@@ -1027,6 +1050,8 @@ extern "C" int socket_fs_shutdown(int libc_fd, int how)
 
 extern "C" int socket_fs_socket(int domain, int type, int protocol)
 {
+	GENODE_TRACE_DURATION(protocol);
+
 	Socket_fs::Absolute_path path(config_socket());
 
 	if (path == "") {
@@ -1097,6 +1122,8 @@ static int read_ifaddr_file(sockaddr_in &sockaddr, Socket_fs::Absolute_path cons
 
 extern "C" int getifaddrs(struct ifaddrs **ifap)
 {
+	GENODE_TRACE_DURATION(0);
+
 	static Pthread_mutex mutex;
 
 	Pthread_mutex::Guard guard(mutex);
@@ -1137,6 +1164,8 @@ extern "C" void freeifaddrs(struct ifaddrs *) { }
 
 int Socket_fs::Plugin::fcntl(File_descriptor *fd, int cmd, long arg)
 {
+	GENODE_TRACE_CHECKPOINT(fd);
+
 	Socket_fs::Context *context = dynamic_cast<Socket_fs::Context *>(fd->context);
 	if (!context) return Errno(EBADF);
 
@@ -1154,6 +1183,8 @@ int Socket_fs::Plugin::fcntl(File_descriptor *fd, int cmd, long arg)
 
 ssize_t Socket_fs::Plugin::read(File_descriptor *fd, void *buf, ::size_t count)
 {
+	GENODE_TRACE_DURATION(count);
+
 	ssize_t const ret = do_recvfrom(fd, buf, count, 0, nullptr, nullptr);
 	if (ret != -1) return ret;
 
@@ -1166,6 +1197,7 @@ ssize_t Socket_fs::Plugin::read(File_descriptor *fd, void *buf, ::size_t count)
 
 ssize_t Socket_fs::Plugin::write(File_descriptor *fd, const void *buf, ::size_t count)
 {
+	GENODE_TRACE_DURATION(count);
 
 	ssize_t const ret = do_sendto(fd, buf, count, 0, nullptr, 0);
 	if (ret != -1) return ret;
@@ -1180,6 +1212,8 @@ ssize_t Socket_fs::Plugin::write(File_descriptor *fd, const void *buf, ::size_t 
 bool Socket_fs::Plugin::poll(File_descriptor &fdo, struct pollfd &pfd)
 {
 	if (fdo.plugin != this) return false;
+
+	GENODE_TRACE_CHECKPOINT(0);
 	Socket_fs::Context *context { nullptr };
 
 	try {
@@ -1214,6 +1248,7 @@ bool Socket_fs::Plugin::supports_select(int nfds,
                                         fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
                                         struct timeval *timeout)
 {
+	GENODE_TRACE_CHECKPOINT(0);
 	/* return true if any file descriptor (which is set) belongs to the VFS */
 	for (int fd = 0; fd < nfds; ++fd) {
 
@@ -1233,6 +1268,7 @@ int Socket_fs::Plugin::select(int nfds,
                               fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
                               timeval *timeout)
 {
+	GENODE_TRACE_DURATION(0);
 	int nready = 0;
 
 	fd_set const in_readfds  = *readfds;
@@ -1299,6 +1335,7 @@ int Socket_fs::Plugin::select(int nfds,
 
 int Socket_fs::Plugin::close(File_descriptor *fd)
 {
+	GENODE_TRACE_CHECKPOINT(fd);
 	Socket_fs::Context *context = dynamic_cast<Socket_fs::Context *>(fd->context);
 	if (!context) return Errno(EBADF);
 
@@ -1317,6 +1354,7 @@ int Socket_fs::Plugin::close(File_descriptor *fd)
 
 int Socket_fs::Plugin::ioctl(File_descriptor *, unsigned long request, char*)
 {
+	GENODE_TRACE_CHECKPOINT(request);
 	if (request == FIONREAD) {
 		/*
 		 * This request occurs quite often when using the Arora web browser,
