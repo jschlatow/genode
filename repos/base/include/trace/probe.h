@@ -18,6 +18,29 @@
 
 #include <base/trace/events.h>
 
+namespace Genode { namespace Trace {
+
+	class Duration
+	{
+		private:
+			char               const *_end_name;
+			unsigned long long const  _data;
+
+			Duration(Duration const &) = delete;
+
+			Duration & operator = (Duration const &) = delete;
+
+		public:
+			Duration(char const * start_name, char const * end_name, unsigned long long data)
+			: _end_name(end_name), _data(data)
+			{ Checkpoint(start_name, data); }
+
+			~Duration()
+			{ Checkpoint(_end_name, _data); }
+	};
+
+} }
+
 
 /**
  * Trace a single checkpoint named after the current function.
@@ -36,6 +59,17 @@
  */
 #define GENODE_TRACE_CHECKPOINT_NAMED(data, name) \
 	Genode::Trace::Checkpoint(#name, (unsigned long long)data);
+
+
+/**
+ * Trace a pair of checkpoints when entering and leaving the current scope.
+ *
+ * The argument 'data' specifies the payload as an unsigned value.
+ * The argument 'name' specifies the names of the checkpoint suffixed with
+ * '_start' resp. '_end'.
+ */
+#define GENODE_TRACE_DURATION_NAMED(data, name) \
+	Genode::Trace::Duration(#name"_start", #name"_end", (unsigned long long)data);
 
 
 #endif /* _INCLUDE__TRACE__PROBE_H_ */
