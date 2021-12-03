@@ -1,0 +1,24 @@
+            Netperf component running in server mode.
+
+In order to run a test, start the component and add the following forwarding
+rules to your Nic router config (assuming the netperf server got ip 10.0.1.2):
+
+! <domain name="uplink">
+!   [...]
+!   <tcp-forward port="12865" domain="default" to="10.0.1.2"/>
+!   <tcp-forward port="18000" domain="default" to="10.0.1.2"/>
+! </domain>
+
+On a remote (Linux) host, execute netperf 2.6.0 binary with the following
+arguments:
+
+! netperf-2.6.0 -4 -H <sculpt-ip-address> -t tcp_stream -- -P 18000 -k THROUGHPUT,THROUGHPUT_UNITS
+
+Note, that you must insert the IP address of the Sculpt system running this
+netperf component.
+In case of the 'tcp_stream' test, data will flow from the client to the host.
+To reverse the direction, you may use the 'tcp_maerts' test.
+
+By default, the component uses vfs_lxip.lib.so as a socket-fs plugin but the
+vfs_lwip.lib.so is also packaged so that you are able to modify the
+configuration and thereby replace the TCP/IP stack.
