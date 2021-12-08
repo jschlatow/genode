@@ -357,6 +357,9 @@ class Net::Interface : private Interface_list::Element
 
 		bool link_state() const;
 
+		template <typename NAME>
+		void _trace_tcp_packet(NAME const &name, void *packet, Genode::size_t size);
+
 
 		/***********************************
 		 ** Packet-stream signal handlers **

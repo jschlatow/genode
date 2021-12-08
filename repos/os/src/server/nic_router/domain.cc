@@ -199,6 +199,7 @@ Domain::Domain(Configuration &config, Xml_node const node, Allocator &alloc)
 	_icmp_echo_server    { node.attribute_value("icmp_echo_server",
 	                                            config.icmp_echo_server()) },
 	_use_arp             { _node.attribute_value("use_arp", true) },
+	_trace_tcp           { _node.attribute_value("trace_tcp", false) },
 	_label               { node.attribute_value("label",
 	                                            String<160>()).string() }
 {

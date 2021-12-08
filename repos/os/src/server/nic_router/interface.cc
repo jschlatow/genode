@@ -17,6 +17,7 @@
 #include <net/icmp.h>
 #include <net/arp.h>
 #include <base/quota_guard.h>
+#include <trace/probe.h>
 
 /* local includes */
 #include <interface.h>
@@ -1619,6 +1620,11 @@ void Interface::_handle_eth(void              *const  eth_base,
 				if (local_domain.verbose_packets()) {
 					log("[", local_domain, "] rcv ", eth); }
 
+				if (local_domain.trace_tcp()) {
+					Genode::String<160> name { local_domain.name(), "_rcv" };
+					_trace_tcp_packet(name, eth_base, size_guard.total_size());
+				}
+
 				/* try to handle ethernet frame */
 				try { _handle_eth(eth, size_guard, pkt, local_domain); }
 				catch (Free_resources_and_retry_handle_eth) {
@@ -1743,6 +1749,10 @@ void Interface::_send_submit_pkt(Packet_descriptor &pkt,
 		}
 		catch (Size_guard::Exceeded) { log("[", local_domain, "] snd ?"); }
 	}
+	if (local_domain.trace_tcp()) {
+		Genode::String<160> name { local_domain.name(), "_snd" };
+		_trace_tcp_packet(name, pkt_base, pkt_size);
+	}
 	_source.submit_packet(pkt);
 }
 
@@ -1773,6 +1783,28 @@ Interface::Interface(Genode::Entrypoint     &ep,
 	_interfaces         { interfaces }
 {
 	_interfaces.insert(this);
+}
+
+
+template <typename NAME>
+void Interface::_trace_tcp_packet(NAME const &name, void *packet, Genode::size_t size)
+{
+	if (!packet) return;
+
+	Size_guard size_guard { size };
+
+	Ethernet_frame const &eth = Ethernet_frame::cast_from(packet, size_guard);
+	if (eth.type() != Ethernet_frame::Type::IPV4)
+		return;
+
+	Ipv4_packet const &ip = eth.data<Ipv4_packet const>(size_guard);
+	if (ip.protocol() !=  Ipv4_packet::Protocol::TCP)
+		return;
+
+	Tcp_packet const &tcp = ip.data<Tcp_packet const>(size_guard);
+	Genode::uint64_t data = (Genode::uint64_t)tcp.seq_nr() << 32 | tcp.ack_nr();
+
+	GENODE_TRACE_CHECKPOINT_NAMED(data, name.string());
 }
 
 
