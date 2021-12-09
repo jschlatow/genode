@@ -20,11 +20,8 @@
 
 	<config>
 		<vfs>
-			<fs/>
+			<fs label="target"/>
 			<ctf/>
-			<import>
-				<rom name="metadata"/>
-			</import>
 		</vfs>
 		<default-policy root="/" writeable="yes"/>
 	</config>
