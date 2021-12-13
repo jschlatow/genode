@@ -114,6 +114,7 @@ event {
 	stream_id = 0;
 	fields := struct {
 		uint64_t _data;
-		string _name;
+		uint8_t  _type;
+		string   _name;
 	};
 };
