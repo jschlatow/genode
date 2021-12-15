@@ -349,7 +349,7 @@ struct Vfs_trace::Local_factory : File_system_factory
 	Vfs::Env          &_env;
 
 	Trace::Connection  _trace;
-	enum { MAX_SUBJECTS = 128 };
+	enum { MAX_SUBJECTS = 512 };
 	Trace::Subject_id  _subjects[MAX_SUBJECTS];
 	unsigned           _subject_count { 0 };
 	Trace::Policy_id   _policy_id { 0 };
