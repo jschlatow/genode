@@ -1186,6 +1186,7 @@ class Lwip::Tcp_socket_dir final :
 			_pcb_pending.insert(elem);
 
 			tcp_backlog_delayed(newpcb);
+			tcp_nagle_disable(newpcb);
 
 			tcp_arg(newpcb, elem);
 			tcp_recv(newpcb, tcp_delayed_recv_callback);
