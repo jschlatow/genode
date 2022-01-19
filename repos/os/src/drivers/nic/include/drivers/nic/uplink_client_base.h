@@ -60,9 +60,17 @@ class Genode::Uplink_client_base : Noncopyable
 		 ** Interface towards Uplink connection **
 		 *****************************************/
 
-		void _conn_tx_handle_ready_to_submit() { }
+		void _conn_tx_handle_ready_to_submit()
+		{
+			if (_custom_conn_tx_ready_to_submit_handler())
+				_custom_conn_tx_handle_ready_to_submit();
+		}
 
-		void _conn_rx_handle_ready_to_ack() { }
+		void _conn_rx_handle_ready_to_ack()
+		{
+			if (_custom_conn_rx_ready_to_ack_handler())
+				_custom_conn_rx_handle_ready_to_ack();
+		}
 
 		void _conn_tx_handle_ack_avail()
 		{
@@ -309,6 +317,18 @@ class Genode::Uplink_client_base : Noncopyable
 		_drv_transmit_pkt(const char *conn_rx_pkt_base,
 		                  size_t      conn_rx_pkt_size) = 0;
 
+		virtual void _custom_conn_tx_handle_ready_to_submit()
+		{
+			class Unexpected_call { };
+			throw Unexpected_call { };
+		}
+
+		virtual void _custom_conn_rx_handle_ready_to_ack()
+		{
+			class Unexpected_call { };
+			throw Unexpected_call { };
+		}
+
 		virtual void _custom_conn_rx_handle_packet_avail()
 		{
 			class Unexpected_call { };
@@ -320,6 +340,10 @@ class Genode::Uplink_client_base : Noncopyable
 			class Unexpected_call { };
 			throw Unexpected_call { };
 		}
+
+		virtual bool _custom_conn_tx_ready_to_submit_handler() { return false; }
+
+		virtual bool _custom_conn_rx_ready_to_ack_handler() { return false; }
 
 		virtual bool _custom_conn_rx_packet_avail_handler() { return false; }
 
