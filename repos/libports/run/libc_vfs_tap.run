@@ -1,0 +1,92 @@
+#
+# Build
+#
+#
+
+create_boot_directory
+
+import_from_depot [depot_user]/src/[base_src] \
+                  [depot_user]/src/vfs_tap
+
+set build_components {
+	core init timer
+	server/nic_router
+	test/libc_vfs_tap
+}
+
+build $build_components
+
+#
+# Generate config
+#
+
+append config {
+<config verbose="yes">
+	<parent-provides>
+		<service name="ROM"/>
+		<service name="PD"/>
+		<service name="RM"/>
+		<service name="CPU"/>
+		<service name="LOG"/>
+	</parent-provides>
+	<default-route>
+		<any-service> <parent/> <any-child/> </any-service>
+	</default-route>
+	<default caps="100"/>
+
+	<start name="timer">
+		<resource name="RAM" quantum="1M"/>
+		<provides> <service name="Timer"/> </provides>
+	</start>
+
+	<start name="nic_router">
+		<resource name="RAM" quantum="10M"/>
+		<provides>
+			<service name="Nic"/>
+			<service name="Uplink"/>
+		</provides>
+		<config verbose="yes" verbose_packets="yes" verbose_domain_state="yes">
+			<policy label_prefix="test-libc_vfs_tap -> "  domain="tap"/>
+
+			<domain name="tap">
+			</domain>
+		</config>
+	</start>
+
+	<start name="test-libc_vfs_tap">
+		<resource name="RAM" quantum="8M"/>
+		<config>
+			<libc stdin="/dev/log" stdout="/dev/log" stderr="/dev/log"/>
+			<vfs>
+				<dir name="dev">
+					<log/>
+					<tap name="tap0" mac="02:02:00:00:00:20" mode="uplink_client"/>
+				</dir>
+			</vfs>
+		</config>
+	</start>
+</config>
+}
+
+install_config $config
+
+#
+# Boot modules
+#
+
+
+set boot_modules {
+	core init timer test-libc_vfs_tap nic_router
+	ld.lib.so libc.lib.so vfs.lib.so libm.lib.so posix.lib.so
+}
+
+build_boot_image $boot_modules
+
+append qemu_args "-nographic "
+
+# wait for two packets DHCP packets from nic_router being looped back
+run_genode_until ".*Successfully opened device tap0.*\n" 30
+run_genode_until ".*\[tap\].*rcv.*ETH.*02:02:00:00:00.*\n" 15 [output_spawn_id]
+run_genode_until ".*\[tap\].*rcv.*ETH.*02:02:00:00:00.*\n" 15 [output_spawn_id]
+
+# vi: set ft=tcl :
