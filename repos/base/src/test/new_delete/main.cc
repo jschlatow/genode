@@ -109,5 +109,18 @@ void Component::construct(Genode::Env &env)
 		destroy(a, e);
 	} catch (...) { log("exception caught"); }
 
+	/****************************
+	 ** Via base class pointer **
+	 ****************************/
+
+	/* test successful deallocation without side effects */
+	{
+		D *d = new (a)  E(false);
+		B *b = new (a)  B();
+		destroy(a, d);
+		b->b = 19;
+		destroy(a, b);
+	}
+
 	log("Test done");
 }
