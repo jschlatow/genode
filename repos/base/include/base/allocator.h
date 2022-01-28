@@ -282,27 +282,38 @@ void Genode::destroy(DEALLOC && dealloc, T *obj)
 	if (!obj)
 		return;
 
-	/* call destructors */
-	obj->~T();
-
-	/*
-	 * Free memory at the allocator
-	 *
-	 * We have to use the delete operator instead of just calling
-	 * 'dealloc.free' because the 'obj' pointer might not always point to the
-	 * begin of the allocated block:
+	/**
+	 * The 'obj' pointer might not always point to the beginning of the allocated
+	 * block:
 	 *
 	 * If 'T' is the base class of another class 'A', 'obj' may refer
 	 * to an instance of 'A'. In particular when 'A' used multiple inheritance
 	 * with 'T' not being the first inhertited class, the pointer to the actual
 	 * object differs from 'obj'.
 	 *
-	 * Given the pointer to the base class 'T', however, the delete operator is
-	 * magically (by the means of the information found in the vtable of 'T')
-	 * able to determine the actual pointer to the instance of 'A' and passes
-	 * this pointer to 'free'.
+	 * Normally, GCC handles this case according to the Itanium ABI by generating
+	 * two types of destructors: a standard destructor and a deleting destructor.
+	 * For virtual classes, it then replaces the delete operator with a call to
+	 * to the deleting destructor.
+	 * Since we overload the the delete operator, however, this mechanism seems
+	 * to be ineffective.
+	 *
+	 * Instead, if T is a virtual base class, we use a special version of
+	 * dynamic_cast for polymorphic objects that uses the vtable to return a
+	 * pointer to the most derived object. We use GCC's type trait to determine
+	 * at compile time whether 'obj' is polymorphic.
+	 *
+	 * Note, that this must be done before calling the destructor.
 	 */
-	operator delete (obj, dealloc);
+	void * new_addr = obj;
+	if constexpr (__is_polymorphic(T))
+		new_addr = dynamic_cast<void*>(obj);
+
+	/* call destructors */
+	obj->~T();
+
+	/* Free memory at the allocator */
+	operator delete (new_addr, dealloc);
 }
 
 
