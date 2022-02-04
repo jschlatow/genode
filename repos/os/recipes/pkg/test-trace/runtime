@@ -14,6 +14,7 @@
 		<rom label="test-trace"/>
 		<rom label="sequence"/>
 		<rom label="null"/>
+		<rom label="rpc_name"/>
 	</content>
 
 	<config>
@@ -39,7 +40,7 @@
 				<start name="test-trace">
 					<resource name="RAM" quantum="10M"/>
 					<config>
-						<trace_policy label="init -> dynamic -> test-trace -> sequence -> test-trace" thread="test-thread" module="null" />
+						<trace_policy label="init -> dynamic -> test-trace -> sequence -> test-trace" thread="test-thread" module="rpc_name" />
 					</config>
 				</start>
 
