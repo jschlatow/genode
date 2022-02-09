@@ -53,9 +53,9 @@ class Genode::Uplink_client_base : Noncopyable
 		 ** Interface towards Uplink connection **
 		 *****************************************/
 
-		void _conn_tx_handle_ready_to_submit() { }
+		void _conn_tx_handle_ready_to_submit() { _conn_tx_handle_ack_avail(); }
 
-		void _conn_rx_handle_ready_to_ack() { }
+		void _conn_rx_handle_ready_to_ack()    { _conn_rx_handle_packet_avail(); }
 
 		void _conn_tx_handle_ack_avail()
 		{
