@@ -106,6 +106,11 @@ struct Scanner_policy_path_element
 	{
 		return (c != '/') && (c != 0);
 	}
+
+	static bool end_of_quote(const char *s)
+	{
+		return s[0] != '\\' && s[1] == '\"';
+	}
 };
 
 typedef Token<Scanner_policy_path_element> Path_element_token;
