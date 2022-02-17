@@ -293,6 +293,11 @@ class Vfs::Tar_file_system : public File_system
 		{
 			return (c != '/') && (c != 0);
 		}
+
+		static bool end_of_quote(const char *s)
+		{
+			return s[0] != '\\' && s[1] == '\"';
+		}
 	};
 
 
