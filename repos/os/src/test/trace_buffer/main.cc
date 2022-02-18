@@ -52,8 +52,7 @@ struct Generator1
 		Entry const &current { *reinterpret_cast<const Entry*>(entry.data()) };
 		if (current.value != _next_value) {
 			if (print_error) {
-				error("expected entry: ", _next_value);
-				error("but got: ", current);
+				error("expected entry: ", _next_value, ", but got: ", current);
 			}
 			return false;
 		}
@@ -108,16 +107,14 @@ struct Generator2
 		Entry const &current { *reinterpret_cast<const Entry*>(entry.data()) };
 		if (current.value[0] != _next_value) {
 			if (print_error) {
-				error("expected entry: ", _next_value);
-				error("but got: ", current);
+				error("expected entry: ", _next_value, ", but got: ", current);
 			}
 			return false;
 		}
 
 		if (entry.length() != _next_length) {
 			if (print_error) {
-				error("expected entry length: ", _next_length);
-				error("but got: ", entry.length());
+				error("expected entry length: ", _next_length, ", but got: ", entry.length());
 			}
 			return false;
 		}
@@ -125,8 +122,7 @@ struct Generator2
 		unsigned char last = current.value[entry.length()-1];
 		if (last != _next_value) {
 			if (print_error) {
-				error("corrupted entry, expected: ", _next_value);
-				error("but got: ", last);
+				error("corrupted entry, expected: ", _next_value, ", but got: ", last);
 			}
 			return false;
 		}
@@ -327,17 +323,17 @@ struct Main
 		enum { BUFFER_SIZE = 32 * ENTRY_SIZE + sizeof(Trace::Buffer) };
 
 		/* consume as fast as possible */
-		test_1.construct(env, BUFFER_SIZE, 1, 0);
+		test_1.construct(env, BUFFER_SIZE, 10000, 0);
 		test_1.destruct();
 
 		/* leave a word-sized padding at the end */
-		test_1.construct(env, BUFFER_SIZE+4, 1, 0);
+		test_1.construct(env, BUFFER_SIZE+4, 10000, 0);
 		test_1.destruct();
 
 		/* XXX also test with slower consumer than producer */
 
 		/* variable-size test */
-		test_2.construct(env, BUFFER_SIZE, 1, 0);
+		test_2.construct(env, BUFFER_SIZE, 10000, 0);
 		test_2.destruct();
 
 		env.parent().exit(0);
