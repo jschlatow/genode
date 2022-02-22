@@ -79,8 +79,9 @@ class Genode::Trace::Subject
 
 				/**
 				 * Allocate new dataspace
+				 * (used for buffer)
 				 */
-				void setup(Ram_allocator &ram, size_t size)
+				void setup(Ram_allocator &ram, size_t size, Region_map &local_rm)
 				{
 					if (_size && _size == size)
 						return;
@@ -91,10 +92,17 @@ class Genode::Trace::Subject
 					_ds      = ram.alloc(size); /* may throw */
 					_ram_ptr = &ram;
 					_size    = size;
+
+					Trace::Buffer *buffer = local_rm.attach(_ds);
+
+					buffer->init(size);
+
+					local_rm.detach(buffer);
 				}
 
 				/**
 				 * Clone dataspace into newly allocated dataspace
+				 * (used for policy)
 				 */
 				bool setup(Ram_allocator &ram, Region_map &local_rm,
 				           Dataspace_capability &from_ds, size_t size)
@@ -233,7 +241,7 @@ class Genode::Trace::Subject
 			/* check state and throw error in case subject is not traceable */
 			_traceable_or_throw();
 
-			_buffer.setup(ram, size);
+			_buffer.setup(ram, size, local_rm);
 			if(!_policy.setup(ram, local_rm, policy_ds, policy_size))
 				throw Already_traced();
 

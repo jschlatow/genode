@@ -131,7 +131,6 @@ bool Trace::Logger::_evaluate_control()
 
 		try {
 			buffer = _env().rm().attach(buffer_ds);
-			buffer->init(Dataspace_client(buffer_ds).size());
 		} catch (...) { }
 
 		policy_version = control->policy_version();
