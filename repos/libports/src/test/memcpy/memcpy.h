@@ -16,6 +16,8 @@ void memcpy_test(void * dst = nullptr, void * src = nullptr,
 	void * const from_buf = src ? src : malloc(size);
 	void * const to_buf   = dst ? dst : malloc(size);
 
+	Genode::log(from_buf, " -> ", to_buf);
+
 	Test test;
 	test.start();
 

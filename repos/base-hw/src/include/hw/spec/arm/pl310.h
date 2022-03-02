@@ -55,11 +55,18 @@ class Hw::Pl310 : public Genode::Mmio
 
 			struct Share_override : Bitfield<22,1> { };
 
+			struct Force_write_alloc : Bitfield<23,2>
+			{
+				enum { DEFAULT  = 0,
+				       NO_ALLOC = 1,
+				       ALLOC    = 2 };
+			};
+
 			struct Replacement_policy : Bitfield<25,1>
 			{
 				enum { ROUND_ROBIN, PRAND };
 			};
-
+			
 			struct Ns_lockdown   : Bitfield<26,1> { };
 			struct Ns_irq_ctrl   : Bitfield<27,1> { };
 			struct Data_prefetch : Bitfield<28,1> { };
@@ -95,8 +102,9 @@ class Hw::Pl310 : public Genode::Mmio
 
 		struct Prefetch_ctrl : Register<0xf60, 32>
 		{
-			struct Data_prefetch : Bitfield<28,1> { };
-			struct Inst_prefetch : Bitfield<29,1> { };
+			struct Data_prefetch   : Bitfield<28,1> { };
+			struct Inst_prefetch   : Bitfield<29,1> { };
+			struct Double_linefill : Bitfield<30,1> { };
 		};
 
 		void _sync() { while (read<Cache_sync>()) ; }

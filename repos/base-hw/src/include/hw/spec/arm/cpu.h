@@ -95,7 +95,7 @@ struct Hw::Arm_cpu
 	 */
 	struct Ttbr : Genode::Register<32>
 	{
-		enum Memory_region { CACHEABLE = 1 };
+		enum Memory_region { CACHEABLE = 1, NO_WRITE_ALLOC = 3 };
 
 		struct C   : Bitfield<0,1> { };    /* inner cacheable */
 		struct S   : Bitfield<1,1> { };    /* shareable */
@@ -115,9 +115,9 @@ struct Hw::Arm_cpu
 		static access_t init(Genode::addr_t table)
 		{
 			access_t v = Ttbr::Ba::masked(table);
-			Ttbr::Rgn::set(v, Ttbr::CACHEABLE);
+			Ttbr::Rgn::set(v, Ttbr::NO_WRITE_ALLOC);
 			if (Mpidr::Me::get(Mpidr::read())) { /* check for SMP system */
-				Ttbr::Irgn::set(v, Ttbr::CACHEABLE);
+				Ttbr::Irgn::set(v, Ttbr::NO_WRITE_ALLOC);
 				Ttbr::S::set(v, 1);
 			} else
 				Ttbr::C::set(v, 1);

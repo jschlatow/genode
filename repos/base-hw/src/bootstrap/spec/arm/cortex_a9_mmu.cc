@@ -56,7 +56,8 @@ struct Scu : Genode::Mmio
 {
 	struct Cr : Register<0x0, 32>
 	{
-		struct Enable : Bitfield<0, 1> { };
+		struct Enable   : Bitfield<0, 1> { };
+		struct Linefill : Bitfield<3, 1> { };
 	};
 
 	struct Dcr : Register<0x30, 32>
@@ -90,6 +91,7 @@ struct Scu : Genode::Mmio
 	void enable(bool err_arm_764369)
 	{
 		if (err_arm_764369) write<Dcr::Bit_0>(1);
+		write<Cr::Linefill>(1);
 		write<Cr::Enable>(1);
 	}
 };

@@ -98,6 +98,40 @@ void Kernel::main_handle_kernel_entry()
 	Main::_instance->_handle_kernel_entry();
 }
 
+enum {
+	BUF_SIZE     = 8UL*1024UL*1024UL,
+	ITERATION    = 1024UL,
+	TOTAL_MEM_KB = BUF_SIZE / 1024 * ITERATION,
+};
+
+char src[BUF_SIZE] __attribute__((aligned(4096)));
+char dst[BUF_SIZE] __attribute__((aligned(4096)));
+
+template <typename Test>
+void memcpy_test()
+{
+	void * const from_buf = (void*)src;
+	void * const to_buf   = (void*)dst;
+
+	Genode::log(from_buf, " -> ", to_buf);
+
+	Test test;
+	test.start();
+
+	for (unsigned i = 0; i < ITERATION; i++)
+		test.copy(to_buf, from_buf, BUF_SIZE);
+
+	test.finished();
+}
+
+struct Genode_cpy_test {
+
+	void start()    { Genode::log("start Genode memcpy");    }
+	void finished() { Genode::log("finished Genode memcpy"); }
+
+	void copy(void *dst, const void *src, Genode::size_t size) {
+		Genode::memcpy(dst, src, size); }
+};
 
 void Kernel::main_initialize_and_handle_kernel_entry()
 {
@@ -157,6 +191,12 @@ void Kernel::main_initialize_and_handle_kernel_entry()
 	while (nr_of_initialized_cpus < nr_of_cpus) { }
 
 	if (primary_cpu) {
+		Genode::log("");
+		Genode::log("kernel initialized");
+		Genode::log("");
+
+//		Genode::log("Memcpy testsuite started");
+//		memcpy_test<Genode_cpy_test>();
 
 		/**
 		 * Let the primary CPU initialize the core main thread and finish
@@ -179,10 +219,7 @@ void Kernel::main_initialize_and_handle_kernel_entry()
 		boot_info.core_main_thread_utcb =
 			(addr_t)Main::_instance->_core_main_thread->utcb();
 
-		Genode::log("");
-		Genode::log("kernel initialized");
 		kernel_initialized = true;
-
 	} else {
 
 		/**

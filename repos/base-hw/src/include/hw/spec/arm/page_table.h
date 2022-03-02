@@ -65,7 +65,7 @@ class Hw::Page_table
 						T::Tex::set(v, _device_tex());
 					} else {
 						switch (f.cacheable) {
-							case         CACHED: T::Tex::set(v, 5); [[fallthrough]];
+							case         CACHED: T::Tex::set(v, 7); T::C::set(v, 1); [[fallthrough]];
 							case WRITE_COMBINED: T::B::set(v, 1);   break;
 							case       UNCACHED: T::Tex::set(v, 1); break;
 						}
@@ -140,6 +140,7 @@ class Hw::Page_table
 				{
 					struct Xn   : Bitfield<0, 1> { };       /* execute never */
 					struct B    : Bitfield<2, 1> { };       /* mem region attr. */
+					struct C    : Bitfield<3, 1> { };       /* mem. region attr. */
 					struct Ap_0 : Bitfield<4, 2> { };       /* access permission */
 					struct Tex  : Bitfield<6, 3> { };       /* mem region attr. */
 					struct Ap_1 : Bitfield<9, 1> { };       /* access permission */
@@ -392,6 +393,7 @@ class Hw::Page_table
 		struct Section : Descriptor
 		{
 			struct B    : Bitfield<2, 1> { };       /* mem. region attr. */
+			struct C    : Bitfield<3, 1> { };       /* mem. region attr. */
 			struct Xn   : Bitfield<4, 1> { };       /* execute never bit */
 			struct Ap_0 : Bitfield<10, 2> { };      /* access permission */
 			struct Tex  : Bitfield<12, 3> { };      /* mem. region attr. */

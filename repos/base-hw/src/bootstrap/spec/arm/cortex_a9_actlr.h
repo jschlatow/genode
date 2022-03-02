@@ -34,6 +34,7 @@ struct Bootstrap::Actlr : Board::Cpu::Actlr
 		L1_prefetch_enable::set(v, 1);
 		L2_prefetch_enable::set(v, 1);
 		Write_full_line::set(v, 1);
+		/* TODO try alloc in one way only */
 		Smp::set(v, 1);
 		write(v);
 	}

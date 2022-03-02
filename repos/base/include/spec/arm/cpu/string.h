@@ -30,15 +30,18 @@ namespace Genode {
 	{
 		unsigned char *d = (unsigned char *)dst, *s = (unsigned char *)src;
 
-		/* check 4 byte; alignment */
+		/* check 32-byte alignment */
+//		size_t d_align = (size_t)d & 0x1f;
+//		size_t s_align = (size_t)s & 0x1f;
 		size_t d_align = (size_t)d & 0x3;
 		size_t s_align = (size_t)s & 0x3;
 
-		/* only same alignments work for the following LDM/STM loop */
-		if (d_align != s_align)
+		/* only same word-alignments work for the following LDM/STM loop */
+		if ((d_align & 0x3) != (s_align & 0x3))
 			return size;
 
-		/* copy to 4 byte alignment */
+		/* copy to 32-byte alignment */
+//		for (; (size > 0) && (s_align > 0) && (s_align < 32);
 		for (; (size > 0) && (s_align > 0) && (s_align < 4);
 		     s_align++, *d++ = *s++, size--);
 
