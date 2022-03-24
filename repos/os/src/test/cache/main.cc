@@ -54,9 +54,12 @@ Main::Main(Genode::Env &env) : env(env)
 	char * buf1 = new (heap) char[MAX_KB*1024];
 	char * buf2 = new (heap) char[MAX_KB*1024];
 
+	memset(buf1, 0, MAX_KB*1024);
+	memset(buf2, 0, MAX_KB*1024);
+
 	log("--- test-cache started (touch words | touch lines | memcpy) ---");
 
-	sweep_test<8, MAX_KB>(buf1, buf2, 100, triplet_test);
+	sweep_test<8, MAX_KB>(buf1, buf2, 30, triplet_test);
 
 	log("--- test-cache done ---");
 
