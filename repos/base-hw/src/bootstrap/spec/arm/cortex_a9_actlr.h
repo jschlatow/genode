@@ -26,6 +26,7 @@ struct Bootstrap::Actlr : Board::Cpu::Actlr
 	struct L1_prefetch_enable : Bitfield<2, 1> { };
 	struct Write_full_line    : Bitfield<3, 1> { };
 	struct Smp                : Bitfield<6, 1> { };
+	struct Alloc_one_way_only : Bitfield<8, 1> { };
 
 	static void enable_smp()
 	{
@@ -34,6 +35,7 @@ struct Bootstrap::Actlr : Board::Cpu::Actlr
 		L1_prefetch_enable::set(v, 1);
 		L2_prefetch_enable::set(v, 1);
 		Write_full_line::set(v, 1);
+		Alloc_one_way_only::set(v, 0);
 		/* TODO try alloc in one way only */
 		Smp::set(v, 1);
 		write(v);

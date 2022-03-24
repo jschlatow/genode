@@ -90,19 +90,27 @@ void Libc::Component::construct(Libc::Env &env)
 //	memcpy_test<Libc_cpy_test>();
 //	memcpy_test<Libc_set_test>();
 
+	/* Test different page and byte offsets */
+
 	Genode::Attached_ram_dataspace cached_ds1(env.ram(), env.rm(),
 	                                          BUF_SIZE+4096*2, Genode::CACHED);
 	Genode::Attached_ram_dataspace cached_ds2(env.ram(), env.rm(),
 	                                          BUF_SIZE+4096*2, Genode::CACHED);
 
-	memcpy_test<Genode_cpy_test>((void*)((Genode::addr_t)cached_ds1.local_addr<void>()+     0),
-	                             (void*)((Genode::addr_t)cached_ds2.local_addr<void>()+4096+0), BUF_SIZE);
+	log(Genode::Hex(env.pd().dma_addr(cached_ds1.cap())), " <- ",
+	    Genode::Hex(env.pd().dma_addr(cached_ds2.cap())));
 
-	Genode::Attached_ram_dataspace uncached_ds(env.ram(), env.rm(),
-	                                           BUF_SIZE, Genode::UNCACHED);
+//	memcpy_test<Genode_cpy_test>((void*)((Genode::addr_t)cached_ds1.local_addr<void>()+     0),
+//	                             (void*)((Genode::addr_t)cached_ds2.local_addr<void>()+4096+0), BUF_SIZE);
 
-	memcpy_test<Genode_cpy_test>(uncached_ds.local_addr<void>(),
-	                             nullptr, BUF_SIZE);
+	memcpy_test<Bytewise_test>((void*)((Genode::addr_t)cached_ds1.local_addr<void>()+     0),
+	                           (void*)((Genode::addr_t)cached_ds2.local_addr<void>()+4096+0), BUF_SIZE);
+
+//	Genode::Attached_ram_dataspace uncached_ds(env.ram(), env.rm(),
+//	                                           BUF_SIZE, Genode::UNCACHED);
+//
+//	memcpy_test<Genode_cpy_test>(uncached_ds.local_addr<void>(),
+//	                             nullptr, BUF_SIZE);
 //	memcpy_test<Genode_cpy_test>(nullptr, uncached_ds.local_addr<void>(),
 //	                             BUF_SIZE);
 

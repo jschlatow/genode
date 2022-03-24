@@ -18,14 +18,15 @@
 
 #include "genode_time.h"
 #include "common.h"
+#include "pmu_test.h"
 
 void triplet_test(void * src, void * dst, size_t size, unsigned iterations)
 {
 	size_t size_kb = size / 1024;
 
-	unsigned long res1 = timed_test(src, nullptr, size, iterations, touch_words);
-	unsigned long res2 = timed_test(src, src,     size, iterations, memcpy_cpu);
-	unsigned long res3 = timed_test(src, dst,     size, iterations, memcpy_cpu);
+	unsigned long res1 = timed_test_pmu(src, nullptr, size, iterations, touch_words);
+	unsigned long res2 = timed_test_pmu(src, src,     size, iterations, memcpy_cpu);
+	unsigned long res3 = timed_test_pmu(src, dst,     size, iterations, memcpy_cpu);
 
 	log(size_kb, "KB (Cycles/KB): ",
 	             res1 / size_kb / iterations, " | ",

@@ -100,28 +100,44 @@ void Kernel::main_handle_kernel_entry()
 
 enum {
 	BUF_SIZE     = 8UL*1024UL*1024UL,
-	ITERATION    = 1024UL,
-	TOTAL_MEM_KB = BUF_SIZE / 1024 * ITERATION,
 };
 
 char src[BUF_SIZE] __attribute__((aligned(4096)));
 char dst[BUF_SIZE] __attribute__((aligned(4096)));
 
-template <typename Test>
-void memcpy_test()
+#include <trace/timestamp.h>
+
+struct Duration { unsigned long value; };
+
+struct Time
 {
-	void * const from_buf = (void*)src;
-	void * const to_buf   = (void*)dst;
+	using Timestamp = Genode::Trace::Timestamp;
 
-	Genode::log(from_buf, " -> ", to_buf);
+	Timestamp _ts { Genode::Trace::timestamp() };
 
-	Test test;
-	test.start();
+	static Duration duration(Time t1, Time t2)
+	{
+		Timestamp diff = t2._ts - t1._ts;
+		if (t2._ts < t1._ts) diff--;
 
-	for (unsigned i = 0; i < ITERATION; i++)
-		test.copy(to_buf, from_buf, BUF_SIZE);
+		return Duration { diff };
+	}
+};
 
-	test.finished();
+void cache_test(Genode::size_t sz=2*1024*1024)
+{
+	Time s { };
+
+	unsigned iterations = 100;
+
+	for (; iterations; iterations--)
+		Genode::memcpy_cpu(src, dst, sz);
+
+	{
+		Time e { } ;
+		Duration d = Time::duration(s, e);
+		Genode::log("Copying ", sz/1024, " KBytes took ", d.value / (sz/1024) / 100, " cycles per KB\n");
+	}
 }
 
 struct Genode_cpy_test {
@@ -195,8 +211,7 @@ void Kernel::main_initialize_and_handle_kernel_entry()
 		Genode::log("kernel initialized");
 		Genode::log("");
 
-//		Genode::log("Memcpy testsuite started");
-//		memcpy_test<Genode_cpy_test>();
+		cache_test(2*1024*1024);
 
 		/**
 		 * Let the primary CPU initialize the core main thread and finish
