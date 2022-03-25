@@ -12,7 +12,7 @@ using Genode::log;
 struct Bytewise_test {
 
 	void start()    { log("start bytewise memcpy");    }
-	void finished() { log("finished bytewise memcpy"); }
+	void finished() { log("finished bytewise memcpy"); log(""); }
 
 	void copy(void *dst, const void *src, size_t size) {
 		bytewise_memcpy(dst, src, size); }
@@ -21,7 +21,7 @@ struct Bytewise_test {
 struct Genode_cpy_test {
 
 	void start()    { log("start Genode memcpy");    }
-	void finished() { log("finished Genode memcpy"); }
+	void finished() { log("finished Genode memcpy"); log(""); }
 
 	void copy(void *dst, const void *src, size_t size) {
 		Genode::memcpy(dst, src, size); }
@@ -30,7 +30,7 @@ struct Genode_cpy_test {
 struct Genode_set_test {
 
 	void start()    { log("start Genode memset");    }
-	void finished() { log("finished Genode memset"); }
+	void finished() { log("finished Genode memset"); log(""); }
 
 	void copy(void *dst, const void *, size_t size) {
 		Genode::memset(dst, 0, size); }
@@ -39,7 +39,7 @@ struct Genode_set_test {
 struct Libc_cpy_test {
 
 	void start()    { log("start libc memcpy");    }
-	void finished() { log("finished libc memcpy"); }
+	void finished() { log("finished libc memcpy"); log(""); }
 
 	void copy(void *dst, const void *src, size_t size) {
 		memcpy(dst, src, size); }
@@ -48,7 +48,7 @@ struct Libc_cpy_test {
 struct Libc_set_test {
 
 	void start()    { log("start libc memset");    }
-	void finished() { log("finished libc memset"); }
+	void finished() { log("finished libc memset"); log(""); }
 
 	void copy(void *dst, const void *, size_t size) {
 		memset(dst, 0, size); }

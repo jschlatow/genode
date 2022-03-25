@@ -33,9 +33,7 @@ namespace Genode {
 		/* fetch the first cache line */
 		asm volatile ("pld [%0, #0]\n\t" : "+r" (s));
 
-		/* check 32-byte alignment */
-//		size_t d_align = (size_t)d & 0x1f;
-//		size_t s_align = (size_t)s & 0x1f;
+		/* check 32-byte (cache line) alignment */
 		size_t d_align = (size_t)d & 0x1f;
 		size_t s_align = (size_t)s & 0x1f;
 
@@ -44,17 +42,8 @@ namespace Genode {
 			return size;
 
 		/* copy to 32-byte alignment */
-//		for (; (size > 0) && (s_align > 0) && (s_align < 32);
 		for (; (size > 0) && (s_align > 0) && (s_align < 32);
 		     s_align++, *d++ = *s++, size--);
-
-		/**
-		 * On Cortex-A9 (Zynq), starting the loop from a 24-byte offset seems to
-		 * gain a few more MiB/s (1062 vs 1082). We keep it cache-line aligned
-		 * though until this is validated on other SoCs.
-		 * Note, according to the Cortex-A9 manual, there is a 1 cycle penalty if
-		 * the address is not 8-byte aligned.
-		 */
 
 		/* copy 32 byte chunks */
 		for (; size >= 32; size -= 32) {
