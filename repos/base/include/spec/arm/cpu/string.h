@@ -30,11 +30,14 @@ namespace Genode {
 	{
 		unsigned char *d = (unsigned char *)dst, *s = (unsigned char *)src;
 
+		/* fetch the first cache line */
+		asm volatile ("pld [%0, #0]\n\t" : "+r" (s));
+
 		/* check 32-byte alignment */
 //		size_t d_align = (size_t)d & 0x1f;
 //		size_t s_align = (size_t)s & 0x1f;
-		size_t d_align = (size_t)d & 0x3;
-		size_t s_align = (size_t)s & 0x3;
+		size_t d_align = (size_t)d & 0x1f;
+		size_t s_align = (size_t)s & 0x1f;
 
 		/* only same word-alignments work for the following LDM/STM loop */
 		if ((d_align & 0x3) != (s_align & 0x3))
@@ -42,12 +45,19 @@ namespace Genode {
 
 		/* copy to 32-byte alignment */
 //		for (; (size > 0) && (s_align > 0) && (s_align < 32);
-		for (; (size > 0) && (s_align > 0) && (s_align < 4);
+		for (; (size > 0) && (s_align > 0) && (s_align < 32);
 		     s_align++, *d++ = *s++, size--);
+
+		/**
+		 * On Cortex-A9 (Zynq), starting the loop from a 24-byte offset seems to
+		 * gain a few more MiB/s (1051 vs 1068). We keep it cache-line aligned
+		 * though until this is validated on other SoCs.
+		 */
 
 		/* copy 32 byte chunks */
 		for (; size >= 32; size -= 32) {
-			asm volatile ("ldmia %0!, {r3 - r10} \n\t"
+			asm volatile ("pld [%0, #160]\n\t"
+			              "ldmia %0!, {r3 - r10} \n\t"
 			              "stmia %1!, {r3 - r10} \n\t"
 			              : "+r" (s), "+r" (d)
 			              :: "r3","r4","r5","r6","r7","r8","r9","r10");
