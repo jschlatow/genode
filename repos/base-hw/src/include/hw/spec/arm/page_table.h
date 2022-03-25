@@ -65,7 +65,7 @@ class Hw::Page_table
 						T::Tex::set(v, _device_tex());
 					} else {
 						switch (f.cacheable) {
-							case         CACHED: T::Tex::set(v, 7); T::B::set(v, 1); T::C::set(v, 1); [[fallthrough]];
+							case         CACHED: T::Tex::set(v, 7); T::C::set(v, 1); [[fallthrough]];
 							case WRITE_COMBINED: T::B::set(v, 1);   break;
 							case       UNCACHED: T::Tex::set(v, 1); break;
 						}

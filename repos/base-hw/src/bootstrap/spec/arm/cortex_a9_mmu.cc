@@ -91,7 +91,7 @@ struct Scu : Genode::Mmio
 	void enable(bool err_arm_764369)
 	{
 		if (err_arm_764369) write<Dcr::Bit_0>(1);
-		write<Cr::Linefill>(1);
+		write<Cr::Linefill>(0);
 		write<Cr::Enable>(1);
 	}
 };
