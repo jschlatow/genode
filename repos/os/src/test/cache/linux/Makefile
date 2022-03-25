@@ -7,7 +7,7 @@ else
 endif
 
 cache: main.cc $(INC_DIR)/common.h
-	g++ -I$(INC_DIR) -O2 -Wall -Wextra -Weffc++ -std=gnu++11 $< -o $@
+	g++ -I$(INC_DIR) $(CC_MARCH) -O2 -Wall -Wextra -Weffc++ -std=gnu++11 $< -o $@
 
 clean:
 	rm -f *~ cache
