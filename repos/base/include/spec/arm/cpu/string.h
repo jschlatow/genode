@@ -50,14 +50,16 @@ namespace Genode {
 
 		/**
 		 * On Cortex-A9 (Zynq), starting the loop from a 24-byte offset seems to
-		 * gain a few more MiB/s (1051 vs 1068). We keep it cache-line aligned
+		 * gain a few more MiB/s (1062 vs 1082). We keep it cache-line aligned
 		 * though until this is validated on other SoCs.
+		 * Note, according to the Cortex-A9 manual, there is a 1 cycle penalty if
+		 * the address is not 8-byte aligned.
 		 */
 
 		/* copy 32 byte chunks */
 		for (; size >= 32; size -= 32) {
-			asm volatile ("pld [%0, #160]\n\t"
-			              "ldmia %0!, {r3 - r10} \n\t"
+			asm volatile ("ldmia %0!, {r3 - r10} \n\t"
+			              "pld [%0, #160]\n\t"
 			              "stmia %1!, {r3 - r10} \n\t"
 			              : "+r" (s), "+r" (d)
 			              :: "r3","r4","r5","r6","r7","r8","r9","r10");
