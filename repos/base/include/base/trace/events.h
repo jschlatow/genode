@@ -26,6 +26,7 @@ namespace Genode { namespace Trace {
 	struct Signal_submit;
 	struct Signal_received;
 	struct Checkpoint;
+	struct Ethernet_packet;
 } }
 
 
@@ -148,6 +149,29 @@ struct Genode::Trace::Checkpoint
 
 	size_t generate(Policy_module &policy, char *dst) const {
 		return policy.checkpoint(dst, name, data, addr, type); }
+};
+
+
+struct Genode::Trace::Ethernet_packet
+{
+	char      const *name;
+	char            *data;
+	size_t           length;
+
+	Ethernet_packet(char const *name, char *data, size_t len)
+	: name(name), data(data), length(len)
+	{
+		Thread::trace(this);
+	}
+
+	Ethernet_packet(char const *name, void *data, size_t len)
+	: name(name), data((char*)data), length(len)
+	{
+		Thread::trace(this);
+	}
+
+	size_t generate(Policy_module &policy, char *dst) const {
+		return policy.trace_eth_packet(dst, name, data, length); }
 };
 
 
