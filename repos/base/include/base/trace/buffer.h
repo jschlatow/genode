@@ -268,7 +268,7 @@ class Genode::Trace::Simple_buffer
 		};
 
 		/* Return whether buffer has been initialized. */
-		bool initialized() const { return _size && _head_offset < _size; }
+		bool initialized() const { return _size && _head_offset <= _size; }
 
 		/* Return the very first entry at the start of the buffer. */
 		Entry first() const
