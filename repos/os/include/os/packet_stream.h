@@ -80,6 +80,8 @@
 #include <util/string.h>
 #include <util/construct_at.h>
 
+#include <base/trace/events.h>
+
 namespace Genode {
 
 	class Packet_descriptor;
@@ -465,6 +467,11 @@ class Genode::Packet_descriptor_receiver
 			Genode::Mutex::Guard mutex_guard(_rx_queue_mutex);
 			return _rx_queue->peek();
 		}
+
+		/**
+		 * Return number of slots left to be put into the rx queue
+		 */
+		unsigned rx_slots_free() { return _rx_queue->slots_free(); }
 };
 
 
@@ -748,10 +755,19 @@ class Genode::Packet_stream_source : private Packet_stream_base
 		 */
 		void submit_packet(Packet_descriptor packet)
 		{
+			using Checkpoint = Genode::Trace::Checkpoint;
+			Checkpoint("tx_submit_slots_free",
+			           _submit_transmitter.tx_slots_free(),
+			           this, Checkpoint::Type::OBJ_STATE);
+
 			if (!ready_to_submit()) {
 				error("attempt to add packet into saturated submit queue");
 				throw Saturated_submit_queue();
 			}
+
+			Checkpoint("tx_submit_slots_free",
+			           _submit_transmitter.tx_slots_free(),
+			           this, Checkpoint::Type::OBJ_STATE);
 
 			_submit_transmitter.tx(packet);
 		}
@@ -776,6 +792,15 @@ class Genode::Packet_stream_source : private Packet_stream_base
 		 */
 		void wakeup()
 		{
+			using Checkpoint = Genode::Trace::Checkpoint;
+
+			Checkpoint("rx_ack_slots_free",
+			           _ack_receiver.rx_slots_free(),
+			           this, Checkpoint::Type::OBJ_STATE);
+			Checkpoint("tx_submit_slots_free",
+			           _submit_transmitter.tx_slots_free(),
+			           this, Checkpoint::Type::OBJ_STATE);
+
 			/* submit only one signal */
 			_submit_transmitter.tx_wakeup() || _ack_receiver.rx_wakeup();
 		}
@@ -790,6 +815,11 @@ class Genode::Packet_stream_source : private Packet_stream_base
 		 */
 		Packet_descriptor get_acked_packet()
 		{
+			using Checkpoint = Genode::Trace::Checkpoint;
+			Checkpoint("rx_ack_slots_free",
+			           _ack_receiver.rx_slots_free(),
+			           this, Checkpoint::Type::OBJ_STATE);
+
 			if (!ack_avail()) {
 				error("attempt to retrieve packet from empty acknowledgement queue");
 				throw Empty_ack_queue();
@@ -797,6 +827,11 @@ class Genode::Packet_stream_source : private Packet_stream_base
 
 			Packet_descriptor packet;
 			_ack_receiver.rx(&packet);
+
+			Checkpoint("rx_ack_slots_free",
+			           _ack_receiver.rx_slots_free(),
+			           this, Checkpoint::Type::OBJ_STATE);
+
 			return packet;
 		}
 
@@ -906,6 +941,11 @@ class Genode::Packet_stream_sink : private Packet_stream_base
 		 */
 		Packet_descriptor get_packet()
 		{
+			using Checkpoint = Genode::Trace::Checkpoint;
+			Checkpoint("rx_submit_slots_free",
+			           _submit_receiver.rx_slots_free(),
+			           this, Checkpoint::Type::OBJ_STATE);
+
 			if (!packet_avail()) {
 				error("attempt to retrieve packet from empty submit queue");
 				throw Empty_submit_queue();
@@ -913,6 +953,11 @@ class Genode::Packet_stream_sink : private Packet_stream_base
 
 			Packet_descriptor packet;
 			_submit_receiver.rx(&packet);
+
+			Checkpoint("rx_submit_slots_free",
+			           _submit_receiver.rx_slots_free(),
+			           this, Checkpoint::Type::OBJ_STATE);
+
 			return packet;
 		}
 
@@ -934,6 +979,15 @@ class Genode::Packet_stream_sink : private Packet_stream_base
 		 */
 		void wakeup()
 		{
+			using Checkpoint = Genode::Trace::Checkpoint;
+
+			Checkpoint("tx_ack_slots_free",
+			           _ack_transmitter.tx_slots_free(),
+			           this, Checkpoint::Type::OBJ_STATE);
+			Checkpoint("rx_submit_slots_free",
+			           _submit_receiver.rx_slots_free(),
+			           this, Checkpoint::Type::OBJ_STATE);
+
 			/* submit only one signal */
 			_submit_receiver.rx_wakeup() || _ack_transmitter.tx_wakeup();
 		}
@@ -975,12 +1029,17 @@ class Genode::Packet_stream_sink : private Packet_stream_base
 		 */
 		void acknowledge_packet(Packet_descriptor packet)
 		{
+			using Checkpoint = Genode::Trace::Checkpoint;
+			Checkpoint("tx_ack_slots_free", ack_slots_free(), this, Checkpoint::Type::OBJ_STATE);
+
 			if (!ack_slots_free()) {
 				error("attempt to add packet to saturated acknowledgement queue");
 				throw Saturated_ack_queue();
 			}
 
 			_ack_transmitter.tx(packet);
+
+			Checkpoint("tx_ack_slots_free", ack_slots_free(), this, Checkpoint::Type::OBJ_STATE);
 		}
 
 		/**
