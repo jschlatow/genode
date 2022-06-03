@@ -13,6 +13,7 @@
 		<rom label="vfs.lib.so"/>
 		<rom label="ctf_rpc_name"/>
 		<rom label="pcapng"/>
+		<rom label="ctf_pcapng"/>
 		<rom label="metadata"/>
 	</content>
 
