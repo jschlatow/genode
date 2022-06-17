@@ -82,7 +82,7 @@ void Nic_perf::Nic_client::_send_alloc_pkt(Packet_descriptor &pkt,
 
 void Nic_perf::Nic_client::_send_submit_pkt(Packet_descriptor &pkt)
 {
-	_nic.tx()->submit_packet(pkt);
+	_nic.tx()->try_submit_packet(pkt);
 }
 
 #endif /* _NIC_CLIENT_H_ */

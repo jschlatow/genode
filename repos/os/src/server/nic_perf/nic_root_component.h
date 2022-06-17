@@ -97,7 +97,7 @@ void Nic_perf::Nic_session_component::_send_alloc_pkt(Packet_descriptor &pkt,
 
 void Nic_perf::Nic_session_component::_send_submit_pkt(Packet_descriptor &pkt)
 {
-	_rx.source()->submit_packet(pkt);
+	_rx.source()->try_submit_packet(pkt);
 }
 
 

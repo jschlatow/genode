@@ -273,11 +273,6 @@ void Nic_perf::Interface::_send_dhcp_reply(Ethernet_frame      const & eth_req,
 		dhcp_opts.append_dns_server([&] (Dhcp_options::Dns_server_data &data) {
 			data.append_address(_ip);
 		});
-//		dhcp_srv.dns_domain_name().with_string(
-//			[&] (Dns_domain_name::String const &str)
-//		{
-//			dhcp_opts.append_domain_name(str.string(), str.length());
-//		});
 		dhcp_opts.append_option<Dhcp_packet::Broadcast_addr>(Ipv4_packet::broadcast());
 		dhcp_opts.append_option<Dhcp_packet::Options_end>();
 
@@ -319,33 +314,34 @@ void Nic_perf::Interface::_handle_packet_stream(SOURCE & source, SINK & sink)
 
 	/* handle acks from client */
 	while (source.ack_avail())
-		source.release_packet(source.get_acked_packet());
+		source.release_packet(source.try_get_acked_packet());
 
 	/* loop while we can make Rx progress */
 	for (;;) {
-		/*
-		 * If the client cannot accept new acknowledgements for a sent packets,
-		 * we won't consume the sent packet.
-		 */
 		if (!sink.ready_to_ack())
 			break;
 
-		/*
-		 * Nothing to be done if the client has not sent any packets.
-		 */
 		if (!sink.packet_avail())
 			break;
 
-		Packet_descriptor const packet_from_client = sink.get_packet();
+		Packet_descriptor const packet_from_client = sink.try_get_packet();
 
 		if (sink.packet_valid(packet_from_client)) {
 			_handle_eth(sink.packet_content(packet_from_client), packet_from_client.size());
-			sink.acknowledge_packet(packet_from_client);
+			if (!sink.try_ack_packet(packet_from_client)) {
+				/* XXX remove */
+				error("ACK queue saturated");
+				break;
+			}
 		}
 	}
 
 	/* skip sending if disabled */
-	if (!_generator.enabled()) return; /* XXX finish receiving */
+	if (!_generator.enabled()) {
+		sink.wakeup();
+		source.wakeup();
+		return;
+	}
 
 	/* loop while we can make Tx progress */
 	for (;;) {
@@ -365,7 +361,8 @@ void Nic_perf::Interface::_handle_packet_stream(SOURCE & source, SINK & sink)
 			break;
 	}
 
-	/* XXX finish sending */
+	sink.wakeup();
+	source.wakeup();
 }
 
 #endif /* _INTERFACE_H_ */
