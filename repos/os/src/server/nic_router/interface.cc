@@ -1469,7 +1469,7 @@ void Interface::_handle_arp(Ethernet_frame &eth,
 
 void Interface::_handle_pkt()
 {
-	Packet_descriptor const pkt = _sink.get_packet();
+	Packet_descriptor const pkt = _sink.try_get_packet();
 	Size_guard size_guard(pkt.size());
 	try {
 		_handle_eth(_sink.packet_content(pkt), size_guard, pkt);
@@ -1488,7 +1488,7 @@ void Interface::_handle_pkt_stream_signal()
 	 * sending new packets in the subsequent steps of this handler.
 	 */
 	while (_source.ack_avail()) {
-		_source.release_packet(_source.get_acked_packet());
+		_source.release_packet(_source.try_get_acked_packet());
 	}
 
 	/*
@@ -1517,6 +1517,9 @@ void Interface::_handle_pkt_stream_signal()
 			_handle_pkt();
 		}
 	}
+
+	_source.wakeup();
+	_sink.wakeup();
 }
 
 
@@ -2172,7 +2175,7 @@ void Interface::_ack_packet(Packet_descriptor const &pkt)
 		}
 		return;
 	}
-	_sink.acknowledge_packet(pkt);
+	_sink.try_ack_packet(pkt);
 }
 
 
