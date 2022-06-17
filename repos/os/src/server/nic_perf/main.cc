@@ -16,7 +16,8 @@
 
 /* local includes */
 #include <interface.h>
-#include <nic_root_component.h>
+#include <uplink_component.h>
+#include <nic_component.h>
 #include <nic_client.h>
 
 /* Genode includes */
@@ -50,9 +51,11 @@ struct Nic_perf::Main
 
 	Interface_registry        _registry { };
 
-	Nic_perf::Nic_root        _root   { _env, _heap, _registry, _config };
+	Nic_perf::Nic_root        _nic_root    { _env, _heap, _registry, _config };
 
-	Constructible<Nic_client> _nic_client { };
+	Nic_perf::Uplink_root     _uplink_root { _env, _heap, _registry, _config };
+
+	Constructible<Nic_client> _nic_client  { };
 
 	Genode::Signal_handler<Main> _config_handler =
 		{ _env.ep(), *this, &Main::_handle_config };
@@ -105,7 +108,8 @@ struct Nic_perf::Main
 
 	Main(Env &env) : _env(env)
 	{
-		_env.parent().announce(_env.ep().manage(_root));
+		_env.parent().announce(_env.ep().manage(_nic_root));
+		_env.parent().announce(_env.ep().manage(_uplink_root));
 
 		_config.sigh(_config_handler);
 		_timer.sigh(_timer_handler);

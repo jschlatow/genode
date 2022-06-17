@@ -31,10 +31,11 @@ namespace Nic_perf {
 }
 
 
-class Nic_perf::Nic_session_component : public Nic::Session_component,
-                                        public Interface
+class Nic_perf::Nic_session_component : public Nic::Session_component
 {
 	private:
+
+		Interface _interface;
 
 		static Mac_address _default_mac_address()
 		{
@@ -43,12 +44,8 @@ class Nic_perf::Nic_session_component : public Nic::Session_component,
 			return result;
 		}
 
-		/***********************
-		 * 'Interface' methods *
-		 ***********************/
-
-		void _send_alloc_pkt (Packet_descriptor &, void *&, size_t) override;
-		void _send_submit_pkt(Packet_descriptor &) override;
+		void _handle_packet_stream() override {
+			_interface.handle_packet_stream(); }
 
 	public:
 
@@ -62,8 +59,9 @@ class Nic_perf::Nic_session_component : public Nic::Session_component,
 		:
 			Nic::Session_component(tx_buf_size, rx_buf_size, CACHED,
 			                       rx_block_md_alloc, env),
-			Interface(registry, label, policy, true, _default_mac_address())
-		{ if (_generator.enabled()) _handle_packet_stream(); }
+			_interface(registry, label, policy, true, _default_mac_address(),
+			           *_rx.source(), *_tx.sink())
+		{ _interface.handle_packet_stream(); }
 
 		/*****************************
 		 * Session_component methods *
@@ -80,25 +78,7 @@ class Nic_perf::Nic_session_component : public Nic::Session_component,
 			/* XXX always return true, for now */
 			return true;
 		}
-
-		void _handle_packet_stream() override {
-			Interface::_handle_packet_stream(*_rx.source(), *_tx.sink()); }
 };
-
-
-void Nic_perf::Nic_session_component::_send_alloc_pkt(Packet_descriptor &pkt,
-                                                      void *            &pkt_base,
-                                                      size_t             pkt_size)
-{
-	pkt      = _rx.source()->alloc_packet(pkt_size);
-	pkt_base = _rx.source()->packet_content(pkt);
-}
-
-
-void Nic_perf::Nic_session_component::_send_submit_pkt(Packet_descriptor &pkt)
-{
-	_rx.source()->try_submit_packet(pkt);
-}
 
 
 class Nic_perf::Nic_root : public Root_component<Nic_session_component>

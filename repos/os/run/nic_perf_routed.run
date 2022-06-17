@@ -48,7 +48,10 @@ append config {
 	<start name="nic_perf_tx" caps="200">
 		<binary name="nic_perf"/>
 		<resource name="RAM" quantum="10M"/>
-		<provides><service name="Nic"/></provides>
+		<provides>
+			<service name="Uplink"/>
+			<service name="Nic"/>
+		</provides>
 		<config period_ms="5000" count="5">
 			<nic-client>
 				<interface ip="10.0.1.2"/>
@@ -82,7 +85,10 @@ append config {
 	<start name="nic_perf_rx" caps="200">
 		<binary name="nic_perf"/>
 		<resource name="RAM" quantum="10M"/>
-		<provides><service name="Nic"/></provides>
+		<provides>
+			<service name="Uplink"/>
+			<service name="Nic"/>
+		</provides>
 		<config period_ms="5000">
 			<nic-client>
 				<interface ip="10.0.2.2"/>

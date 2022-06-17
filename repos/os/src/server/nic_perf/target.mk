@@ -1,5 +1,5 @@
 TARGET = nic_perf
-SRC_CC = main.cc
+SRC_CC = main.cc interface.cc packet_generator.cc
 LIBS   = base net
 
 INC_DIR += $(PRG_DIR)
