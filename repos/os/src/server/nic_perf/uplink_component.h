@@ -103,13 +103,14 @@ class Nic_perf::Uplink_session_component : private Uplink_session_base,
 		                         Session_label const &label,
 		                         Xml_node      const &policy,
 		                         Interface_registry  &registry,
-		                         Mac_address          mac)
+		                         Mac_address          mac,
+		                         Timer::Connection   &timer)
 		:
 			Uplink_session_base(env, tx_buf_size, rx_buf_size, alloc),
 			Uplink::Session_rpc_object(env.rm(), _tx_buf.ds(), _rx_buf.ds(),
 			                           &_packet_alloc, env.ep().rpc_ep()),
 			_interface(registry, label, policy, false, mac,
-			           *_rx.source(), *_tx.sink())
+			           *_rx.source(), *_tx.sink(), timer)
 		{
 			_interface.handle_packet_stream();
 
@@ -127,6 +128,7 @@ class Nic_perf::Uplink_root : public Root_component<Uplink_session_component>
 		Env                    &_env;
 		Attached_rom_dataspace &_config;
 		Interface_registry     &_registry;
+		Timer::Connection      &_timer;
 
 	protected:
 
@@ -171,7 +173,7 @@ class Nic_perf::Uplink_root : public Root_component<Uplink_session_component>
 
 			return new (md_alloc()) Uplink_session_component(tx_buf_size, rx_buf_size,
 			                                                 *md_alloc(), _env, label, policy,
-			                                                 _registry, mac);
+			                                                 _registry, mac, _timer);
 		}
 
 	public:
@@ -179,12 +181,14 @@ class Nic_perf::Uplink_root : public Root_component<Uplink_session_component>
 		Uplink_root(Env                    &env,
 		            Allocator              &md_alloc,
 		            Interface_registry     &registry,
-		            Attached_rom_dataspace &config)
+		            Attached_rom_dataspace &config,
+		            Timer::Connection      &timer)
 		:
 			Root_component<Uplink_session_component>(&env.ep().rpc_ep(), &md_alloc),
 			_env(env),
 			_config(config),
-			_registry(registry)
+			_registry(registry),
+			_timer(timer)
 		{ }
 };
 

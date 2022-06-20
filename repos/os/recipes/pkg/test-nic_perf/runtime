@@ -37,7 +37,7 @@
 			</provides>
 			<config period_ms="5000" count="8">
 				<nic-client>
-					<interface ip="10.0.1.1"/>
+					<interface ip="10.0.1.1" dhcp_client_ip="10.0.1.2"/>
 					<tx mtu="1500" to="10.0.1.2" udp_port="12345"/>
 				</nic-client>
 			</config>
@@ -55,9 +55,7 @@
 				<service name="Nic"/>
 			</provides>
 			<config period_ms="5000">
-				<default-policy>
-					<interface ip="10.0.1.2"/>
-				</default-policy>
+				<default-policy/>
 			</config>
 		</start>
 	</config>

@@ -55,12 +55,13 @@ class Nic_perf::Nic_session_component : public Nic::Session_component
 		                      Env                 &env,
 		                      Session_label const &label,
 		                      Xml_node      const &policy,
-		                      Interface_registry  &registry)
+		                      Interface_registry  &registry,
+		                      Timer::Connection   &timer)
 		:
 			Nic::Session_component(tx_buf_size, rx_buf_size, CACHED,
 			                       rx_block_md_alloc, env),
 			_interface(registry, label, policy, true, _default_mac_address(),
-			           *_rx.source(), *_tx.sink())
+			           *_rx.source(), *_tx.sink(), timer)
 		{ _interface.handle_packet_stream(); }
 
 		/*****************************
@@ -87,6 +88,7 @@ class Nic_perf::Nic_root : public Root_component<Nic_session_component>
 		Env                    &_env;
 		Attached_rom_dataspace &_config;
 		Interface_registry     &_registry;
+		Timer::Connection      &_timer;
 
 	protected:
 
@@ -118,7 +120,7 @@ class Nic_perf::Nic_root : public Root_component<Nic_session_component>
 
 			return new (md_alloc()) Nic_session_component(tx_buf_size, rx_buf_size,
 			                                              *md_alloc(), _env, label, policy,
-			                                              _registry);
+			                                              _registry, _timer);
 		}
 
 	public:
@@ -126,12 +128,14 @@ class Nic_perf::Nic_root : public Root_component<Nic_session_component>
 		Nic_root(Env                    &env,
 		         Allocator              &md_alloc,
 		         Interface_registry     &registry,
-		         Attached_rom_dataspace &config)
+		         Attached_rom_dataspace &config,
+		         Timer::Connection      &timer)
 		:
 			Root_component<Nic_session_component>(&env.ep().rpc_ep(), &md_alloc),
 			_env(env),
 			_config(config),
-			_registry(registry)
+			_registry(registry),
+			_timer(timer)
 		{ }
 };
 

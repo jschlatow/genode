@@ -23,8 +23,10 @@
 void Nic_perf::Interface::_handle_eth(void * pkt_base, size_t size)
 {
 	try {
+
 		Size_guard size_guard(size);
 		Ethernet_frame &eth = Ethernet_frame::cast_from(pkt_base, size_guard);
+
 		switch (eth.type()) {
 			case Ethernet_frame::Type::ARP:
 				_handle_arp(eth, size_guard);
@@ -37,6 +39,8 @@ void Nic_perf::Interface::_handle_eth(void * pkt_base, size_t size)
 		}
 	} catch (Size_guard::Exceeded) {
 		warning("Size guard exceeded");
+	} catch (Net::Drop_packet_inform e) {
+		error(e.msg);
 	}
 
 	_stats.rx_packet(size);
@@ -90,8 +94,16 @@ void Nic_perf::Interface::_handle_ip(Ethernet_frame & eth, Size_guard & size_gua
 		Udp_packet &udp = ip.data<Udp_packet>(size_guard);
 		if (Dhcp_packet::is_dhcp(&udp)) {
 			Dhcp_packet &dhcp = udp.data<Dhcp_packet>(size_guard);
-			if (dhcp.op() == Dhcp_packet::REQUEST)
+			switch (dhcp.op()) {
+			case Dhcp_packet::REQUEST:
 				_handle_dhcp_request(eth, dhcp);
+				break;
+			case Dhcp_packet::REPLY:
+				if (_dhcp_client.constructed()) {
+					_dhcp_client->handle_dhcp(dhcp, eth, size_guard);
+				}
+				break;
+			}
 		}
 	}
 }
@@ -190,27 +202,6 @@ void Nic_perf::Interface::_send_dhcp_reply(Ethernet_frame      const & eth_req,
 }
 
 
-template <typename FUNC>
-bool Nic_perf::Interface::send(size_t pkt_size, FUNC && write_to_pkt)
-{
-	if (!pkt_size)
-		return false;
-
-	try {
-		Packet_descriptor  pkt      = _source.alloc_packet(pkt_size);
-		void              *pkt_base = _source.packet_content(pkt);
-
-		Size_guard size_guard { pkt_size };
-		write_to_pkt(pkt_base, size_guard);
-
-		_source.try_submit_packet(pkt);
-	} catch (...) { return false; }
-
-	_stats.tx_packet(pkt_size);
-
-	return true;
-}
-
 void Nic_perf::Interface::handle_packet_stream()
 {
 	/* TODO trace burst length */
@@ -236,8 +227,8 @@ void Nic_perf::Interface::handle_packet_stream()
 		}
 	}
 
-	/* skip sending if disabled */
-	if (!_generator.enabled()) {
+	/* skip sending if disabled or IP address is not set */
+	if (!_generator.enabled() || _ip == Ipv4_address()) {
 		_sink.wakeup();
 		_source.wakeup();
 		return;

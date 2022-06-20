@@ -38,7 +38,6 @@
 			</provides>
 			<config period_ms="5000" count="8">
 				<nic-client>
-					<interface ip="10.0.1.2"/>
 					<tx mtu="1500" to="10.0.2.2" udp_port="12345"/>
 				</nic-client>
 			</config>
@@ -59,10 +58,13 @@
 				<policy label_suffix="nic_perf_rx -> " domain="receiver"/>
 
 				<domain name="sender" interface="10.0.1.1/24">
+					<dhcp-server ip_first="10.0.1.2" ip_last="10.0.1.2"/>
 					<ip dst="0.0.0.0/0" domain="receiver"/>
 				</domain>
 
-				<domain name="receiver" interface="10.0.2.1/24"/>
+				<domain name="receiver" interface="10.0.2.1/24">
+					<dhcp-server ip_first="10.0.2.2" ip_last="10.0.2.2"/>
+				</domain>
 			</config>
 		</start>
 
@@ -74,9 +76,7 @@
 				<service name="Nic"/>
 			</provides>
 			<config period_ms="5000">
-				<nic-client>
-					<interface ip="10.0.2.2"/>
-				</nic-client>
+				<nic-client/>
 			</config>
 			<route>
 				<service name="Nic"> <child name="nic_router"/> </service>

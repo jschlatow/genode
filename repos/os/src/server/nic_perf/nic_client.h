@@ -50,12 +50,13 @@ class Nic_perf::Nic_client
 		Nic_client(Env                 &env,
 		           Genode::Allocator   &alloc,
 		           Xml_node      const &policy,
-		           Interface_registry  &registry)
+		           Interface_registry  &registry,
+		           Timer::Connection   &timer)
 		:
 			_env(env),
 			_pkt_alloc(&alloc),
 			_interface(registry, "nic-client", policy, false, Mac_address(),
-			           *_nic.tx(), *_nic.rx())
+			           *_nic.tx(), *_nic.rx(), timer)
 		{
 			_nic.rx_channel()->sigh_ready_to_ack(_packet_stream_handler);
 			_nic.rx_channel()->sigh_packet_avail(_packet_stream_handler);

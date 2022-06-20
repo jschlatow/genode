@@ -37,6 +37,8 @@ namespace Nic_perf {
 
 struct Nic_perf::Main
 {
+	using Periodic_timeout = Timer::Periodic_timeout<Main>;
+
 	Env                      &_env;
 
 	Heap                      _heap   { _env.ram(), _env.rm() };
@@ -51,17 +53,16 @@ struct Nic_perf::Main
 
 	Interface_registry        _registry { };
 
-	Nic_perf::Nic_root        _nic_root    { _env, _heap, _registry, _config };
+	Nic_perf::Nic_root        _nic_root    { _env, _heap, _registry, _config, _timer };
 
-	Nic_perf::Uplink_root     _uplink_root { _env, _heap, _registry, _config };
+	Nic_perf::Uplink_root     _uplink_root { _env, _heap, _registry, _config, _timer };
 
 	Constructible<Nic_client> _nic_client  { };
 
 	Genode::Signal_handler<Main> _config_handler =
 		{ _env.ep(), *this, &Main::_handle_config };
 
-	Genode::Signal_handler<Main> _timer_handler =
-		{ _env.ep(), *this, &Main::_handle_timer };
+	Constructible<Periodic_timeout> _timeout { };
 
 	void _handle_config()
 	{
@@ -82,16 +83,16 @@ struct Nic_perf::Main
 			_nic_client.destruct();
 
 		if (_config.xml().has_sub_node("nic-client"))
-			_nic_client.construct(_env, _heap, _config.xml().sub_node("nic-client"), _registry);
+			_nic_client.construct(_env, _heap, _config.xml().sub_node("nic-client"), _registry, _timer);
 
 		_period_ms = _config.xml().attribute_value("period_ms", _period_ms);
 		_count     = _config.xml().attribute_value("count",     _count);
 
-		if (_count)
-			_timer.trigger_periodic(_period_ms * 1000);
+		_timeout.conditional(_count && _period_ms,
+		                     _timer, *this, &Main::_handle_timeout, Microseconds(_period_ms*1000));
 	}
 
-	void _handle_timer()
+	void _handle_timeout(Genode::Duration)
 	{
 		_registry.for_each([&] (Interface &interface) {
 			Packet_stats &stats = interface.packet_stats();
@@ -112,7 +113,6 @@ struct Nic_perf::Main
 		_env.parent().announce(_env.ep().manage(_uplink_root));
 
 		_config.sigh(_config_handler);
-		_timer.sigh(_timer_handler);
 
 		_handle_config();
 	}
