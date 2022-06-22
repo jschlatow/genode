@@ -71,8 +71,8 @@ class Nic_perf::Packet_stats
 
 			if (_period_ms == 0) return;
 
-			_rx_mbit_sec = (float)(_recv_bytes * 8) / (float)(period_ms*1000);
-			_tx_mbit_sec = (float)(_sent_bytes * 8) / (float)(period_ms*1000);
+			_rx_mbit_sec = (float)(_recv_bytes * 8ULL) / (float)(period_ms*1000ULL);
+			_tx_mbit_sec = (float)(_sent_bytes * 8ULL) / (float)(period_ms*1000ULL);
 		}
 
 		void print(Output &out) const
