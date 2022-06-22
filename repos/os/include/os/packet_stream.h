@@ -465,6 +465,8 @@ class Genode::Packet_descriptor_receiver
 			Genode::Mutex::Guard mutex_guard(_rx_queue_mutex);
 			return _rx_queue->peek();
 		}
+
+		unsigned rx_slots_free() { return _rx_queue->slots_free(); }
 };
 
 
@@ -743,6 +745,9 @@ class Genode::Packet_stream_source : private Packet_stream_base
 			return _submit_transmitter.tx_slots_free() >= count;
 		}
 
+		unsigned submit_slots_free() { return _submit_transmitter.tx_slots_free(); }
+		unsigned ack_slots_free()    { return _ack_receiver.rx_slots_free(); }
+
 		/**
 		 * Tell sink about a packet to process
 		 */
@@ -967,6 +972,9 @@ class Genode::Packet_stream_sink : private Packet_stream_base
 		 */
 		unsigned ack_slots_free() {
 			return _ack_transmitter.tx_slots_free(); }
+
+		unsigned submit_slots_free() {
+			return _submit_receiver.rx_slots_free(); }
 
 		/**
 		 * Tell the source that the processing of the specified packet is completed
