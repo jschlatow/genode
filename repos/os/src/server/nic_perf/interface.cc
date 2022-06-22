@@ -18,6 +18,7 @@
 #include <net/mac_address.h>
 #include <net/ipv4.h>
 #include <net/udp.h>
+#include <base/trace/events.h>
 
 
 void Nic_perf::Interface::_handle_eth(void * pkt_base, size_t size)
@@ -203,6 +204,12 @@ void Nic_perf::Interface::_send_dhcp_reply(Ethernet_frame      const & eth_req,
 
 void Nic_perf::Interface::handle_packet_stream()
 {
+	using Checkpoint = Genode::Trace::Checkpoint;
+	Checkpoint("tx_submit_queue_pre", _source.submit_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+	Checkpoint("rx_submit_queue_pre", _sink.submit_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+	Checkpoint("tx_ack_queue_pre", _source.ack_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+	Checkpoint("rx_ack_queue_pre", _sink.ack_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+
 	/* handle acks from client */
 	while (_source.ack_avail())
 		_source.release_packet(_source.try_get_acked_packet());
@@ -226,6 +233,11 @@ void Nic_perf::Interface::handle_packet_stream()
 
 	/* skip sending if disabled or IP address is not set */
 	if (!_generator.enabled() || _ip == Ipv4_address()) {
+		Checkpoint("tx_submit_queue_post", _source.submit_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+		Checkpoint("rx_submit_queue_post", _sink.submit_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+		Checkpoint("tx_ack_queue_post", _source.ack_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+		Checkpoint("rx_ack_queue_post", _sink.ack_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+
 		_sink.wakeup();
 		_source.wakeup();
 		return;
@@ -248,6 +260,11 @@ void Nic_perf::Interface::handle_packet_stream()
 		if (!okay)
 			break;
 	}
+
+	Checkpoint("tx_submit_queue_post", _source.submit_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+	Checkpoint("rx_submit_queue_post", _sink.submit_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+	Checkpoint("tx_ack_queue_post", _source.ack_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+	Checkpoint("rx_ack_queue_post", _sink.ack_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
 
 	_sink.wakeup();
 	_source.wakeup();
