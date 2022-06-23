@@ -67,7 +67,7 @@ namespace Genode { namespace Trace {
  * The argument 'data' specifies the payload as an unsigned value.
  */
 #define GENODE_TRACE_DURATION(data) \
-	Genode::Trace::Duration(__PRETTY_FUNCTION__, (unsigned long)data);
+	Genode::Trace::Duration duration(__PRETTY_FUNCTION__, (unsigned long)data);
 
 
 /**
@@ -77,7 +77,7 @@ namespace Genode { namespace Trace {
  * The argument 'name' specifies the names of the checkpoints
  */
 #define GENODE_TRACE_DURATION_NAMED(data, name) \
-	Genode::Trace::Duration(name, (unsigned long)data);
+	Genode::Trace::Duration duration(name, (unsigned long)data);
 
 
 #endif /* _INCLUDE__TRACE__PROBE_H_ */
