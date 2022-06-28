@@ -1,0 +1,7 @@
+_/src/init
+_/src/test-udp
+_/src/nic_perf
+_/src/posix
+_/src/libc
+_/src/vfs
+_/src/vfs_lwip
