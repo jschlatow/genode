@@ -112,7 +112,7 @@ void Nic_perf::Interface::_handle_ip(Ethernet_frame & eth, Size_guard & size_gua
 
 void Nic_perf::Interface::_handle_dhcp_request(Ethernet_frame & eth, Dhcp_packet & dhcp)
 {
-	Dhcp_packet::Message_type const msg_type = 
+	Dhcp_packet::Message_type const msg_type =
 		dhcp.option<Dhcp_packet::Message_type_option>().value();
 
 	switch (msg_type) {
@@ -121,7 +121,6 @@ void Nic_perf::Interface::_handle_dhcp_request(Ethernet_frame & eth, Dhcp_packet
 		break;
 	case Dhcp_packet::Message_type::REQUEST:
 		_send_dhcp_reply(eth, dhcp, Dhcp_packet::Message_type::ACK);
-		_generator.dhcp_client_configured();
 		break;
 	default:
 		;

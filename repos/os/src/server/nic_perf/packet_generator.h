@@ -20,11 +20,13 @@
 #include <net/ipv4.h>
 #include <net/arp.h>
 #include <net/udp.h>
+#include <timer_session/connection.h>
 
 namespace Nic_perf {
 	using namespace Genode;
 	using namespace Net;
 
+	class Interface;
 	class Packet_generator;
 }
 
@@ -46,11 +48,21 @@ class Nic_perf::Packet_generator
 		Mac_address  _dst_mac  { };
 		State        _state    { MUTED };
 
+		Timer::One_shot_timeout<Packet_generator>  _timeout;
+		Nic_perf::Interface                       &_interface;
+
 		void _generate_arp_request(void *, Size_guard &, Mac_address const &, Ipv4_address const &);
 
 		void _generate_test_packet(void *, Size_guard &, Mac_address const &, Ipv4_address const &);
 
+		void _handle_timeout(Genode::Duration);
+
 	public:
+
+		Packet_generator(Timer::Connection &timer, Nic_perf::Interface &interface)
+		: _timeout(timer, *this, &Packet_generator::_handle_timeout),
+		  _interface(interface)
+		{ }
 
 		void apply_config(Xml_node const &config)
 		{
@@ -94,13 +106,6 @@ class Nic_perf::Packet_generator
 			}
 
 			return 0;
-		}
-
-		void dhcp_client_configured()
-		{
-			/* re-issue ARP request */
-			if (_state == WAIT_ARP_REPLY)
-				_state = NEED_ARP_REQUEST;
 		}
 
 		void handle_arp_reply(Arp_packet const & arp);

@@ -13,7 +13,16 @@
 
 /* local includes */
 #include <packet_generator.h>
+#include <interface.h>
 
+void Nic_perf::Packet_generator::_handle_timeout(Genode::Duration)
+{
+	/* re-issue ARP request */
+	if (_state == WAIT_ARP_REPLY)
+		_state = NEED_ARP_REQUEST;
+
+	_interface.handle_packet_stream();
+}
 
 void Nic_perf::Packet_generator::handle_arp_reply(Arp_packet const & arp)
 {
@@ -22,6 +31,8 @@ void Nic_perf::Packet_generator::handle_arp_reply(Arp_packet const & arp)
 
 	if (_state != WAIT_ARP_REPLY)
 		return;
+
+	_timeout.discard();
 
 	_dst_mac = arp.src_mac();
 	_state = READY;
@@ -53,8 +64,6 @@ void Nic_perf::Packet_generator::_generate_arp_request(void               * pkt_
 	arp.src_ip(from_ip);
 	arp.dst_mac(Mac_address(0xff));
 	arp.dst_ip(_dst_ip);
-
-
 }
 
 
@@ -115,6 +124,7 @@ void Nic_perf::Packet_generator::generate(void               * pkt_base,
 		case NEED_ARP_REQUEST:
 			_generate_arp_request(pkt_base, size_guard, from_mac, from_ip);
 			_state = WAIT_ARP_REPLY;
+			_timeout.schedule(Microseconds { 1000 * 1000 });
 			break;
 		case MUTED:
 		case WAIT_ARP_REPLY:

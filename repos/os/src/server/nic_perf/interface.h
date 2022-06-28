@@ -88,7 +88,7 @@ class Nic_perf::Interface
 		: _element(registry, *this),
 		  _label(label),
 		  _stats(_label),
-		  _generator(),
+		  _generator(timer, *this),
 		  _mac_from_policy(mac_from_policy),
 		  _default_mac(mac),
 		  _source(source),
