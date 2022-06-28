@@ -43,7 +43,7 @@ class Uplink_client : public Uplink_client_base
 		{
 			instance = this;
 			dde_ipxe_nic_register_callbacks(
-				_drv_rx_callback, _drv_link_callback);
+				_drv_rx_callback, _drv_link_callback, _drv_irq_callback);
 
 			Net::Mac_address mac_addr { };
 			dde_ipxe_nic_get_mac_addr(1, mac_addr.addr);
@@ -72,6 +72,11 @@ class Uplink_client : public Uplink_client_base
 		static void _drv_link_callback()
 		{
 			instance->_drv_handle_link_state(dde_ipxe_nic_link_state(1));
+		}
+
+		static void _drv_irq_callback()
+		{
+			instance->_drv_finish_received_pkts();
 		}
 
 

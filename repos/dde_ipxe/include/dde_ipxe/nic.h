@@ -33,6 +33,11 @@ typedef void (*dde_ipxe_nic_link_cb)(void);
 typedef void (*dde_ipxe_nic_rx_cb)(unsigned if_index, const char *packet, unsigned packet_len);
 
 /**
+ * Irq finished callback
+ */
+typedef void (*dde_ipxe_nic_irq_cb)(void);
+
+/**
  * Register packet reception callback
  *
  * \param   rx_cb    packet-reception callback function
@@ -42,7 +47,8 @@ typedef void (*dde_ipxe_nic_rx_cb)(unsigned if_index, const char *packet, unsign
  * are passed to this function.
  */
 extern void dde_ipxe_nic_register_callbacks(dde_ipxe_nic_rx_cb rx_cb,
-                                            dde_ipxe_nic_link_cb link_cb);
+                                            dde_ipxe_nic_link_cb link_cb,
+                                            dde_ipxe_nic_irq_cb irq_cb);
 
 /**
  * Clear callbacks
