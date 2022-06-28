@@ -1,0 +1,67 @@
+<runtime ram="100M" caps="2500" binary="init">
+
+	<requires> <timer/> </requires>
+
+	<events>
+		<timeout meaning="failed" sec="60" />
+		<log meaning="succeeded">
+			[init] child "nic_perf" exited with exit value 0
+		</log>
+	</events>
+
+	<content>
+		<rom label="ld.lib.so"/>
+		<rom label="libc.lib.so"/>
+		<rom label="libm.lib.so"/>
+		<rom label="posix.lib.so"/>
+		<rom label="vfs.lib.so"/>
+		<rom label="vfs_lwip.lib.so"/>
+		<rom label="nic_perf"/>
+		<rom label="vfs"/>
+		<rom label="test-udp"/>
+	</content>
+
+	<config verbose="yes">
+		<parent-provides>
+			<service name="ROM"/>
+			<service name="PD"/>
+			<service name="RM"/>
+			<service name="CPU"/>
+			<service name="LOG"/>
+			<service name="Timer"/>
+		</parent-provides>
+		<default-route>
+			<any-service> <parent/> <any-child/> </any-service>
+		</default-route>
+		<default caps="256"/>
+
+		<start name="nic_perf">
+			<resource name="RAM" quantum="10M"/>
+			<provides>
+				<service name="Uplink"/>
+				<service name="Nic"/>
+			</provides>
+			<config period_ms="5000" count="16">
+				<default-policy>
+					<interface ip="10.0.1.1" dhcp_client_ip="10.0.1.2"/>
+					<tx mtu="1500" to="10.0.1.2" udp_port="12345"/>
+				</default-policy>
+			</config>
+		</start>
+
+		<start name="recv">
+			<binary name="test-udp"/>
+			<resource name="RAM" quantum="32M"/>
+			<config>
+				<arg value="recv"/>
+				<libc stdout="/log" stderr="/log" socket="/socket"/>
+				<vfs>
+					<log/>
+					<dir name="socket">
+						<lwip dhcp="yes"/>
+					</dir>
+				</vfs>
+			</config>
+		</start>
+	</config>
+</runtime>
