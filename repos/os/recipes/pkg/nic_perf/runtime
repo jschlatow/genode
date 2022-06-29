@@ -1,0 +1,14 @@
+<runtime ram="40M" caps="2000" binary="nic_perf">
+
+	<requires> <timer/> <nic/> </requires>
+	<provides> <uplink/> <nic/> </provides>
+
+	<content>
+		<rom label="ld.lib.so"/>
+		<rom label="nic_perf"/>
+	</content>
+
+	<config period_ms="5000">
+		<nic-client/>
+	</config>
+</runtime>
