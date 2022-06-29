@@ -351,7 +351,7 @@ class Lwip::Nic_netif
 			Nic::Packet_descriptor packet;
 			try { packet = tx.alloc_packet(p->tot_len); }
 			catch (...) {
-				Genode::error("lwIP: Nic packet allocation failed, cannot send packet");
+//				Genode::error("lwIP: Nic packet allocation failed, cannot send packet");
 				return ERR_WOULDBLOCK;
 			}
 
