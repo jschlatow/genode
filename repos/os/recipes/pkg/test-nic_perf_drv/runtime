@@ -1,0 +1,56 @@
+<runtime ram="40M" caps="2000" binary="init">
+
+	<requires> <timer/> <platform/> <rm/> </requires>
+
+	<events>
+		<timeout meaning="failed" sec="60" />
+		<log meaning="succeeded">
+			[init] child "nic_perf" exited with exit value 0
+		</log>
+	</events>
+
+	<content>
+		<rom label="ld.lib.so"/>
+		<rom label="nic_perf"/>
+		<rom label="nic_drv"/>
+	</content>
+
+	<config>
+		<parent-provides>
+			<service name="ROM"/>
+			<service name="PD"/>
+			<service name="RM"/>
+			<service name="CPU"/>
+			<service name="LOG"/>
+			<service name="Timer"/>
+			<service name="Platform"/>
+		</parent-provides>
+		<default-route>
+			<any-service> <parent/> <any-child/> </any-service>
+		</default-route>
+		<default caps="500"/>
+
+		<start name="nic_perf">
+			<binary name="nic_perf"/>
+			<resource name="RAM" quantum="10M"/>
+			<provides>
+				<service name="Uplink"/>
+				<service name="Nic"/>
+			</provides>
+			<config period_ms="5000" count="8">
+				<default-policy>
+					<tx mtu="1500" to="192.168.42.58" udp_port="12345"/>
+				</default-policy>
+			</config>
+		</start>
+
+		<start name="nic_drv">
+			<resource name="RAM" quantum="10M"/>
+			<config/>
+			<route>
+				<service name="Uplink"> <child name="nic_perf"/> </service>
+				<any-service> <any-child/> <parent/> </any-service>
+			</route>
+		</start>
+	</config>
+</runtime>
