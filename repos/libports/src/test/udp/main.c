@@ -77,8 +77,8 @@ int test_send_and_recv(char const *dst_ip, unsigned port)
 	int result = bind(sock, (struct sockaddr*)&bind_addr, sizeof(bind_addr));
 
 	while (!result) {
-		while (!_recv_packet(sock));
-		while (!_send_packet(sock, &addr));
+//		while (!_recv_packet(sock));
+//		while (!_send_packet(sock, &addr));
 
 		/* block until we can send again */
 		result = _send_packet(bsock, &addr);
