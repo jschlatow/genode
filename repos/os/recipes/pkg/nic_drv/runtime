@@ -1,0 +1,10 @@
+<runtime ram="40M" caps="2000" binary="nic_drv">
+
+	<requires> <uplink/> <timer/> <platform/> <rm/> </requires>
+
+	<content>
+		<rom label="ld.lib.so"/>
+		<rom label="nic_drv"/>
+	</content>
+
+</runtime>
