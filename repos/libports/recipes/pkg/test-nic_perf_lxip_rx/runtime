@@ -1,6 +1,6 @@
 <runtime ram="100M" caps="2500" binary="init">
 
-	<requires> <timer/> </requires>
+	<requires> <timer/> <rm/> </requires>
 
 	<events>
 		<timeout meaning="failed" sec="60" />
