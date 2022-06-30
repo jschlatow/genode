@@ -410,18 +410,24 @@ signed long schedule_timeout(signed long timeout)
 {
 	unsigned long expire = timeout + jiffies;
 
+	/**
+	 * XXX
+	 * schedule_timeout is called from sock_wait_for_wmem() (UDP) and
+	 * sk_stream_wait_memory() (TCP) if sk_wmem_alloc (UDP) resp.
+	 * sk_wmem_queued (TCP) reaches are certain threshold
+	 * unfortunately, recovery from this state seems to be broken
+	 * so that we land here for every skb once we hit the threshold
+	 */
+	static bool warned = false;
+	if (!warned) {
+		Genode::warning(__func__, " called (tx throttled?)");
+		warned = true;
+	}
+
 	long start = jiffies;
 	_timer->wait(timeout);
 	timeout -= jiffies - start;
 
-	/**
-	 * XXX
-	 * schedule_timeout is called from sock_wait_for_wmem when
-	 * sk_wmem_alloc reaches are certain threshold
-	 * unfortunately, recovery from this state seems to be broken
-	 * so that we land here for every skb once we hit the threshold
-	 */
-	Genode::warning(__func__, " called (tx throttled?)");
 	return timeout < 0 ? 0 : timeout;
 }
 
