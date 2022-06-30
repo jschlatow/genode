@@ -306,10 +306,20 @@ class Lx::Timer
 
 		void wait(unsigned long timeo = 0)
 		{
+			/**
+			 * XXX
+			 * in contrast to wait_uninterruptible(), wait() should be interruptible
+			 * although we return immediately once we dispatched any signal, we
+			 * need to reflect this via signal_pending()
+			 */
+
 			if (timeo > 0)
 				_wait_one_shot.schedule(Genode::Microseconds(jiffies_to_usecs(timeo)));
 
 			_ep.wait_and_dispatch_one_io_signal();
+			/* update jiffies if we dispatched another signal */
+			if (_wait_one_shot.scheduled())
+				update_jiffies();
 		}
 
 		void wait_uninterruptible(unsigned long timeo)
@@ -403,6 +413,15 @@ signed long schedule_timeout(signed long timeout)
 	long start = jiffies;
 	_timer->wait(timeout);
 	timeout -= jiffies - start;
+
+	/**
+	 * XXX
+	 * schedule_timeout is called from sock_wait_for_wmem when
+	 * sk_wmem_alloc reaches are certain threshold
+	 * unfortunately, recovery from this state seems to be broken
+	 * so that we land here for every skb once we hit the threshold
+	 */
+	Genode::warning(__func__, " called (tx throttled?)");
 	return timeout < 0 ? 0 : timeout;
 }
 
