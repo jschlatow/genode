@@ -40,6 +40,7 @@ class Nic_client
 		Genode::Io_signal_handler<Nic_client> _sink_ack;
 		Genode::Io_signal_handler<Nic_client> _sink_submit;
 		Genode::Io_signal_handler<Nic_client> _source_ack;
+		Genode::Io_signal_handler<Nic_client> _source_submit;
 		Genode::Io_signal_handler<Nic_client> _link_state_change;
 
 		void (*_tick)();
@@ -89,7 +90,7 @@ class Nic_client
 		}
 
 		/**
-		 * acknoledgement queue not full anymore
+		 * acknowledgement queue not full anymore
 		 */
 		void _ready_to_ack()
 		{
@@ -97,7 +98,7 @@ class Nic_client
 		}
 
 		/**
-		 * acknoledgement queue not empty anymore
+		 * acknowledgement queue not empty anymore
 		 */
 		void _ack_avail()
 		{
@@ -105,6 +106,14 @@ class Nic_client
 				Nic::Packet_descriptor p = _nic.tx()->get_acked_packet();
 				_nic.tx()->release_packet(p);
 			}
+		}
+
+		/** submit queue not full anymore
+		 *
+		 */
+		void _ready_to_submit()
+		{
+			_ack_avail();
 		}
 
 
@@ -119,6 +128,7 @@ class Nic_client
 			_sink_ack(env.ep(), *this, &Nic_client::_packet_avail),
 			_sink_submit(env.ep(), *this, &Nic_client::_ready_to_ack),
 			_source_ack(env.ep(), *this, &Nic_client::_ack_avail),
+			_source_submit(env.ep(), *this, &Nic_client::_ready_to_submit),
 			_link_state_change(env.ep(), *this, &Nic_client::_link_state),
 			_tick(ticker)
 		{
@@ -127,6 +137,7 @@ class Nic_client
 			_nic.rx_channel()->sigh_ready_to_ack(_sink_ack);
 			_nic.rx_channel()->sigh_packet_avail(_sink_submit);
 			_nic.tx_channel()->sigh_ack_avail(_source_ack);
+			_nic.tx_channel()->sigh_ready_to_submit(_source_submit);
 			_nic.link_state_sigh(_link_state_change);
 			/* ready_to_submit not handled */
 		}
@@ -177,6 +188,9 @@ void net_mac(void* mac, unsigned long size)
  */
 int net_tx(void* addr, unsigned long len)
 {
+	if (!_nic_client->nic()->tx()->ready_to_submit())
+		return 1;
+
 	try {
 		Nic::Packet_descriptor packet = _nic_client->nic()->tx()->alloc_packet(len);
 		void* content                 = _nic_client->nic()->tx()->packet_content(packet);
