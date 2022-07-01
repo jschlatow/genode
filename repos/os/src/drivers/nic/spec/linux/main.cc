@@ -142,6 +142,8 @@ class Uplink_client : public Uplink_client_base
 					return Write_result::WRITE_SUCCEEDED;
 				});
 			}
+
+			_drv_finish_received_pkts();
 		}
 
 
