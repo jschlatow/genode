@@ -311,7 +311,7 @@ void Timeout_scheduler::_schedule_timeout(Timeout         &timeout,
 	 *     new duration in the future
 	 */
 	if (deadline_us > timeout._deadline.value &&
-	    curr_time_us + (duration.value / 10) <= timeout._deadline.value)
+	    curr_time_us + (duration.value / 2) <= timeout._deadline.value)
 		warning("_schedule_timeout(", duration.value,
 		        ") called on existing timeout: old timeout hits in ",
 		        timeout._deadline.value - curr_time_us);
