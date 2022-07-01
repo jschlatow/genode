@@ -1537,7 +1537,7 @@ void Interface::_handle_pkt_stream_signal()
 	 * sending new packets in the subsequent steps of this handler.
 	 */
 	while (_source.ack_avail()) {
-		_source.release_packet(_source.get_acked_packet());
+		_source.release_packet(_source.try_get_acked_packet());
 	}
 
 	/*
@@ -1566,6 +1566,13 @@ void Interface::_handle_pkt_stream_signal()
 			_handle_pkt();
 		}
 	}
+
+	_config().domains().for_each([&] (Domain &domain) {
+		domain.interfaces().for_each([&] (Interface &interface) {
+			interface.wakeup_source();
+			interface.wakeup_sink();
+		});
+	});
 }
 
 
@@ -1809,7 +1816,7 @@ void Interface::_send_submit_pkt(Packet_descriptor &pkt,
 		}
 		catch (Size_guard::Exceeded) { log("[", local_domain, "] snd ?"); }
 	}
-	_source.submit_packet(pkt);
+	_source.try_submit_packet(pkt);
 }
 
 
@@ -2260,7 +2267,7 @@ void Interface::_ack_packet(Packet_descriptor const &pkt)
 		}
 		return;
 	}
-	_sink.acknowledge_packet(pkt);
+	_sink.try_ack_packet(pkt);
 }
 
 

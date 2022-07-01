@@ -456,6 +456,8 @@ class Net::Interface : private Interface_list::Element
 		Interface_link_stats      &icmp_stats()                      { return _icmp_stats; }
 		Interface_object_stats    &arp_stats()                       { return _arp_stats; }
 		Interface_object_stats    &dhcp_stats()                      { return _dhcp_stats; }
+		void                       wakeup_source()                   { _source.wakeup(); }
+		void                       wakeup_sink()                     { _sink.wakeup(); }
 };
 
 #endif /* _INTERFACE_H_ */
