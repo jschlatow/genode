@@ -1566,6 +1566,13 @@ void Interface::_handle_pkt_stream_signal()
 			_handle_pkt();
 		}
 	}
+
+	_config().domains().for_each([&] (Domain &domain) {
+		domain.interfaces().for_each([&] (Interface &interface) {
+			interface.wakeup_source();
+			interface.wakeup_sink();
+		});
+	});
 }
 
 
@@ -1814,7 +1821,7 @@ void Interface::_send_submit_pkt(Packet_descriptor &pkt,
 	}
 	if (local_domain.trace_packets())
 		Genode::Trace::Ethernet_packet(local_domain.name().string(), pkt_base, pkt_size);
-	_source.submit_packet(pkt);
+	_source.try_submit_packet(pkt);
 }
 
 
@@ -2265,7 +2272,7 @@ void Interface::_ack_packet(Packet_descriptor const &pkt)
 		}
 		return;
 	}
-	_sink.acknowledge_packet(pkt);
+	_sink.try_ack_packet(pkt);
 }
 
 
