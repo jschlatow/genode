@@ -444,6 +444,8 @@ class Virtio_nic::Uplink_client : public Virtio_nic::Device,
 				});
 				return true;
 			});
+
+			_drv_finish_received_pkts();
 		}
 
 		void _handle_irq()

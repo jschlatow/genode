@@ -436,6 +436,7 @@ class Uplink_client : public Signal_handler<Uplink_client>,
 					return Write_result::WRITE_SUCCEEDED;
 				});
 			}
+			_drv_finish_received_pkts();
 			_finish_handle_irq();
 		}
 

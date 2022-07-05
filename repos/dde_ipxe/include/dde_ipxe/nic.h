@@ -33,7 +33,7 @@ typedef void (*dde_ipxe_nic_link_cb)(void);
 typedef void (*dde_ipxe_nic_rx_cb)(unsigned if_index, const char *packet, unsigned packet_len);
 
 /**
- * Irq finished callback
+ * Irq-handling finished callback
  */
 typedef void (*dde_ipxe_nic_irq_cb)(void);
 
@@ -42,6 +42,7 @@ typedef void (*dde_ipxe_nic_irq_cb)(void);
  *
  * \param   rx_cb    packet-reception callback function
  * \param   link_cb  link-state change callback function
+ * \param   irq_cb   irq-handling finished callback function
  *
  * This registers a function pointer as rx callback. Incoming ethernet packets
  * are passed to this function.
