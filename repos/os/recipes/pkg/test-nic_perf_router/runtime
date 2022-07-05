@@ -38,7 +38,7 @@
 			</provides>
 			<config period_ms="5000" count="8">
 				<nic-client>
-					<tx mtu="1500" to="10.0.2.2" udp_port="12345"/>
+					<tx mtu="1500" to="10.0.1.1" udp_port="12345"/>
 				</nic-client>
 			</config>
 			<route>
@@ -59,7 +59,11 @@
 
 				<domain name="sender" interface="10.0.1.1/24">
 					<dhcp-server ip_first="10.0.1.2" ip_last="10.0.1.2"/>
+					<nat domain="receiver" tcp-port="1000" udp-ports="1000" icmp-ids="1000"/>
+					<udp-forward port="12345" to="10.0.2.2" domain="receiver"/>
+					<!--
 					<ip dst="0.0.0.0/0" domain="receiver"/>
+					-->
 				</domain>
 
 				<domain name="receiver" interface="10.0.2.1/24">

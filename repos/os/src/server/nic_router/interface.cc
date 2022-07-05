@@ -300,11 +300,14 @@ void Interface::_pass_prot(Ethernet_frame       &eth,
                            void          *const  prot_base,
                            size_t         const  prot_size)
 {
+	{
+	GENODE_LOG_TSC(300000);
 	eth.src(_router_mac);
 	if (!_domain().use_arp()) {
 		eth.dst(_router_mac);
 	}
 	_update_checksum(prot, prot_base, prot_size, ip.src(), ip.dst(), ip.total_length());
+	}
 	_pass_ip(eth, size_guard, ip);
 }
 
@@ -313,8 +316,14 @@ void Interface::_pass_ip(Ethernet_frame &eth,
                          Size_guard     &size_guard,
                          Ipv4_packet    &ip)
 {
+	{
+	GENODE_LOG_TSC(300000);
 	ip.update_checksum();
+	}
+	{
+	GENODE_LOG_TSC_NAMED(300000, "send");
 	send(eth, size_guard);
+	}
 }
 
 
@@ -1253,7 +1262,10 @@ void Interface::_handle_ip(Ethernet_frame          &eth,
 					interface._pass_prot(
 						eth, size_guard, ip, prot, prot_base, prot_size);
 				});
+				{
+					GENODE_LOG_TSC_NAMED(300000, "link_packet");
 				_link_packet(prot, prot_base, link, client);
+				}
 				done = true;
 			},
 			[&] /* handle_no_match */ () { }
@@ -1531,6 +1543,12 @@ void Interface::_handle_pkt()
 
 void Interface::_handle_pkt_stream_signal()
 {
+	using Checkpoint = Genode::Trace::Checkpoint;
+//	Checkpoint("tx_submit_queue_pre", _source.submit_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+	Checkpoint("rx_submit_queue_pre", _sink.submit_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+//	Checkpoint("tx_ack_queue_pre", _source.ack_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+	Checkpoint("rx_ack_queue_pre", _sink.ack_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+
 	/*
 	 * Release all sent packets that were already acknowledged by the counter
 	 * side. Doing this first frees packet-stream memory which facilitates
@@ -1566,6 +1584,11 @@ void Interface::_handle_pkt_stream_signal()
 			_handle_pkt();
 		}
 	}
+
+//	Checkpoint("tx_submit_queue_post", _source.submit_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+	Checkpoint("rx_submit_queue_post", _sink.submit_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+//	Checkpoint("tx_ack_queue_post", _source.ack_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+	Checkpoint("rx_ack_queue_post", _sink.ack_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
 
 	_config().domains().for_each([&] (Domain &domain) {
 		domain.interfaces().for_each([&] (Interface &interface) {
@@ -1821,6 +1844,7 @@ void Interface::_send_submit_pkt(Packet_descriptor &pkt,
 	}
 	if (local_domain.trace_packets())
 		Genode::Trace::Ethernet_packet(local_domain.name().string(), pkt_base, pkt_size);
+
 	_source.try_submit_packet(pkt);
 }
 

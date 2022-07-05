@@ -323,8 +323,8 @@ class Lwip::Nic_netif
 			/* set Nic session signal handlers */
 			_nic.link_state_sigh(_link_state_handler);
 			_nic.rx_channel()->sigh_packet_avail(_rx_packet_handler);
-			_nic.rx_channel()->sigh_ready_to_ack(_rx_packet_handler);
-			_nic.tx_channel()->sigh_ready_to_submit(_tx_ready_handler);
+//			_nic.rx_channel()->sigh_ready_to_ack(_rx_packet_handler);
+//			_nic.tx_channel()->sigh_ready_to_submit(_tx_ready_handler);
 			_nic.tx_channel()->sigh_ack_avail      (_tx_ready_handler);
 
 			return ERR_OK;
@@ -337,6 +337,8 @@ class Lwip::Nic_netif
 		 */
 		err_t linkoutput(struct pbuf *p)
 		{
+			GENODE_LOG_TSC(100000);
+//			GENODE_TRACE_CHECKPOINT_NAMED(0, __func__);
 			auto &tx = *_nic.tx();
 
 			/* flush acknowledgements */
@@ -359,15 +361,21 @@ class Lwip::Nic_netif
 			 * We iterate over the pbuf chain until we have read the entire
 			 * pbuf into the packet.
 			 */
+			{
+			GENODE_LOG_TSC_NAMED(100000, "memcpy");
 			char *dst = tx.packet_content(packet);
 			for(struct pbuf *q = p; q != 0; q = q->next) {
 				char const *src = (char*)q->payload;
 				Genode::memcpy(dst, src, q->len);
 				dst += q->len;
 			}
+			}
 
+			{
+			GENODE_LOG_TSC_NAMED(100000, "submit_packet");
 			tx.submit_packet(packet);
 			LINK_STATS_INC(link.xmit);
+			}
 			return ERR_OK;
 		}
 

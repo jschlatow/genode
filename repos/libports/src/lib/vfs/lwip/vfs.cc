@@ -22,6 +22,7 @@
 #include <base/tslab.h>
 #include <base/registry.h>
 #include <base/log.h>
+#include <trace/probe.h>
 
 /* LwIP includes */
 #include <lwip/genode_init.h>
@@ -804,6 +805,7 @@ class Lwip::Udp_socket_dir final :
 
 				u16_t read(void *dst, size_t count)
 				{
+					GENODE_LOG_TSC_NAMED(100000, "Packet::read");
 					count = min((size_t)buf->tot_len, count);
 					auto n = pbuf_copy_partial(buf, dst, count, offset);
 					offset += n;
@@ -812,6 +814,7 @@ class Lwip::Udp_socket_dir final :
 
 				u16_t peek(void *dst, size_t count)  const
 				{
+					GENODE_LOG_TSC_NAMED(100000, "Packet::peek");
 					count = min((size_t)buf->tot_len, count);
 					return pbuf_copy_partial(buf, dst, count, offset);
 				}
@@ -992,6 +995,8 @@ class Lwip::Udp_socket_dir final :
 		                   char const *src, file_size count,
 		                   file_size &out_count) override
 		{
+			GENODE_LOG_TSC_NAMED(100000, "Udp_socket_dir::write");
+			GENODE_TRACE_CHECKPOINT_NAMED(count, __func__);
 			Genode::Mutex::Guard guard { Lwip::mutex() };
 
 			switch (handle.kind) {
@@ -1001,11 +1006,22 @@ class Lwip::Udp_socket_dir final :
 
 				file_size remain = count;
 				while (remain) {
-					pbuf *buf = pbuf_alloc(PBUF_RAW, remain, PBUF_RAM);
+					pbuf *buf;
+					{
+					GENODE_LOG_TSC_NAMED(100000, "pbuf_alloc");
+					buf = pbuf_alloc(PBUF_RAW, remain, PBUF_RAM);
 					pbuf_take(buf, src, buf->tot_len);
+					}
 
-					err_t err = udp_sendto(_pcb, buf, &_to_addr, _to_port);
+					err_t err;
+					{
+					GENODE_LOG_TSC_NAMED(100000, "udp_sendto");
+					err = udp_sendto(_pcb, buf, &_to_addr, _to_port);
+					}
+					{
+					GENODE_LOG_TSC_NAMED(100000, "pbuf_free");
 					pbuf_free(buf);
+					}
 					if (err == ERR_WOULDBLOCK)
 						return Write_result::WRITE_ERR_WOULD_BLOCK;
 					else if (err != ERR_OK)
