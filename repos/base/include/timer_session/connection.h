@@ -80,7 +80,7 @@ template <typename HANDLER>
 class Timer::One_shot_timeout : private Genode::Noncopyable,
                                 private Genode::Timeout_handler
 {
-	private:
+	protected:
 
 		using Duration          = Genode::Duration;
 		using Timeout           = Genode::Timeout;
@@ -117,6 +117,8 @@ class Timer::One_shot_timeout : private Genode::Noncopyable,
 		void discard() { _timeout.discard(); }
 
 		bool scheduled() { return _timeout.scheduled(); }
+
+		Microseconds deadline() { return _timeout.deadline(); }
 };
 
 

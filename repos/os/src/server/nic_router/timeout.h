@@ -2,6 +2,12 @@
  * \brief  Replacement of Timer::One_shot_timeout with lazy rescheduling
  * \author Johannes Schlatow
  * \date   2022-07-01
+ *
+ * This implementation prevents rescheduling when a timeout is frequently
+ * updated with only marginal changes. Timeouts within a certain accuracy
+ * threshold of the existing timeout will be ignored. Otherwise, earlier
+ * timeouts will always be rescheduled whereas later timeouts are never
+ * applied immediately but only when the scheduled timeout occured.
  */
 
 /*
@@ -20,27 +26,21 @@
 
 namespace Net {
 	template <typename>
-	class One_shot_timeout;
+	class Lazy_one_shot_timeout;
 }
 
 template <typename HANDLER>
-class Net::One_shot_timeout : private Genode::Noncopyable,
-                              private Genode::Timeout_handler
+class Net::Lazy_one_shot_timeout : private Timer::One_shot_timeout<HANDLER>
 {
 	private:
-
-		using Duration          = Genode::Duration;
-		using Timeout           = Genode::Timeout;
-		using Microseconds      = Genode::Microseconds;
-
-		typedef void (HANDLER::*Handler_method)(Duration);
+		using One_shot_timeout = Timer::One_shot_timeout<HANDLER>;
+		using Microseconds     = typename One_shot_timeout::Microseconds;
+		using Duration         = typename One_shot_timeout::Duration;
+		using Handler_method   = typename One_shot_timeout::Handler_method;
 
 		Timer::Connection    &_timer;
-		Timeout               _timeout;
-		HANDLER              &_object;
-		Handler_method const  _method;
+		Microseconds const    _accuracy;
 		Microseconds          _deadline_wanted { 0 };
-
 
 		/*********************
 		 ** Timeout_handler **
@@ -50,42 +50,42 @@ class Net::One_shot_timeout : private Genode::Noncopyable,
 		{
 			if (_deadline_wanted.value > 0) {
 				Microseconds curr_time_us = curr_time.trunc_to_plain_us();
-				if (curr_time_us.value < _deadline_wanted.value) {
-					/* reschedule if _deadline_wanted is != 0 and in the future */
-					schedule(Microseconds { _deadline_wanted.value - curr_time_us.value });
+				if (curr_time_us.value + _accuracy.value < _deadline_wanted.value) {
+					/* reschedule if _deadline_wanted is != 0 and in the future (minus tolerance) */
+					One_shot_timeout::schedule(Microseconds { _deadline_wanted.value - curr_time_us.value });
 					_deadline_wanted.value = 0;
 					return;
 				}
 			}
 
-			(_object.*_method)(curr_time);
+			One_shot_timeout::handle_timeout(curr_time);
 		}
 
 	public:
 
-		One_shot_timeout(Timer::Connection &timer,
-		                 HANDLER           &object,
-		                 Handler_method     method)
-		:
-			_timer   { timer },
-			_timeout { timer },
-			_object  { object },
-			_method  { method }
+		using One_shot_timeout::discard;
+		using One_shot_timeout::scheduled;
+		using One_shot_timeout::deadline;
+
+		Lazy_one_shot_timeout(Timer::Connection &timer,
+		                      HANDLER           &object,
+		                      Handler_method     method,
+		                      Microseconds       accuracy)
+		: One_shot_timeout(timer, object, method),
+		  _timer    { timer },
+		  _accuracy { accuracy }
 		{ }
 
-		void schedule(Microseconds duration) {
-			_timeout.schedule_one_shot(duration, *this); }
-
-		/**
-		 * Variant of schedule() that does not replace the currently scheduled
-		 * timeout if it is at least 'min_duration' in the future.
-		 * If the new deadline is at most 'accuracy' microseconds after the
-		 * current deadline, we just ignore the update.
-		 */
-		void schedule_lazy(Microseconds duration, Microseconds min_duration, Microseconds accuracy = Microseconds { 10 })
+		void schedule(Microseconds duration)
 		{
-			if (!_timeout.scheduled())
-				schedule(duration);
+			/* remove wanted deadline (may be set below) */
+			_deadline_wanted.value = 0;
+
+			/* no special treatment if timeout is unscheduled or smaller than accuracy */
+			if (!scheduled() || duration.value <= _accuracy.value) {
+				One_shot_timeout::schedule(duration);
+				return;
+			}
 
 			using uint64_t = Genode::uint64_t;
 
@@ -96,21 +96,22 @@ class Net::One_shot_timeout : private Genode::Noncopyable,
 				duration.value <= ~(uint64_t)0 - curr_time_us ?
 					curr_time_us + duration.value : ~(uint64_t)0 };
 
-			/* scheduled timeout is at least min_duration ahead */
-			if (deadline_us > _timeout.deadline().value &&
-			    curr_time_us + min_duration.value <= _timeout.deadline().value) {
-				/* do nothing if wanted deadline will be too close */
-				if (_timeout.deadline().value + accuracy.value < deadline_us) {
+			/* new deadline is earlier */
+			if (deadline_us < deadline().value) {
+				/* reschedule only if old timeout is not accurate enough */
+				if (deadline_us + _accuracy.value < deadline().value)
+					One_shot_timeout::schedule(duration);
+			}
+			/* new deadline is later */
+			else {
+				/**
+				 * remember and apply deadline in timeout handler
+				 * only if old timeout is not accurate enough
+				 */
+				if (deadline_us - _accuracy.value > deadline().value)
 					_deadline_wanted.value = deadline_us;
-				}
-			} else {
-				schedule(duration);
 			}
 		}
-
-		void discard() { _timeout.discard(); }
-
-		bool scheduled() { return _timeout.scheduled(); }
 };
 
 #endif /* _TIMEOUT_H_ */
