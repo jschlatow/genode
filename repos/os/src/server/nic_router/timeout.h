@@ -31,15 +31,18 @@ namespace Net {
 }
 
 template <typename HANDLER>
-class Net::Lazy_one_shot_timeout : private Timer::One_shot_timeout<HANDLER>
+class Net::Lazy_one_shot_timeout : private Timer::One_shot_timeout<Lazy_one_shot_timeout<HANDLER>>
 {
 	private:
-		using One_shot_timeout = Timer::One_shot_timeout<HANDLER>;
+		using One_shot_timeout = Timer::One_shot_timeout<Lazy_one_shot_timeout<HANDLER>>;
 		using Microseconds     = typename One_shot_timeout::Microseconds;
 		using Duration         = typename One_shot_timeout::Duration;
-		using Handler_method   = typename One_shot_timeout::Handler_method;
+
+		typedef void (HANDLER::*Handler_method)(Duration);
 
 		Timer::Connection    &_timer;
+		HANDLER              &_object;
+		Handler_method const  _method;
 		Microseconds const    _accuracy;
 		Microseconds          _deadline_wanted { 0 };
 		Genode::Mutex         _mutex { };
@@ -128,19 +131,14 @@ class Net::Lazy_one_shot_timeout : private Timer::One_shot_timeout<HANDLER>
 			return result;
 		}
 
-
-		/*********************
-		 ** Timeout_handler **
-		 *********************/
-
-		void handle_timeout(Duration curr_time) override
+		void _handle_timeout(Duration curr_time)
 		{
 			Microseconds duration = _wanted_timeout(curr_time);
 
 			if (duration.value)
 				One_shot_timeout::schedule(duration);
 			else
-				One_shot_timeout::handle_timeout(curr_time);
+				(_object.*_method)(curr_time);
 		}
 
 	public:
@@ -152,8 +150,10 @@ class Net::Lazy_one_shot_timeout : private Timer::One_shot_timeout<HANDLER>
 		                      HANDLER           &object,
 		                      Handler_method     method,
 		                      Microseconds       accuracy)
-		: One_shot_timeout(timer, object, method),
+		: One_shot_timeout(timer, *this, &Lazy_one_shot_timeout<HANDLER>::_handle_timeout),
 		  _timer    { timer },
+		  _object   { object },
+		  _method   { method },
 		  _accuracy { accuracy }
 		{ }
 
