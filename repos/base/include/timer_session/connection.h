@@ -92,6 +92,7 @@ class Timer::One_shot_timeout : private Genode::Noncopyable,
 		HANDLER              &_object;
 		Handler_method const  _method;
 
+		Microseconds _deadline() { return _timeout.deadline(); }
 
 		/*********************
 		 ** Timeout_handler **
@@ -117,8 +118,6 @@ class Timer::One_shot_timeout : private Genode::Noncopyable,
 		void discard() { _timeout.discard(); }
 
 		bool scheduled() { return _timeout.scheduled(); }
-
-		Microseconds deadline() { return _timeout.deadline(); }
 };
 
 
