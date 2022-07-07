@@ -1548,6 +1548,7 @@ void Interface::_handle_pkt_stream_signal()
 	Checkpoint("rx_submit_queue_pre", _sink.submit_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
 //	Checkpoint("tx_ack_queue_pre", _source.ack_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
 	Checkpoint("rx_ack_queue_pre", _sink.ack_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+	_timer.update_time();
 
 	/*
 	 * Release all sent packets that were already acknowledged by the counter
@@ -1850,7 +1851,7 @@ void Interface::_send_submit_pkt(Packet_descriptor &pkt,
 
 
 Interface::Interface(Genode::Entrypoint     &ep,
-                     Timer::Connection      &timer,
+                     Cached_timer           &timer,
                      Mac_address      const  router_mac,
                      Genode::Allocator      &alloc,
                      Mac_address      const  mac,
