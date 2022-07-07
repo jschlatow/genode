@@ -107,7 +107,7 @@ class Lwip::Nic_netif
 				Genode::error("Nic rx acknowledgement queue congested, blocking to  free pbuf");
 			}
 
-			_nic.rx()->acknowledge_packet(pbuf.packet);
+			_nic.rx()->try_ack_packet(pbuf.packet);
 			destroy(_pbuf_alloc, &pbuf);
 		}
 
@@ -147,7 +147,7 @@ class Lwip::Nic_netif
 
 			while (rx.packet_avail() && rx.ready_to_ack()) {
 
-				Nic::Packet_descriptor packet = rx.get_packet();
+				Nic::Packet_descriptor packet = rx.try_get_packet();
 
 				Nic_netif_pbuf *nic_pbuf = new (_pbuf_alloc)
 					Nic_netif_pbuf(*this, packet);
@@ -166,6 +166,8 @@ class Lwip::Nic_netif
 					pbuf_free(p);
 				}
 			}
+
+			rx.wakeup();
 		}
 
 		/**
@@ -177,10 +179,12 @@ class Lwip::Nic_netif
 
 			/* flush acknowledgements */
 			while (tx.ack_avail())
-				tx.release_packet(tx.get_acked_packet());
+				tx.release_packet(tx.try_get_acked_packet());
 
 			/* notify subclass to resume pending transmissions */
 			status_callback();
+
+			tx.wakeup();
 		}
 
 		void configure(Genode::Xml_node const &config)
