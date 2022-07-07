@@ -23,8 +23,8 @@
 #ifndef _TIMEOUT_H_
 #define _TIMEOUT_H_
 
-/* Genode includes */
-#include <timer_session/connection.h>
+/* local includes */
+#include <timer.h>
 
 
 namespace Net {
@@ -42,7 +42,7 @@ class Net::Lazy_one_shot_timeout : private Timer::One_shot_timeout<Lazy_one_shot
 
 		typedef void (HANDLER::*Handler_method)(Duration);
 
-		Timer::Connection    &_timer;
+		Cached_timer         &_timer;
 		HANDLER              &_object;
 		Handler_method const  _method;
 		Microseconds const    _accuracy;
@@ -79,7 +79,7 @@ class Net::Lazy_one_shot_timeout : private Timer::One_shot_timeout<Lazy_one_shot
 			using uint64_t = Genode::uint64_t;
 
 			uint64_t const curr_time_us {
-				_timer.curr_time().trunc_to_plain_us().value };
+				_timer.cached_time().trunc_to_plain_us().value };
 
 			uint64_t const deadline_us {
 				duration.value <= ~(uint64_t)0 - curr_time_us ?
@@ -128,6 +128,7 @@ class Net::Lazy_one_shot_timeout : private Timer::One_shot_timeout<Lazy_one_shot
 
 		void _handle_timeout(Duration curr_time)
 		{
+			_timer.curr_time(curr_time);
 			Microseconds duration = _wanted_timeout(curr_time);
 
 			if (duration.value)
@@ -141,7 +142,7 @@ class Net::Lazy_one_shot_timeout : private Timer::One_shot_timeout<Lazy_one_shot
 		using One_shot_timeout::discard;
 		using One_shot_timeout::scheduled;
 
-		Lazy_one_shot_timeout(Timer::Connection &timer,
+		Lazy_one_shot_timeout(Cached_timer      &timer,
 		                      HANDLER           &object,
 		                      Handler_method     method,
 		                      Microseconds       accuracy)
