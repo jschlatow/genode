@@ -17,12 +17,14 @@
 #include <base/output.h>
 #include <base/buffered_output.h>
 #include <base/mutex.h>
+#include <util/misc_math.h>
 #include <trace/timestamp.h>
 
 namespace Genode {
 	class Log;
 	class Raw;
 	class Trace_output;
+	template <typename> class Log_data_probe;
 	template <typename> class Log_tsc_probe;
 }
 
@@ -210,6 +212,98 @@ namespace Genode {
 	template <typename... ARGS>
 	void trace(ARGS && ... args) { Trace_output::Fn(args...); }
 }
+
+
+/*
+ * Helper for the 'GENODE_LOG_DATA' utility
+ */
+template <typename T>
+class Genode::Log_data_probe : Noncopyable
+{
+	public:
+		class Stats : Noncopyable
+		{
+			private:
+
+				friend class Log_data_probe;
+
+				/* rate of log messages in number of calls */
+				unsigned const _sample_rate;
+				unsigned long const _id;
+
+				T _data_sum            = 0;  /* accumulated since start */
+				T _data_sum_last       = 0;  /* accumulated since last output */
+				T _data_min            = 0;  /* minimum since last output */
+				T _data_max            = 0;  /* maximum since last output */
+				unsigned  _calls       = 0;  /* number of executions */
+				unsigned  _cycle_count = 0;  /* track sample rate */
+				Mutex     _mutex { };        /* protect stats */
+
+				void record(char const * const name, T data)
+				{
+					Mutex::Guard guard(_mutex);
+
+					_data_sum      = _data_sum + data;
+					_data_sum_last = _data_sum_last + data;
+					_data_min      = min(_data_min, data);
+					_data_max      = max(_data_max, data);
+
+					_calls++;
+					_cycle_count++;
+
+					if (_cycle_count < _sample_rate)
+						return;
+
+					log("Probe(", _id, ") ", name, ": ", _data_sum/_calls,            " total avg. | ",
+					                                     _data_sum_last/_cycle_count, " window avg. | ",
+					                                     _data_min,                   " window min. | ",
+					                                     _data_max,                   " window max.");
+					_cycle_count = 0;
+					_data_sum_last = 0;
+					_data_max = 0;
+					_data_min = data; /* not exactly correct but good enough */
+				}
+
+			public:
+
+				Stats(unsigned sample_rate, unsigned long id) : _sample_rate(sample_rate), _id(id) { }
+		};
+
+	private:
+
+		Stats &_stats;
+
+		struct { char const *_name; };
+
+	public:
+
+		Log_data_probe(Stats &stats, char const *name, T data)
+		:
+			_stats(stats), _name(name)
+		{
+			_stats.record(_name, data);
+		}
+};
+
+
+/**
+ * Print statistics about the given data value.
+ *
+ * The macro captures the given 'data' variable and prints the average, minimum
+ * and maximum value. The argument 'n' specifies the number of calls over which
+ * the statistics are calculated and printed. The 'name' argument provides a
+ * name for identification in the output. Moreover, the 'id' argument can be
+ * used in order to distinguish different contexts (e.g. address of the
+ * corresponding object instance).
+ *
+ * The output looks as follows:
+ *
+ *    Probe(<id>) <name>: X total avg. | X window avg. | X window min. | X window max.
+ */
+#define GENODE_LOG_DATA(n, data, name, id) {\
+	using Genode_log_data_probe = Genode::Log_data_probe<decltype(data)>; \
+	static Genode_log_data_probe::Stats genode_log_data_stats { n, id }; \
+	Genode_log_data_probe genode_log_data_probe(genode_log_data_stats, name, data); }
 
 
 /*
