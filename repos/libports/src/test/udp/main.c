@@ -88,7 +88,7 @@ int test_send_and_recv(char const *dst_ip, unsigned port)
 	struct sockaddr_in addr;
 	addr.sin_family      = AF_INET;
 	addr.sin_addr.s_addr = inet_addr(dst_ip);
-	addr.sin_port        = htons(2);
+	addr.sin_port        = htons(port);
 
 	/* create a blocking socket */
 	int bsock = socket(AF_INET, SOCK_DGRAM, 0);
