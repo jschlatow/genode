@@ -48,7 +48,7 @@
 			</config>
 		</start>
 
-		<start name="recv">
+		<start name="send">
 			<binary name="test-udp"/>
 			<resource name="RAM" quantum="32M"/>
 			<config>
