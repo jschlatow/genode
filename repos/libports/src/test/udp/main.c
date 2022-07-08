@@ -23,14 +23,47 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <pthread.h>
+
+int    exit_stats = 0;
+size_t sent_bytes = 0;
+size_t recv_bytes = 0;
+size_t sent_cnt = 0;
+size_t recv_cnt = 0;
+
+void* stats(void* args)
+{
+	unsigned period_sec = 5;
+
+	while (!exit_stats) {
+		float rx_mbit_sec = (float)(recv_bytes * 8ULL) / (float)(period_sec*1000ULL*1000ULL);
+		float tx_mbit_sec = (float)(sent_bytes * 8ULL) / (float)(period_sec*1000ULL*1000ULL);
+
+		printf("  Received %ld packets in %ds at %fMbit/s\n", recv_cnt, period_sec, rx_mbit_sec);
+		printf("  Sent %ld packets in %ds at %fMbit/s\n",     sent_cnt, period_sec, tx_mbit_sec);
+
+		recv_cnt = 0;
+		sent_cnt = 0;
+		sent_bytes = 0;
+		recv_bytes = 0;
+
+		sleep(period_sec);
+	}
+
+	return 0;
+}
+
 
 int _send_packet(int sock, struct sockaddr_in *addr)
 {
 	char buf[1600];
 	size_t len = 1450;
 	ssize_t snd_sz = sendto(sock, buf, len, 0, (struct sockaddr*)addr, sizeof(struct sockaddr_in));
-	if (snd_sz > 0)
+	if (snd_sz > 0) {
+		sent_cnt++;
+		sent_bytes += snd_sz;
 		return 0;
+	}
 
 	return -1;
 }
@@ -40,8 +73,11 @@ int _recv_packet(int sock)
 {
 	char buf[1600];
 	ssize_t rcv_sz = recvfrom(sock, buf, sizeof(buf), 0, 0, 0);
-	if (rcv_sz > 0)
+	if (rcv_sz > 0) {
+		recv_cnt++;
+		recv_bytes += rcv_sz;
 		return 0;
+	}
 
 	return -1;
 }
@@ -117,14 +153,22 @@ int main(int argc, char **argv)
 {
 	enum { PORT = 12345 };
 
+	pthread_t t;
+	pthread_create(&t, 0, stats, 0);
+
+	int result = 0;
+
 	if (argc < 1) {
 		fprintf(stderr, "Usage: (recv|send <dst-ip>)\n");
-		return ~0;
+		result = ~0;
 	}
-	if (argc >= 2) {
-		if (strcmp(argv[0], "send") == 0)
-			return test_send_and_recv(argv[1], PORT);
+	else if (argc >= 2 && strcmp(argv[0], "send") == 0) {
+		result = test_send_and_recv(argv[1], PORT);
+	} else {
+		result = test_recv(PORT);
 	}
 
-	return test_recv(PORT);
+	exit_stats = 1;
+	pthread_join(t, 0);
+	return result;
 }
