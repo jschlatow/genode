@@ -107,7 +107,7 @@ class Lwip::Nic_netif
 				Genode::error("Nic rx acknowledgement queue congested, blocking to  free pbuf");
 			}
 
-			_nic.rx()->try_ack_packet(pbuf.packet);
+			_nic.rx()->acknowledge_packet(pbuf.packet);
 			destroy(_pbuf_alloc, &pbuf);
 		}
 
