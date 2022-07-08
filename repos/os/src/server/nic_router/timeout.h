@@ -3,6 +3,9 @@
  * \author Johannes Schlatow
  * \date   2022-07-01
  *
+ * NOTE: This implementation is not thread safe and should only be used in
+ *       single-threaded components.
+ *
  * This implementation prevents rescheduling when a timeout is frequently
  * updated with only marginal changes. Timeouts within a certain accuracy
  * threshold of the existing timeout will be ignored. Otherwise, earlier
@@ -19,9 +22,6 @@
 
 #ifndef _TIMEOUT_H_
 #define _TIMEOUT_H_
-
-/* Genode includes */
-#include <base/mutex.h>
 
 /* local includes */
 #include <timer.h>
@@ -47,7 +47,6 @@ class Net::Lazy_one_shot_timeout : private Timer::One_shot_timeout<Lazy_one_shot
 		Handler_method const  _method;
 		Microseconds const    _accuracy;
 		Microseconds          _deadline_wanted { 0 };
-		Genode::Mutex         _mutex { };
 
 		using One_shot_timeout::_deadline;
 
@@ -76,9 +75,6 @@ class Net::Lazy_one_shot_timeout : private Timer::One_shot_timeout<Lazy_one_shot
 			if (!scheduled()) {
 				return true;
 			}
-
-			/* synchronise accesses on _deadline_wanted */
-			Genode::Mutex::Guard guard(_mutex);
 
 			using uint64_t = Genode::uint64_t;
 
@@ -116,9 +112,6 @@ class Net::Lazy_one_shot_timeout : private Timer::One_shot_timeout<Lazy_one_shot
 		 */
 		Microseconds _wanted_timeout(Duration curr_time)
 		{
-			/* synchronise accesses on _deadline_wanted */
-			Genode::Mutex::Guard guard(_mutex);
-
 			Microseconds result { 0 };
 
 			if (_deadline_wanted.value > 0) {
