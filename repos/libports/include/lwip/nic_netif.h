@@ -145,6 +145,9 @@ class Lwip::Nic_netif
 			Genode::Mutex::Guard guard { Lwip::mutex() };
 			auto &rx = *_nic.rx();
 
+			size_t acks = rx.ack_slots_free();
+			size_t pkts = rx.submit_slots_free();
+
 			while (rx.packet_avail() && rx.ready_to_ack()) {
 
 				Nic::Packet_descriptor packet = rx.try_get_packet();
@@ -166,6 +169,9 @@ class Lwip::Nic_netif
 					pbuf_free(p);
 				}
 			}
+
+			GENODE_LOG_DATA_NAMED(10000, rx.submit_slots_free()-pkts, "received pkts", rx.ds_local_base());
+			GENODE_LOG_DATA_NAMED(10000, rx.ack_slots_free()-acks,    "received acks", rx.ds_local_base());
 
 			rx.wakeup();
 		}
@@ -341,7 +347,7 @@ class Lwip::Nic_netif
 		 */
 		err_t linkoutput(struct pbuf *p)
 		{
-			GENODE_LOG_TSC(100000);
+//			GENODE_LOG_TSC(100000);
 //			GENODE_TRACE_CHECKPOINT_NAMED(0, __func__);
 			auto &tx = *_nic.tx();
 
@@ -366,7 +372,7 @@ class Lwip::Nic_netif
 			 * pbuf into the packet.
 			 */
 			{
-			GENODE_LOG_TSC_NAMED(100000, "memcpy");
+//			GENODE_LOG_TSC_NAMED(100000, "memcpy");
 			char *dst = tx.packet_content(packet);
 			for(struct pbuf *q = p; q != 0; q = q->next) {
 				char const *src = (char*)q->payload;
@@ -376,7 +382,7 @@ class Lwip::Nic_netif
 			}
 
 			{
-			GENODE_LOG_TSC_NAMED(100000, "submit_packet");
+//			GENODE_LOG_TSC_NAMED(100000, "submit_packet");
 			tx.submit_packet(packet);
 			LINK_STATS_INC(link.xmit);
 			}

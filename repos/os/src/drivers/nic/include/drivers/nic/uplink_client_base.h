@@ -55,6 +55,9 @@ class Genode::Uplink_client_base : Noncopyable
 			if (!_conn.constructed())
 				return;
 
+			size_t acks = _conn->tx()->ack_slots_free();
+			size_t pkts = _conn->rx()->submit_slots_free();
+
 			if (_custom_packet_stream_handler()) {
 				_custom_handle_packet_stream();
 			}
@@ -62,6 +65,9 @@ class Genode::Uplink_client_base : Noncopyable
 				_handle_acks();
 				_handle_packets();
 			}
+
+			GENODE_LOG_DATA_NAMED(10000, _conn->rx()->submit_slots_free()-pkts, "received packets", _conn->rx()->ds_local_base());
+			GENODE_LOG_DATA_NAMED(10000, _conn->tx()->ack_slots_free()-acks,    "received acks",    _conn->rx()->ds_local_base());
 
 			_conn->tx()->wakeup();
 			_conn->rx()->wakeup();
@@ -188,8 +194,8 @@ class Genode::Uplink_client_base : Noncopyable
 
 			} catch (...) {
 
-				warning("exception while trying to forward packet from driver "
-				        "to Uplink connection TX");
+//				warning("exception while trying to forward packet from driver "
+//				        "to Uplink connection TX");
 
 				return;
 			}
@@ -231,6 +237,9 @@ class Genode::Uplink_client_base : Noncopyable
 
 		void _drv_finish_received_pkts()
 		{
+			GENODE_LOG_DATA_NAMED(10000, 1023-_conn->tx()->submit_slots_free(), "submit queue after sending", _conn->tx()->ds_local_base());
+			GENODE_LOG_DATA_NAMED(10000, 1023-_conn->tx()->ack_slots_free(),    "ack queue after sending",    _conn->tx()->ds_local_base());
+
 			if (_conn.constructed())
 				_conn->tx()->wakeup();
 		}

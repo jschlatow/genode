@@ -539,7 +539,7 @@ class Platform::Device_component : public  Rpc_object<Platform::Device>,
 			if (!_device_config.valid())
 				return;
 
-			_power_off();
+//			_power_off();
 		}
 
 		/****************************************

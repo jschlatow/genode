@@ -851,7 +851,7 @@ static ssize_t do_sendto(File_descriptor *fd,
                          void const *buf, ::size_t len, int flags,
                          sockaddr const *dest_addr, socklen_t dest_addrlen)
 {
-	GENODE_LOG_TSC(100000);
+//	GENODE_LOG_TSC(100000);
 	Socket_fs::Context *context = dynamic_cast<Socket_fs::Context *>(fd->context);
 	if (!context) return Errno(ENOTSOCK);
 	if (!buf)     return Errno(EFAULT);
@@ -861,7 +861,7 @@ static ssize_t do_sendto(File_descriptor *fd,
 
 	try {
 		if (dest_addr && context->proto() == Context::Proto::UDP) {
-			GENODE_LOG_TSC_NAMED(100000, "remote_fd");
+//			GENODE_LOG_TSC_NAMED(100000, "remote_fd");
 			try {
 				Sockaddr_string addr_string(host_string(*(sockaddr_in const *)dest_addr),
 				                            port_string(*(sockaddr_in const *)dest_addr));
@@ -875,7 +875,7 @@ static ssize_t do_sendto(File_descriptor *fd,
 
 		size_t out_len = 0;
 		{
-		GENODE_LOG_TSC_NAMED(100000, "data_fd");
+//		GENODE_LOG_TSC_NAMED(100000, "data_fd");
 		lseek(context->data_fd(), 0, 0);
 		out_len = write(context->data_fd(), buf, len);
 		}

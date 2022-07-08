@@ -1543,12 +1543,15 @@ void Interface::_handle_pkt()
 
 void Interface::_handle_pkt_stream_signal()
 {
-	using Checkpoint = Genode::Trace::Checkpoint;
-//	Checkpoint("tx_submit_queue_pre", _source.submit_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
-	Checkpoint("rx_submit_queue_pre", _sink.submit_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
-//	Checkpoint("tx_ack_queue_pre", _source.ack_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
-	Checkpoint("rx_ack_queue_pre", _sink.ack_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
 	_timer.update_time();
+//	using Checkpoint = Genode::Trace::Checkpoint;
+////	Checkpoint("tx_submit_queue_pre", _source.submit_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+//	Checkpoint("rx_submit_queue_pre", _sink.submit_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+////	Checkpoint("tx_ack_queue_pre", _source.ack_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+//	Checkpoint("rx_ack_queue_pre", _sink.ack_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+
+	size_t acks = _source.ack_slots_free();
+	size_t pkts = _sink.submit_slots_free();
 
 	/*
 	 * Release all sent packets that were already acknowledged by the counter
@@ -1556,7 +1559,7 @@ void Interface::_handle_pkt_stream_signal()
 	 * sending new packets in the subsequent steps of this handler.
 	 */
 	while (_source.ack_avail()) {
-		_source.release_packet(_source.get_acked_packet());
+		_source.release_packet(_source.try_get_acked_packet());
 	}
 
 	/*
@@ -1586,10 +1589,13 @@ void Interface::_handle_pkt_stream_signal()
 		}
 	}
 
-//	Checkpoint("tx_submit_queue_post", _source.submit_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
-	Checkpoint("rx_submit_queue_post", _sink.submit_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
-//	Checkpoint("tx_ack_queue_post", _source.ack_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
-	Checkpoint("rx_ack_queue_post", _sink.ack_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+////	Checkpoint("tx_submit_queue_post", _source.submit_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+//	Checkpoint("rx_submit_queue_post", _sink.submit_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+////	Checkpoint("tx_ack_queue_post", _source.ack_slots_free(), (void*)_source.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+//	Checkpoint("rx_ack_queue_post", _sink.ack_slots_free(), (void*)_sink.ds_local_base(), Checkpoint::Type::OBJ_STATE);
+
+	GENODE_LOG_DATA_NAMED(10000, _sink.submit_slots_free()-pkts, "received packets", _sink.ds_local_base());
+	GENODE_LOG_DATA_NAMED(10000, _source.ack_slots_free()-acks,  "received acks",    _sink.ds_local_base());
 
 	_config().domains().for_each([&] (Domain &domain) {
 		domain.interfaces().for_each([&] (Interface &interface) {

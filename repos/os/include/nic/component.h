@@ -107,9 +107,9 @@ class Nic::Session_component : Communication_buffers, public Session_rpc_object
 			_ep(env.ep())
 		{
 			/* install data-flow signal handlers for both packet streams */
-			_tx.sigh_ready_to_ack(_packet_stream_dispatcher);
+//			_tx.sigh_ready_to_ack(_packet_stream_dispatcher);
 			_tx.sigh_packet_avail(_packet_stream_dispatcher);
-			_rx.sigh_ready_to_submit(_packet_stream_dispatcher);
+//			_rx.sigh_ready_to_submit(_packet_stream_dispatcher);
 			_rx.sigh_ack_avail(_packet_stream_dispatcher);
 		}
 

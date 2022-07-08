@@ -827,7 +827,7 @@ int Libc::Vfs_plugin::stat(char const *path, struct stat *buf)
 ssize_t Libc::Vfs_plugin::write(File_descriptor *fd, const void *buf,
                                 ::size_t count)
 {
-	GENODE_LOG_TSC_NAMED(100000, "Vfs_plugin::write");
+//	GENODE_LOG_TSC_NAMED(100000, "Vfs_plugin::write");
 	typedef Vfs::File_io_service::Write_result Result;
 
 	if ((fd->flags & O_ACCMODE) == O_RDONLY) {
@@ -841,7 +841,7 @@ ssize_t Libc::Vfs_plugin::write(File_descriptor *fd, const void *buf,
 
 	if (fd->flags & O_NONBLOCK) {
 		monitor().monitor([&] {
-			GENODE_LOG_TSC_NAMED(100000, "monitored write nonblock");
+//			GENODE_LOG_TSC_NAMED(100000, "monitored write nonblock");
 			try {
 				out_result = handle->fs().write(handle, (char const *)buf, count, out_count);
 			} catch (Vfs::File_io_service::Insufficient_buffer) { }
@@ -879,7 +879,7 @@ ssize_t Libc::Vfs_plugin::write(File_descriptor *fd, const void *buf,
 
 		monitor().monitor([&]
 		{
-			GENODE_LOG_TSC_NAMED(100000, "monitored write blocking");
+//			GENODE_LOG_TSC_NAMED(100000, "monitored write blocking");
 			for (;;) {
 
 				/* number of bytes written in one iteration */
@@ -888,7 +888,7 @@ ssize_t Libc::Vfs_plugin::write(File_descriptor *fd, const void *buf,
 				try {
 					char const * const src = (char const *)_buf + _offset;
 
-					GENODE_LOG_TSC_NAMED(100000, "handle->write");
+//					GENODE_LOG_TSC_NAMED(100000, "handle->write");
 					_out_result = _handle->fs().write(_handle, src, _count, partial_out_count);
 				} catch (Vfs::File_io_service::Insufficient_buffer) { return Fn::INCOMPLETE; }
 

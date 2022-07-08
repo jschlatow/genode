@@ -750,7 +750,7 @@ __SYS_(ssize_t, write, (int libc_fd, const void *buf, ::size_t count),
 	if ((flags != -1) && (flags & O_APPEND))
 		lseek(libc_fd, 0, SEEK_END);
 
-	GENODE_LOG_TSC_NAMED(100000, "libc_write")
+//	GENODE_LOG_TSC_NAMED(100000, "libc_write")
 	{
 	FD_FUNC_WRAPPER(write, libc_fd, buf, count);
 	}

@@ -53,7 +53,7 @@
 				<service name="Nic"/>
 				<service name="Uplink"/>
 			</provides>
-			<config verbose_packet_drop="yes" verbose_packets="no" verbose="no">
+			<config verbose_packet_drop="yes" verbose_packets="no" verbose="no" max_packets_per_signal="150">
 				<policy label_suffix="nic_perf_tx -> " domain="sender"/>
 				<policy label_suffix="nic_perf_rx -> " domain="receiver"/>
 

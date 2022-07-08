@@ -59,6 +59,10 @@ proc unique_byte_per_platform { } {
 				if {[have_spec foc]}       { return 6; }
 				if {[have_spec sel4]}      { return 7; }
 			}
+			if {[have_board zynq_usrp_e31x]} {
+				return 21;
+			}
+
 		}
 		if {[have_spec arm_v8a]} {
 			if {[have_board imx8q_evk]} {
