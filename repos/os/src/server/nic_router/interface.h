@@ -345,6 +345,8 @@ class Net::Interface : private Interface_list::Element
 
 		void _failed_to_send_packet_link();
 
+		void _failed_to_send_packet_submit();
+
 		void _failed_to_send_packet_alloc();
 
 		void _send_icmp_dst_unreachable(Ipv4_address_prefix const &local_intf,
@@ -392,6 +394,10 @@ class Net::Interface : private Interface_list::Element
 		{
 			if (!link_state()) {
 				_failed_to_send_packet_link();
+				return;
+			}
+			if (!_source.ready_to_submit()) {
+				_failed_to_send_packet_submit();
 				return;
 			}
 			try {

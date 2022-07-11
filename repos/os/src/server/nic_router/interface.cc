@@ -1571,9 +1571,9 @@ void Interface::_handle_pkt_stream_signal()
 	_config().domains().for_each([&] (Domain &domain) {
 		domain.interfaces().for_each([&] (Interface &interface) {
 			interface.wakeup_source();
-			interface.wakeup_sink();
 		});
 	});
+	wakeup_sink();
 }
 
 
@@ -2139,6 +2139,13 @@ void Interface::_failed_to_send_packet_link()
 }
 
 
+void Interface::_failed_to_send_packet_submit()
+{
+	if (_config().verbose()) {
+		log("[", _domain(), "] failed to send packet (queue full)"); }
+}
+
+
 void Interface::_failed_to_send_packet_alloc()
 {
 	if (_config().verbose()) {
@@ -2261,14 +2268,13 @@ void Interface::handle_config_3()
 
 void Interface::_ack_packet(Packet_descriptor const &pkt)
 {
-	if (!_sink.ready_to_ack()) {
+	if (!_sink.try_ack_packet(pkt)) {
 		if (_config().verbose()) {
 			log("[", _domain(), "] leak packet (sink not ready to "
 			    "acknowledge)");
 		}
 		return;
 	}
-	_sink.try_ack_packet(pkt);
 }
 
 
