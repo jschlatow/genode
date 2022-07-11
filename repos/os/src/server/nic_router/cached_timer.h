@@ -1,9 +1,10 @@
 /*
- * \brief  Replacement of Timer::Connection
+ * \brief  A wrapper for Timer::Connection that caches time values
  * \author Johannes Schlatow
  * \date   2022-07-07
  *
- * This implementation prevents frequent calls of elapsed_us() on ARM.
+ * This implementation prevents frequent calls of curr_time() that cause
+ * syscalls or elapsed_us() RPCs on ARM.
  */
 
 /*
@@ -13,8 +14,8 @@
  * under the terms of the GNU Affero General Public License version 3.
  */
 
-#ifndef _SAMPLED_TIMER_H_
-#define _SAMPLED_TIMER_H_
+#ifndef _CACHED_TIMER_H_
+#define _CACHED_TIMER_H_
 
 /* Genode includes */
 #include <timer_session/connection.h>
@@ -57,4 +58,4 @@ class Net::Cached_timer : public ::Timer::Connection
 		Duration cached_time() { return _cached_time; }
 };
 
-#endif /* _SAMPLED_TIMER_H_ */
+#endif /* _CACHED_TIMER_H_ */

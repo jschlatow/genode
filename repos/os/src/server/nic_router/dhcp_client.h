@@ -15,7 +15,7 @@
 #define _DHCP_CLIENT_H_
 
 /* local includes */
-#include <timer.h>
+#include <cached_timer.h>
 
 /* Genode includes */
 #include <net/dhcp.h>

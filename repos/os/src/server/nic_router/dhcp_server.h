@@ -20,7 +20,7 @@
 #include <pointer.h>
 #include <dns.h>
 #include <ipv4_config.h>
-#include <timer.h>
+#include <cached_timer.h>
 
 /* Genode includes */
 #include <net/mac_address.h>

@@ -21,7 +21,7 @@
 #include <nic_session_root.h>
 #include <uplink_session_root.h>
 #include <configuration.h>
-#include <timer.h>
+#include <cached_timer.h>
 
 using namespace Net;
 using namespace Genode;

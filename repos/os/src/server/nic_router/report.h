@@ -15,7 +15,7 @@
 #define _REPORT_H_
 
 /* local includes */
-#include <timer.h>
+#include <cached_timer.h>
 
 /* Genode */
 #include <os/reporter.h>
