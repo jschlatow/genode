@@ -1568,6 +1568,16 @@ void Interface::_handle_pkt_stream_signal()
 		}
 	}
 
+	/**
+	 * Since we use the try_*() variants of the packet-stream API, we
+	 * haven't emitted any packet_avail, ack_avail, ready_to_submit or
+	 * ready_to_ack signal up to now. We've removed packets from our sink's
+	 * submit queue and might have forwarded it to any interface. We may have
+	 * also removed acks from our sink's ack queue.
+	 *
+	 * We therefore wakeup all sources and our sink. Note that the packet-stream
+	 * API takes care of emitting only the signals that are actually needed.
+	 */
 	_config().domains().for_each([&] (Domain &domain) {
 		domain.interfaces().for_each([&] (Interface &interface) {
 			interface.wakeup_source();
