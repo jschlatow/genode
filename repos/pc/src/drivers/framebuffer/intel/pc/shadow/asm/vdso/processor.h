@@ -21,8 +21,6 @@
 #include <linux/delay.h>
 #include <linux/jiffies.h>
 
-extern u64 jiffies_64;
-
 
 static __always_inline void rep_nop(void)
 {
@@ -30,11 +28,17 @@ static __always_inline void rep_nop(void)
 }
 
 
+extern void intel_emul_cpu_relax(void);
+
 static __always_inline void cpu_relax(void)
 {
-	/* break busy loop of slchi() in drivers/i2c/algos/i2c-algo-bit.c */
-	u64 const us = jiffies_to_usecs(1);
-	usleep_range(us, us);
+	/*
+	 * break busy loop of slchi() in drivers/i2c/algos/i2c-algo-bit.c
+	 * without re-scheduling another task, which breaks execution
+	 * assumptions, e.g. drivers/gpu/drm/i915/intel_uncore.c
+	 * spin_lock_irq()+__intel_wait_for_register_fw() combination
+	 */
+	intel_emul_cpu_relax();
 }
 
 #endif /* __ASSEMBLY__ */

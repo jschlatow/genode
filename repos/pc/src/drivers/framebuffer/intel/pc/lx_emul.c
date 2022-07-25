@@ -261,3 +261,32 @@ void intel_vgpu_detect(struct drm_i915_private * dev_priv)
 
 	printk("disabling PPGTT to avoid GPU code paths\n");
 }
+
+
+void intel_emul_cpu_relax(void)
+{
+	/*
+	 * Emulate cpu_relax for intel fb.
+	 * - break busy loop of slchi() in drivers/i2c/algos/i2c-algo-bit.c
+	 *   by increasing jiffies_64 after one jiffie passed
+	 * - don't re-schedule to another task (like usleep_range does), which
+	 *   breaks execution assumptions of drivers/gpu/drm/i915/intel_uncore.c in
+	 *   spin_lock_irq() + __intel_wait_for_register_fw() combination
+	 */
+	static uint64_t last_jiffies = 0;
+	static unsigned same_jiffie  = 0;
+
+	if (jiffies_64 == last_jiffies) {
+		same_jiffie ++;
+	} else {
+		last_jiffies = jiffies_64;
+		same_jiffie  = 0;
+	}
+
+	/* don't permit to re-schedule another task */
+	lx_emul_time_udelay(100 /* us */);
+
+	/* break busy loop of slchi() in drivers/i2c/algos/i2c-algo-bit.c */
+	if (same_jiffie * 100 /* us */ >= jiffies_to_usecs(1))
+		jiffies_64 ++;
+}
