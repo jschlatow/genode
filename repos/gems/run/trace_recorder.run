@@ -116,11 +116,11 @@ install_config {
 					<inline>
 						<config period_ms="3000" enable="yes">
 							<vfs> <fs/> </vfs>
-							<policy label_suffix="nic_router" thread="ep" policy="ctf_pcapng">
+							<policy label_suffix="nic_router" thread="ep" policy="ctf0_pcapng">
 								<pcapng/>
 								<ctf/>
 							</policy>
-							<policy label_suffix="ping" thread="ep" policy="ctf_rpc_name">
+							<policy label_suffix="ping" thread="ep" policy="ctf0">
 								<ctf/>
 							</policy>
 						</config>
