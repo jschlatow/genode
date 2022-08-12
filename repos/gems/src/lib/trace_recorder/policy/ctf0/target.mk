@@ -1,5 +1,5 @@
-TARGET = ctf_rpc_name_policy
+TARGET = ctf0_policy
 
-TARGET_POLICY = ctf_rpc_name
+TARGET_POLICY = ctf0
 
 include $(PRG_DIR)/../policy.inc
