@@ -140,10 +140,10 @@ install_config {
 			<resource name="RAM" quantum="16M"/>
 			<config period_ms="5000" enable="yes">
 				<vfs> <fs/> </vfs>
-				<policy label_suffix="dynamic_rom" thread="dynamic_rom" policy="ctf_rpc_name">
+				<policy label_suffix="dynamic_rom" thread="dynamic_rom" policy="ctf0">
 					<ctf/>
 				</policy>
-				<policy label_suffix="rom_logger"  policy="ctf_rpc_name">
+				<policy label_suffix="rom_logger"  policy="ctf0">
 					<ctf/>
 				</policy>
 			</config>

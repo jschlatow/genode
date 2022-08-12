@@ -11,9 +11,9 @@
 		<rom label="trace_recorder"/>
 		<rom label="ld.lib.so"/>
 		<rom label="vfs.lib.so"/>
-		<rom label="ctf_rpc_name"/>
+		<rom label="ctf0"/>
 		<rom label="pcapng"/>
-		<rom label="ctf_pcapng"/>
+		<rom label="ctf0_pcapng"/>
 		<rom label="metadata"/>
 	</content>
 
@@ -21,7 +21,7 @@
 	<config period_ms="5000" enable="no">
 		<vfs> <fs label="target"/> </vfs>
 
-		<default-policy policy="ctf_rpc_name">
+		<default-policy policy="ctf0">
 			<ctf/>
 		</default-policy>
 	</config>

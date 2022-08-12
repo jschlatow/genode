@@ -7,7 +7,7 @@ An examplary configuration is shown below:
 
 ! <config period_ms="5000" target_root="/" enable="true">
 !    <vfs> <fs/> </vfs>
-!    <policy label_suffix="dynamic_rom" policy="ctf_rpc_name">
+!    <policy label_suffix="dynamic_rom" policy="ctf0">
 !       <ctf/>
 !    </policy>
 ! </config>
