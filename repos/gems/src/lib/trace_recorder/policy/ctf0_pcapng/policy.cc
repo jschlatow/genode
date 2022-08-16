@@ -11,11 +11,11 @@ enum { MAX_CAPTURE_LEN = 100 };
 size_t max_event_size() {
 	return Trace_recorder::Pcapng_event::max_size(MAX_CAPTURE_LEN); }
 
-size_t trace_eth_packet(char *dst, char const *if_name, char *pkt_data, size_t pkt_len)
+size_t trace_eth_packet(char *dst, char const *if_name, bool out, char *pkt_data, size_t pkt_len)
 {
 	using namespace Pcapng;
 	Trace_recorder::Pcapng_event *e =
-		new (dst) Trace_recorder::Pcapng_event(Link_type::ETHERNET, if_name, pkt_len, pkt_data, MAX_CAPTURE_LEN);
+		new (dst) Trace_recorder::Pcapng_event(Link_type::ETHERNET, if_name, out, pkt_len, pkt_data, MAX_CAPTURE_LEN);
 
 	return e->total_length();
 }
