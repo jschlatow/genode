@@ -154,24 +154,30 @@ struct Genode::Trace::Checkpoint
 
 struct Genode::Trace::Ethernet_packet
 {
+	enum Direction : char {
+		RECV = 0x0,
+		SENT = 0x1
+	};
+
 	char      const *name;
+	Direction        direction;
 	char            *data;
 	size_t           length;
 
-	Ethernet_packet(char const *name, char *data, size_t len)
-	: name(name), data(data), length(len)
+	Ethernet_packet(char const *name, Direction direction, char *data, size_t len)
+	: name(name), direction(direction), data(data), length(len)
 	{
 		Thread::trace(this);
 	}
 
-	Ethernet_packet(char const *name, void *data, size_t len)
-	: name(name), data((char*)data), length(len)
+	Ethernet_packet(char const *name, Direction direction, void *data, size_t len)
+	: name(name), direction(direction), data((char*)data), length(len)
 	{
 		Thread::trace(this);
 	}
 
 	size_t generate(Policy_module &policy, char *dst) const {
-		return policy.trace_eth_packet(dst, name, data, length); }
+		return policy.trace_eth_packet(dst, name, direction == Direction::SENT, data, length); }
 };
 
 
