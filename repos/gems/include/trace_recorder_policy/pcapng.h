@@ -44,10 +44,19 @@ struct Pcapng::Interface_name
 	uint8_t        _name_len;
 	char           _name[0] { };
 
-	Interface_name(Link_type type, char const *cstr)
+	Interface_name(Link_type type, bool out, char const *cstr)
 	: _link_type(type),
-	  _name_len((uint8_t)(Genode::Cstring(cstr, MAX_NAME_LEN-1).length() + 1))
-	{ copy_cstring(_name, cstr, _name_len); }
+	  _name_len((uint8_t)(Genode::Cstring(cstr, MAX_NAME_LEN-5).length() + 1))
+	{
+		copy_cstring(_name, cstr, _name_len);
+		if (out) {
+			copy_cstring(&_name[_name_len-1], "_out", 5);
+			_name_len += 4;
+		} else {
+			copy_cstring(&_name[_name_len-1], "_in", 4);
+			_name_len += 3;
+		}
+	}
 	
 	/* length including null-termination */
 	uint8_t data_length() const { return _name_len; }
@@ -108,8 +117,8 @@ class Trace_recorder::Pcapng_event : public Trace_event<Event_type::PCAPNG>
 		static size_t max_size(size_t max_capture_len) {
 			return sizeof(Pcapng_event) + Interface_name::MAX_NAME_LEN + sizeof(Traced_packet) + max_capture_len; }
 
-		Pcapng_event(Pcapng::Link_type type, char const *cstr, uint32_t packet_sz, void *packet_ptr, uint32_t max_captured_len)
-		: _interface(type, cstr)
+		Pcapng_event(Pcapng::Link_type type, char const *cstr, bool out, uint32_t packet_sz, void *packet_ptr, uint32_t max_captured_len)
+		: _interface(type, out, cstr)
 		{
 			/* construct Traced_packet after Interface_name */
 			construct_at<Traced_packet>(_data(), packet_sz, packet_ptr, max_captured_len);
