@@ -47,6 +47,7 @@ namespace Driver {
 	struct Power_domain_update_policy;
 	struct Pci_config_update_policy;
 	struct Reserved_memory_update_policy;
+	struct Control_device_update_policy;
 }
 
 
@@ -211,6 +212,15 @@ class Driver::Device : private List_model<Device>::Element
 			Reserved_memory(Range range) : range(range) {}
 		};
 
+		struct Control_device : List_model<Control_device>::Element
+		{
+			using Name = Genode::String<64>;
+
+			Name name;
+
+			Control_device(Name name) : name(name) {}
+		};
+
 		Device(Env & env, Device_model & model, Name name, Type type,
 		       bool leave_operational);
 		virtual ~Device();
@@ -269,6 +279,13 @@ class Driver::Device : private List_model<Device>::Element
 				fn(idx++, mem.range); });
 		}
 
+		template <typename FN>
+		void for_each_control_device(FN const & fn) const
+		{
+			_control_device_list.for_each([&] (Control_device const & dev) {
+				fn(dev); });
+		}
+
 		void generate(Xml_generator &, bool) const;
 
 	protected:
@@ -292,6 +309,7 @@ class Driver::Device : private List_model<Device>::Element
 		List_model<Reset_domain>    _reset_domain_list {};
 		List_model<Pci_config>      _pci_config_list {};
 		List_model<Reserved_memory> _reserved_mem_list {};
+		List_model<Control_device>  _control_device_list {};
 
 		/*
 		 * Noncopyable
@@ -700,6 +718,37 @@ struct Driver::Reserved_memory_update_policy
 	static bool node_is_element(Genode::Xml_node node)
 	{
 		return node.has_type("reserved_memory");
+	}
+};
+
+
+struct Driver::Control_device_update_policy
+: Genode::List_model<Device::Control_device>::Update_policy
+{
+	Genode::Allocator & alloc;
+
+	Control_device_update_policy(Genode::Allocator & alloc) : alloc(alloc) {}
+
+	void destroy_element(Element & pd) {
+		Genode::destroy(alloc, &pd); }
+
+	Element & create_element(Genode::Xml_node node)
+	{
+		Element::Name name = node.attribute_value("name", Element::Name());
+		return *(new (alloc) Element(name));
+	}
+
+	void update_element(Element &, Genode::Xml_node) {}
+
+	static bool element_matches_xml_node(Element const & e, Genode::Xml_node node)
+	{
+		Element::Name name = node.attribute_value("name", Element::Name());
+		return name == e.name;
+	}
+
+	static bool node_is_element(Genode::Xml_node node)
+	{
+		return node.has_type("control_device");
 	}
 };
 
