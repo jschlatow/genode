@@ -1,5 +1,6 @@
 /*
  * \brief  Platform driver - compound object for all derivate implementations
+ * \author Johannes Schlatow
  * \author Stefan Kalkowski
  * \date   2022-05-10
  */
@@ -11,11 +12,19 @@
  * under the terms of the GNU Affero General Public License version 3.
  */
 
+#ifndef _SRC__DRIVERS__PLATFORM__COMMON_H_
+#define _SRC__DRIVERS__PLATFORM__COMMON_H_
+
+#include <base/registry.h>
+
 #include <root.h>
+#include <device_owner.h>
+#include <control_device.h>
 
 namespace Driver { class Common; };
 
-class Driver::Common : Device_reporter
+class Driver::Common : Device_reporter,
+                       public Device_owner
 {
 	private:
 
@@ -28,11 +37,17 @@ class Driver::Common : Device_reporter
 		Device_model             _devices       { _env, _heap, *this       };
 		Signal_handler<Common>   _dev_handler   { _env.ep(), *this,
 		                                          &Common::_handle_devices };
+		Device::Owner            _owner_id      { *this };
+
+		Registry<Control_device>          _control_devices { };
+		Registry<Control_device_factory>  _control_device_factories   { };
+
 		Driver::Root             _root;
 
 		Constructible<Expanding_reporter> _cfg_reporter { };
 		Constructible<Expanding_reporter> _dev_reporter { };
 
+		void _release_vanished_devices();
 		void _handle_devices();
 		bool _iommu();
 
@@ -44,8 +59,12 @@ class Driver::Common : Device_reporter
 		Heap         & heap()    { return _heap;    }
 		Device_model & devices() { return _devices; }
 
+		Registry<Control_device_factory> & control_device_factories() {
+			return _control_device_factories; }
+
 		void announce_service();
 		void handle_config(Xml_node config);
+		void create_control_devices();
 
 
 		/*********************
@@ -56,10 +75,48 @@ class Driver::Common : Device_reporter
 };
 
 
+void Driver::Common::_release_vanished_devices()
+{
+	_control_devices.for_each([&] (Control_device & control_dev) {
+		bool found = false;
+		_devices.for_each([&] (Device const & dev) {
+			if (found)
+				return;
+
+			if (control_dev.matches(dev))
+				found = true;
+		});
+
+		if (!found)
+			destroy(_heap, &control_dev);
+	});
+}
+
+
+void Driver::Common::create_control_devices()
+{
+	_control_device_factories.for_each([&] (Control_device_factory & factory) {
+
+		_devices.for_each([&] (Device & dev) {
+			if (dev.owner().valid())
+				return;
+
+			if (factory.matches(dev)) {
+				dev.acquire(*this);
+				factory.create(_heap, _control_devices, dev);
+			}
+		});
+
+	});
+}
+
+
 void Driver::Common::_handle_devices()
 {
 	_devices_rom.update();
 	_devices.update(_devices_rom.xml());
+	_release_vanished_devices();
+	create_control_devices();
 	update_report();
 	_root.update_policy();
 }
@@ -120,3 +177,5 @@ Driver::Common::Common(Genode::Env                  & env,
 	_devices_rom.sigh(_dev_handler);
 	_handle_devices();
 }
+
+#endif /* _SRC__DRIVERS__PLATFORM__COMMON_H_ */
