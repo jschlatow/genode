@@ -26,7 +26,7 @@ namespace Driver
 	struct Control_device_factory;
 }
 
-class Driver::Control_device : public Genode::Registry<Control_device>::Element
+class Driver::Control_device : private Genode::Registry<Control_device>::Element
 {
 	protected:
 
