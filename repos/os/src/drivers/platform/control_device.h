@@ -22,27 +22,123 @@ namespace Driver
 {
 	using namespace Genode;
 
-	struct Control_device;
-	struct Control_device_factory;
+	class  Control_device;
+	class  Control_device_factory;
+
+	using Control_devices = Registry<Control_device>;
 }
 
-class Driver::Control_device : private Genode::Registry<Control_device>::Element
+
+class Driver::Control_device : private Control_devices::Element
 {
+	public:
+
+		using Range = Platform::Device_interface::Range;
+
+		struct Domain_id
+		{
+			int id { -1 };
+
+			bool valid() { return id >= 0; }
+		};
+
+		class Domain : private Registry<Domain>::Element
+		{
+			private:
+
+				friend class Control_device;
+
+				Control_device & _control_device;
+				Domain_id        _domain_id { _control_device._alloc_domain_id() };
+
+				unsigned         _active_devices { 0 };
+
+			public:
+				Device::Name const & device_name() const { return _control_device.name(); }
+
+				void enable_device()
+				{
+					_active_devices++;
+
+					if (_active_devices == 1)
+						_control_device._enable_domain();
+				}
+
+				void disable_device()
+				{
+					if (_active_devices > 0) {
+						_active_devices--;
+
+						if (_active_devices == 0)
+							_control_device._disable_domain();
+					}
+				}
+
+				unsigned devices() const { return _active_devices; }
+
+				void add_range(Range range)    { _control_device._add_range(range); }
+				void remove_range(Range range) { _control_device._remove_range(range); }
+
+				Domain(Control_device & control_device)
+				: Registry<Domain>::Element(control_device._domains, *this),
+				  _control_device(control_device)
+				{ }
+
+				virtual ~Domain() { }
+		};
+
 	protected:
 
-		Device::Name  _name;
+		friend class Domain;
+
+		Device::Name      _name;
+		Registry<Domain>  _domains { };
+
+		unsigned          _active_domains { 0 };
+
+		virtual void      _enable()  { };
+		virtual void      _disable() { };
+		virtual Domain_id _alloc_domain_id() { return Domain_id(); };
+
+		/* Add a memory range (e.g. DMA buffer) */
+		virtual void _add_range(Range) { };
+
+		/* Remove a previously added memory range */
+		virtual void _remove_range(Range) { };
+
+		void _enable_domain()
+		{
+			if (!_active_domains)
+				_enable();
+
+			_active_domains++;
+		};
+
+		void _disable_domain()
+		{
+			if (_active_domains > 0)
+				_active_domains--;
+
+			if (!_active_domains)
+				_disable();
+		};
 
 	public:
 
-		Control_device(Registry<Control_device> & registry,
-		               Device::Name       const & name)
-		: Registry<Control_device>::Element(registry, *this),
+		Device::Name const & name() const { return _name; }
+
+		bool domain_owner(Domain const & domain) const {
+			return &domain._control_device == this; }
+
+		Control_device(Control_devices     & devices,
+		               Device::Name  const & name)
+		: Control_devices::Element(devices, *this),
 			_name(name)
 		{ }
 
-		bool matches(Device const & dev) {
-			return dev.name() == _name; }
+		virtual ~Control_device() { }
 };
+
 
 class Driver::Control_device_factory : private Genode::Registry<Control_device_factory>::Element
 {
@@ -64,7 +160,7 @@ class Driver::Control_device_factory : private Genode::Registry<Control_device_f
 			return dev.type() == _type; }
 
 		virtual void create(Allocator &,
-		                    Registry<Control_device> &,
+		                    Control_devices &,
 		                    Device const &) = 0;
 };
 

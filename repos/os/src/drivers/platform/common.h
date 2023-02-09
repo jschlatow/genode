@@ -39,7 +39,7 @@ class Driver::Common : Device_reporter,
 		                                          &Common::_handle_devices };
 		Device::Owner            _owner_id      { *this };
 
-		Registry<Control_device>          _control_devices { };
+		Control_devices                   _control_devices { };
 		Registry<Control_device_factory>  _control_device_factories   { };
 
 		Driver::Root             _root;
@@ -83,7 +83,7 @@ void Driver::Common::_release_vanished_devices()
 			if (found)
 				return;
 
-			if (control_dev.matches(dev))
+			if (control_dev.name() == dev.name())
 				found = true;
 		});
 
