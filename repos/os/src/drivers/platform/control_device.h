@@ -49,11 +49,13 @@ class Driver::Control_device : private Control_devices::Element
 				friend class Control_device;
 
 				Control_device & _control_device;
+				Allocator      & _md_alloc;
 				Domain_id        _domain_id { _control_device._alloc_domain_id() };
 
 				unsigned         _active_devices { 0 };
 
 			public:
+
 				Device::Name const & device_name() const { return _control_device.name(); }
 
 				void enable_device()
@@ -79,9 +81,9 @@ class Driver::Control_device : private Control_devices::Element
 				void add_range(Range range)    { _control_device._add_range(range); }
 				void remove_range(Range range) { _control_device._remove_range(range); }
 
-				Domain(Control_device & control_device)
+				Domain(Control_device & control_device, Allocator & md_alloc)
 				: Registry<Domain>::Element(control_device._domains, *this),
-				  _control_device(control_device)
+				  _control_device(control_device), _md_alloc(md_alloc)
 				{ }
 
 				virtual ~Domain() { }
@@ -136,7 +138,11 @@ class Driver::Control_device : private Control_devices::Element
 			_name(name)
 		{ }
 
-		virtual ~Control_device() { }
+		virtual ~Control_device()
+		{
+			_domains.for_each([&] (Domain & domain) {
+				destroy(domain._md_alloc, &domain); });
+		}
 };
 
 

@@ -69,6 +69,7 @@ class Driver::Session_component
 		Ram_quota_guard & ram_quota_guard() { return _ram_quota_guard(); }
 		Cap_quota_guard & cap_quota_guard() { return _cap_quota_guard(); }
 
+		void update_control_devices();
 		void update_policy(bool info, Policy_version version);
 
 		/**************************
@@ -102,15 +103,46 @@ class Driver::Session_component
 		{
 			Ram_dataspace_capability const cap;
 			addr_t dma_addr { 0 };
+			size_t size;
 
 			Dma_buffer(Registry<Dma_buffer> & registry,
-			           Ram_dataspace_capability const cap)
-			: Registry<Dma_buffer>::Element(registry, *this), cap(cap) {}
+			           Ram_dataspace_capability const cap,
+			           size_t size)
+			: Registry<Dma_buffer>::Element(registry, *this), cap(cap), size(size) {}
 		};
+
+		struct Control_device_domain : public  Control_device::Domain,
+		                               private Registry<Control_device_domain>::Element
+		{
+			Registry<Dma_buffer> const & dma_buffers;
+
+			Control_device_domain(Registry<Control_device_domain> & registry,
+			                      Control_device                  & device,
+			                      Allocator                       & md_alloc,
+			                      Registry<Dma_buffer>      const & dma_buffers)
+			: Control_device::Domain(device, md_alloc),
+			  Registry<Control_device_domain>::Element(registry, *this),
+			  dma_buffers(dma_buffers)
+			{
+				/* add DMA buffer ranges */
+				dma_buffers.for_each([&] (Dma_buffer const & dma_buf) {
+					add_range({ dma_buf.dma_addr, dma_buf.size }); });
+			}
+
+			~Control_device_domain()
+			{
+				/* remove DMA buffer ranges */
+				dma_buffers.for_each([&] (Dma_buffer const & dma_buf) {
+					remove_range({ dma_buf.dma_addr, dma_buf.size }); });
+			}
+		};
+
+		using Domain_registry = Registry<Control_device_domain>;
 
 		Env                          & _env;
 		Attached_rom_dataspace const & _config;
 		Device_model                 & _devices;
+
 		Control_devices              & _control_devices;
 		Device::Owner                  _owner_id    { *this };
 		Constrained_ram_allocator      _env_ram     { _env.pd(),
@@ -119,6 +151,7 @@ class Driver::Session_component
 		Heap                           _md_alloc    { _env_ram, _env.rm() };
 		Registry<Device_component>     _device_registry { };
 		Registry<Dma_buffer>           _buffer_registry { };
+		Domain_registry                _domain_registry { };
 		Dynamic_rom_session            _rom_session { _env.ep(), _env.ram(),
 		                                              _env.rm(), *this    };
 		bool                           _info;
@@ -133,7 +166,24 @@ class Driver::Session_component
 		Device_capability _acquire(Device & device);
 		void              _release_device(Device_component & dc);
 		void              _free_dma_buffer(Dma_buffer & buf);
-		
+
+		template <typename MATCH_FN, typename NONMATCH_FN>
+		void _with_device_domain(Device::Name const & name,
+		                        MATCH_FN          && match_fn,
+		                        NONMATCH_FN       && nonmatch_fn)
+		{
+			bool exists = false;
+			_domain_registry.for_each([&] (Control_device_domain & domain) {
+				if (domain.device_name() == name) {
+					match_fn(domain);
+					exists = true;
+				}
+			});
+
+			if (!exists)
+				nonmatch_fn();
+		}
+
 		/*
 		 * Noncopyable
 		 */

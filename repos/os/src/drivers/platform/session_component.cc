@@ -25,6 +25,21 @@ Session_component::_acquire(Device & device)
 {
 	Device_component * dc = new (heap())
 		Device_component(_device_registry, _env, *this, _devices, device);
+
+	/* add control-device domains if they don't exist yet */
+	device.for_each_control_device([&] (Device::Control_device const & wanted_cd) {
+		_with_device_domain(wanted_cd.name,
+			[&] (Control_device_domain &) { },
+			[&] () {
+				_control_devices.for_each([&] (Control_device & cd) {
+					if (cd.name() == wanted_cd.name)
+						new (heap()) Control_device_domain(_domain_registry, cd, heap(), _buffer_registry);
+				});
+			}
+		);
+	});
+
+
 	device.acquire(*this);
 	return _env.ep().rpc_ep().manage(dc);
 };
@@ -38,6 +53,12 @@ void Session_component::_release_device(Device_component & dc)
 
 	_devices.for_each([&] (Device & dev) {
 		if (name == dev.name()) dev.release(*this); });
+
+	/* destroy unused domains */
+	_domain_registry.for_each([&] (Control_device_domain & domain) {
+		if (domain.devices() == 0)
+			destroy(heap(), &domain);
+	});
 }
 
 
@@ -45,6 +66,11 @@ void Session_component::_free_dma_buffer(Dma_buffer & buf)
 {
 	Ram_dataspace_capability cap = buf.cap;
 	_device_pd.free_dma_mem(buf.dma_addr);
+
+	_domain_registry.for_each([&] (Control_device_domain & domain) {
+		domain.remove_range(Control_device::Range { buf.dma_addr, buf.size });
+	});
+
 	destroy(heap(), &buf);
 	_env_ram.free(cap);
 }
@@ -72,10 +98,60 @@ bool Session_component::matches(Device const & dev) const
 };
 
 
+void Session_component::update_control_devices()
+{
+	_control_devices.for_each([&] (Control_device & cd) {
+
+		/* determine whether control device is used by any owned/acquire device */
+		bool used_by_owned_device = false;
+		_devices.for_each([&] (Device const & dev) {
+			if (!(dev.owner() == _owner_id))
+				return;
+
+			if (used_by_owned_device)
+				return;
+
+			dev.for_each_control_device([&] (Device::Control_device const & wanted_cd) {
+				if (wanted_cd.name == cd.name())
+					used_by_owned_device = true;
+			});
+		});
+
+		/* synchronise with control-device domains */
+		bool domain_exists = false;
+		_domain_registry.for_each([&] (Control_device_domain & domain) {
+			if (cd.domain_owner(domain)) {
+				domain_exists = true;
+
+				/* remove domain if not used by any owned device */
+				if (!used_by_owned_device)
+					destroy(heap(), &domain);
+			}
+		});
+
+		/**
+		 * If a control device is used but there is no domain (because the control
+		 * device was just added), we need to create (i.e. allocate) a domain for
+		 * it. However, since we are in context of a ROM update at this point,
+		 * we are not able to propagate any Out_of_ram exception to the client.
+		 * Since this is supposedly a very rare and not even practical corner-case,
+		 * we print a warning instead.
+		 */
+		if (used_by_owned_device && !domain_exists) {
+			warning("Unable to configure DMA ranges properly because ",
+			        "control device '", cd.name(), "' was to an already acquired device.");
+		}
+
+	});
+}
+
+
 void Session_component::update_policy(bool info, Policy_version version)
 {
 	_info    = info;
 	_version = version;
+
+	update_control_devices();
 
 	enum Device_state { AWAY, CHANGED, UNCHANGED };
 
@@ -128,12 +204,26 @@ void Session_component::update_devices_rom()
 void Session_component::enable_device(Device const & device)
 {
 	pci_enable(_env, device_pd(), device);
+
+	device.for_each_control_device([&] (Device::Control_device const & wanted_cd) {
+		_with_device_domain(wanted_cd.name,
+			[&] (Control_device_domain & domain) { domain.enable_device(); },
+			[&] () { }
+		);
+	});
 }
 
 
 void Session_component::disable_device(Device const & device)
 {
 	pci_disable(_env, device);
+
+	device.for_each_control_device([&] (Device::Control_device const & wanted_cd) {
+		_with_device_domain(wanted_cd.name,
+			[&] (Control_device_domain & domain) { domain.disable_device(); },
+			[&] () { }
+		);
+	});
 }
 
 
@@ -210,7 +300,7 @@ Session_component::alloc_dma_buffer(size_t const size, Cache cache)
 
 	Dma_buffer *buf { nullptr };
 	try {
-			buf = new (heap()) Dma_buffer(_buffer_registry, ram_cap);
+			buf = new (heap()) Dma_buffer(_buffer_registry, ram_cap, size);
 	} catch (Out_of_ram)  {
 		_env_ram.free(ram_cap);
 		throw;
@@ -221,6 +311,10 @@ Session_component::alloc_dma_buffer(size_t const size, Cache cache)
 
 	try {
 		buf->dma_addr = _device_pd.attach_dma_mem(ram_cap, _env.pd().dma_addr(buf->cap), false);
+
+		_domain_registry.for_each([&] (Control_device_domain & domain) {
+			domain.add_range(Control_device::Range { buf->dma_addr, buf->size });
+		});
 	} catch (Out_of_ram)  {
 		destroy(heap(), buf);
 		_env_ram.free(ram_cap);
@@ -295,6 +389,10 @@ Session_component::Session_component(Env                          & env,
 
 Session_component::~Session_component()
 {
+	_domain_registry.for_each([&] (Control_device_domain & domain) {
+		destroy(heap(), &domain);
+	});
+
 	_device_registry.for_each([&] (Device_component & dc) {
 		_release_device(dc); });
 
