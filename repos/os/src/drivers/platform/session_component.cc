@@ -139,7 +139,7 @@ void Session_component::update_control_devices()
 		 */
 		if (used_by_owned_device && !domain_exists) {
 			warning("Unable to configure DMA ranges properly because ",
-			        "control device '", cd.name(), "' was to an already acquired device.");
+			        "control device '", cd.name(), "' was added to an already acquired device.");
 		}
 
 	});
