@@ -125,6 +125,12 @@ class Driver::Control_device : private Control_devices::Element
 				_disable();
 		};
 
+		void _destroy_domains()
+		{
+			_domains.for_each([&] (Domain & domain) {
+				destroy(domain._md_alloc, &domain); });
+		}
+
 	public:
 
 		Device::Name const & name() const { return _name; }
@@ -140,8 +146,12 @@ class Driver::Control_device : private Control_devices::Element
 
 		virtual ~Control_device()
 		{
-			_domains.for_each([&] (Domain & domain) {
-				destroy(domain._md_alloc, &domain); });
+			/**
+			 * destroying domain objects
+			 * any derived class that overrides any virtual method must
+			 * call this at the very beginning of its
+			 */
+			_destroy_domains();
 		}
 };
 

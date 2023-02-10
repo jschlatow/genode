@@ -335,6 +335,7 @@ class Driver::Device_model :
 		Env                      & _env;
 		Heap                     & _heap;
 		Device_reporter          & _reporter;
+		Device_owner             & _owner;
 		List_model<Device>         _model  { };
 		Registry<Shared_interrupt> _shared_irqs { };
 		Clocks                     _clocks { };
@@ -349,8 +350,9 @@ class Driver::Device_model :
 
 		Device_model(Env             & env,
 		             Heap            & heap,
-		             Device_reporter & reporter)
-		: _env(env), _heap(heap), _reporter(reporter) { }
+		             Device_reporter & reporter,
+		             Device_owner    & owner)
+		: _env(env), _heap(heap), _reporter(reporter), _owner(owner) { }
 
 		~Device_model() {
 			_model.destroy_all_elements(*this); }

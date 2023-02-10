@@ -34,7 +34,7 @@ class Driver::Common : Device_reporter,
 		Attached_rom_dataspace   _platform_info { _env, "platform_info"    };
 		Heap                     _heap          { _env.ram(), _env.rm()    };
 		Sliced_heap              _sliced_heap   { _env.ram(), _env.rm()    };
-		Device_model             _devices       { _env, _heap, *this       };
+		Device_model             _devices       { _env, _heap, *this, *this };
 		Signal_handler<Common>   _dev_handler   { _env.ep(), *this,
 		                                          &Common::_handle_devices };
 		Device::Owner            _owner_id      { *this };
@@ -47,7 +47,6 @@ class Driver::Common : Device_reporter,
 		Constructible<Expanding_reporter> _cfg_reporter { };
 		Constructible<Expanding_reporter> _dev_reporter { };
 
-		void _release_vanished_devices();
 		void _handle_devices();
 		bool _iommu();
 
@@ -72,25 +71,13 @@ class Driver::Common : Device_reporter,
 		 *********************/
 
 		void update_report() override;
+
+		/******************
+		 ** Device_owner **
+		 ******************/
+
+		void disable_device(Device const & device) override;
 };
-
-
-void Driver::Common::_release_vanished_devices()
-{
-	_control_devices.for_each([&] (Control_device & control_dev) {
-		bool found = false;
-		_devices.for_each([&] (Device const & dev) {
-			if (found)
-				return;
-
-			if (control_dev.name() == dev.name())
-				found = true;
-		});
-
-		if (!found)
-			destroy(_heap, &control_dev);
-	});
-}
 
 
 void Driver::Common::create_control_devices()
@@ -115,7 +102,6 @@ void Driver::Common::_handle_devices()
 {
 	_devices_rom.update();
 	_devices.update(_devices_rom.xml());
-	_release_vanished_devices();
 	create_control_devices();
 	update_report();
 	_root.update_policy();
@@ -137,6 +123,15 @@ void Driver::Common::update_report()
 	if (_dev_reporter.constructed())
 		_dev_reporter->generate([&] (Xml_generator & xml) {
 			_devices.generate(xml); });
+}
+
+
+void Driver::Common::disable_device(Device const & device)
+{
+	_control_devices.for_each([&] (Control_device & control_dev) {
+		if (control_dev.name() == device.name())
+			destroy(_heap, &control_dev);
+	});
 }
 
 

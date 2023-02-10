@@ -68,6 +68,7 @@ void Device_model::destroy_element(Device & device)
 		device._control_device_list.destroy_all_elements(policy);
 	}
 
+	device.release(_owner);
 	Genode::destroy(_heap, &device);
 }
 
