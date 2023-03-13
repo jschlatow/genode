@@ -262,6 +262,7 @@ void Driver::Device_model::update(Xml_node const & node)
 	}
 
 	/*
+	 * Iterate over all devices and apply PCI quirks if necessary
 	 */
 	for_each([&] (Device const & device) {
 		pci_apply_quirks(_env, device);

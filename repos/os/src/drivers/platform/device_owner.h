@@ -1,6 +1,6 @@
 /*
  * \brief  Platform driver - Device owner abstraction
- j \author Johannes Schlatow
+ * \author Johannes Schlatow
  * \date   2023-01-20
  */
 
