@@ -64,7 +64,7 @@ struct Usb::Block_driver : Usb::Completion
 		size_t         size      { 0 };
 		bool           completed { false };
 
-		Block_request(Request &request, Request_stream::Payload const &payload)
+		Block_request(Request const &request, Request_stream::Payload const &payload)
 		: block_request(request)
 		{
 			payload.with_content(request, [&](void *addr, size_t sz) {
@@ -902,7 +902,7 @@ struct Usb::Block_driver : Usb::Completion
 		         .writeable   = _writeable };
 	}
 
-	Response submit(Request &block_request,
+	Response submit(Request                 const &block_request,
 	                Request_stream::Payload const &payload)
 	{
 		if (device_plugged == false)
@@ -1005,22 +1005,26 @@ struct Usb::Main : Rpc_object<Typed_root<Block::Session>>
 		env.parent().announce(env.ep().manage(*this));
 	}
 
+	/**
+	 * There can only be one request in flight for this driver, so keep it simple
+	 */
 	void handle_requests()
 	{
 		if (!block_session.constructed()) return;
 
-		for (;;) {
-			bool progress = false;
+		bool progress;
+		do {
+			progress = false;
 
 			/* ack and release possibly pending packet */
 			block_session->try_acknowledge([&] (Block_session_component::Ack &ack) {
-				driver.with_completed([&] (Block::Request &request) {
+				driver.with_completed([&] (Block::Request const &request) {
 					ack.submit(request);
 					progress = true;
 				});
 			});
 
-			block_session->with_requests([&] (Request request) {
+			block_session->with_requests([&] (Request const request) {
 
 				Response response = Response::RETRY;
 
@@ -1032,10 +1036,7 @@ struct Usb::Main : Rpc_object<Typed_root<Block::Session>>
 
 				return response;
 			});
-
-			if (!progress)
-				break;
-		}
+		} while (progress);
 
 		block_session->wakeup_client_if_needed();
 	}
