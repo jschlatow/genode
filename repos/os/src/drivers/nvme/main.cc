@@ -578,6 +578,8 @@ class Nvme::Controller : Platform::Device,
                          Platform::Device::Mmio,
                          Platform::Device::Irq
 {
+	using Mmio = Genode::Mmio;
+
 	public:
 
 	/**********
@@ -797,9 +799,9 @@ class Nvme::Controller : Platform::Device,
 	 ** CODE **
 	 **********/
 
-	Genode::Env           &_env;
-	Platform::Connection  &_platform;
-	Genode::Mmio::Delayer &_delayer;
+	Genode::Env          &_env;
+	Platform::Connection &_platform;
+	Mmio::Delayer        &_delayer;
 
 	/*
 	 * There is a completion and submission queue for
@@ -898,7 +900,7 @@ class Nvme::Controller : Platform::Device,
 
 		try {
 			wait_for(a, t, _delayer, Csts::Rdy::Equal(val));
-		} catch (Genode::Mmio::Polling_timeout) {
+		} catch (Mmio::Polling_timeout) {
 			error("Csts::Rdy(", val, ") failed");
 			throw;
 		}
@@ -1335,7 +1337,7 @@ class Nvme::Controller : Platform::Device,
 	 */
 	Controller(Genode::Env              &env,
 	           Platform::Connection     &platform,
-	           Genode::Mmio::Delayer    &delayer,
+	           Mmio::Delayer            &delayer,
 	           Signal_context_capability irq_sigh)
 	:
 		Platform::Device(platform),
