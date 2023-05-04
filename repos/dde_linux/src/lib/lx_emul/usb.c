@@ -270,10 +270,10 @@ static struct file * open_usb_dev(struct usb_device * udev)
 		data->file.f_mode  = FMODE_WRITE;
 		usbdev_file_operations->open(&data->inode, &data->file);
 		data->dev = udev;
-		dev_set_drvdata(&udev->dev, data);
 		pid = kernel_thread(poll_usb_device, data, CLONE_FS | CLONE_FILES);
 		data->task = find_task_by_pid_ns(pid, NULL);
 		INIT_LIST_HEAD(&data->urblist);
+		dev_set_drvdata(&udev->dev, data);
 	}
 
 	return &data->file;
@@ -337,12 +337,17 @@ static int claim(genode_usb_bus_num_t bus,
                  unsigned             iface_num)
 {
 	struct usb_device       * udev = find_usb_device(bus, dev);
-	struct usb_per_dev_data * data;
+	struct usb_per_dev_data * data = udev ? dev_get_drvdata(&udev->dev) : NULL;
 
-	if (!udev)
-		return -1;
+	/*
+	 * As long as 'claim' is a rpc-call, and the usb device wasn't opened yet,
+	 * we cannot open the device here, this has to be done from a Linux task.
+	 * So just ignore it here, it will be claimed implicitely by the devio
+	 * usb layer later.
+	 */
+	if (!data)
+		return 0;
 
-	open_usb_dev(udev);
 	data                = dev_get_drvdata(&udev->dev);
 	data->rpc.ret       = 1;
 	data->rpc.call      = CLAIM;
@@ -690,6 +695,7 @@ static int poll_usb_device(void * args)
 			struct usb_device * udev = find_usb_device(bus, dev);
 			release_device(data, udev ? 1 : 0);
 			if (!udev) genode_usb_discontinue_device(bus, dev);
+			else       dev_set_drvdata(&udev->dev, NULL);
 			kfree(data);
 			do_exit(0);
 		}
