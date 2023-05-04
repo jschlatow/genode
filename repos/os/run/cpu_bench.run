@@ -10,7 +10,7 @@ if {[have_board linux]} {
 	exit 0
 }
 
-build "core init timer test/cpu_bench"
+build { core init timer lib/ld test/cpu_bench }
 
 create_boot_directory
 
@@ -31,8 +31,6 @@ install_config {
 		</start>
 	</config>
 }
-
-build_boot_image { core init cpu_bench ld.lib.so }
 
 append qemu_args " -nographic  "
 
