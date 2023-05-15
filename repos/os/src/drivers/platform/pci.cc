@@ -164,14 +164,18 @@ struct Config_helper
 };
 
 
-void Driver::pci_enable(Env & env, Driver::Io_mmu_domain_registry & domain_registry, Device const & dev)
+void Driver::pci_enable(Env                            & env,
+                        Driver::Io_mmu_domain_registry & domain_registry,
+                        Device const                   & dev)
 {
 	dev.for_pci_config([&] (Device::Pci_config const & pc) {
 		Config_helper(env, dev, pc).enable(domain_registry); });
 }
 
 
-void Driver::pci_disable(Env & env, Driver::Io_mmu_domain_registry & domain_registry, Device const & dev)
+void Driver::pci_disable(Env                            & env,
+                         Driver::Io_mmu_domain_registry & domain_registry,
+                         Device const                   & dev)
 {
 	dev.for_pci_config([&] (Device::Pci_config const & pc) {
 		Config_helper(env, dev, pc).disable(domain_registry); });

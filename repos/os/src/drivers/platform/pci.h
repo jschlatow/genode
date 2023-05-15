@@ -27,8 +27,12 @@ namespace Driver {
 	class Device_component;
 	class Device_pd;
 
-	void pci_enable(Genode::Env & env, Io_mmu_domain_registry &, Device const & dev);
-	void pci_disable(Genode::Env & env, Io_mmu_domain_registry &, Device const & dev);
+	void pci_enable(Genode::Env            & env,
+	                Io_mmu_domain_registry & domain_registry,
+	                Device const           & dev);
+	void pci_disable(Genode::Env            & env,
+	                 Io_mmu_domain_registry & domain_registry,
+	                 Device const           & dev);
 	void pci_apply_quirks(Genode::Env & env, Device const & dev);
 	void pci_msi_enable(Genode::Env & env, Device_component & dc,
 	                    addr_t cfg_space, Genode::Irq_session::Info const info,

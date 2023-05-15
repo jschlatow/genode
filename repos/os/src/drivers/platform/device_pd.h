@@ -90,8 +90,10 @@ class Driver::Device_pd : public Io_mmu::Domain
 		void add_range(Io_mmu::Range const &, Dataspace_capability const) override;
 		void remove_range(Io_mmu::Range const &) override;
 
-		void enable_pci_device(Io_mem_dataspace_capability const, Pci::Bdf const) override;
-		void disable_pci_device(Io_mem_dataspace_capability const, Pci::Bdf const) override;
+		void enable_pci_device(Io_mem_dataspace_capability const,
+		                       Pci::Bdf const) override;
+		void disable_pci_device(Io_mem_dataspace_capability const,
+		                        Pci::Bdf const) override;
 };
 
 
@@ -107,12 +109,18 @@ class Driver::Kernel_iommu : public Io_mmu
 		 * Iommu interface
 		 */
 
-		Driver::Io_mmu::Domain & create_domain(Allocator & md_alloc,
-		                                       Registry<Dma_buffer> const & buffer_registry,
-		                                       Ram_quota_guard & ram_guard,
-		                                       Cap_quota_guard & cap_guard) override
+		Driver::Io_mmu::Domain & create_domain(
+			Allocator                  & md_alloc,
+			Registry<Dma_buffer> const & buffer_registry,
+			Ram_quota_guard            & ram_guard,
+			Cap_quota_guard            & cap_guard) override
 		{
-			return *new (md_alloc) Device_pd(_env, ram_guard, cap_guard, *this, md_alloc, buffer_registry);
+			return *new (md_alloc) Device_pd(_env,
+			                                 ram_guard,
+			                                 cap_guard,
+			                                 *this,
+			                                 md_alloc,
+			                                 buffer_registry);
 		}
 
 

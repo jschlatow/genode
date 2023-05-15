@@ -69,7 +69,8 @@ void Device_pd::Region_map_client::upgrade_caps()
 }
 
 
-void Device_pd::add_range(Io_mmu::Range const & range, Dataspace_capability const cap)
+void Device_pd::add_range(Io_mmu::Range        const & range,
+                          Dataspace_capability const   cap)
 {
 	using namespace Genode;
 
