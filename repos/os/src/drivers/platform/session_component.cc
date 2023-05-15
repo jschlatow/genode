@@ -36,7 +36,8 @@ Session_component::_acquire(Device & device)
 				_io_mmu_devices.for_each([&] (Io_mmu & io_mmu_dev) {
 					if (io_mmu_dev.name() == io_mmu.name) {
 						if (io_mmu_dev.mpu() && _iommu)
-							error("Unable to create domain for MPU device ", io_mmu_dev.name(), " for an IOMMU-enabled session.");
+							error("Unable to create domain for MPU device ",
+							      io_mmu_dev.name(), " for an IOMMU-enabled session.");
 						else
 							new (heap()) Io_mmu_domain(_domain_registry,
 							                           io_mmu_dev,
@@ -156,7 +157,8 @@ void Session_component::update_io_mmu_devices()
 		 */
 		if (used_by_owned_device && !domain_exists) {
 			warning("Unable to configure DMA ranges properly because ",
-			        "IO MMU'", io_mmu_dev.name(), "' was added to an already acquired device.");
+			        "IO MMU'", io_mmu_dev.name(),
+			        "' was added to an already acquired device.");
 		}
 
 	});
@@ -209,10 +211,16 @@ void Session_component::produce_xml(Xml_generator &xml)
 Genode::Heap & Session_component::heap() { return _md_alloc; }
 
 
-Driver::Io_mmu_domain_registry & Session_component::domain_registry() { return _domain_registry; }
+Driver::Io_mmu_domain_registry & Session_component::domain_registry()
+{
+	return _domain_registry;
+}
 
 
-Driver::Dma_allocator & Session_component::dma_allocator() { return _dma_allocator; }
+Driver::Dma_allocator & Session_component::dma_allocator()
+{
+	return _dma_allocator;
+}
 
 
 void Session_component::update_devices_rom()
@@ -333,7 +341,9 @@ Session_component::alloc_dma_buffer(size_t const size, Cache cache)
 	if (!ram_cap.valid()) return ram_cap;
 
 	try {
-		Dma_buffer & buf = _dma_allocator.alloc_buffer(ram_cap, _env.pd().dma_addr(ram_cap), size);
+		Dma_buffer & buf = _dma_allocator.alloc_buffer(ram_cap,
+		                                               _env.pd().dma_addr(ram_cap),
+		                                               size);
 
 		_domain_registry.for_each_domain([&] (Io_mmu::Domain & domain) {
 			domain.add_range({ buf.dma_addr, buf.size }, buf.cap);
