@@ -415,15 +415,14 @@ class Core::Region_map_component : private Weak_object<Region_map_component>,
 
 			auto try_reflect_fault_to_user_land = [&]
 			{
-				if (_fault_sigh.valid()) {
+				if (_fault_sigh.valid())
 					reflect_fn(*this, fault);
-					return Result::REFLECTED;
-				}
-				return Result::NO_REGION;
 			};
 
-			if (!region_ptr)
-				return try_reflect_fault_to_user_land();
+			if (!region_ptr) {
+				try_reflect_fault_to_user_land();
+				return Result::NO_REGION;
+			}
 
 			Rm_region const &region = *region_ptr;
 
@@ -447,7 +446,10 @@ class Core::Region_map_component : private Weak_object<Region_map_component>,
 				                         && !relative_fault.rwx.x;
 
 				if (write_violation || exec_violation)
-					return try_reflect_fault_to_user_land();
+					try_reflect_fault_to_user_land();
+
+				if (write_violation) return Result::WRITE_VIOLATION;
+				if (exec_violation)  return Result::EXEC_VIOLATION;
 
 				return resolved_fn(region, relative_fault);
 			}
