@@ -106,7 +106,7 @@ Pager_object::Pager_result Rm_client::pager(Ipc_pager &pager)
 	case Result::WRITE_VIOLATION:
 	case Result::EXEC_VIOLATION:
 		error(fault.access, " violation at address ",
-		      fault.hotspot, " ", fault.rwx, " ", origin);
+		      fault.hotspot, " ", origin);
 		break;
 	}
 	return Pager_result::STOP;
