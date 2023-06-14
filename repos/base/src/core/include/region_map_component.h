@@ -413,16 +413,17 @@ class Core::Region_map_component : private Weak_object<Region_map_component>,
 			/* lookup region and dataspace */
 			Rm_region const * const region_ptr = _map.metadata((void*)fault.hotspot.value);
 
-			auto try_reflect_fault_to_user_land = [&]
+			auto reflect_fault = [&] (Result result)
 			{
-				if (_fault_sigh.valid())
-					reflect_fn(*this, fault);
+				if (!_fault_sigh.valid())
+					return result;   /* not reflected to user land */
+
+				reflect_fn(*this, fault);
+				return Result::REFLECTED;  /* omit diagnostics */
 			};
 
-			if (!region_ptr) {
-				try_reflect_fault_to_user_land();
-				return Result::NO_REGION;
-			}
+			if (!region_ptr)
+				return reflect_fault(Result::NO_REGION);
 
 			Rm_region const &region = *region_ptr;
 
@@ -445,11 +446,8 @@ class Core::Region_map_component : private Weak_object<Region_map_component>,
 				bool const exec_violation  = relative_fault.exec_access()
 				                         && !relative_fault.rwx.x;
 
-				if (write_violation || exec_violation)
-					try_reflect_fault_to_user_land();
-
-				if (write_violation) return Result::WRITE_VIOLATION;
-				if (exec_violation)  return Result::EXEC_VIOLATION;
+				if (write_violation) return reflect_fault(Result::WRITE_VIOLATION);
+				if (exec_violation)  return reflect_fault(Result::EXEC_VIOLATION);
 
 				return resolved_fn(region, relative_fault);
 			}
