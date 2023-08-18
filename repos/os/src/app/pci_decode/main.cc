@@ -20,6 +20,7 @@
 
 #include <irq.h>
 #include <rmrr.h>
+#include <drhd.h>
 #include <pci/config.h>
 
 using namespace Genode;
@@ -40,6 +41,7 @@ struct Main
 	List_model<Irq_routing>  irq_routing_list  {};
 	List_model<Irq_override> irq_override_list {};
 	List_model<Rmrr>         reserved_memory_list {};
+	List_model<Drhd>         drhd_list {};
 
 	Constructible<Attached_io_mem_dataspace> pci_config_ds {};
 
@@ -346,6 +348,20 @@ void Main::parse_acpi_device_info(Xml_node const &xml, Xml_generator & gen)
 	 */
 	if (xml.has_sub_node("sci_int"))
 		parse_acpica_info(xml, gen);
+
+	/* Intel DMA-remapping hardware units */
+	drhd_list.for_each([&] (Drhd const & drhd) {
+		gen.node("device", [&]
+		{
+			gen.attribute("name", drhd.name());
+			gen.attribute("type", "intel_iommu");
+			gen.node("io_mem", [&]
+			{
+				gen.attribute("address", String<20>(Hex(drhd.addr)));
+				gen.attribute("size",    String<20>(Hex(drhd.size)));
+			});
+		});
+	});
 }
 
 
@@ -436,6 +452,11 @@ Main::Main(Env & env) : env(env)
 	{
 		Rmrr_policy policy(heap);
 		reserved_memory_list.update_from_xml(policy, xml);
+	}
+
+	{
+		Drhd_policy policy(heap);
+		drhd_list.update_from_xml(policy, xml);
 	}
 
 	pci_reporter.generate([&] (Xml_generator & generator)
