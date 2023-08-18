@@ -14,6 +14,7 @@
 #include <base/component.h>
 
 #include <common.h>
+#include <intel/io_mmu.h>
 
 namespace Driver { struct Main; };
 
@@ -29,6 +30,8 @@ struct Driver::Main
 	Signal_handler<Main>   _system_handler { _env.ep(), *this,
 	                                         &Main::_system_update };
 
+	Intel::Io_mmu_factory  _intel_iommu    { _env, _common.io_mmu_factories() };
+
 	void _handle_config();
 	void _reset();
 	void _system_update();
@@ -41,6 +44,7 @@ struct Driver::Main
 		_system_rom.sigh(_system_handler);
 		_handle_config();
 		_system_update();
+		_common.acquire_io_mmu_devices();
 		_common.announce_service();
 	}
 };
