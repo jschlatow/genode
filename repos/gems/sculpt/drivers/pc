@@ -124,6 +124,7 @@
 			<service name="ROM" label="devices"> <child name="report_rom"/> </service>
 			<service name="ROM" label="acpi">    <child name="report_rom"/> </service>
 			<service name="Report" label="devices"> <child name="report_rom"/> </service>
+			<service name="Report" label="iommu">   <parent label="iommu"/> </service>
 			<service name="IRQ">     <parent/> </service>
 			<service name="IO_MEM">  <parent/> </service>
 			<service name="IO_PORT"> <parent/> </service>
