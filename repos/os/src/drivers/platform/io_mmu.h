@@ -89,14 +89,10 @@ class Driver::Io_mmu : private Io_mmu_devices::Element
 
 				Domain(Io_mmu                     & io_mmu,
 				       Allocator                  & md_alloc,
-				       Registry<Dma_buffer> const & buffer_registry)
+				       Registry<Dma_buffer> const &)
 				: Registry<Domain>::Element(io_mmu._domains, *this),
 				  _io_mmu(io_mmu), _md_alloc(md_alloc)
-				{
-					/* we always need to add existing buffers when creating a new domain */
-					buffer_registry.for_each([&] (Dma_buffer const & buf) {
-						add_range({ buf.dma_addr, buf.size }, buf.cap); });
-				}
+				{ }
 
 				virtual ~Domain() { }
 		};
