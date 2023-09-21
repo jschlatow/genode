@@ -244,17 +244,11 @@ Device_component::Device_component(Registry<Device_component> & registry,
 		};
 
 		/* attach reserved memory ranges to IOMMU domains */
-		device.for_each_io_mmu(
-			/* non-empty list fn */
-			[&] (Driver::Device::Io_mmu const &io_mmu) {
-				session.domain_registry().with_domain(io_mmu.name,
-				                                      add_range_fn,
-				                                      [&] () { }); },
-
-			/* empty list fn */
-			[&] () {
-				session.domain_registry().with_default_domain(add_range_fn); }
-		);
+		device.for_each_io_mmu([&] (Driver::Device::Io_mmu const &io_mmu) {
+			session.domain_registry().with_domain(io_mmu.name,
+			                                      add_range_fn,
+			                                      [&] () { });
+		});
 
 	} catch(...) {
 		_release_resources();
