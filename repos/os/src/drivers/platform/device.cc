@@ -223,7 +223,7 @@ void Driver::Device_model::update(Xml_node const & node)
 	for_each([&] (Device const & device) {
 		device._irq_list.for_each([&] (Device::Irq const & irq) {
 
-			if (irq.type != Device::Irq::LEGACY)
+			if (irq.type != Irq_session::TYPE_LEGACY)
 				return;
 
 			if (detected_irqs.get(irq.number, 1)) {
@@ -240,7 +240,7 @@ void Driver::Device_model::update(Xml_node const & node)
 	for_each([&] (Device & device) {
 		device._irq_list.for_each([&] (Device::Irq & irq) {
 
-			if (irq.type != Device::Irq::LEGACY)
+			if (irq.type != Irq_session::TYPE_LEGACY)
 				return;
 
 			if (shared_irqs.get(irq.number, 1))

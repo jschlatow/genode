@@ -95,10 +95,8 @@ class Driver::Device : private List_model<Device>::Element
 
 		struct Irq : List_model<Irq>::Element
 		{
-			enum Type { LEGACY, MSI, MSIX };
-
 			unsigned              number;
-			Type                  type     { LEGACY                          };
+			Irq_session::Type     type     { Irq_session::TYPE_LEGACY        };
 			Irq_session::Polarity polarity { Irq_session::POLARITY_UNCHANGED };
 			Irq_session::Trigger  mode     { Irq_session::TRIGGER_UNCHANGED  };
 			bool                  shared   { false                           };
@@ -418,7 +416,8 @@ struct Driver::Irq_update_policy : Genode::List_model<Device::Irq>::Update_polic
 			elem.mode = (mode == "edge") ? Irq_session::TRIGGER_EDGE
 			                             : Irq_session::TRIGGER_LEVEL;
 		if (type.valid())
-			elem.type = (type == "msi-x") ? Element::MSIX : Element::MSI;
+			elem.type = (type == "msi-x") ? Irq_session::TYPE_MSIX
+			                              : Irq_session::TYPE_MSI;
 
 		return elem;
 	}
