@@ -174,7 +174,7 @@ class Intel::Io_mmu : private Attached_mmio,
 		 * create separate Domain objects that receive identical modification
 		 * instructions.
 		 */
-		bool                          _verbose            { false };
+		bool                          _verbose            { true };
 		Managed_root_table            _managed_root_table;
 		Report_helper                 _report_helper      { *this };
 		Domain_allocator              _domain_allocator;
