@@ -16,6 +16,7 @@
 #include <assertion.h>
 
 #include <nova_util.h> /* kernel_hip */
+#include <nova_msr.h>
 
 using namespace Core;
 
@@ -221,54 +222,16 @@ static State acpi_suspend(State const &request)
 }
 
 
-#ifdef __x86_64__
-static State msr_access(State const &state)
-{
-	auto const  msr_cap = platform_specific().core_pd_sel() + 4;
-	Nova::Utcb &utcb    = *reinterpret_cast<Nova::Utcb *>(Thread::myself()->utcb());
-
-	State result { };
-
-	utcb.set_msg_word(state.ip); /* count */
-	utcb.msg()[0] = state.r8;
-	utcb.msg()[1] = state.r9;
-	utcb.msg()[2] = state.r10;
-	utcb.msg()[3] = state.r11;
-	utcb.msg()[4] = state.r12;
-	utcb.msg()[5] = state.r13;
-
-	auto const res = Nova::ec_ctrl(Nova::Ec_op::EC_MSR_ACCESS, msr_cap);
-
-	result.trapno = (res == Nova::NOVA_OK) ? 1 : 0;
-
-	if (res != Nova::NOVA_OK)
-		return result;
-
-	result.ip  = utcb.msg_words(); /* bitmap about valid returned words */
-	result.r8  = utcb.msg()[0];
-	result.r9  = utcb.msg()[1];
-	result.r10 = utcb.msg()[2];
-	result.r11 = utcb.msg()[3];
-	result.r12 = utcb.msg()[4];
-	result.r13 = utcb.msg()[5];
-
-	return result;
-}
-#else
-static State msr_access(State const &)
-{
-	return { }; /* not supported for now on x86_32 */
-}
-#endif
-
-
 State System_control_component::system_control(State const &request)
 {
 	if (request.trapno == State::ACPI_SUSPEND_REQUEST)
 		return acpi_suspend(request);
 
-	if (request.trapno == State::MSR_ACCESS)
-		return msr_access(request);
+	if (request.trapno == State::MSR_ACCESS) {
+		auto const  msr_cap = platform_specific().core_pd_sel() + 4;
+		Nova::Utcb &utcb    = *reinterpret_cast<Nova::Utcb *>(Thread::myself()->utcb());
+		return msr_access(request, utcb, msr_cap);
+	}
 
 	return State();
 }
