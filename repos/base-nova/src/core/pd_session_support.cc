@@ -19,19 +19,26 @@
 
 using namespace Core;
 
-
-bool Pd_session_component::assign_pci(addr_t pci_config_memory, uint16_t bdf)
+template <typename FUNC>
+inline Nova::uint8_t retry_syscall(addr_t pd_sel, FUNC func)
 {
-	uint8_t res = Nova::NOVA_PD_OOM;
+	Nova::uint8_t res;
 	do {
-		res = Nova::assign_pci(_pd->pd_sel(), pci_config_memory, bdf);
+		res = func();
 	} while (res == Nova::NOVA_PD_OOM &&
 	         Nova::NOVA_OK == Pager_object::handle_oom(Pager_object::SRC_CORE_PD,
-	                                                   _pd->pd_sel(),
+	                                                   pd_sel,
 	                                                   "core", "ep",
 	                                                   Pager_object::Policy::UPGRADE_CORE_TO_DST));
 
-	return res == Nova::NOVA_OK;
+	return res;
+}
+
+bool Pd_session_component::assign_pci(addr_t pci_config_memory, uint16_t bdf)
+{
+	return retry_syscall(_pd->pd_sel(), [&]() {
+		return Nova::assign_pci(_pd->pd_sel(), pci_config_memory, bdf);
+	}) == Nova::NOVA_OK;
 }
 
 
@@ -45,8 +52,7 @@ void Pd_session_component::map(addr_t virt, addr_t size)
 	auto map_memory = [&] (Mapping const &mapping)
 	{
 		/* asynchronously map memory */
-		uint8_t err = Nova::NOVA_PD_OOM;
-		do {
+		uint8_t err = retry_syscall(_pd->pd_sel(), [&]() {
 			utcb.set_msg_word(0);
 
 			bool res = utcb.append_item(nova_src_crd(mapping), 0, true, false,
@@ -57,13 +63,9 @@ void Pd_session_component::map(addr_t virt, addr_t size)
 			/* one item ever fits on the UTCB */
 			(void)res;
 
-			err = Nova::delegate(pd_core, pd_dst, nova_dst_crd(mapping));
+			return Nova::delegate(pd_core, pd_dst, nova_dst_crd(mapping));
+		});
 
-		} while (err == Nova::NOVA_PD_OOM &&
-		         Nova::NOVA_OK == Pager_object::handle_oom(Pager_object::SRC_CORE_PD,
-		                                                   target_pd.pd_sel(),
-		                                                   "core", "ep",
-		                                                   Pager_object::Policy::UPGRADE_CORE_TO_DST));
 		if (err != Nova::NOVA_OK) {
 			error("could not eagerly map memory ",
 			      Hex_range<addr_t>(mapping.dst_addr, 1UL << mapping.size_log2) , " "
@@ -191,16 +193,9 @@ Capability<Pd_session::System_control> System_control_impl::control_cap(Affinity
 }
 
 
-State System_control_component::system_control(State const &request)
+static State acpi_suspend(State const &request)
 {
-	bool const suspend = (request.trapno   == State::ACPI_SUSPEND_REQUEST);
-	State respond { };
-
-	if (!suspend) {
-		/* report failed attempt */
-		respond.trapno = 0;
-		return respond;
-	}
+	State respond { .trapno = 0 };
 
 	/*
 	 * The trapno/ip/sp registers used below are just convention to transfer
@@ -223,4 +218,57 @@ State System_control_component::system_control(State const &request)
 		respond.trapno = 1 /* success, which means we resumed already */;
 
 	return respond;
+}
+
+
+#ifdef __x86_64__
+static State msr_access(State const &state)
+{
+	auto const  msr_cap = platform_specific().core_pd_sel() + 4;
+	Nova::Utcb &utcb    = *reinterpret_cast<Nova::Utcb *>(Thread::myself()->utcb());
+
+	State result { };
+
+	utcb.set_msg_word(state.ip); /* count */
+	utcb.msg()[0] = state.r8;
+	utcb.msg()[1] = state.r9;
+	utcb.msg()[2] = state.r10;
+	utcb.msg()[3] = state.r11;
+	utcb.msg()[4] = state.r12;
+	utcb.msg()[5] = state.r13;
+
+	auto const res = Nova::ec_ctrl(Nova::Ec_op::EC_MSR_ACCESS, msr_cap);
+
+	result.trapno = (res == Nova::NOVA_OK) ? 1 : 0;
+
+	if (res != Nova::NOVA_OK)
+		return result;
+
+	result.ip  = utcb.msg_words(); /* bitmap about valid returned words */
+	result.r8  = utcb.msg()[0];
+	result.r9  = utcb.msg()[1];
+	result.r10 = utcb.msg()[2];
+	result.r11 = utcb.msg()[3];
+	result.r12 = utcb.msg()[4];
+	result.r13 = utcb.msg()[5];
+
+	return result;
+}
+#else
+static State msr_access(State const &)
+{
+	return { }; /* not supported for now on x86_32 */
+}
+#endif
+
+
+State System_control_component::system_control(State const &request)
+{
+	if (request.trapno == State::ACPI_SUSPEND_REQUEST)
+		return acpi_suspend(request);
+
+	if (request.trapno == State::MSR_ACCESS)
+		return msr_access(request);
+
+	return State();
 }
