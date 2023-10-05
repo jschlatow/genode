@@ -11,28 +11,51 @@
  * under the terms of the GNU Affero General Public License version 3.
  */
 
-#ifndef _VIEW__DOWNLOAD_STATUS_DIALOG_H_
-#define _VIEW__DOWNLOAD_STATUS_DIALOG_H_
+#ifndef _VIEW__DOWNLOAD_STATUS_H_
+#define _VIEW__DOWNLOAD_STATUS_H_
 
 /* local includes */
+#include <xml.h>
 #include <model/download_queue.h>
-#include <view/dialog.h>
 
-namespace Sculpt { struct Download_status_dialog; }
+namespace Sculpt {
+
+	static void gen_download_status(Xml_generator &, Xml_node const &, Download_queue const &);
+}
 
 
-struct Sculpt::Download_status_dialog : Titled_frame
+void Sculpt::gen_download_status(Xml_generator &xml, Xml_node const &state,
+                                 Download_queue const &download_queue)
 {
-	void view(Scope<Frame> &s, Xml_node const &state, Download_queue const &download_queue) const
-	{
-		Titled_frame::view(s, [&] {
+	gen_named_node(xml, "frame", "downloads", [&] () {
+		xml.node("vbox", [&] () {
+
+			xml.node("label", [&] () {
+				xml.attribute("text", "Download"); });
 
 			using Path = String<40>;
 			using Info = String<16>;
 
+			unsigned count = 0;
+
 			auto gen_message = [&] (auto const &path, auto const &info)
 			{
-				s.sub_scope<Left_right_annotation>(path, Info(" ", info));
+				gen_named_node(xml, "hbox", String<10>(count++), [&] () {
+					gen_named_node(xml, "float", "left", [&] () {
+						xml.attribute("west", "yes");
+						xml.node("label", [&] () {
+							xml.attribute("text", path);
+							xml.attribute("font", "annotation/regular");
+						});
+					});
+					gen_named_node(xml, "float", "right", [&] () {
+						xml.attribute("east", "yes");
+						xml.node("label", [&] () {
+							xml.attribute("text", Info(" ", info));
+							xml.attribute("font", "annotation/regular");
+						});
+					});
+				});
 			};
 
 			bool const download_in_progress = state.attribute_value("progress", false);
@@ -59,7 +82,7 @@ struct Sculpt::Download_status_dialog : Titled_frame
 					gen_message(path, "failed"); });
 			}
 		});
-	}
-};
+	});
+}
 
-#endif /* _VIEW__DOWNLOAD_STATUS_DIALOG_H_ */
+#endif /* _VIEW__DOWNLOAD_STATUS_H_ */

@@ -45,9 +45,7 @@ struct Sculpt::Deploy
 
 	Runtime_info const &_runtime_info;
 
-	struct Action : Interface { virtual void refresh_deploy_dialog() = 0; };
-
-	Action &_action;
+	Deprecated_dialog::Generator &_dialog_generator;
 
 	Runtime_config_generator &_runtime_config_generator;
 
@@ -251,7 +249,7 @@ struct Sculpt::Deploy
 		return !all_satisfied;
 	}
 
-	void view_diag(Scope<> &) const;
+	void gen_child_diagnostics(Xml_generator &xml) const;
 
 	void gen_runtime_start_nodes(Xml_generator &, Prio_levels, Affinity::Space) const;
 
@@ -294,7 +292,7 @@ struct Sculpt::Deploy
 
 	Deploy(Env &env, Allocator &alloc, Registry<Child_state> &child_states,
 	       Runtime_info const &runtime_info,
-	       Action &action,
+	       Deprecated_dialog::Generator &dialog_generator,
 	       Runtime_config_generator &runtime_config_generator,
 	       Depot_query &depot_query,
 	       Attached_rom_dataspace const &launcher_listing_rom,
@@ -303,7 +301,7 @@ struct Sculpt::Deploy
 	:
 		_env(env), _alloc(alloc), _child_states(child_states),
 		_runtime_info(runtime_info),
-		_action(action),
+		_dialog_generator(dialog_generator),
 		_runtime_config_generator(runtime_config_generator),
 		_depot_query(depot_query),
 		_launcher_listing_rom(launcher_listing_rom),

@@ -15,52 +15,64 @@
 #define _VIEW__STORAGE_DEVICE_DIALOG_H_
 
 #include <types.h>
-#include <view/partition_operations.h>
+#include <model/storage_devices.h>
+#include <model/storage_target.h>
+#include <view/selectable_item.h>
+#include <view/activatable_item.h>
+#include <view/partition_dialog.h>
 
 namespace Sculpt { struct Storage_device_dialog; }
 
 
-struct Sculpt::Storage_device_dialog : Widget<Vbox>
+struct Sculpt::Storage_device_dialog : Deprecated_dialog
 {
-	Partition::Number _selected_partition { };
+	Storage_device::Label const  _device;
+	Storage_devices       const &_storage_devices;
+	Storage_target        const &_used_target;
 
-	Partition_operations _partition_operations { };
+	Selectable_item _partition_item { };
 
-	void view(Scope<Vbox> &, Storage_device const &, Storage_target const &) const;
+	Reconstructible<Partition_dialog> _partition_dialog {
+		_selected_storage_target(), _storage_devices, _used_target };
 
-	using Action = Partition_operations::Action;
+	void generate(Xml_generator &) const override { }
+
+	void _gen_partition(Xml_generator &, Storage_device const &, Partition const &) const;
+
+	void generate(Xml_generator &, Storage_device const &) const;
+
+	Hover_result hover(Xml_node hover) override;
+
+	using Action = Partition_dialog::Action;
+
+	Storage_target _selected_storage_target() const
+	{
+		Partition::Number partition = (_partition_item._selected == "")
+		                            ? Partition::Number { }
+		                            : Partition::Number(_partition_item._selected);
+
+		return Storage_target { _device, partition };
+	}
+
+	void reset() override { }
 
 	void reset_operation()
 	{
-		_partition_operations.reset_operation();
+		if (_partition_dialog.constructed())
+			_partition_dialog->reset_operation();
 	}
 
-	void click(Clicked_at const &at, Storage_target const &used_target, Action &action)
-	{
-		Id const device_id    = at.matching_id<Vbox>();
-		Id const partition_id = at.matching_id<Vbox, Hbox>();
+	Click_result click(Action &action);
+	Clack_result clack(Action &action);
 
-		Storage_target const selected_target { device_id.value, _selected_partition };
-
-		if (partition_id.valid()) {
-			_selected_partition = (partition_id.value == _selected_partition)
-			                    ? Partition::Number { }
-			                    : Partition::Number { partition_id.value };
-
-			_partition_operations.reset_operation();
-		}
-
-		_partition_operations.click(at, selected_target, used_target, action);
-	}
-
-	void clack(Clacked_at const &at, Action &action)
-	{
-		Id const device_id = at.matching_id<Vbox>();
-
-		Storage_target const selected_target { device_id.value, _selected_partition };
-
-		_partition_operations.clack(at, selected_target, action);
-	}
+	Storage_device_dialog(Storage_device::Label const &device,
+	                      Storage_devices       const &storage_devices,
+	                      Storage_target        const &used)
+	:
+		_device(device),
+		_storage_devices(storage_devices),
+		_used_target(used)
+	{ }
 };
 
 #endif /* _VIEW__STORAGE_DEVICE_DIALOG_H_ */

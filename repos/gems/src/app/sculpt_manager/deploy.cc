@@ -33,7 +33,7 @@ bool Sculpt::Deploy::update_child_conditions()
 }
 
 
-void Sculpt::Deploy::view_diag(Scope<> &s) const
+void Sculpt::Deploy::gen_child_diagnostics(Xml_generator &xml) const
 {
 	/*
 	 * Collect messages in registry, avoiding duplicates
@@ -59,7 +59,7 @@ void Sculpt::Deploy::view_diag(Scope<> &s) const
 	};
 
 	_children.for_each_unsatisfied_child([&] (Xml_node start, Xml_node launcher,
-	                                                  Start_name const &name) {
+	                                          Start_name const &name) {
 		gen_missing_dependencies(start,    name);
 		gen_missing_dependencies(launcher, name);
 	});
@@ -67,8 +67,17 @@ void Sculpt::Deploy::view_diag(Scope<> &s) const
 	/*
 	 * Generate dialog elements, drop consumed messages from the registry
 	 */
+	int count = 0;
 	messages.for_each([&] (Registered_message &message) {
-		s.sub_scope<Left_annotation>(message);
+		gen_named_node(xml, "hbox", String<20>(count++), [&] () {
+			gen_named_node(xml, "float", "left", [&] () {
+				xml.attribute("west", "yes");
+				xml.node("label", [&] () {
+					xml.attribute("text", message);
+					xml.attribute("font", "annotation/regular");
+				});
+			});
+		});
 		destroy(_alloc, &message);
 	});
 }
@@ -161,7 +170,7 @@ void Sculpt::Deploy::handle_deploy()
 		/* apply runtime condition checks */
 		update_child_conditions();
 
-		_action.refresh_deploy_dialog();
+		_dialog_generator.generate_dialog();
 		_runtime_config_generator.generate_runtime_config();
 	}
 }
