@@ -57,7 +57,7 @@ void Intel::Io_mmu::Domain::add_range(Range const & range,
 	                                      !_intel_iommu.coherent_page_walk());
 
 	/* only invalidate iotlb if failed requests are cached */
-	if (_intel_iommu.caching_mode())
+	if (_intel_iommu.caching_mode() && !_skip_invalidation)
 		_intel_iommu.invalidate_iotlb(_domain_id, vaddr, size);
 }
 
@@ -68,7 +68,8 @@ void Intel::Io_mmu::Domain::remove_range(Range const & range)
 	                                      _table_allocator,
 	                                      !_intel_iommu.coherent_page_walk());
 
-	_intel_iommu.invalidate_iotlb(_domain_id, range.start, range.size);
+	if (!_skip_invalidation)
+		_intel_iommu.invalidate_iotlb(_domain_id, range.start, range.size);
 }
 
 

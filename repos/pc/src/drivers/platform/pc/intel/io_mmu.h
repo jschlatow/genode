@@ -57,19 +57,43 @@ class Intel::Io_mmu : private Attached_mmio,
 
 				using Table_allocator   = Expanding_page_table_allocator<4096>;
 
-				Intel::Io_mmu & _intel_iommu;
-				Env           & _env;
-				Ram_allocator & _ram_alloc;
+				Intel::Io_mmu              & _intel_iommu;
+				Env                        & _env;
+				Ram_allocator              & _ram_alloc;
+				Registry<Dma_buffer> const & _buffer_registry;
 
 				Table_allocator    _table_allocator;
 				Domain_allocator & _domain_allocator;
 				Domain_id          _domain_id         { _domain_allocator.alloc() };
+				bool               _skip_invalidation { false };
 
 				addr_t             _translation_table_phys {
 					_table_allocator.construct<Pml4_table>() };
 
 				Pml4_table       & _translation_table {
 					*(Pml4_table*)virt_addr(_translation_table_phys) };
+
+				struct Invalidation_guard {
+					Domain & _domain;
+					bool     _requires_invalidation;
+
+					Invalidation_guard(Domain & domain, bool required=true)
+					: _domain(domain),
+					  _requires_invalidation(required)
+					{
+						_domain._skip_invalidation = true;
+					}
+
+					~Invalidation_guard()
+					{
+						_domain._skip_invalidation = false;
+
+						if (_requires_invalidation)
+							_domain._intel_iommu.invalidate_all(_domain._domain_id);
+					}
+				};
+
+				friend struct Invalidation_guard;
 
 			public:
 
@@ -104,18 +128,29 @@ class Intel::Io_mmu : private Attached_mmio,
 				  _intel_iommu(intel_iommu),
 				  _env(env),
 				  _ram_alloc(ram_alloc),
+				  _buffer_registry(buffer_registry),
 				  _table_allocator(_env, md_alloc, ram_alloc, 2),
 				  _domain_allocator(domain_allocator)
 				{
-					buffer_registry.for_each([&] (Dma_buffer const & buf) {
+					Invalidation_guard guard { *this, _intel_iommu.caching_mode() };
+
+					_buffer_registry.for_each([&] (Dma_buffer const & buf) {
 						add_range({ buf.dma_addr, buf.size }, buf.phys_addr, buf.cap); });
 				}
 
 				~Domain() override
 				{
-					_intel_iommu.root_table().remove_context(_translation_table_phys);
+					{
+						Invalidation_guard guard { *this };
 
-					_intel_iommu.invalidate_all(_domain_id);
+						_intel_iommu.root_table().remove_context(_translation_table_phys);
+
+						_buffer_registry.for_each([&] (Dma_buffer const & buf) {
+							remove_range({ buf.dma_addr, buf.size });
+						});
+
+						_table_allocator.destruct<Pml4_table>(_translation_table_phys);
+					}
 
 					_domain_allocator.free(_domain_id);
 				}
