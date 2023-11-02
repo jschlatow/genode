@@ -99,7 +99,7 @@ class Intel::Io_mmu : private Attached_mmio,
 				       Env                        & env,
 				       Ram_allocator              & ram_alloc,
 				       Domain_allocator           & domain_allocator)
-				: Driver::Io_mmu::Domain(intel_iommu, md_alloc, buffer_registry),
+				: Driver::Io_mmu::Domain(intel_iommu, md_alloc),
 				  Registered_translation_table(intel_iommu),
 				  _intel_iommu(intel_iommu),
 				  _env(env),
