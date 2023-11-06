@@ -20,9 +20,8 @@
 #include <hw/page_flags.h>
 #include <hw/util.h>
 #include <util/misc_math.h>
-#include <util/register.h>
 
-#include <intel/report_helper.h>
+#include <clflush.h>
 #include <expanding_page_table_allocator.h>
 
 namespace Intel {
@@ -47,8 +46,8 @@ namespace Intel {
 		SIZE_LOG2_256TB = 48,
 	};
 
-	class Level_1_translation_table;
-	class Pml4_table;
+	template <typename DESCRIPTOR>
+	class Final_table;
 
 	/**
 	 * Page directory template.
@@ -59,48 +58,24 @@ namespace Intel {
 	 * \param PAGE_SIZE_LOG2  virtual address range size in log2
 	 *                        of a single table entry
 	 */
-	template <typename ENTRY, unsigned PAGE_SIZE_LOG2>
+	template <typename ENTRY, typename DESCRIPTOR>
 	class Page_directory;
 
-	/**
-	 * Common descriptor.
-	 *
-	 * Table entry containing descriptor fields common to all levels.
-	 */
-	struct Common_descriptor : Genode::Register<64>
-	{
-		struct R   : Bitfield<0, 1> { };   /* read            */
-		struct W   : Bitfield<1, 1> { };   /* write           */
-		struct A   : Bitfield<8, 1> { };   /* accessed        */
-		struct D   : Bitfield<9, 1> { };   /* dirty           */
-
-		static bool present(access_t const v) { return R::get(v) || W::get(v); }
-
-		static access_t create(Page_flags const &flags)
-		{
-			return R::bits(1)
-				| W::bits(flags.writeable);
-		}
-
-		/**
-		 * Return descriptor value with cleared accessed and dirty flags. These
-		 * flags can be set by the MMU.
-		 */
-		static access_t clear_mmu_flags(access_t value)
-		{
-			A::clear(value);
-			D::clear(value);
-			return value;
-		}
-	};
+	template <typename ENTRY, typename DESCRIPTOR>
+	class Pml4_table;
 }
 
 
-class Intel::Level_1_translation_table
+template <typename DESCRIPTOR>
+class Intel::Final_table
 {
+	public:
+
+		using Descriptor = DESCRIPTOR;
+
 	private:
 
-		static constexpr size_t PAGE_SIZE_LOG2 = SIZE_LOG2_4KB;
+		static constexpr size_t PAGE_SIZE_LOG2 = DESCRIPTOR::PAGE_SIZE_LOG2;
 		static constexpr size_t MAX_ENTRIES    = 512;
 		static constexpr size_t PAGE_SIZE      = 1UL << PAGE_SIZE_LOG2;
 		static constexpr size_t PAGE_MASK      = ~((1UL << PAGE_SIZE_LOG2) - 1);
@@ -109,22 +84,7 @@ class Intel::Level_1_translation_table
 		class Invalid_range {};
 		class Double_insertion {};
 
-		struct Descriptor : Common_descriptor
-		{
-			using Common = Common_descriptor;
-
-			struct Pa  : Bitfield<12, 36> { };        /* physical address     */
-
-			static access_t create(Page_flags const &flags, addr_t const pa)
-			{
-				/* Ipat and Emt are ignored in legacy mode */
-
-				return Common::create(flags)
-					| Pa::masked(pa);
-			}
-		};
-
-		typename Descriptor::access_t _entries[MAX_ENTRIES];
+		typename DESCRIPTOR::access_t _entries[MAX_ENTRIES];
 
 		struct Insert_func
 		{
@@ -136,18 +96,18 @@ class Intel::Level_1_translation_table
 
 			void operator () (addr_t const vo, addr_t const pa,
 			                  size_t const size,
-			                  Descriptor::access_t &desc)
+			                  DESCRIPTOR::access_t &desc)
 			{
 				if ((vo & ~PAGE_MASK) || (pa & ~PAGE_MASK) ||
 				    size < PAGE_SIZE)
 				{
 					throw Invalid_range();
 				}
-				Descriptor::access_t table_entry =
-					Descriptor::create(flags, pa);
+				typename DESCRIPTOR::access_t table_entry =
+					DESCRIPTOR::create(flags, pa);
 
-				if (Descriptor::present(desc) &&
-				    Descriptor::clear_mmu_flags(desc) != table_entry)
+				if (DESCRIPTOR::present(desc) &&
+				    DESCRIPTOR::clear_mmu_flags(desc) != table_entry)
 				{
 					throw Double_insertion();
 				}
@@ -165,7 +125,7 @@ class Intel::Level_1_translation_table
 			Remove_func(bool flush) : flush(flush) { }
 
 			void operator () (addr_t /* vo */, addr_t /* pa */, size_t /* size */,
-			                  Descriptor::access_t &desc)
+			                  DESCRIPTOR::access_t &desc)
 			{
 				desc = 0;
 
@@ -205,7 +165,7 @@ class Intel::Level_1_translation_table
 		 * A page table consists of 512 entries that each maps a 4KB page
 		 * frame. For further details refer to Intel SDM Vol. 3A, table 4-19.
 		 */
-		Level_1_translation_table()
+		Final_table()
 		{
 			if (!Hw::aligned(this, ALIGNM_LOG2)) throw Misaligned();
 			Genode::memset(&_entries, 0, sizeof(_entries));
@@ -217,29 +177,17 @@ class Intel::Level_1_translation_table
 		bool empty()
 		{
 			for (unsigned i = 0; i < MAX_ENTRIES; i++)
-				if (Descriptor::present(_entries[i]))
+				if (DESCRIPTOR::present(_entries[i]))
 					return false;
 			return true;
 		}
 
-		void generate(Genode::Xml_generator & xml, Genode::Env &, Report_helper &)
+		template <typename FN>
+		void for_each_entry(FN && fn)
 		{
-			using Genode::Hex;
-			using Hex_str = Genode::String<20>;
-
 			for (unsigned long i = 0; i < MAX_ENTRIES; i++) {
-				if (Descriptor::present(_entries[i])) {
-					xml.node("page", [&] () {
-						addr_t addr = Descriptor::Pa::masked(_entries[i]);
-						xml.attribute("index",   Hex_str(Hex(i << PAGE_SIZE_LOG2)));
-						xml.attribute("value",   Hex_str(Hex(_entries[i])));
-						xml.attribute("address", Hex_str(Hex(addr)));
-						xml.attribute("accessed",(bool)Descriptor::A::get(_entries[i]));
-						xml.attribute("dirty",   (bool)Descriptor::D::get(_entries[i]));
-						xml.attribute("write",   (bool)Descriptor::W::get(_entries[i]));
-						xml.attribute("read",    (bool)Descriptor::R::get(_entries[i]));
-					});
-				}
+				if (Descriptor::present(_entries[i]))
+					fn(i, _entries[i]);
 			}
 		}
 
@@ -276,14 +224,20 @@ class Intel::Level_1_translation_table
 } __attribute__((aligned(1 << ALIGNM_LOG2)));
 
 
-template <typename ENTRY, unsigned PAGE_SIZE_LOG2>
+template <typename ENTRY, typename DESCRIPTOR>
 class Intel::Page_directory
 {
+	public:
+
+		using Descriptor = DESCRIPTOR;
+		using Entry      = ENTRY;
+
 	private:
 
-		static constexpr size_t MAX_ENTRIES = 512;
-		static constexpr size_t PAGE_SIZE   = 1UL << PAGE_SIZE_LOG2;
-		static constexpr size_t PAGE_MASK   = ~((1UL << PAGE_SIZE_LOG2) - 1);
+		static constexpr size_t PAGE_SIZE_LOG2 = Descriptor::PAGE_SIZE_LOG2;
+		static constexpr size_t MAX_ENTRIES    = 512;
+		static constexpr size_t PAGE_SIZE      = 1UL << PAGE_SIZE_LOG2;
+		static constexpr size_t PAGE_MASK      = ~((1UL << PAGE_SIZE_LOG2) - 1);
 
 		using Allocator = Page_table_allocator;
 
@@ -291,60 +245,10 @@ class Intel::Page_directory
 		class Invalid_range {};
 		class Double_insertion {};
 
-		struct Base_descriptor : Common_descriptor
-		{
-			using Common = Common_descriptor;
-
-			struct Ps : Common::template Bitfield<7, 1> { };  /* page size */
-
-			static bool maps_page(access_t const v) { return Ps::get(v); }
-		};
-
-		struct Page_descriptor : Base_descriptor
-		{
-			using Base = Base_descriptor;
-
-			/**
-			 * Physical address
-			 */
-			struct Pa : Base::template Bitfield<PAGE_SIZE_LOG2,
-			                                     48 - PAGE_SIZE_LOG2> { };
-
-
-			static typename Base::access_t create(Page_flags const &flags,
-			                                      addr_t const pa)
-			{
-				/* Ipat and Emt are ignored in legacy mode */
-
-				return Base::create(flags)
-				     | Base::Ps::bits(1)
-				     | Pa::masked(pa);
-			}
-		};
-
-		struct Table_descriptor : Base_descriptor
-		{
-			using Base = Base_descriptor;
-
-			/**
-			 * Physical address
-			 */
-			struct Pa : Base::template Bitfield<12, 36> { };
-
-			static typename Base::access_t create(addr_t const pa)
-			{
-				static Page_flags flags { RW, NO_EXEC, USER, NO_GLOBAL,
-				                          RAM, Genode::UNCACHED };
-				return Base::create(flags) | Pa::masked(pa);
-			}
-		};
-
-		typename Base_descriptor::access_t _entries[MAX_ENTRIES];
+		typename Descriptor::access_t _entries[MAX_ENTRIES];
 
 		struct Insert_func
 		{
-			using Descriptor = Base_descriptor;
-
 			Page_flags const & flags;
 			Allocator        & alloc;
 			bool               flush;
@@ -356,14 +260,14 @@ class Intel::Page_directory
 			                  size_t const size,
 			                  typename Descriptor::access_t &desc)
 			{
-				using Td = Table_descriptor;
+				using Td = Descriptor::Table;
 				using access_t = typename Descriptor::access_t;
 
 				/* can we insert a large page mapping? */
 				if (!((vo & ~PAGE_MASK) || (pa & ~PAGE_MASK) ||
 				      size < PAGE_SIZE))
 				{
-					access_t table_entry = Page_descriptor::create(flags, pa);
+					access_t table_entry = Descriptor::Page::create(flags, pa);
 
 					if (Descriptor::present(desc) &&
 					    Descriptor::clear_mmu_flags(desc) != table_entry) {
@@ -396,7 +300,8 @@ class Intel::Page_directory
 						                         flags, alloc, flush);
 					},
 					[&] () {
-						error("Unable to get mapped table address for ", Hex(Td::Pa::masked(desc)));
+						error("Unable to get mapped table address for ",
+						      Genode::Hex(Td::Pa::masked(desc)));
 					});
 			}
 		};
@@ -411,13 +316,13 @@ class Intel::Page_directory
 
 			void operator () (addr_t const vo, addr_t /* pa */,
 			                  size_t const size,
-			                  typename Base_descriptor::access_t &desc)
+			                  typename Descriptor::access_t &desc)
 			{
-				if (Base_descriptor::present(desc)) {
-					if (Base_descriptor::maps_page(desc)) {
+				if (Descriptor::present(desc)) {
+					if (Descriptor::maps_page(desc)) {
 						desc = 0;
 					} else {
-						using Td = Table_descriptor;
+						using Td = Descriptor::Table;
 
 						/* use allocator to retrieve virt address of table */
 						addr_t  table_phys = Td::Pa::masked(desc);
@@ -432,7 +337,8 @@ class Intel::Page_directory
 								}
 							},
 							[&] () {
-								error("Unable to get mapped table address for ", Hex(table_phys));
+								error("Unable to get mapped table address for ",
+								      Genode::Hex(table_phys));
 							});
 					}
 
@@ -482,59 +388,17 @@ class Intel::Page_directory
 		bool empty()
 		{
 			for (unsigned i = 0; i < MAX_ENTRIES; i++)
-				if (Base_descriptor::present(_entries[i]))
+				if (Descriptor::present(_entries[i]))
 					return false;
 			return true;
 		}
 
-		void _generate_page_dir(unsigned long           index,
-		                        Genode::Xml_generator & xml,
-		                        Genode::Env           & env,
-		                        Report_helper         & report_helper)
-		{
-			using Genode::Hex;
-			using Hex_str = Genode::String<20>;
-
-			xml.node("page_directory", [&] () {
-				addr_t pd_addr = Table_descriptor::Pa::masked(_entries[index]);
-				xml.attribute("index",   Hex_str(Hex(index << PAGE_SIZE_LOG2)));
-				xml.attribute("value",   Hex_str(Hex(_entries[index])));
-				xml.attribute("address", Hex_str(Hex(pd_addr)));
-
-				report_helper.with_table<ENTRY>(pd_addr, [&] (ENTRY & pd) {
-					/* dump page directory */
-					pd.generate(xml, env, report_helper);
-				});
-			});
-		}
-
-		void _generate_page(unsigned long           index,
-		                    Genode::Xml_generator & xml)
-		{
-			using Genode::Hex;
-			using Hex_str = Genode::String<20>;
-
-			xml.node("page", [&] () {
-				addr_t addr = Page_descriptor::Pa::masked(_entries[index]);
-				xml.attribute("index",   Hex_str(Hex(index << PAGE_SIZE_LOG2)));
-				xml.attribute("value",   Hex_str(Hex(_entries[index])));
-				xml.attribute("address", Hex_str(Hex(addr)));
-				xml.attribute("accessed",(bool)Page_descriptor::A::get(_entries[index]));
-				xml.attribute("dirty",   (bool)Page_descriptor::D::get(_entries[index]));
-				xml.attribute("write",   (bool)Page_descriptor::W::get(_entries[index]));
-				xml.attribute("read",    (bool)Page_descriptor::R::get(_entries[index]));
-			});
-		}
-
-		void generate(Genode::Xml_generator & xml, Genode::Env & env, Report_helper & report_helper)
+		template <typename FN>
+		void for_each_entry(FN && fn)
 		{
 			for (unsigned long i = 0; i < MAX_ENTRIES; i++)
-				if (Base_descriptor::present(_entries[i])) {
-					if (Base_descriptor::maps_page(_entries[i]))
-						_generate_page(i, xml);
-					else
-						_generate_page_dir(i, xml, env, report_helper);
-				}
+				if (Descriptor::present(_entries[i]))
+					fn(i, _entries[i]);
 		}
 
 		/**
@@ -566,31 +430,19 @@ class Intel::Page_directory
 };
 
 
-namespace Intel {
-
-	struct Level_2_translation_table
-	:
-		Page_directory< Level_1_translation_table, SIZE_LOG2_2MB>
-	{ } __attribute__((aligned(1 << ALIGNM_LOG2)));
-
-	struct Level_3_translation_table
-	:
-		Page_directory<Level_2_translation_table, SIZE_LOG2_1GB>
-	{ } __attribute__((aligned(1 << ALIGNM_LOG2)));
-
-}
-
-
+template <typename ENTRY, typename DESCRIPTOR>
 class Intel::Pml4_table
 {
 	public:
 
-		using Allocator = Page_table_allocator;
+		using Allocator  = Page_table_allocator;
+		using Descriptor = DESCRIPTOR;
+		using Entry      = ENTRY;
 
 	private:
 
-		static constexpr size_t PAGE_SIZE_LOG2 = SIZE_LOG2_512GB;
-		static constexpr size_t SIZE_LOG2      = SIZE_LOG2_256TB;
+		static constexpr size_t PAGE_SIZE_LOG2 = Descriptor::PAGE_SIZE_LOG2;
+		static constexpr size_t SIZE_LOG2      = Descriptor::SIZE_LOG2;
 		static constexpr size_t SIZE_MASK      = (1UL << SIZE_LOG2) - 1;
 		static constexpr size_t MAX_ENTRIES    = 512;
 		static constexpr size_t PAGE_SIZE      = 1UL << PAGE_SIZE_LOG2;
@@ -599,21 +451,7 @@ class Intel::Pml4_table
 		class Misaligned {};
 		class Invalid_range {};
 
-		struct Descriptor : Common_descriptor
-		{
-			struct Pa  : Bitfield<12, SIZE_LOG2> { };    /* physical address */
-
-			static access_t create(addr_t const pa)
-			{
-				static Page_flags flags { RW, NO_EXEC, USER, NO_GLOBAL,
-				                          RAM, Genode::UNCACHED };
-				return Common_descriptor::create(flags) | Pa::masked(pa);
-			}
-		};
-
 		typename Descriptor::access_t _entries[MAX_ENTRIES];
-
-		using ENTRY = Level_3_translation_table;
 
 		struct Insert_func
 		{
@@ -647,7 +485,8 @@ class Intel::Pml4_table
 						table.insert_translation(table_vo, pa, size, flags, alloc, flush);
 					},
 					[&] () {
-						error("Unable to get mapped table address for ", Hex(table_phys));
+						error("Unable to get mapped table address for ",
+						      Genode::Hex(table_phys));
 					});
 			}
 		};
@@ -680,7 +519,8 @@ class Intel::Pml4_table
 							}
 						},
 						[&] () {
-							error("Unable to get mapped table address for ", Hex(table_phys));
+							error("Unable to get mapped table address for ",
+							      Genode::Hex(table_phys));
 						});
 				}
 			}
@@ -748,26 +588,13 @@ class Intel::Pml4_table
 			return true;
 		}
 
-		void generate(Genode::Xml_generator & xml, Genode::Env & env, Report_helper & report_helper)
+		template <typename FN>
+		void for_each_entry(FN && fn)
 		{
-			using Genode::Hex;
-			using Hex_str = Genode::String<20>;
-
-			for (unsigned long i = 0; i < MAX_ENTRIES; i++)
-				if (Descriptor::present(_entries[i])) {
-					xml.node("level4_entry", [&] () {
-						addr_t level3_addr = Descriptor::Pa::masked(_entries[i]);
-						xml.attribute("index",   Hex_str(Hex(i << PAGE_SIZE_LOG2)));
-						xml.attribute("value",   Hex_str(Hex(_entries[i])));
-						xml.attribute("address", Hex_str(Hex(level3_addr)));
-
-
-						report_helper.with_table<ENTRY>(level3_addr, [&] (ENTRY & level3_table) {
-							/* dump stage2 table */
-							level3_table.generate(xml, env, report_helper);
-						});
-					});
-				}
+			for (unsigned long i = 0; i < MAX_ENTRIES; i++) {
+				if (Descriptor::present(_entries[i]))
+					fn(i, _entries[i]);
+			}
 		}
 
 		/**

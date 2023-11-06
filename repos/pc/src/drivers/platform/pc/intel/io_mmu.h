@@ -28,7 +28,7 @@
 /* local includes */
 #include <intel/managed_root_table.h>
 #include <intel/report_helper.h>
-#include <intel/page_table.h>
+#include <intel/dmar_page_table.h>
 #include <intel/domain_allocator.h>
 #include <expanding_page_table_allocator.h>
 
@@ -68,10 +68,10 @@ class Intel::Io_mmu : private Attached_mmio,
 				bool               _skip_invalidation { false };
 
 				addr_t             _translation_table_phys {
-					_table_allocator.construct<Pml4_table>() };
+					_table_allocator.construct<Level_4_translation_table>() };
 
-				Pml4_table       & _translation_table {
-					*(Pml4_table*)virt_addr(_translation_table_phys) };
+				Level_4_translation_table & _translation_table {
+					*(Level_4_translation_table*)virt_addr(_translation_table_phys) };
 
 				struct Invalidation_guard {
 					Domain & _domain;
@@ -110,9 +110,9 @@ class Intel::Io_mmu : private Attached_mmio,
 				{
 					addr_t va { 0 };
 
-					_table_allocator.with_table<Pml4_table>(phys_addr,
-						[&] (Pml4_table & table) { va = (addr_t)&table; },
-						[&] ()                   { va = 0; });
+					_table_allocator.with_table<Level_4_translation_table>(phys_addr,
+						[&] (Level_4_translation_table & t) { va = (addr_t)&t; },
+						[&] ()                              { va = 0; });
 
 					return va;
 				}
@@ -149,7 +149,8 @@ class Intel::Io_mmu : private Attached_mmio,
 							remove_range({ buf.dma_addr, buf.size });
 						});
 
-						_table_allocator.destruct<Pml4_table>(_translation_table_phys);
+						_table_allocator.destruct<Level_4_translation_table>(
+							_translation_table_phys);
 					}
 
 					_domain_allocator.free(_domain_id);

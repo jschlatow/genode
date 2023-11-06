@@ -7,3 +7,4 @@ SRC_CC += intel/root_table.cc
 SRC_CC += intel/context_table.cc
 SRC_CC += intel/managed_root_table.cc
 SRC_CC += intel/io_mmu.cc
+SRC_CC += intel/dmar_page_table.cc

@@ -14,7 +14,7 @@
 /* local includes */
 #include <intel/context_table.h>
 #include <intel/report_helper.h>
-#include <intel/page_table.h>
+#include <intel/dmar_page_table.h>
 
 static void attribute_hex(Genode::Xml_generator & xml, char const * name,
                           unsigned long long value)
@@ -49,11 +49,12 @@ void Intel::Context_table::generate(Xml_generator & xml,
 				return;
 			}
 
+			using Table = Intel::Level_4_translation_table;
+
 			/* dump stage2 table */
-			report_helper.with_table<Intel::Pml4_table>(stage2_addr,
-				[&] (Intel::Pml4_table & stage2_table) {
-					stage2_table.generate(xml, env, report_helper);
-				});
+			report_helper.with_table<Table>(stage2_addr,
+				[&] (Table & stage2_table) {
+					stage2_table.generate(xml, env, report_helper); });
 		});
 	}
 }
