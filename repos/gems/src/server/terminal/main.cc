@@ -252,8 +252,15 @@ void Terminal::Main::_handle_config()
 	 */
 	_gui.buffer(_fb_mode, false);
 
-	if (_fb_mode.area.count() > 0)
+	if (_fb_mode.area.count() > 0) {
+		/*
+		 * Detach a previously attached framebuffer dataspace before creating
+		 * a new one.
+		 */
+		_fb_ds.destruct();
+
 		_fb_ds.construct(_env.rm(), _gui.framebuffer()->dataspace());
+	}
 
 	/*
 	 * Distinguish the case where the framebuffer change affects the character
