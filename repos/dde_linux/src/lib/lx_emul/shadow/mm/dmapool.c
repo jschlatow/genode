@@ -88,9 +88,12 @@ struct dma_pool *dmam_pool_create(const char *name,
 }
 
 
+/*
+ * Caller guarantees that no more memory from the pool is in use,
+ * and that nothing will try to use the pool after this call.
+ */
 void dma_pool_destroy(struct dma_pool * pool)
 {
-	/* XXX pending allocations are released */
 	kfree(pool);
 }
 
