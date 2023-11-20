@@ -142,9 +142,12 @@ ifneq ($(LIBS),)
 	  echo "$(DEP_SO_VAR_NAME) = $(foreach l,$(LIBS),\$${SO_NAME($l)} \$$(DEP_SO_$l))"; \
 	  echo "") >> $(LIB_DEP_FILE)
 endif
-	@(echo "$(LIB).lib: check_ports $(addsuffix .lib,$(LIBS))"; \
+ifdef SHARED_LIB
+	@(echo "$(LIB).a:"; \
+	  echo "	@true"; \
+	  echo "$(LIB).so: check_ports $(LIB).abi $(addsuffix .a,$(LIBS)) $(addsuffix .abi,$(LIBS))"; \
 	  echo "	@\$$(MKDIR) -p \$$(LIB_CACHE_DIR)/$(LIB)"; \
-	  echo "	\$$(VERBOSE_MK)\$$(MAKE) $(VERBOSE_DIR) -C \$$(LIB_CACHE_DIR)/$(LIB) -f \$$(BASE_DIR)/mk/lib.mk \\"; \
+	  echo "	\$$(VERBOSE_MK)\$$(MAKE) $(VERBOSE_DIR) -C \$$(LIB_CACHE_DIR)/$(LIB) -f \$$(BASE_DIR)/mk/so.mk \\"; \
 	  echo "	     REP_DIR=$(REP_DIR) \\"; \
 	  echo "	     LIB_MK=$(LIB_MK) \\"; \
 	  echo "	     SYMBOLS=$(SYMBOLS) \\"; \
@@ -155,12 +158,30 @@ endif
 	  echo "	     SHELL=$(SHELL) \\"; \
 	  echo "	     INSTALL_DIR=\$$(INSTALL_DIR) \\"; \
 	  echo "	     DEBUG_DIR=\$$(DEBUG_DIR)"; \
+	  echo "$(LIB).abi:"; \
+	  echo "	@\$$(MKDIR) -p \$$(LIB_CACHE_DIR)/$(LIB)"; \
+	  echo "	\$$(VERBOSE_MK)\$$(MAKE) $(VERBOSE_DIR) -C \$$(LIB_CACHE_DIR)/$(LIB) -f \$$(BASE_DIR)/mk/abi.mk \\"; \
+	  echo "	     SYMBOLS=$(SYMBOLS) \\"; \
+	  echo "	     LIB=$(LIB) \\"; \
+	  echo "	     SHELL=$(SHELL)"; \
+	  echo "SO_NAME($(LIB)) := $(LIB).lib.so"; \
 	  echo "") >> $(LIB_DEP_FILE)
-ifdef SHARED_LIB
-	@(echo "SO_NAME($(LIB)) := $(LIB).lib.so"; \
-	  echo "") >> $(LIB_DEP_FILE)
-else
-	@(echo "ARCHIVE_NAME($(LIB)) := $(LIB).lib.a"; \
+else # not SHARED_LIB
+	@(echo "$(LIB).a: check_ports $(addsuffix .a,$(LIBS)) $(addsuffix .abi,$(LIBS))"; \
+	  echo "	@\$$(MKDIR) -p \$$(LIB_CACHE_DIR)/$(LIB)"; \
+	  echo "	\$$(VERBOSE_MK)\$$(MAKE) $(VERBOSE_DIR) -C \$$(LIB_CACHE_DIR)/$(LIB) -f \$$(BASE_DIR)/mk/a.mk \\"; \
+	  echo "	     REP_DIR=$(REP_DIR) \\"; \
+	  echo "	     LIB_MK=$(LIB_MK) \\"; \
+	  echo "	     LIB=$(LIB) \\"; \
+	  echo "	     ARCHIVES=\"\$$(sort \$$($(DEP_A_VAR_NAME)))\" \\"; \
+	  echo "	     SHARED_LIBS=\"\$$(sort \$$($(DEP_SO_VAR_NAME)))\" \\"; \
+	  echo "	     BUILD_BASE_DIR=$(BUILD_BASE_DIR) \\"; \
+	  echo "	     SHELL=$(SHELL) \\"; \
+	  echo "	     INSTALL_DIR=\$$(INSTALL_DIR) \\"; \
+	  echo "	     DEBUG_DIR=\$$(DEBUG_DIR)"; \
+	  echo "$(LIB).so $(LIB).abi:"; \
+	  echo "	@true"; \
+	  echo "ARCHIVE_NAME($(LIB)) := $(LIB).lib.a"; \
 	  echo "") >> $(LIB_DEP_FILE)
 endif
 

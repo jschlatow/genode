@@ -270,4 +270,5 @@ MSG_ASSEM    ?= @$(ECHO) "    ASSEMBLE "
 MSG_INST     ?= @$(ECHO) "    INSTALL  "
 MSG_PRG      ?= @$(ECHO) "$(BRIGHT_COL)  Program $(DEFAULT_COL)"
 MSG_LIB      ?= @$(ECHO) "$(DARK_COL)  Library $(DEFAULT_COL)"
+MSG_ABI      ?= @$(ECHO) "$(DARK_COL)  ABI     $(DEFAULT_COL)"
 

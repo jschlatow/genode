@@ -305,7 +305,7 @@ traverse_dependencies: $(dir $(LIB_DEP_FILE)) init_libdep_file init_progress_log
 	            REP_DIR=$$rep LIB=$$lib \
 	            BUILD_BASE_DIR=$(BUILD_BASE_DIR) \
 	            DARK_COL="$(DARK_COL)" DEFAULT_COL="$(DEFAULT_COL)"; \
-	    echo "all: $$lib.lib" >> $(LIB_DEP_FILE); \
+	    echo "all: $$lib.a $$lib.so" >> $(LIB_DEP_FILE); \
 	done; \
 	for target in $(TARGETS_TO_VISIT); do \
 	  for rep in $(REPOSITORIES); do \
