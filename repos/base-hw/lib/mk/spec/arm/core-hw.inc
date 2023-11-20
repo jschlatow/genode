@@ -23,6 +23,7 @@ SRC_S += spec/arm/crt0.s
 SRC_S += spec/arm/exception_vector.S
 
 vpath spec/32bit/memory_map.cc $(call select_from_repositories,src/lib/hw)
+vpath cache.cc $(REP_DIR)/src/lib/base/arm
 
 # include less specific configuration
 include $(call select_from_repositories,lib/mk/core-hw.inc)

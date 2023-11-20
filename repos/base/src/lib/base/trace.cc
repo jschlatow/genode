@@ -18,6 +18,7 @@
 #include <dataspace/client.h>
 #include <util/construct_at.h>
 #include <cpu_thread/client.h>
+#include <cpu/cache.h>
 
 /* local includes */
 #include <base/internal/trace_control.h>
@@ -113,6 +114,9 @@ bool Trace::Logger::_evaluate_control()
 			for (unsigned i = 0; i < sizeof(Trace::Policy_module)/sizeof(void *); i++) {
 				((addr_t *)policy_module)[i] += (addr_t)(policy_module);
 			}
+
+			cache_clean_invalidate_data((addr_t)policy_module, Dataspace_client(policy_ds).size());
+			cache_coherent((addr_t)policy_module, Dataspace_client(policy_ds).size());
 
 			max_event_size = policy_module->max_event_size();
 

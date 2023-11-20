@@ -26,6 +26,7 @@
 #include <base/env.h>
 #include <base/weak_ptr.h>
 #include <dataspace/client.h>
+#include <cpu/cache.h>
 
 /* base-internal include */
 #include <base/internal/trace_control.h>
@@ -114,6 +115,9 @@ class Core::Trace::Subject
 					     *dst = local_rm.attach(_ds);
 
 					Genode::memcpy(dst, src, _size);
+
+					Genode::cache_clean_invalidate_data((addr_t)dst, _size);
+					Genode::cache_coherent((addr_t)dst, _size);
 
 					local_rm.detach(src);
 					local_rm.detach(dst);
