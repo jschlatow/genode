@@ -105,7 +105,7 @@ class Core::Trace::Subject
 					if (_size)
 						flush();
 
-					_ds      = ram.alloc(size); /* may throw */
+					_ds      = ram.alloc(size, UNCACHED); /* may throw */
 					_ram_ptr = &ram;
 					_size    = size;
 
