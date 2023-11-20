@@ -81,7 +81,7 @@ message:
 # ingredients. This is the case if the library is present as ABI only.
 #
 ifneq ($(sort $(OBJECTS) $(LIBS)),)
-ABI_SO         := $(addsuffix .abi.so,$(LIB))
+ABI_SO         := $(wildcard $(addsuffix .abi.so,$(LIB)))
 INSTALL_SO     := $(INSTALL_DIR)/$(LIB_SO)
 DEBUG_SO       := $(DEBUG_DIR)/$(LIB_SO)
 LIB_SO_DEBUG   := $(LIB_SO).debug

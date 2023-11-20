@@ -27,9 +27,16 @@
 # file named 'symbols.s' that is generated from the library's symbol list.
 #
 
-ABI_SO := $(addsuffix .abi.so,$(LIB))
+ABI_SO  := $(addsuffix .abi.so,$(LIB))
+SYMBOLS := $(wildcard $(SYMBOLS))
 
-all:
+ifeq ($(SYMBOLS),)
+all: missing_symbols_file
+missing_symbols_file:
+	@$(ECHO) "\nWarning: shared libary '$(LIB)' lacks a symbols file\n"
+else
+all: $(ABI_SO)
+endif
 
 include $(BASE_DIR)/mk/global.mk
 include $(BASE_DIR)/mk/generic.mk
@@ -79,8 +86,6 @@ symbols.s: $(SYMBOLS)
 .PRECIOUS: symbols.s
 
 ABI_SONAME := $(addsuffix .lib.so,$(LIB))
-
-all: $(ABI_SO)
 
 all: # prevent 'Nothing to be done' message
 	@true
