@@ -5,7 +5,7 @@ if { ![have_spec foc] && ![have_spec hw] && ![have_spec nova] &&
 }
 
 set build_components {
-	core lib/ld init timert
+	core lib/ld init timer
 	server/cpu_sampler
 	test/cpu_sampler
 }
@@ -15,6 +15,8 @@ if {[have_spec foc] || [have_spec nova]} {
 } else {
 	lappend build_components lib/cpu_sampler_platform-generic
 }
+
+build $build_components
 
 create_boot_directory
 
