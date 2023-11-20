@@ -5,7 +5,7 @@
 #
 
 CXX_OPT  = -g -ffreestanding -fPIC -fno-exceptions -fno-rtti \
-           -nostdinc -nostdlib -MMD
+           -nostdinc -nostdlib -MMD -O2
 
 CXX_OPT += $(CC_CXX_OPT_STD)
 
