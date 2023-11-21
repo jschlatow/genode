@@ -55,7 +55,7 @@ all: check_unsatisfied_requirements
 endif
 
 warn_missing_lib_mk: generate_lib_rule_for_defect_library
-	@$(ECHO) "Library-description file $(DARK_COL)$(LIB).mk$(DEFAULT_COL) is missing"
+	@$(ECHO) "Library-description file '$(LIB).mk' is missing"
 
 #
 # Determine the repository base directory from the absolute pathname

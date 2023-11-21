@@ -57,7 +57,7 @@ PRG_REL_DIR := $(PRG_REL_DIR:/=)
 UNSATISFIED_REQUIREMENTS = $(filter-out $(SPECS),$(REQUIRES))
 ifneq ($(UNSATISFIED_REQUIREMENTS),)
 all:
-	@$(ECHO) "Skip target $(PRG_REL_DIR) because it requires $(DARK_COL)$(UNSATISFIED_REQUIREMENTS)$(DEFAULT_COL)"
+	@$(ECHO) "Skip target $(PRG_REL_DIR) because it requires '$(UNSATISFIED_REQUIREMENTS)'"
 else
 all: gen_prg_rule
 endif
