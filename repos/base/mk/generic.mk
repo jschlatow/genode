@@ -146,8 +146,8 @@ binary_%.o: %
 # time a user of the library is linked, the ABI stub should be used instead of
 # the library.
 #
-select_so = $(firstword $(wildcard $(LIB_CACHE_DIR)/$(1:.lib.so=)/$(1:.lib.so=).abi.so \
-                                   $(LIB_CACHE_DIR)/$(1:.lib.so=)/$(1:.lib.so=).lib.so))
+select_so = $(firstword $(wildcard $(LIB_CACHE_DIR)/$(1:.lib.so=)/$(1:.lib.so=).abi.so) \
+                        $(LIB_CACHE_DIR)/$(1:.lib.so=)/$(1:.lib.so=).lib.so)
 
 ifneq ($(filter-out $(foreach s,$(SHARED_LIBS),$(realpath $s)), \
                     $(foreach s,$(SHARED_LIBS),$(call select_so,$s))),)

@@ -31,9 +31,7 @@ ABI_SO  := $(addsuffix .abi.so,$(LIB))
 SYMBOLS := $(wildcard $(SYMBOLS))
 
 ifeq ($(SYMBOLS),)
-all: missing_symbols_file
-missing_symbols_file:
-	@$(ECHO) "\nWarning: shared libary '$(LIB)' lacks a symbols file\n"
+all:
 else
 all: $(ABI_SO)
 endif

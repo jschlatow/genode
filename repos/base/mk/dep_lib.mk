@@ -130,7 +130,7 @@ endif
 ifdef SHARED_LIB
 	@(echo "$(LIB).lib.a:"; \
 	  echo "	@true"; \
-	  echo "$(LIB).lib.so: check_ports $(LIB).abi.so $(addsuffix .lib.a,$(LIBS)) $(addsuffix .abi.so,$(LIBS))"; \
+	  echo "$(LIB).lib.so: check_ports $(if $(SYMBOLS),$(LIB).abi.so) $(addsuffix .lib.a,$(LIBS)) $(addsuffix .abi.so,$(LIBS))"; \
 	  echo "	\$$(VERBOSE)\$$(call _prepare_lib_step,\$$@,$(LIB),$(BUILD_ARTIFACTS))"; \
 	  echo "	\$$(VERBOSE_MK)\$$(MAKE) \$$(VERBOSE_DIR) -C \$$(LIB_CACHE_DIR)/$(LIB) -f \$$(BASE_DIR)/mk/so.mk \\"; \
 	  echo "	     REP_DIR=$(REP_DIR) \\"; \
@@ -143,7 +143,7 @@ ifdef SHARED_LIB
 	  echo "	     SHELL=$(SHELL) \\"; \
 	  echo "	     INSTALL_DIR=\$$(INSTALL_DIR) \\"; \
 	  echo "	     DEBUG_DIR=\$$(DEBUG_DIR)"; \
-	  echo "$(LIB).abi.so:"; \
+	  echo "$(LIB).abi.so: $(if $(SYMBOLS),,$(LIB).lib.so)"; \
 	  echo "	\$$(VERBOSE)\$$(call _prepare_lib_step,\$$@,$(LIB),)"; \
 	  echo "	\$$(VERBOSE_MK)\$$(MAKE) \$$(VERBOSE_DIR) -C \$$(LIB_CACHE_DIR)/$(LIB) -f \$$(BASE_DIR)/mk/abi.mk \\"; \
 	  echo "	     SYMBOLS=$(SYMBOLS) \\"; \
