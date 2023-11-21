@@ -233,10 +233,11 @@ init_progress_log:
 
 .PHONY: init_libdep_file
 init_libdep_file: $(dir $(LIB_DEP_FILE))
-	@echo "checking library dependencies..."
 	@(echo "#"; \
 	  echo "# Library dependencies for build '$(DST_DIRS)'"; \
 	  echo "#"; \
+	  echo ""; \
+	  echo ".NOTPARALLEL:"; \
 	  echo ""; \
 	  echo "export SPEC_FILES := \\"; \
 	  for i in $(SPEC_FILES); do \
@@ -258,7 +259,7 @@ init_libdep_file: $(dir $(LIB_DEP_FILE))
 	  echo ""; \
 	  echo "export MK_BUILD_STAGE := 1"; \
 	  echo ""; \
-	  echo "_log_artifacts    = \$$(foreach A,\$$1,echo -e \"\\n\# Build artifact \$$A\" >> \$$(PROGRESS_LOG);)"; \
+	  echo "_log_artifacts = \$$(foreach A,\$$1,echo -e \"\\n# Build artifact \$$A\" >> \$$(PROGRESS_LOG);)"; \
 	  echo ""; \
 	  echo "# args: target file, libname, artifacts"; \
 	  echo "_prepare_lib_step = ( echo -e \"  \$$(DARK_COL)Library\$$(DEFAULT_COL) \$$1\"; \\"; \
@@ -269,12 +270,11 @@ init_libdep_file: $(dir $(LIB_DEP_FILE))
 	  echo "_prepare_prg_step = ( echo -e \"  \$$(BRIGHT_COL)Program\$$(DEFAULT_COL) \$$1\"; \\"; \
 	  echo "                      \$$(MKDIR) -p \$$(dir \$$1); \\"; \
 	  echo "                      \$$(call _log_artifacts,\$$2) )"; \
+	  echo ""; \
+	  echo "all:"; \
+	  echo "	@true"; \
+	  echo ""; \
 	  echo "") > $(LIB_DEP_FILE)
-
-#
-# We check if any target.mk files exist in the specified directories within
-# any of the repositories listed in the 'REPOSITORIES' variable.
-#
 
 $(dir $(LIB_DEP_FILE)):
 	@mkdir -p $@
@@ -318,8 +318,7 @@ traverse_dependencies: $(dir $(LIB_DEP_FILE)) init_libdep_file init_progress_log
 	for libname in $(LIBS); do \
 	    $(MAKE) $(VERBOSE_DIR) -f $(BASE_DIR)/mk/dep_lib.mk \
 	            REP_DIR=$$rep LIB=$$libname \
-	            BUILD_BASE_DIR=$(BUILD_BASE_DIR) \
-	            DARK_COL="$(DARK_COL)" DEFAULT_COL="$(DEFAULT_COL)"; \
+	            BUILD_BASE_DIR=$(BUILD_BASE_DIR); \
 	    echo "all: $$libname.lib.a $$libname.lib.so" >> $(LIB_DEP_FILE); \
 	done; \
 	[ -n "$(KERNEL)" ] && echo "ld.lib.so: ld-$(KERNEL).lib.so" >> $(LIB_DEP_FILE); \
@@ -329,7 +328,7 @@ traverse_dependencies: $(dir $(LIB_DEP_FILE)) init_libdep_file init_progress_log
 	    $(MAKE) $(VERBOSE_DIR) -f $(BASE_DIR)/mk/dep_prg.mk \
 	            REP_DIR=$$rep TARGET_MK=$$rep/src/$$target \
 	            BUILD_BASE_DIR=$(BUILD_BASE_DIR) \
-	            DARK_COL="$(DARK_COL)" DEFAULT_COL="$(DEFAULT_COL)" || result=false; \
+	            || result=false; \
 	    break; \
 	  done; \
 	done; $$result;
