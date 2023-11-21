@@ -256,6 +256,8 @@ init_libdep_file: $(dir $(LIB_DEP_FILE))
 	  echo "DARK_COL     ?= \033[00;33m"; \
 	  echo "DEFAULT_COL  ?= \033[0m"; \
 	  echo ""; \
+	  echo "export MK_BUILD_STAGE := 1"; \
+	  echo ""; \
 	  echo "_log_artifacts    = \$$(foreach A,\$$1,echo -e \"\\n\# Build artifact \$$A\" >> \$$(PROGRESS_LOG);)"; \
 	  echo ""; \
 	  echo "# args: target file, libname, artifacts"; \
