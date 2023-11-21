@@ -66,7 +66,6 @@ ASM_SYM_DEPENDENCY := movq \1@GOTPCREL(%rip), %rax
 endif
 
 symbols.s: $(SYMBOLS)
-	$(MSG_LIB)$(ABI_SO)
 	$(MSG_CONVERT)$@
 	$(VERBOSE)\
 		sed -e "s/^\(\w\+\) D \(\w\+\)\$$/.data; .global \1; .type \1,%object; .size \1,\2; \1: .skip 1/" \

@@ -15,6 +15,7 @@ include $(BASE_DIR)/mk/base-libs.mk
 # Prevent <libname>.mk rules to be executed as default rule
 #
 all:
+	@true # prevent nothing-to-be-done message
 
 #
 # Include common utility functions
@@ -65,14 +66,6 @@ include $(BASE_DIR)/mk/generic.mk
 # against the final target.
 #
 LIBGCC = $(shell $(CC) $(CC_MARCH) -print-libgcc-file-name)
-
-#
-# Print message for the currently built library
-#
-all: message
-
-message:
-	$(MSG_LIB)$(LIB_SO)
 
 #
 # Name of <libname>.lib.a or <libname>.lib.so file to create

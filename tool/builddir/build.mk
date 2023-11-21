@@ -250,10 +250,23 @@ init_libdep_file: $(dir $(LIB_DEP_FILE))
 	  echo "INSTALL_DIR  ?= $(INSTALL_DIR)"; \
 	  echo "DEBUG_DIR    ?= $(DEBUG_DIR)"; \
 	  echo "SHELL        ?= $(SHELL)"; \
+	  echo "PROGRESS_LOG := $(LIB_PROGRESS_LOG)"; \
 	  echo "MKDIR        ?= mkdir"; \
+	  echo "BRIGHT_COL   ?= \033[01;33m"; \
+	  echo "DARK_COL     ?= \033[00;33m"; \
+	  echo "DEFAULT_COL  ?= \033[0m"; \
 	  echo ""; \
-	  echo "all:"; \
-	  echo "	@true # prevent nothing-to-be-done message"; \
+	  echo "_log_artifacts    = \$$(foreach A,\$$1,echo -e \"\\n\# Build artifact \$$A\" >> \$$(PROGRESS_LOG);)"; \
+	  echo ""; \
+	  echo "# args: target file, libname, artifacts"; \
+	  echo "_prepare_lib_step = ( echo -e \"  \$$(DARK_COL)Library\$$(DEFAULT_COL) \$$1\"; \\"; \
+	  echo "                      \$$(MKDIR) -p \$$(LIB_CACHE_DIR)/\$$2; \\"; \
+	  echo "                      \$$(call _log_artifacts,\$$3) )"; \
+	  echo ""; \
+	  echo "# args: target path, artifacts"; \
+	  echo "_prepare_prg_step = ( echo -e \"  \$$(BRIGHT_COL)Program\$$(DEFAULT_COL) \$$1\"; \\"; \
+	  echo "                      \$$(MKDIR) -p \$$(dir \$$1); \\"; \
+	  echo "                      \$$(call _log_artifacts,\$$2) )"; \
 	  echo "") > $(LIB_DEP_FILE)
 
 #
@@ -300,13 +313,14 @@ endif
 #
 traverse_dependencies: $(dir $(LIB_DEP_FILE)) init_libdep_file init_progress_log
 	$(VERBOSE_MK) \
-	for lib in $(LIBS); do \
+	for libname in $(LIBS); do \
 	    $(MAKE) $(VERBOSE_DIR) -f $(BASE_DIR)/mk/dep_lib.mk \
-	            REP_DIR=$$rep LIB=$$lib \
+	            REP_DIR=$$rep LIB=$$libname \
 	            BUILD_BASE_DIR=$(BUILD_BASE_DIR) \
 	            DARK_COL="$(DARK_COL)" DEFAULT_COL="$(DEFAULT_COL)"; \
-	    echo "all: $$lib.a $$lib.so" >> $(LIB_DEP_FILE); \
+	    echo "all: $$libname.lib.a $$libname.lib.so" >> $(LIB_DEP_FILE); \
 	done; \
+	[ -n "$(KERNEL)" ] && echo "ld.lib.so: ld-$(KERNEL).lib.so" >> $(LIB_DEP_FILE); \
 	for target in $(TARGETS_TO_VISIT); do \
 	  for rep in $(REPOSITORIES); do \
 	    test -f $$rep/src/$$target || continue; \

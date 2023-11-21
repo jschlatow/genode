@@ -3,18 +3,11 @@
 #
 # The following variables must be defined by the caller:
 #
-#   VERBOSE          - controls the make verboseness
 #   VERBOSE_DIR      - verboseness of directory change messages
-#   VERBOSE_MK       - verboseness of make calls
 #   REPOSITORIES     - source code repositories to use
 #   BASE_DIR         - base directory of build system repository
-#   TARGET_DIR       - target build directory
 #   BUILD_BASE_DIR   - build directory with build config
-#   LIB_CACHE_DIR    - destination directory for object files
 #   LIB_PROGRESS_LOG - library build log file
-#   BUILD_LIBS       - list of libraries to build (without .lib.a or .lib.so suffix)
-#   INSTALL_DIR      - destination directory for installing shared libraries
-#   DEBUG_DIR        - destination directory for installing unstripped shared libraries
 #
 
 ACCUMULATE_MISSING_PORTS = 1
@@ -38,7 +31,6 @@ endif
 
 append_lib_to_progress_log:
 	@echo "LIBS_READY  += $(LIB)" >> $(LIB_PROGRESS_LOG)
-
 
 LIB_MK_DIRS  = $(foreach REP,$(REPOSITORIES),$(addprefix $(REP)/lib/mk/spec/,     $(SPECS)) $(REP)/lib/mk)
 SYMBOLS_DIRS = $(foreach REP,$(REPOSITORIES),$(addprefix $(REP)/lib/symbols/spec/,$(SPECS)) $(REP)/lib/symbols)
@@ -84,13 +76,6 @@ include $(LIB_MK)
 ifdef SHARED_LIB
 BUILD_ARTIFACTS ?= $(LIB).lib.so
 endif
-
-# record creation of shared library build artifact
-append_artifact_to_progress_log:
-	@( $(foreach A,$(BUILD_ARTIFACTS),\
-	      echo -e "\n# Build artifact $A\n";) true \
-	) >> $(LIB_PROGRESS_LOG)
-append_lib_to_progress_log: append_artifact_to_progress_log
 
 ifdef SHARED_LIB
 LIBS += ldso_so_support
@@ -143,11 +128,11 @@ ifneq ($(LIBS),)
 	  echo "") >> $(LIB_DEP_FILE)
 endif
 ifdef SHARED_LIB
-	@(echo "$(LIB).a:"; \
+	@(echo "$(LIB).lib.a:"; \
 	  echo "	@true"; \
-	  echo "$(LIB).so: check_ports $(LIB).abi $(addsuffix .a,$(LIBS)) $(addsuffix .abi,$(LIBS))"; \
-	  echo "	@\$$(MKDIR) -p \$$(LIB_CACHE_DIR)/$(LIB)"; \
-	  echo "	\$$(VERBOSE_MK)\$$(MAKE) $(VERBOSE_DIR) -C \$$(LIB_CACHE_DIR)/$(LIB) -f \$$(BASE_DIR)/mk/so.mk \\"; \
+	  echo "$(LIB).lib.so: check_ports $(LIB).abi.so $(addsuffix .lib.a,$(LIBS)) $(addsuffix .abi.so,$(LIBS))"; \
+	  echo "	\$$(VERBOSE)\$$(call _prepare_lib_step,\$$@,$(LIB),$(BUILD_ARTIFACTS))"; \
+	  echo "	\$$(VERBOSE_MK)\$$(MAKE) \$$(VERBOSE_DIR) -C \$$(LIB_CACHE_DIR)/$(LIB) -f \$$(BASE_DIR)/mk/so.mk \\"; \
 	  echo "	     REP_DIR=$(REP_DIR) \\"; \
 	  echo "	     LIB_MK=$(LIB_MK) \\"; \
 	  echo "	     SYMBOLS=$(SYMBOLS) \\"; \
@@ -158,18 +143,18 @@ ifdef SHARED_LIB
 	  echo "	     SHELL=$(SHELL) \\"; \
 	  echo "	     INSTALL_DIR=\$$(INSTALL_DIR) \\"; \
 	  echo "	     DEBUG_DIR=\$$(DEBUG_DIR)"; \
-	  echo "$(LIB).abi:"; \
-	  echo "	@\$$(MKDIR) -p \$$(LIB_CACHE_DIR)/$(LIB)"; \
-	  echo "	\$$(VERBOSE_MK)\$$(MAKE) $(VERBOSE_DIR) -C \$$(LIB_CACHE_DIR)/$(LIB) -f \$$(BASE_DIR)/mk/abi.mk \\"; \
+	  echo "$(LIB).abi.so:"; \
+	  echo "	\$$(VERBOSE)\$$(call _prepare_lib_step,\$$@,$(LIB),)"; \
+	  echo "	\$$(VERBOSE_MK)\$$(MAKE) \$$(VERBOSE_DIR) -C \$$(LIB_CACHE_DIR)/$(LIB) -f \$$(BASE_DIR)/mk/abi.mk \\"; \
 	  echo "	     SYMBOLS=$(SYMBOLS) \\"; \
 	  echo "	     LIB=$(LIB) \\"; \
 	  echo "	     SHELL=$(SHELL)"; \
 	  echo "SO_NAME($(LIB)) := $(LIB).lib.so"; \
 	  echo "") >> $(LIB_DEP_FILE)
 else # not SHARED_LIB
-	@(echo "$(LIB).a: check_ports $(addsuffix .a,$(LIBS)) $(addsuffix .abi,$(LIBS))"; \
-	  echo "	@\$$(MKDIR) -p \$$(LIB_CACHE_DIR)/$(LIB)"; \
-	  echo "	\$$(VERBOSE_MK)\$$(MAKE) $(VERBOSE_DIR) -C \$$(LIB_CACHE_DIR)/$(LIB) -f \$$(BASE_DIR)/mk/a.mk \\"; \
+	@(echo "$(LIB).lib.a: check_ports $(addsuffix .lib.a,$(LIBS)) $(addsuffix .abi.so,$(LIBS))"; \
+	  echo "	\$$(VERBOSE)\$$(call _prepare_lib_step,\$$@,$(LIB),$(BUILD_ARTIFACTS))"; \
+	  echo "	\$$(VERBOSE_MK)\$$(MAKE) \$$(VERBOSE_DIR) -C \$$(LIB_CACHE_DIR)/$(LIB) -f \$$(BASE_DIR)/mk/a.mk \\"; \
 	  echo "	     REP_DIR=$(REP_DIR) \\"; \
 	  echo "	     LIB_MK=$(LIB_MK) \\"; \
 	  echo "	     LIB=$(LIB) \\"; \
@@ -179,7 +164,7 @@ else # not SHARED_LIB
 	  echo "	     SHELL=$(SHELL) \\"; \
 	  echo "	     INSTALL_DIR=\$$(INSTALL_DIR) \\"; \
 	  echo "	     DEBUG_DIR=\$$(DEBUG_DIR)"; \
-	  echo "$(LIB).so $(LIB).abi:"; \
+	  echo "$(LIB).lib.so $(LIB).abi.so:"; \
 	  echo "	@true"; \
 	  echo "ARCHIVE_NAME($(LIB)) := $(LIB).lib.a"; \
 	  echo "") >> $(LIB_DEP_FILE)

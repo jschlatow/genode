@@ -24,6 +24,7 @@ LIB_A := $(addsuffix .lib.a,$(LIB))
 # Prevent <libname>.mk rules to be executed as default rule
 #
 all:
+	@true # prevent nothing-to-be-done message
 
 #
 # Include common utility functions
@@ -66,14 +67,6 @@ error_inc_dir_override:
 #
 include $(BASE_DIR)/mk/global.mk
 include $(BASE_DIR)/mk/generic.mk
-
-#
-# Print message for the currently built library
-#
-all: message
-
-message:
-	$(MSG_LIB)$(LIB)
 
 #
 # Trigger the creation of the <libname>.lib.a

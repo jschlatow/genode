@@ -68,7 +68,7 @@ LIBS_TO_VISIT = $(filter-out $(LIBS_READY),$(LIBS))
 #
 # Generate program rule
 #
-gen_prg_rule: append_artifact_to_progress_log
+gen_prg_rule:
 ifneq ($(LIBS),)
 	@for i in $(LIBS_TO_VISIT); do \
 	  $(MAKE) $(VERBOSE_DIR) -f $(BASE_DIR)/mk/dep_lib.mk REP_DIR=$(REP_DIR) LIB=$$i; done
@@ -80,8 +80,8 @@ ifneq ($(DEP_MISSING_PORTS),)
 	@(echo "MISSING_PORTS += $(DEP_MISSING_PORTS)"; \
 	  echo "") >> $(LIB_DEP_FILE)
 endif
-	@(echo "$(TARGET).prg: check_ports $(addsuffix .a,$(LIBS)) $(addsuffix .abi,$(LIBS))"; \
-	  echo "	@\$$(MKDIR) -p $(PRG_REL_DIR)"; \
+	@(echo "$(TARGET).prg: check_ports $(addsuffix .lib.a,$(LIBS)) $(addsuffix .abi.so,$(LIBS))"; \
+	  echo "	$(VERBOSE)\$$(call _prepare_prg_step,$(PRG_REL_DIR)/$(TARGET),$(BUILD_ARTIFACTS))"; \
 	  echo "	\$$(VERBOSE_MK)\$$(MAKE) $(VERBOSE_DIR) -C $(PRG_REL_DIR) -f \$$(BASE_DIR)/mk/prg.mk \\"; \
 	  echo "	     REP_DIR=$(REP_DIR) \\"; \
 	  echo "	     PRG_REL_DIR=$(PRG_REL_DIR) \\"; \
@@ -116,8 +116,3 @@ ifeq ($(FORCE_BUILD_LIBS),yes)
 	@(echo ""; \
 	  echo "all: \$$(addsuffix .lib,\$$(filter-out \$$(INVALID_DEPS), $(LIBS)))") >> $(LIB_DEP_FILE)
 endif
-
-append_artifact_to_progress_log:
-	@( $(foreach A,$(BUILD_ARTIFACTS),\
-	      echo -e "\n# Build artifact $A\n";) true \
-	) >> $(LIB_PROGRESS_LOG)
