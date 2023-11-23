@@ -96,11 +96,22 @@ class Driver::Device_component : public Rpc_object<Platform::Device_interface,
 				idx(idx), range(range) {}
 		};
 
+		struct Io_mmu : Registry<Io_mmu>::Element
+		{
+			Device::Name name;
+
+			Io_mmu(Registry<Io_mmu> & registry, Device::Name const & name)
+			:
+				Registry<Io_mmu>::Element(registry, *this),
+				name(name) {}
+		};
+
 		struct Pci_config
 		{
-			addr_t addr;
+			addr_t   addr;
+			Pci::Bdf bdf;
 
-			Pci_config(addr_t addr) : addr(addr) {}
+			Pci_config(addr_t addr, Pci::Bdf bdf) : addr(addr), bdf(bdf) {}
 		};
 
 		Device_component(Registry<Device_component> & registry,
@@ -136,6 +147,7 @@ class Driver::Device_component : public Rpc_object<Platform::Device_interface,
 		Registry<Io_mem>                    _io_mem_registry {};
 		Registry<Io_port_range>             _io_port_range_registry {};
 		Registry<Io_mem>                    _reserved_mem_registry {};
+		Registry<Io_mmu>                    _io_mmu_registry {};
 		Constructible<Pci_config>           _pci_config {};
 
 		void _release_resources();

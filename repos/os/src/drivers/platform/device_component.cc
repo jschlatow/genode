@@ -31,12 +31,22 @@ void Driver::Device_component::_release_resources()
 	_io_port_range_registry.for_each([&] (Io_port_range & iop) {
 		destroy(_session.heap(), &iop); });
 
-	/* remove reserved memory ranges from IOMMU domains */
-	_session.domain_registry().for_each_domain(
-		[&] (Driver::Io_mmu::Domain & domain) {
-			_reserved_mem_registry.for_each([&] (Io_mem & iomem) {
-				domain.remove_range(iomem.range);
-		});
+	_io_mmu_registry.for_each([&] (Io_mmu & io_mmu) {
+		_session.domain_registry().with_domain(io_mmu.name,
+			[&] (Driver::Io_mmu::Domain & domain) {
+
+				/* remove reserved memory ranges from IOMMU domains */
+				_reserved_mem_registry.for_each([&] (Io_mem & iomem) {
+					domain.remove_range(iomem.range); });
+
+				/* unmap IRQs */
+				if (_pci_config.constructed())
+					domain.unmap_irqs(_pci_config->bdf);
+			},
+			[&] () {} /* no match */
+		);
+
+		destroy(_session.heap(), &io_mmu);
 	});
 
 	_reserved_mem_registry.for_each([&] (Io_mem & iomem) {
@@ -97,16 +107,33 @@ Genode::Irq_session_capability Device_component::irq(unsigned idx)
 {
 	Irq_session_capability cap;
 
+	auto remapped_irq = [&] (Pci::Bdf bdf, unsigned irq, Irq_session::Info const & info) {
+		Driver::Io_mmu::Irq_info remapped_irq { false, info, irq };
+
+		_io_mmu_registry.for_each([&] (Io_mmu const & io_mmu) {
+			_session.domain_registry().with_domain(io_mmu.name,
+				[&] (Driver::Io_mmu::Domain & domain) {
+					remapped_irq = domain.map_irq(bdf, remapped_irq); },
+				[&] () {} /* no match */
+			);
+		});
+
+		return remapped_irq;
+	};
+
 	_irq_registry.for_each([&] (Irq & irq)
 	{
 		if (irq.idx != idx)
 			return;
 
 		if (!irq.shared && !irq.irq.constructed()) {
-			addr_t pci_cfg_addr = 0;
+			addr_t   pci_cfg_addr = 0;
+			Pci::Bdf bdf { 0, 0, 0 };
 			if (irq.type != Irq_session::TYPE_LEGACY) {
-				if (_pci_config.constructed()) pci_cfg_addr = _pci_config->addr;
-				else
+				if (_pci_config.constructed()) {
+					pci_cfg_addr = _pci_config->addr;
+					bdf          = _pci_config->bdf;
+				} else
 					error("MSI(-x) detected for device without pci-config!");
 
 				irq.irq.construct(_env, irq.number, pci_cfg_addr, irq.type);
@@ -122,15 +149,15 @@ Genode::Irq_session_capability Device_component::irq(unsigned idx)
 			 */
 			Irq_session::Info info = irq.irq->info();
 			if (pci_cfg_addr && info.type == Irq_session::Info::MSI)
-				pci_msi_enable(_env, *this, pci_cfg_addr, info, irq.type);
-			else {
+				pci_msi_enable(_env, *this, pci_cfg_addr,
+				               remapped_irq(bdf, irq.idx, info).session_info,
+				               irq.type);
+			else
 				_session.irq_controller_registry().for_each([&] (Irq_controller & controller) {
-					if (controller.remap_enabled()) {
-						/* TODO first add iommu remapping entry to get a virtual idx */
-						controller.remap_irq(irq.number);
-					}
+					if (controller.remap_enabled()) /* XXX remove, because the presence of Irq_controller indicates enabled remapping*/
+						controller.remap_irq(irq.idx,
+						                     remapped_irq(controller.bdf(), irq.idx, info).irq_number);
 				});
-			}
 		}
 
 		if (irq.shared && !irq.sirq.constructed())
@@ -138,7 +165,13 @@ Genode::Irq_session_capability Device_component::irq(unsigned idx)
 			                              [&] (Shared_interrupt & sirq) {
 				irq.sirq.construct(_env.ep().rpc_ep(), sirq,
 				                   irq.mode, irq.polarity);
-				/* TODO remap legacy IRQ via _session.irq_controller_registry */
+
+				/* remap legacy IRQ (note: there is only a single IRQ controller */
+				_session.irq_controller_registry().for_each([&] (Irq_controller & controller) {
+					Driver::Io_mmu::Irq_info info = remapped_irq(controller.bdf(), irq.idx,
+					                                             { Irq_session::Info::INVALID, 0, 0 });
+					controller.remap_irq(irq.idx, info.irq_number);
+				});
 			});
 
 		cap = irq.shared ? irq.sirq->cap() : irq.irq->cap();
@@ -236,7 +269,8 @@ Device_component::Device_component(Registry<Device_component> & registry,
 			_ram_quota += Io_mem_session::RAM_QUOTA;
 			session.cap_quota_guard().withdraw(Cap_quota{Io_mem_session::CAP_QUOTA});
 			_cap_quota += Io_mem_session::CAP_QUOTA;
-			_pci_config.construct(cfg.addr);
+			Pci::Bdf bdf { cfg.bus_num, cfg.dev_num, cfg.func_num };
+			_pci_config.construct(cfg.addr, bdf);
 		});
 
 		device.for_each_reserved_memory([&] (unsigned idx, Range range)
@@ -270,7 +304,10 @@ Device_component::Device_component(Registry<Device_component> & registry,
 			[&] (Driver::Device::Io_mmu const &io_mmu) {
 				session.domain_registry().with_domain(io_mmu.name,
 				                                      add_range_fn,
-				                                      default_domain_fn); },
+				                                      [&] () { });
+				/* save IOMMU names for this device */
+				new (session.heap()) Io_mmu(_io_mmu_registry, io_mmu.name);
+			},
 
 			/* empty list fn */
 			default_domain_fn

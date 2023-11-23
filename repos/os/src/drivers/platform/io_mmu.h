@@ -38,7 +38,13 @@ class Driver::Io_mmu : private Io_mmu_devices::Element
 {
 	public:
 
-		using Range = Platform::Device_interface::Range;
+		using Range    = Platform::Device_interface::Range;
+
+		struct Irq_info {
+			bool              remapped;
+			Irq_session::Info session_info;
+			unsigned          irq_number;
+		};
 
 		class Domain : private Registry<Domain>::Element
 		{
@@ -87,6 +93,11 @@ class Driver::Io_mmu : private Io_mmu_devices::Element
 				                       addr_t const,
 				                       Dataspace_capability const) = 0;
 				virtual void remove_range(Range const &) = 0;
+
+				/* interface for mapping/unmapping interrupts */
+				virtual void     unmap_irqs(Pci::Bdf const &) { }
+				virtual Irq_info map_irq(Pci::Bdf const &, Irq_info const & info) {
+					return info; }
 
 				Domain(Io_mmu                     & io_mmu,
 				       Allocator                  & md_alloc)
