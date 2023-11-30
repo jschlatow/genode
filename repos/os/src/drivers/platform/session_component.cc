@@ -242,15 +242,16 @@ void Session_component::enable_device(Device const & device)
 		domain.enable_device();
 	};
 
+	auto default_domain_fn = [&] () { _domain_registry.with_default_domain(fn); };
+
 	device.for_each_io_mmu(
 		/* non-empty list fn */
 		[&] (Device::Io_mmu const & io_mmu) {
-			_domain_registry.with_domain(io_mmu.name, fn, [&] () { });
+			_domain_registry.with_domain(io_mmu.name, fn, default_domain_fn);
 		},
 
 		/* empty list fn */
-		[&] () {
-			_domain_registry.with_default_domain(fn); }
+		default_domain_fn
 	);
 
 	pci_enable(_env, device);
@@ -268,14 +269,15 @@ void Session_component::disable_device(Device const & device)
 		domain.disable_device();
 	};
 
+	auto default_domain_fn = [&] () { _domain_registry.with_default_domain(fn); };
+
 	device.for_each_io_mmu(
 		/* non-empty list fn */
 		[&] (Device::Io_mmu const & io_mmu) {
-			_domain_registry.with_domain(io_mmu.name, fn, [&] () { }); },
+			_domain_registry.with_domain(io_mmu.name, fn, default_domain_fn); },
 
 		/* empty list fn */
-		[&] () {
-			_domain_registry.with_default_domain(fn); }
+		default_domain_fn
 	);
 }
 
