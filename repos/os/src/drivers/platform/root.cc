@@ -48,7 +48,7 @@ Driver::Session_component * Driver::Root::_create_session(const char *args)
 			                  session_diag_from_args(args),
 			                  policy.attribute_value("info", false),
 			                  policy.attribute_value("version", Version()),
-			                  _io_mmu_present, _kernel_iommu);
+			                  _io_mmu_present || _kernel_iommu, _kernel_iommu);
 	} catch (Session_policy::No_policy_defined) {
 		error("Invalid session request, no matching policy for ",
 		      "'", label_from_args(args).string(), "'");
