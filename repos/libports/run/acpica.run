@@ -66,7 +66,7 @@ set config {
 		</start>
 
 		<start name="acpi" caps="350">
-			<resource name="RAM" quantum="4M"/>
+			<resource name="RAM" quantum="7M"/>
 			<route>
 				<service name="Report"> <child name="drivers_reports"/> </service>
 				<any-service> <parent/> <any-child/> </any-service>
@@ -132,7 +132,7 @@ set config {
 				<any-service><parent/><any-child/></any-service>
 			</route>
 		</start>
-
+-->
 		<start name="event_filter" caps="100">
 			<resource name="RAM" quantum="1M" />
 			<provides> <service name="Event" /> </provides>
@@ -165,11 +165,11 @@ set config {
 
 		<start name="acpica" caps="400">
 			<resource name="RAM" quantum="8M"/>
-			<config ld_verbose="yes" reset="yes" poweroff="yes" report="yes"
+			<config ld_verbose="yes" reset="no" poweroff="no" report="yes"
 			        report_period_ms="0" verbose="yes">
 			</config>
 			<route>
-				<service name="ROM" label="system"> <child name="dynamic_rom"/> </service>
+				<service name="ROM" label="system"> <child name="drivers_reports"/> </service>
 				<service name="Report">  <child name="acpi_state"/> </service>
 				<any-service> <parent/> <any-child/> </any-service>
 			</route>
@@ -223,6 +223,7 @@ set config {
 			</route>
 		</start>
 
+<!--
 		<start name="dynamic_rom" caps="100">
 			<resource name="RAM" quantum="4M"/>
 			<provides><service name="ROM"/></provides>
@@ -232,7 +233,6 @@ set config {
 						<system state="normal"/>
 					</inline>
 					<sleep milliseconds="5000" />
-<!--
 					<inline description="set system state to 'reset'">
 						<system state="reset"/>
 					</inline>
@@ -241,10 +241,10 @@ set config {
 						<system state="poweroff"/>
 					</inline>
 					<sleep milliseconds="500" />
--->
 				</rom>
 			</config>
 		</start>
+-->
 
 	<start name="rtc_drv"  priority="-1" caps="75">
 		<resource name="RAM" quantum="1M"/>
@@ -269,6 +269,7 @@ build_boot_image [build_artifacts]
 
 append qemu_args "-nographic "
 
+run_genode_until forever
 if {![have_include "power_on/qemu"]} {
 	run_genode_until forever
 	exit 0
