@@ -35,6 +35,7 @@
 #include <dlfcn.h>
 #include <net/if.h>
 #include <net/if_tap.h>
+#include <linux/fb.h>
 
 /* libc-internal includes */
 #include <internal/plugin.h>
@@ -1808,6 +1809,60 @@ Libc::Vfs_plugin::_ioctl_sndctl(File_descriptor *fd, unsigned long request, char
 
 
 Libc::Vfs_plugin::Ioctl_result
+Libc::Vfs_plugin::_ioctl_fbctl(File_descriptor *fd, unsigned long request, char *argp)
+{
+	bool handled = false;
+	int  result  = 0;
+
+	if (request == FBIOGET_FSCREENINFO) { /* return fb_fix_screeninfo */
+		if (!argp)
+			return { true, EINVAL };
+
+		fb_fix_screeninfo *finfo = reinterpret_cast<fb_fix_screeninfo*>(argp);
+
+		monitor().monitor([&] {
+			_with_info(*fd, [&] (Xml_node info) {
+				if (info.type() == "fb") {
+					finfo->smem_len    = info.attribute_value("size",  0U);
+					finfo->line_length = info.attribute_value("width", 0U) * 4;
+					finfo->smem_start = 0;
+					handled = true;
+				}
+			});
+
+			return Fn::COMPLETE;
+		});
+	}
+	else if (request == FBIOGET_VSCREENINFO) { /* return fb_var_screeninfo */
+		if (!argp)
+			return { true, EINVAL };
+
+		fb_var_screeninfo *vinfo = reinterpret_cast<fb_var_screeninfo*>(argp);
+
+		monitor().monitor([&] {
+			_with_info(*fd, [&] (Xml_node info) {
+				if (info.type() == "fb") {
+					vinfo->xres = info.attribute_value("width",  0U);
+					vinfo->yres = info.attribute_value("height", 0U);
+					vinfo->xoffset        = 0;
+					vinfo->yoffset        = 0;
+					vinfo->bits_per_pixel = 32;
+					vinfo->red            = { 16 };
+					vinfo->green          = { 8 };
+					vinfo->blue           = { 0 };
+					handled = true;
+				}
+			});
+
+			return Fn::COMPLETE;
+		});
+	}
+
+	return { handled, result };
+}
+
+
+Libc::Vfs_plugin::Ioctl_result
 Libc::Vfs_plugin::_ioctl_tapctl(File_descriptor *fd, unsigned long request, char *argp)
 {
 	bool handled = false;
@@ -1932,6 +1987,9 @@ int Libc::Vfs_plugin::ioctl(File_descriptor *fd, unsigned long request, char *ar
 	case SIOCSIFADDR:
 		result = _ioctl_tapctl(fd, request, argp);
 		break;
+	case FBIOGET_FSCREENINFO:
+	case FBIOGET_VSCREENINFO:
+		result = _ioctl_fbctl(fd, request, argp);
 	default:
 		break;
 	}

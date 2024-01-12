@@ -25,9 +25,17 @@ namespace Vfs_capture
 
 	typedef String<64> Name;
 
+	struct Info_updater;
 	struct Data_file_system;
 	struct Local_factory;
 	struct File_system;
+};
+
+
+struct Vfs_capture::Info_updater
+{
+	virtual void update_info() = 0;
+	virtual ~Info_updater() { };
 };
 
 
@@ -42,9 +50,11 @@ class Vfs_capture::Data_file_system : public Single_file_system
 
 		Genode::Env &_env;
 
-		Capture::Area const _capture_area { 640, 480 };
+		Capture::Area       _capture_area;
 		Constructible<Capture::Connection> _capture { };
 		Constructible<Attached_dataspace>  _capture_ds { };
+
+		Info_updater & _info_updater;
 
 		unsigned int _open_count { 0 };
 
@@ -96,13 +106,16 @@ class Vfs_capture::Data_file_system : public Single_file_system
 
 	public:
 
-		Data_file_system(Name        const &name,
-		                 Label       const &label,
-		                 Genode::Env       &env)
+		Data_file_system(Name          const &name,
+		                 Label         const &label,
+		                 Genode::Env         &env,
+		                 Capture::Area const  area,
+		                 Info_updater        &updater)
 		:
 			Single_file_system(Node_type::TRANSACTIONAL_FILE, name.string(),
 			                   Node_rwx::rw(), Genode::Xml_node("<data/>")),
-			_name(name), _label(label), _env(env)
+			_name(name), _label(label), _env(env), _capture_area(area),
+			_info_updater(updater)
 		{ }
 
 		static const char *name()   { return "data"; }
@@ -121,6 +134,13 @@ class Vfs_capture::Data_file_system : public Single_file_system
 				} catch (Genode::Service_denied) {
 					return OPEN_ERR_UNACCESSIBLE;
 				}
+
+				Capture::Area screen_area = _capture->screen_size();
+				if (screen_area.valid()) {
+					_capture_area = screen_area;
+					_info_updater.update_info();
+				}
+
 				_capture->buffer(_capture_area);
 				_capture_ds.construct(_env.rm(), _capture->dataspace());
 			}
@@ -169,10 +189,23 @@ class Vfs_capture::Data_file_system : public Single_file_system
 		{
 			return FTRUNCATE_OK;
 		}
+
+		/************************************
+		 ** Accessors for Info file system *
+		 ***********************************/
+
+		Capture::Area area() const { return _capture_area; }
+
+		size_t size() const
+		{
+			if (!_capture.constructed()) return 0;
+
+			return _capture->buffer_bytes(_capture_area);
+		}
 };
 
 
-struct Vfs_capture::Local_factory : File_system_factory
+struct Vfs_capture::Local_factory : File_system_factory, Info_updater
 {
 	typedef Genode::String<64> Label;
 	Label const _label;
@@ -181,7 +214,33 @@ struct Vfs_capture::Local_factory : File_system_factory
 
 	Genode::Env &_env;
 
-	Data_file_system _data_fs { _name, _label, _env };
+	Capture::Area _area;
+
+	struct Info
+	{
+		Data_file_system const & _data_fs;
+
+		Info(Data_file_system const & data_fs) : _data_fs(data_fs) { }
+
+		void print(Genode::Output &out) const
+		{
+			char buf[128] { };
+			Genode::Xml_generator xml(buf, sizeof(buf), "fb", [&] () {
+				xml.attribute("width",  _data_fs.area().w());
+				xml.attribute("height", _data_fs.area().h());
+				xml.attribute("size",   _data_fs.size());
+			});
+			Genode::print(out, Genode::Cstring(buf));
+		}
+	};
+
+	using Info_file_system = Readonly_value_file_system<Info>;
+
+	Data_file_system _data_fs { _name, _label, _env, _area, *this };
+	Info             _info    { _data_fs };
+	Info_file_system _info_fs { "info", _info };
+
+	void update_info() override { _info_fs.value(_info); }
 
 	static Name name(Xml_node config)
 	{
@@ -192,12 +251,15 @@ struct Vfs_capture::Local_factory : File_system_factory
 	:
 		_label(config.attribute_value("label", Label(""))),
 		_name(name(config)),
-		_env(env.env())
+		_env(env.env()),
+		_area({ config.attribute_value("width",  640U),
+		        config.attribute_value("height", 480U) })
 	{ }
 
 	Vfs::File_system *create(Vfs::Env&, Xml_node node) override
 	{
 		if (node.has_type("data")) return &_data_fs;
+		if (node.has_type("info")) return &_info_fs;
 
 		return nullptr;
 	}
@@ -228,6 +290,7 @@ class Vfs_capture::File_system : private Local_factory,
 
 				xml.node("dir", [&] () {
 					xml.attribute("name", Name(".", name));
+					xml.node("info", [&] () {});
 				});
 			});
 
