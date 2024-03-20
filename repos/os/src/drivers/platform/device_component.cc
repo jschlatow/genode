@@ -113,9 +113,24 @@ Genode::Irq_session_capability Device_component::irq(unsigned idx)
 			} else
 				irq.irq.construct(_env, irq.number, irq.mode, irq.polarity);
 
+			/**
+			 * Core/Kernel is and remains in control of the IRQ controller. When
+			 * IRQ remapping is enabled, however, we need to modify the upper 32bit
+			 * of the corresponding redirection table entry. This is save because
+			 * the kernel (NOVA, base-hw) never touches the upper 32bit after
+			 * the initial setup.
+			 */
 			Irq_session::Info info = irq.irq->info();
 			if (pci_cfg_addr && info.type == Irq_session::Info::MSI)
 				pci_msi_enable(_env, *this, pci_cfg_addr, info, irq.type);
+			else {
+				_session.irq_controller_registry().for_each([&] (Irq_controller & controller) {
+					if (controller.remap_enabled()) {
+						/* TODO first add iommu remapping entry to get a virtual idx */
+						controller.remap_irq(irq.number);
+					}
+				});
+			}
 		}
 
 		if (irq.shared && !irq.sirq.constructed())
@@ -123,6 +138,7 @@ Genode::Irq_session_capability Device_component::irq(unsigned idx)
 			                              [&] (Shared_interrupt & sirq) {
 				irq.sirq.construct(_env.ep().rpc_ep(), sirq,
 				                   irq.mode, irq.polarity);
+				/* TODO remap legacy IRQ via _session.irq_controller_registry */
 			});
 
 		cap = irq.shared ? irq.sirq->cap() : irq.irq->cap();

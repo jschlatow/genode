@@ -32,6 +32,7 @@ class Driver::Root : public Root_component<Session_component>
 		     Attached_rom_dataspace const & config,
 		     Device_model                 & devices,
 		     Io_mmu_devices               & io_mmu_devices,
+		     Registry<Irq_controller>     & irq_controller_registry,
 		     bool const                     kernel_iommu);
 
 		void update_policy();
@@ -60,6 +61,7 @@ class Driver::Root : public Root_component<Session_component>
 		Attached_rom_dataspace const & _config;
 		Device_model                 & _devices;
 		Io_mmu_devices               & _io_mmu_devices;
+		Registry<Irq_controller>     & _irq_controller_registry;
 		bool                           _io_mmu_present { false };
 		bool const                     _kernel_iommu;
 		Registry<Session_component>    _sessions {};
