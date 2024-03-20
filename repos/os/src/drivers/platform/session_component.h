@@ -28,6 +28,7 @@
 #include <device_owner.h>
 #include <io_mmu.h>
 #include <io_mmu_domain_registry.h>
+#include <irq_controller.h>
 
 namespace Driver {
 	class Session_component;
@@ -52,6 +53,7 @@ class Driver::Session_component
 		                  Device_model                 & devices,
 		                  Session_registry             & registry,
 		                  Io_mmu_devices               & io_mmu_devices,
+		                  Registry<Irq_controller>     & irq_controller_registry,
 		                  Label            const       & label,
 		                  Resources        const       & resources,
 		                  Diag             const       & diag,
@@ -62,9 +64,19 @@ class Driver::Session_component
 
 		~Session_component();
 
-		Heap                   & heap();
-		Io_mmu_domain_registry & domain_registry();
-		Dma_allocator          & dma_allocator();
+		Heap                     & heap();
+		Io_mmu_domain_registry   & domain_registry();
+		Dma_allocator            & dma_allocator();
+		Registry<Irq_controller> & irq_controller_registry();
+
+		template <typename FN>
+		void with_io_mmu(Device::Name const & name, FN && fn)
+		{
+			_io_mmu_devices.for_each([&] (Io_mmu & io_mmu) {
+				if (io_mmu.name() == name)
+					fn(io_mmu);
+			});
+		}
 
 		void enable_dma_remapping() { _dma_allocator.enable_remapping(); }
 
@@ -108,6 +120,7 @@ class Driver::Session_component
 		Device_model                 & _devices;
 
 		Io_mmu_devices               & _io_mmu_devices;
+		Registry<Irq_controller>     & _irq_controller_registry;
 		Device::Owner                  _owner_id    { *this };
 		Constrained_ram_allocator      _env_ram     { _env.pd(),
 		                                              _ram_quota_guard(),
