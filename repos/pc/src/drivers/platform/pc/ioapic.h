@@ -83,7 +83,7 @@ class Driver::Ioapic : private Attached_mmio<0x1000>,
 		       Device::Io_mem::Range      range,
 		       unsigned                   irq_start)
 		: Attached_mmio(env, {(char *)range.start, range.size}),
-		  Driver::Irq_controller(irq_controller_registry, name, iommu_name, bdf, true),
+		  Driver::Irq_controller(irq_controller_registry, name, iommu_name, bdf),
 		  _env(env), _irq_start(irq_start), _max_entries(_read_max_entries())
 		{ }
 };
