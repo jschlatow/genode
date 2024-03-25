@@ -20,13 +20,13 @@ unsigned Driver::Ioapic::_read_max_entries()
 	return read<Iowin::Maximum_entries>() + 1;
 }
 
-void Driver::Ioapic::remap_irq(unsigned irq_number)
+void Driver::Ioapic::remap_irq(unsigned from, unsigned)
 {
 	/* ignore if irq_number is not in range */
-	if (irq_number < _irq_start || irq_number >= _irq_start + _max_entries)
+	if (from < _irq_start || from >= _irq_start + _max_entries)
 		return;
 
-	unsigned idx = irq_number - _irq_start;
+	unsigned idx = from - _irq_start;
 
 	/* dump entry */
 
@@ -41,9 +41,9 @@ void Driver::Ioapic::remap_irq(unsigned irq_number)
 	irte |= read<Iowin>();
 
 	if (Irte::Remap::get(irte))
-		Genode::log("IRQ ", irq_number, " is remapped to ", Irte::Index::get(irte));
+		Genode::log("IRQ ", from, " is remapped to ", Irte::Index::get(irte));
 	else
-		Genode::log("IRQ ", irq_number, " is not remapped");
+		Genode::log("IRQ ", from, " is not remapped");
 
 	/* TODO remap entry */
 }

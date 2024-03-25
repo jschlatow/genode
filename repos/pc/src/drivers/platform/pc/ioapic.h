@@ -69,7 +69,7 @@ class Driver::Ioapic : private Attached_mmio<0x1000>,
 		/**
 		 * Irq_controller interface
 		 */
-		void remap_irq(unsigned) override;
+		void remap_irq(unsigned, unsigned) override;
 
 		/**
 		 * Constructor/Destructor
@@ -79,10 +79,11 @@ class Driver::Ioapic : private Attached_mmio<0x1000>,
 		       Registry<Irq_controller> & irq_controller_registry,
 		       Device::Name       const & name,
 		       Device::Name       const & iommu_name,
+		       Pci::Bdf           const & bdf,
 		       Device::Io_mem::Range      range,
 		       unsigned                   irq_start)
 		: Attached_mmio(env, {(char *)range.start, range.size}),
-		  Driver::Irq_controller(irq_controller_registry, name, iommu_name, true),
+		  Driver::Irq_controller(irq_controller_registry, name, iommu_name, bdf, true),
 		  _env(env), _irq_start(irq_start), _max_entries(_read_max_entries())
 		{ }
 };
@@ -106,14 +107,17 @@ class Driver::Ioapic_factory : public Driver::Irq_controller_factory
 			using Range    = Device::Io_mem::Range;
 			using Property = Device::Property;
 
-			/* evaluate properties (remapping support, base IRQ) */
-			bool     remap     { false };
-			unsigned irq_start { 0 };
+			/* evaluate properties (remapping support, base IRQ, routing id) */
+			bool       remap     { false };
+			unsigned   irq_start { 0 };
+			Pci::rid_t rid       { 0 };
 			device.for_each_property([&] (Property::Name const & name, Property::Value const & value) {
 				if (name == "remapping")
 					ascii_to(value.string(), remap);
 				else if (name == "irq_start")
 					ascii_to(value.string(), irq_start);
+				else if (name == "routing_id")
+					ascii_to(value.string(), rid);
 			});
 
 			/* ignore IOAPIC devices without remapping support */
@@ -128,7 +132,7 @@ class Driver::Ioapic_factory : public Driver::Irq_controller_factory
 				{
 					if (idx == 0)
 						new (alloc) Ioapic(_env, irq_controller_registry, device.name(),
-						                   iommu.name, range, irq_start);
+						                   iommu.name, Pci::Bdf::bdf(rid), range, irq_start);
 				});
 			}, [] () { /* empty fn */ });
 		}
