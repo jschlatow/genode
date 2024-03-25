@@ -37,7 +37,6 @@ class Driver::Irq_controller : private Registry<Irq_controller>::Element
 		Device::Name _name;
 		Device::Name _iommu_name;
 		Pci::Bdf     _bdf;
-		const bool   _remapping_enabled;
 
 	public:
 
@@ -45,18 +44,14 @@ class Driver::Irq_controller : private Registry<Irq_controller>::Element
 		Device::Name const & iommu() const { return _iommu_name; }
 		Pci::Bdf     const & bdf()   const { return _bdf;}
 
-		/* TODO remove after testing, never acquire IOAPIC if remapping is not supported or there is no IOMMU */
-		bool remap_enabled() const { return _remapping_enabled; }
-
 		virtual void remap_irq(unsigned from, unsigned to) = 0;
 
 		Irq_controller(Registry<Irq_controller>  & registry,
 		               Device::Name        const & name,
 		               Device::Name        const & iommu_name,
-		               Pci::Bdf            const & bdf,
-		               bool                        remap)
+		               Pci::Bdf            const & bdf)
 		: Registry<Irq_controller>::Element(registry, *this),
-		  _name(name), _iommu_name(iommu_name), _bdf(bdf), _remapping_enabled(remap)
+		  _name(name), _iommu_name(iommu_name), _bdf(bdf)
 		{ }
 
 		virtual ~Irq_controller() { }

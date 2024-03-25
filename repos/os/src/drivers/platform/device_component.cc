@@ -154,9 +154,8 @@ Genode::Irq_session_capability Device_component::irq(unsigned idx)
 				               irq.type);
 			else
 				_session.irq_controller_registry().for_each([&] (Irq_controller & controller) {
-					if (controller.remap_enabled()) /* XXX remove, because the presence of Irq_controller indicates enabled remapping*/
-						controller.remap_irq(irq.idx,
-						                     remapped_irq(controller.bdf(), irq.idx, info).irq_number);
+					controller.remap_irq(irq.idx,
+					                     remapped_irq(controller.bdf(), irq.idx, info).irq_number);
 				});
 		}
 
