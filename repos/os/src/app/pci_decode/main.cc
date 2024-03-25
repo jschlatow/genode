@@ -473,11 +473,17 @@ void Main::parse_acpi_device_info(Xml_node const &xml, Xml_generator & gen)
 				gen.attribute("size",    "0x1000");
 			});
 
-			/* find corresponding drhd and add <io_mmu/> node */
+			/* find corresponding drhd and add <io_mmu/> node and Routing_id property */
 			drhd_list.for_each([&] (Drhd const & drhd) {
 				drhd.devices.for_each([&] (Drhd::Device const & device) {
-					if (device.type == Drhd::Device::IOAPIC && device.id == ioapic.id)
+					if (device.type == Drhd::Device::IOAPIC && device.id == ioapic.id) {
 						gen.node("io_mmu", [&] { gen.attribute("name", drhd.name()); });
+						gen.node("property", [&]
+						{
+							gen.attribute("name", "routing_id");
+							gen.attribute("value", Pci::Bdf::rid(device.bdf));
+						});
+					}
 				});
 			});
 
