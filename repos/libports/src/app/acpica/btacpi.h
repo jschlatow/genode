@@ -7,6 +7,7 @@ extern "C" {
 
 namespace Btacpi {
 
+typedef String<8>   Name;
 typedef String<128> Pathname;
 typedef String<64>  Hid;
 typedef String<64>  Cid;
@@ -23,12 +24,20 @@ struct Device
 
 	~Device() { ACPI_FREE(info); }
 
+	Name name() const
+	{
+		Acpica::Buffer<char [Name::capacity()]> name;
+		AcpiGetName(handle, ACPI_SINGLE_NAME, &name);
+
+		return { (char const *)name.Pointer };
+	}
+
 	Pathname pathname() const
 	{
-		Acpica::Buffer<char [128]> path;
+		Acpica::Buffer<char [Pathname::capacity()]> path;
 		AcpiGetName(handle, ACPI_FULL_PATHNAME_NO_TRAILING, &path);
 
-		return (char const *)path.Pointer;
+		return { (char const *)path.Pointer };
 	}
 
 	Hid hid() const
@@ -39,7 +48,7 @@ struct Device
 //		if (info->HardwareId.Length > 8)
 //			log("--------------- ", info->HardwareId.Length, "'", (char const *)HardwareId.String);
 
-		return (char const *)info->HardwareId.String;
+		return { (char const *)info->HardwareId.String };
 	}
 
 	Cid cid() const
@@ -48,7 +57,7 @@ struct Device
 			return "";
 
 		/* only first compatible ID returned */
-		return (char const *)info->CompatibleIdList.Ids[0].String;
+		return { (char const *)info->CompatibleIdList.Ids[0].String };
 	}
 
 	ACPI_HANDLE parent() const
@@ -291,7 +300,7 @@ void Resource::print(Genode::Output &out) const
 }
 
 
-ACPI_STATUS detect_resources(ACPI_RESOURCE *resource, void *context)
+ACPI_STATUS detect_resource(ACPI_RESOURCE *resource, void *context)
 {
 	if (resource->Type == ACPI_RESOURCE_TYPE_END_TAG)
 		return AE_OK;
@@ -306,20 +315,7 @@ ACPI_STATUS detect_resources(ACPI_RESOURCE *resource, void *context)
 }
 
 
-ACPI_STATUS display_devices(ACPI_HANDLE handle, UINT32 level,
-                            void * /* context */, void ** /* retval */)
-{
-	Device dev { handle };
-
-	if (dev.present_ok()) {
-		warning(dev.pathname());
-		AcpiWalkResources(handle, ACPI_STRING("_CRS"), detect_resources, &dev);
-	}
-
-	return AE_OK;
-}
-
-ACPI_STATUS display_methods(ACPI_HANDLE handle, UINT32 level,
+ACPI_STATUS display_method(ACPI_HANDLE handle, UINT32 level,
                             void * /* context */, void ** /* retval */)
 {
 //	warning(__func__, ":", __LINE__, " handle=", handle, " level=", level);
@@ -327,13 +323,66 @@ ACPI_STATUS display_methods(ACPI_HANDLE handle, UINT32 level,
 	Device method { handle };
 	Device parent { method.parent() };
 
-	warning(__func__, ":", __LINE__,
-	        " m=", method.pathname(),
-	        " p=", parent.pathname(),
-	        " h=", parent.hid(), " c=", parent.cid());
+	log(" ", method.name(), " - ", method.pathname(), " ", handle);
 
 	return AE_OK;
 }
+
+
+ACPI_STATUS display_device(ACPI_HANDLE handle, UINT32 level,
+                           void * /* context */, void ** /* retval */)
+{
+	Device dev { handle };
+
+	if (dev.present_ok()) {
+		warning(dev.pathname());
+		AcpiWalkResources(handle, ACPI_STRING("_CRS"), detect_resource, &dev);
+
+		ACPI_HANDLE child = NULL;
+		while (true) {
+			if (AcpiGetNextObject(ACPI_TYPE_METHOD, dev.handle, child, &child) != AE_OK)
+				break;
+			display_method(child, 0, 0, 0);
+		}
+
+		if (false) {
+			child = NULL;
+			while (true) {
+				if (AcpiGetNextObject(ACPI_TYPE_ANY, dev.handle, child, &child) != AE_OK)
+					break;
+				Device x { child };
+				log("--- ", x.name(), " - ", x.pathname());
+			}
+		}
+
+		/* TODO call HID _DSM with func=0 to query avail funcs */
+		if (dev.cid() == "PNP0C50") {
+			ACPI_OBJECT                 args[4];
+			ACPI_OBJECT_LIST            in { 4, args };
+			Acpica::Buffer<ACPI_OBJECT> out;
+
+			ACPI_UUID guid { ACPI_INIT_UUID(0x3cdff6f7, 0x4267, 0x4555, 0xad, 0x05, 0xb3, 0x0a, 0x3d, 0x89, 0x38, 0xde) };
+
+			args[0].Type = ACPI_TYPE_BUFFER;
+			args[0].Buffer.Length = sizeof(guid);
+			args[0].Buffer.Pointer = guid.Data;
+			args[1].Type = ACPI_TYPE_INTEGER;
+			args[1].Integer.Value = 1; /* revision */
+			args[2].Type = ACPI_TYPE_INTEGER;
+			args[2].Integer.Value = 1; /* function (0: query 1: HID descriptor address (2 bytes) */
+			args[3].Type = ACPI_TYPE_PACKAGE;
+			args[3].Package.Count = 0;
+			args[3].Package.Elements = nullptr;
+
+			ACPI_STATUS ret = AcpiEvaluateObjectTyped(dev.handle, ACPI_STRING("_DSM"), &in, &out, ACPI_TYPE_INTEGER);
+
+			log("++++ ret=", ret, " type=", (ACPI_OBJECT_TYPE)out.object.Type, " result=", (UINT64)out.object.Integer.Value);
+		}
+	}
+
+	return AE_OK;
+}
+
 
 void another_test()
 {
@@ -347,17 +396,17 @@ void another_test()
 	} else {
 		log("-- ACPI_TYPE_DEVICE --");
 		AcpiWalkNamespace(ACPI_TYPE_DEVICE, ACPI_ROOT_OBJECT, ACPI_UINT32_MAX,
-		                  display_devices, nullptr, nullptr, nullptr);
+		                  display_device, nullptr, nullptr, nullptr);
 		log("-- ACPI_TYPE_THERMAL --");
 		AcpiWalkNamespace(ACPI_TYPE_THERMAL, ACPI_ROOT_OBJECT, ACPI_UINT32_MAX,
-		                  display_devices, nullptr, nullptr, nullptr);
+		                  display_device, nullptr, nullptr, nullptr);
 		log("-- ACPI_TYPE_PROCESSOR --");
 		AcpiWalkNamespace(ACPI_TYPE_PROCESSOR, ACPI_ROOT_OBJECT, ACPI_UINT32_MAX,
-		                  display_devices, nullptr, nullptr, nullptr);
+		                  display_device, nullptr, nullptr, nullptr);
 	}
 
 //	AcpiWalkNamespace(ACPI_TYPE_METHOD, ACPI_ROOT_OBJECT, ACPI_UINT32_MAX,
-//	                  display_methods, nullptr, nullptr, nullptr);
+//	                  display_method, nullptr, nullptr, nullptr);
 }
 
 } /* namespace Btacpi */
