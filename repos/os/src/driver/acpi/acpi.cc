@@ -758,6 +758,10 @@ class Element : private List<Element>::Element
 		/* list of PCI routing elements for this element */
 		List<Pci_routing> _pci { };
 
+		/* cached hardware/compatible ID */
+		uint32_t _hid { };
+		uint32_t _cid { };
+
 		/* packages we are looking for */
 		enum { DEVICE = 0x5b, SUB_DEVICE = 0x82, DEVICE_NAME = 0x8, SCOPE = 0x10, METHOD = 0x14, PACKAGE_OP = 0x12 };
 
@@ -937,6 +941,7 @@ class Element : private List<Element>::Element
 
 				_name_len += parent_len;
 			}
+			_name[_name_len] = 0;
 		}
 
 		/**
@@ -1078,6 +1083,14 @@ class Element : private List<Element>::Element
 			}
 		}
 
+		void _cache_ids()
+		{
+			if (is_device()) {
+				_hid = _value("_HID");
+				_cid = _value("_CID");
+			}
+		}
+
 		Element(uint8_t const *data = 0, bool package_op4 = false)
 		:
 			_type(0), _size(0), _size_len(0),  _name_len(0), _bdf(0),
@@ -1215,7 +1228,21 @@ class Element : private List<Element>::Element
 		bool           valid() const       { return _valid; }
 		uint32_t       bdf() const         { return _bdf; }
 		bool           is_device() const   { return _type == SUB_DEVICE; }
+		uint32_t       hid() const         { return _hid; }
+		uint32_t       cid() const         { return _cid; }
 
+		bool is_ps2()
+		{
+			if (!is_device())
+				return false;
+
+			return _hid == 0x0303D041 /* PNP0303 */
+			    || _cid == 0x0303D041
+			    || _hid == 0x030FD041 /* PNP0F03 */
+			    || _cid == 0x030FD041
+			    || _hid == 0x130FD041 /* PNP0F13 */
+			    || _cid == 0x130FD041;
+		}
 
 		static bool supported_acpi_format()
 		{
@@ -1292,6 +1319,11 @@ class Element : private List<Element>::Element
 					data += e._para_len;
 			}
 
+			/* parse more information after all elements are discovered */
+
+			for (Element *e = list()->first(); e; e = e->next())
+				e->_cache_ids();
+
 			parse_bdf(alloc);
 		}
 
@@ -1322,8 +1354,8 @@ class Element : private List<Element>::Element
 				if (prt) prt->dump();
 
 				if (prt) {
-					uint32_t const hid= e->_value("_HID");
-					uint32_t const cid= e->_value("_CID");
+					uint32_t const hid = e->_hid;
+					uint32_t const cid = e->_cid;
 					if (hid == 0x80ad041 || cid == 0x80ad041 || // "PNP0A08" PCI Express root bridge
 					    hid == 0x30ad041 || cid == 0x30ad041) { // "PNP0A03" PCI root bridge
 						root_bridge_bdf = e->_bdf;
@@ -1571,7 +1603,7 @@ class Acpi_table
 			}
 
 			/* free up memory of elements not of any use */
-			Element::clean_list(_heap);
+//			Element::clean_list(_heap);
 
 			/* free up io memory */
 			_memory.free_io_memory();
@@ -1716,6 +1748,13 @@ void Acpi::generate_report(Genode::Env &env, Genode::Allocator &alloc,
 			for (; e; e = e->next()) {
 				if (!e->is_device())
 					continue;
+
+				if (e->is_ps2()) {
+					xml.node("ps2", [&] {
+						attribute_hex(xml, "hid", e->hid());
+						attribute_hex(xml, "cid", e->cid());
+					});
+				}
 
 				Pci_routing *r = e->pci_list().first();
 				for (; r; r = r->next()) {
