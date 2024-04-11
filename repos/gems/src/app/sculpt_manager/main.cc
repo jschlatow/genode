@@ -865,9 +865,14 @@ struct Sculpt::Main : Input_event_handler,
 
 	void use(Storage_target const &target) override
 	{
+		Storage_target const orig_target = _storage._selected_target;
+
 		_storage._selected_target = target;
 		_system_dialog.reset_update_widget();
 		_download_queue.reset();
+
+		if (orig_target != _storage._selected_target)
+			_restart_from_storage_target();
 
 		/* hide system panel button and system dialog when "un-using" */
 		_panel_dialog.refresh();
