@@ -85,7 +85,11 @@ class Isoc_cache
 {
 	public:
 
-		enum { PACKETS_PER_URB = 32, URBS = 4 };
+		enum {
+			PACKETS_PER_URB = 32,
+			URBS            = 4,
+			MAX_PACKETS     = 256,
+		};
 
 	private:
 
@@ -384,11 +388,13 @@ struct Session
 	Id_space<Device>          _space {};
 	Registry<Urb>             _urb_registry {};
 
-	Session(Env &env, Allocator &alloc, Signal_context_capability cap)
+	Session(Env &env, Allocator &alloc,
+	        Signal_context_capability io_handler_cap,
+	        Signal_context_capability rom_handler_cap)
 	:
-		_env(env), _alloc(alloc), _handler_cap(cap)
+		_env(env), _alloc(alloc), _handler_cap(io_handler_cap)
 	{
-		_usb.sigh(cap);
+		_usb.sigh(rom_handler_cap);
 	}
 
 	~Session() {
@@ -500,6 +506,8 @@ void Isoc_cache::_new_urb()
 {
 	uint8_t urbs = (_ep.in()) ? URBS : _level() / PACKETS_PER_URB;
 
+	bool sent = false;
+
 	for (unsigned i = 0; urbs && i < URBS; i++) {
 		if (_urbs[i].constructed())
 			continue;
@@ -509,7 +517,10 @@ void Isoc_cache::_new_urb()
 		                   _ep.max_packet_size()*PACKETS_PER_URB,
 		                   PACKETS_PER_URB);
 		--urbs;
+		sent = true;
 	}
+
+	if (sent) _iface.update_urbs();
 }
 
 
@@ -517,13 +528,12 @@ void Isoc_cache::_copy_to_host(USBPacket *p)
 {
 	size_t size = p->iov.size;
 
-	if (!size || _level() >= URBS*PACKETS_PER_URB) {
+	if (!size || _level() >= MAX_PACKETS-1)
 		return;
-	}
 
 	size_t offset = _wrote++ * _ep.max_packet_size();
 
-	if (size > _ep.max_packet_size()) {
+	if (size != _ep.max_packet_size()) {
 		error("Assumption about QEmu Isochronous out packets wrong!");
 		size = _ep.max_packet_size();
 	}
@@ -539,8 +549,8 @@ void Isoc_cache::_copy_to_guest(USBPacket *p)
 	if (!count || !_level())
 		return;
 
-	_read += count;
 	size_t offset = _read * _ep.max_packet_size();
+	_read += count;
 
 	usb_packet_copy(p, _buffer+offset, count * _ep.max_packet_size());
 }
@@ -551,7 +561,6 @@ void Isoc_cache::handle(USBPacket *p)
 	if (_ep.in()) _copy_to_guest(p);
 	else          _copy_to_host(p);
 	_new_urb();
-	_iface.update_urbs();
 }
 
 
@@ -560,8 +569,7 @@ size_t Isoc_cache::read(Byte_range_ptr &dst)
 	if (_ep.in())
 		return _ep.max_packet_size();
 
-	size_t offset = _read * _ep.max_packet_size();
-	_read++;
+	size_t offset = _read++ * _ep.max_packet_size();
 	Genode::memcpy(dst.start, (void*)(_buffer+offset), _ep.max_packet_size());
 	return _ep.max_packet_size();
 }
@@ -570,7 +578,7 @@ size_t Isoc_cache::read(Byte_range_ptr &dst)
 void Isoc_cache::write(Const_byte_range_ptr const &src)
 {
 	size_t offset = _wrote * _ep.max_packet_size();
-	_wrote        += src.num_bytes / _ep.max_packet_size();
+	_wrote       += src.num_bytes / _ep.max_packet_size();
 	Genode::memcpy((void*)(_buffer+offset), src.start, src.num_bytes);
 }
 
@@ -599,7 +607,7 @@ void Isoc_cache::flush()
 Isoc_cache::Isoc_cache(::Interface &iface, Endpoint &ep, Allocator &alloc)
 :
 	_iface(iface), _ep(ep), _alloc(alloc),
-	_buffer((unsigned char*)_alloc.alloc(256*ep.max_packet_size())) {}
+	_buffer((unsigned char*)_alloc.alloc(MAX_PACKETS*ep.max_packet_size())) {}
 
 
 Usb::Interface &::Interface::_session()
@@ -851,7 +859,8 @@ static void usb_host_handle_data(USBDevice *udev, USBPacket *p)
 					new (_usb_session()->_alloc)
 						::Urb(_usb_session()->_urb_registry,
 						      iface, endp, type, usb_packet_size(p), p);
-					break;
+					iface.update_urbs();
+					return;
 				case USB_ENDPOINT_XFER_ISOC:
 					p->status = USB_RET_SUCCESS;
 					endp.handle_isoc_packet(p);
@@ -862,7 +871,6 @@ static void usb_host_handle_data(USBDevice *udev, USBPacket *p)
 					return;
 				}
 			});
-			iface.update_urbs();
 		});
 	});
 }
@@ -969,22 +977,33 @@ extern "C" void _type_init_usb_host_register_types(Entrypoint *ep,
                                                    Allocator *alloc,
                                                    Env *env)
 {
-	struct Helper : Signal_handler<Helper>
+	struct Helper
 	{
-		Helper(Entrypoint &ep)
-		: Signal_handler<Helper>(ep, *this, &Helper::_update) {}
+		Signal_handler<Helper> io_handler;
+		Signal_handler<Helper> rom_handler;
 
-		void _update()
+		Helper(Entrypoint &ep)
+		:
+			io_handler(ep, *this, &Helper::io),
+			rom_handler(ep, *this, &Helper::rom_update) {}
+
+		void io()
+		{
+			Mutex::Guard guard(::_mutex);
+			usb_host_update_device_transfers();
+		}
+
+		void rom_update()
 		{
 			Mutex::Guard guard(::_mutex);
 			usb_host_update_devices();
-			usb_host_update_device_transfers();
 		}
 	};
 	static Helper helper(*ep);
 
 	Mutex::Guard guard(::_mutex);
 	usb_host_register_types();
-	_usb_session().construct(*env, *alloc, helper);
+	_usb_session().construct(*env, *alloc, helper.io_handler,
+	                         helper.rom_handler);
 	usb_host_update_devices();
 }
