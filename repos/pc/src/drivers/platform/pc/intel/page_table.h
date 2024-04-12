@@ -111,6 +111,15 @@ struct Intel::Level_1_descriptor : Common_descriptor
 			| Pa::masked(pa);
 	}
 
+	static void dump_page(unsigned long index, access_t entry, addr_t offset)
+	{
+		using Genode::Hex;
+
+		addr_t pa = Pa::masked(entry);
+		addr_t va = (index << PAGE_SIZE_LOG2) + offset;
+		log("   ", Hex(va), "+", Hex(1 << PAGE_SIZE_LOG2), " -> ", Hex(pa));
+	}
+
 	static void generate_page(unsigned long           index,
 	                          access_t                entry,
 	                          Genode::Xml_generator & xml)
@@ -148,6 +157,21 @@ struct Intel::Page_directory_descriptor<_PAGE_SIZE_LOG2>::Table
 		static Page_flags flags { RW, NO_EXEC, USER, NO_GLOBAL,
 		                          RAM, Genode::UNCACHED };
 		return Base::create(flags) | Pa::masked(pa);
+	}
+
+	template <typename ENTRY>
+	static void dump(unsigned long   index,
+	                 access_t        entry,
+	                 addr_t          offset,
+	                 Report_helper & report_helper)
+	{
+		using Genode::Hex;
+
+		addr_t pd_addr = Pa::masked(entry);
+		offset = (index << PAGE_SIZE_LOG2) + offset;
+
+		report_helper.with_table<ENTRY>(pd_addr, [&] (ENTRY & pd) {
+			pd.dump(offset, report_helper); });
 	}
 
 	template <typename ENTRY>
@@ -196,6 +220,15 @@ struct Intel::Page_directory_descriptor<_PAGE_SIZE_LOG2>::Page
 		     | Pa::masked(pa);
 	}
 
+	static void dump_page(unsigned long index, access_t entry, addr_t offset)
+	{
+		using Genode::Hex;
+
+		addr_t pa = Pa::masked(entry);
+		addr_t va = (index << PAGE_SIZE_LOG2) + offset;
+		log("   ", Hex(va), "+", Hex(1 << PAGE_SIZE_LOG2), " -> ", Hex(pa));
+	}
+
 	static void generate_page(unsigned long           index,
 	                          access_t                entry,
 	                          Genode::Xml_generator & xml)
@@ -233,6 +266,21 @@ struct Intel::Level_4_descriptor : Common_descriptor
 	}
 
 	template <typename ENTRY>
+	static void dump(unsigned long    index,
+	                 access_t         entry,
+	                 addr_t           offset,
+	                 Report_helper  & report_helper)
+	{
+		using Genode::Hex;
+
+		addr_t level3_addr = Pa::masked(entry);
+		offset = (index << PAGE_SIZE_LOG2) + offset;
+
+		report_helper.with_table<ENTRY>(level3_addr, [&] (ENTRY & level3_table) {
+			level3_table.dump(offset, report_helper); });
+	}
+
+	template <typename ENTRY>
 	static void generate(unsigned long           index,
 	                     access_t                entry,
 	                     Genode::Xml_generator & xml,
@@ -263,6 +311,7 @@ namespace Intel {
 	{
 		static constexpr unsigned address_width() { return SIZE_LOG2_2MB; }
 
+		void dump(addr_t offset, Report_helper &);
 		void generate(Genode::Xml_generator &, Genode::Env & env, Report_helper &);
 	} __attribute__((aligned(1 << ALIGNM_LOG2)));
 
@@ -273,6 +322,7 @@ namespace Intel {
 	{
 		static constexpr unsigned address_width() { return SIZE_LOG2_1GB; }
 
+		void dump(addr_t offset, Report_helper &);
 		void generate(Genode::Xml_generator &, Genode::Env & env, Report_helper &);
 	} __attribute__((aligned(1 << ALIGNM_LOG2)));
 
@@ -283,6 +333,7 @@ namespace Intel {
 	{
 		static constexpr unsigned address_width() { return SIZE_LOG2_512GB; }
 
+		void dump(addr_t offset, Report_helper &);
 		void generate(Genode::Xml_generator &, Genode::Env & env, Report_helper &);
 	} __attribute__((aligned(1 << ALIGNM_LOG2)));
 
@@ -293,6 +344,7 @@ namespace Intel {
 	{
 		static constexpr unsigned address_width() { return SIZE_LOG2_256TB; }
 
+		void dump(addr_t offset, Report_helper &);
 		void generate(Genode::Xml_generator &, Genode::Env & env, Report_helper &);
 	} __attribute__((aligned(1 << ALIGNM_LOG2)));
 

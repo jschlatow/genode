@@ -23,6 +23,24 @@ static void attribute_hex(Genode::Xml_generator & xml, char const * name,
 }
 
 
+void Intel::Root_table::dump(Report_helper & report_helper)
+{
+	for_each([&] (uint8_t bus) {
+		if (!present(bus))
+			return;
+
+		addr_t ctx_addr = address(bus);
+
+		auto fn = [&] (Context_table & context) {
+			context.dump(bus, report_helper);
+		};
+
+		/* dump context table */
+		report_helper.with_table<Context_table>(ctx_addr, fn);
+	});
+}
+
+
 void Intel::Root_table::generate(Xml_generator & xml,
                                  Env           & env,
                                  Report_helper & report_helper)

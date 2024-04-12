@@ -31,6 +31,11 @@ void Intel::Io_mmu::Domain<TABLE>::enable_pci_device(Io_mem_dataspace_capability
 		_intel_iommu.root_table().insert_context<TABLE::address_width()>(
 			bdf, _translation_table_phys, _domain_id);
 
+	if (bdf.dev == 0x14 && bdf.fn == 0) {
+		log("enabling 00:14.0");
+		_translation_table.dump(0, _report_helper);
+	}
+
 	/**
 	 * We need to invalidate the context-cache entry for this device and
 	 * IOTLB entries for the previously used domain id.
@@ -257,11 +262,18 @@ void Intel::Io_mmu::_handle_faults()
 			      ", PRIV=",   Hex(Fault_record_hi::Priv::get(hi)),
 			      ", PP=",     Hex(Fault_record_hi::Pp::get(hi)),
 			      ", Source=", Hex(Fault_record_hi::Source::get(hi)),
-			      ", info=",   Hex(Fault_record_lo::Info::get(lo)));
+			      ", lo=",     Hex(lo));
 
 
 			clear_fault_record(i);
 		}
+
+		/* dump root table */
+		addr_t rt_addr = Root_table_address::Address::masked(read<Root_table_address>());
+		_report_helper.with_table<Root_table>(rt_addr,
+			[&] (Root_table & root_table) {
+				root_table.dump(_report_helper);
+			});
 	}
 }
 

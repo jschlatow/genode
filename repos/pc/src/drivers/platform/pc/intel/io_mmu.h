@@ -69,6 +69,8 @@ class Intel::Io_mmu : private Attached_mmio<0x800>,
 				Domain_id          _domain_id         { _domain_allocator.alloc() };
 				bool               _skip_invalidation { false };
 
+				Report_helper    & _report_helper;
+
 				addr_t             _translation_table_phys {
 					_table_allocator.construct<TABLE>() };
 
@@ -128,7 +130,8 @@ class Intel::Io_mmu : private Attached_mmio<0x800>,
 				       Registry<Dma_buffer> const & buffer_registry,
 				       Env                        & env,
 				       Ram_allocator              & ram_alloc,
-				       Domain_allocator           & domain_allocator)
+				       Domain_allocator           & domain_allocator,
+				       Report_helper              & report_helper)
 				: Driver::Io_mmu::Domain(intel_iommu, md_alloc),
 				  Registered_translation_table(intel_iommu),
 				  _intel_iommu(intel_iommu),
@@ -136,7 +139,8 @@ class Intel::Io_mmu : private Attached_mmio<0x800>,
 				  _ram_alloc(ram_alloc),
 				  _buffer_registry(buffer_registry),
 				  _table_allocator(_env, md_alloc, ram_alloc, 2),
-				  _domain_allocator(domain_allocator)
+				  _domain_allocator(domain_allocator),
+				  _report_helper(report_helper)
 				{
 					Invalidation_guard guard { *this, _intel_iommu.caching_mode() };
 
@@ -379,8 +383,6 @@ class Intel::Io_mmu : private Attached_mmio<0x800>,
 		struct Fault_record_lo : Genode::Register<64>
 		{
 			static unsigned offset() { return 0; }
-
-			struct Info : Bitfield<12,52> { };
 		};
 
 		struct Iotlb : Genode::Register<64>
@@ -571,7 +573,8 @@ class Intel::Io_mmu : private Attached_mmio<0x800>,
 					                                                 buffer_registry,
 					                                                 _env,
 					                                                 ram_alloc,
-					                                                 _domain_allocator);
+					                                                 _domain_allocator,
+					                                                 _report_helper);
 
 			if (!read<Capability::Sagaw_3_level>() && read<Capability::Sagaw_5_level>())
 				error("IOMMU requires 5-level translation tables (not implemented)");
@@ -582,7 +585,8 @@ class Intel::Io_mmu : private Attached_mmio<0x800>,
 				                                                 buffer_registry,
 				                                                 _env,
 				                                                 ram_alloc,
-				                                                 _domain_allocator);
+				                                                 _domain_allocator,
+				                                                 _report_helper);
 		}
 
 		/**

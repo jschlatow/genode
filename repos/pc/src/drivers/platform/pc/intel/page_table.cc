@@ -13,6 +13,43 @@
 
 #include <intel/page_table.h>
 
+void Intel::Level_1_translation_table::dump(addr_t offset, Report_helper &)
+{
+	for_each_entry([&] (unsigned long i, Descriptor::access_t e) {
+		Descriptor::dump_page(i, e, offset); });
+}
+
+
+void Intel::Level_2_translation_table::dump(addr_t offset, Report_helper & report_helper)
+{
+	for_each_entry([&] (unsigned long i, Descriptor::access_t e) {
+		if (Descriptor::maps_page(e))
+			Descriptor::Page::dump_page(i, e, offset);
+		else
+			Descriptor::Table::dump<Entry>(i, e, offset, report_helper);
+	});
+}
+
+
+void Intel::Level_3_translation_table::dump(addr_t offset, Report_helper & report_helper)
+{
+	for_each_entry([&] (unsigned long i, Descriptor::access_t e) {
+		if (Descriptor::maps_page(e))
+			Descriptor::Page::dump_page(i, e, offset);
+		else
+			Descriptor::Table::dump<Entry>(i, e, offset, report_helper);
+	});
+}
+
+
+void Intel::Level_4_translation_table::dump(addr_t offset, Report_helper & report_helper)
+{
+	for_each_entry([&] (unsigned long i, Descriptor::access_t e) {
+		Descriptor::dump<Entry>(i, e, offset, report_helper);
+	});
+}
+
+
 void Intel::Level_1_translation_table::generate(
 	Genode::Xml_generator & xml,
 	Genode::Env           &,

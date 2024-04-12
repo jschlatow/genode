@@ -23,6 +23,42 @@ static void attribute_hex(Genode::Xml_generator & xml, char const * name,
 }
 
 
+void Intel::Context_table::dump(uint8_t bus, Report_helper & report_helper)
+{
+	for_each(0, [&] (Pci::rid_t id) {
+		if (!present(id))
+			return;
+
+		addr_t stage2_addr = stage2_pointer(id);
+
+		log("IOMMU translation table ", bus, ":",
+		    Genode::Hex(Pci::Bdf::Routing_id::Device::get(id)), ".",
+		    Pci::Bdf::Routing_id::Function::get(id));
+
+		switch (agaw(id)) {
+			case Hi::Address_width::AGAW_3_LEVEL:
+				using Table3 = Intel::Level_3_translation_table;
+
+				/* dump stage2 table */
+				report_helper.with_table<Table3>(stage2_addr,
+					[&] (Table3 & stage2_table) {
+						stage2_table.dump(0, report_helper); });
+				break;
+			case Hi::Address_width::AGAW_4_LEVEL:
+				using Table4 = Intel::Level_4_translation_table;
+
+				/* dump stage2 table */
+				report_helper.with_table<Table4>(stage2_addr,
+					[&] (Table4 & stage2_table) {
+						stage2_table.dump(0, report_helper); });
+				break;
+			default:
+				break;
+		}
+	});
+}
+
+
 void Intel::Context_table::generate(Xml_generator & xml,
                                     Env           & env,
                                     Report_helper & report_helper)
