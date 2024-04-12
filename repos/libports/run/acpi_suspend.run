@@ -539,7 +539,7 @@ append config {
 
 		<start name="acpi_drv" caps="350" } [priority_base] {>
 			<resource name="RAM" quantum="5M"/>
-			<config report="yes"/>
+			<config report="yes" ignore_drhd="yes"/>
 			<route>
 				<service name="Report"> <child name="drivers_reports"/> </service>
 				<any-service> <parent/> <any-child/> </any-service>
@@ -556,7 +556,7 @@ append config {
 		</start>
 
 		<start name="platform_drv" caps="300" managing_system="yes" } [priority_base] {>
-			<binary name="platform_drv"/>
+			<binary name="pc_platform_drv"/>
 			<resource name="RAM" quantum="8M"/>
 			<provides>
 				<service name="Platform"/>
