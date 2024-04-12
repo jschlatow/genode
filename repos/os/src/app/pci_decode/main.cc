@@ -247,8 +247,8 @@ bus_t Main::parse_pci_function(Bdf             bdf,
 			if (rmrr.bdf == bdf)
 				gen.node("reserved_memory", [&]
 				{
-					gen.attribute("address", rmrr.addr);
-					gen.attribute("size",    rmrr.size);
+					gen.attribute("address", string(rmrr.addr));
+					gen.attribute("size",    string(rmrr.size));
 				});
 		});
 

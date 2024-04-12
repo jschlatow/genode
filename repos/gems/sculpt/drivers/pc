@@ -33,6 +33,7 @@
 			<policy label="platform_drv -> devices" report="pci_decode -> devices"/>
 			<policy label="rom_reporter -> acpi"    report="acpi_drv -> acpi"/>
 			<policy label="rom_reporter -> devices" report="platform_drv -> devices"/>
+			<policy label="rom_reporter -> pci_devices" report="pci_decode -> devices"/>
 		</config>
 	</start>
 
@@ -41,12 +42,15 @@
 		<config>
 			<rom label="acpi"/>
 			<rom label="devices"/>
+			<rom label="pci_devices"/>
 		</config>
 		<route>
 			<service name="ROM"    label="acpi">    <child name="report_rom"/> </service>
 			<service name="ROM"    label="devices"> <child name="report_rom"/> </service>
+			<service name="ROM"    label="pci_devices"> <child name="report_rom"/> </service>
 			<service name="Report" label="acpi">    <parent label="acpi"/>     </service>
 			<service name="Report" label="devices"> <parent label="devices"/>  </service>
+			<service name="Report" label="pci_devices"> <parent label="pci_devices"/>  </service>
 			<service name="LOG"> <parent/> </service>
 			<service name="PD">  <parent/> </service>
 			<service name="CPU"> <parent/> </service>
