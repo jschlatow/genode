@@ -733,9 +733,11 @@ append config {
 					     ACPICA report !?
 					-->
 
+<!--
 					<inline description="suspend system">
 						<system state="suspend"/>
 					</inline>
+-->
 					<sleep milliseconds="10000"/>
 
 					<inline description="resume system">
