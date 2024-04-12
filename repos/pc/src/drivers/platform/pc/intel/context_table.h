@@ -151,7 +151,7 @@ class Intel::Context_table
 				Utils::clflush(&_entries[_lo_index(rid)]);
 		}
 
-		void generate(Xml_generator &, Env &, Intel::Report_helper &);
+		void generate(Xml_generator &, Intel::Report_helper &);
 
 		void flush_all()
 		{
