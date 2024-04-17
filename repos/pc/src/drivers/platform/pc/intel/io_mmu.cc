@@ -27,6 +27,7 @@ template <typename TABLE>
 void Intel::Io_mmu::Domain<TABLE>::enable_pci_device(Io_mem_dataspace_capability const,
                                                      Pci::Bdf const & bdf)
 {
+	log(__func__, " ", bdf);
 	Domain_id cur_domain =
 		_intel_iommu.root_table().insert_context<TABLE::address_width()>(
 			bdf, _translation_table_phys, _domain_id);
@@ -54,6 +55,7 @@ void Intel::Io_mmu::Domain<TABLE>::enable_pci_device(Io_mem_dataspace_capability
 template <typename TABLE>
 void Intel::Io_mmu::Domain<TABLE>::disable_pci_device(Pci::Bdf const & bdf)
 {
+	log(__func__, " ", bdf);
 	_intel_iommu.root_table().remove_context(bdf, _translation_table_phys);
 
 	/* lookup default mappings and insert instead */
@@ -93,6 +95,7 @@ void Intel::Io_mmu::Domain<TABLE>::add_range(Range const & range,
 template <typename TABLE>
 void Intel::Io_mmu::Domain<TABLE>::remove_range(Range const & range)
 {
+	log(__func__, " ", Hex(range.start), " (", Hex(range.size), ")");
 	_translation_table.remove_translation(range.start, range.size,
 	                                      _table_allocator,
 	                                      !_intel_iommu.coherent_page_walk());
