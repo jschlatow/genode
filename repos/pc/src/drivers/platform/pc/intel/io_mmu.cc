@@ -312,6 +312,7 @@ void Intel::Io_mmu::resume()
 {
 	_init();
 	_enable_translation();
+	_enable_irq_remapping();
 }
 
 
