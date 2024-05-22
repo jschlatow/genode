@@ -96,6 +96,7 @@ struct Device
 struct Resource : ACPI_RESOURCE
 {
 	struct Irq;
+	struct Io;
 	struct Extended_irq;
 	struct Gpio;
 
@@ -168,6 +169,24 @@ struct Resource::Irq : ACPI_RESOURCE_IRQ
 		print(out, " ", triggering(Triggering));
 		print(out, " ", polarity(Polarity));
 		print(out, " ", sharable(Sharable));
+	}
+};
+
+
+struct Resource::Io : ACPI_RESOURCE_IO
+{
+	Io(ACPI_RESOURCE_IO const &res) : ACPI_RESOURCE_IO(res) { }
+
+	void print(Genode::Output &out) const
+	{
+		using Genode::print;
+
+		print(out, "IO");
+		print(out, " ", Hex(IoDecode));
+		print(out, " ", Hex(Alignment));
+		print(out, " ", AddressLength);
+		print(out, " ", Hex(Minimum));
+		print(out, " ", Hex(Maximum));
 	}
 };
 
@@ -247,6 +266,7 @@ void Resource::print(Genode::Output &out) const
 
 	switch (Type) {
 	case ACPI_RESOURCE_TYPE_IRQ:          print(out, Irq(Data.Irq)); break;
+	case ACPI_RESOURCE_TYPE_IO:           print(out, Io(Data.Io)); break;
 	case ACPI_RESOURCE_TYPE_EXTENDED_IRQ: print(out, Extended_irq(Data.ExtendedIrq)); break;
 
 //	case ACPI_RESOURCE_TYPE_SERIAL_BUS:
