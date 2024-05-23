@@ -45,14 +45,14 @@ set _missing_depot_archives {}
 # Pattern to parse a version-less archive path into <user>, <type>, <name>
 #
 proc _depot_archive_path_pattern { } {
-	return {^([\w\d\-]+)/([\w]+)/([\w\d\-_]+)$} }
+	return {^([\w\d\-]+)/([\w]+)/([\w\d\-\@_]+)$} }
 
 
 #
 # Pattern to parse a versioned archive path into <user>, <type>, <name>, <version>
 #
 proc _depot_archive_versioned_path_pattern { } {
-	return {^([\w\d\-]+)/([\w]+)/([\w\d\-_]+)/([\w\d\-\._]+)$} }
+	return {^([\w\d\-]+)/([\w]+)/([\w\d\-\@_]+)/([\w\d\-\._]+)$} }
 
 
 #
