@@ -117,10 +117,6 @@ void Driver::Main::_system_update()
 		/* report independent of result */
 		_common.report_resume();
 	}
-
-	if (state == "poweroff") {
-		try { _suspend("S5"); } catch (...) { error("poweroff failed"); }
-	}
 }
 
 
