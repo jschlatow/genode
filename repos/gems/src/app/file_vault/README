@@ -1,21 +1,21 @@
                            The File Vault
                             Martin Stein
 
-Warning
-~~~~~~~
+Disclaimer
+~~~~~~~~~~
 
-The current version of the File Vault is not thought for productive use but
-for mere demonstrational purpose! Please refrain from storing sensitive data
-with it!
+The current version of the File Vault is not intended for productive use but
+for mere demonstrational purpose. Please refrain from storing sensitive data
+with it.
 
 Requires
 ~~~~~~~~
 
 * A ROM session "ui_config" through which it can be controlled by a manager
 * A Report session "ui_report" through which it reflects its state to a manager
-* A File System session to the back-end storage of the Trust Anchor:
+* A file-system session to the back-end storage of the Trust Anchor:
   * "tresor_trust_anchor_vfs -> storage_dir"
-* Five File System sessions to the back-end image file:
+* Five file-system sessions to the back-end image file:
   * "tresor_init -> "
   * "tresor"
   * "image_fs_query -> "
@@ -27,7 +27,7 @@ Requires
 Provides
 ~~~~~~~~
 
-* A File-System service whenever it reports to be in the "unlocked" state. The
+* A file-system service whenever it reports to be in the "unlocked" state. The
   file system is formatted with ext2 and secured/managed via the Tresor
   library.
 
@@ -35,7 +35,7 @@ Function
 ~~~~~~~~
 
 The File Vault can be used to create and control a block-encrypted ext2 file
-system inside an image file using Genodes Tresor block-encryption library and
+system inside an image file using Genode's Tresor block-encryption library and
 the Rump ext2 driver. The file vault doesn't consider runtime updates of its
 "normal" configuration (however, it does so for its UI configuration). This is
 an example File Vault configuration with default values:
@@ -50,8 +50,8 @@ an example File Vault configuration with default values:
 
 The attribute jitterentropy_available should only be set to "no" in a
 non-productive context. It merely enables testing the File Vault on platforms
-without entropy source and in this case causes the component to constantly warn
-about the insecure mode it is driven in.
+without entropy source and in this case prompts the component to constantly warn
+about the insecure mode it is operated in.
 
 The File Vault requires a directory named "tresor" to be present in its
 local VFS in order to store the image file named tresor.img inside.
@@ -70,7 +70,7 @@ This is an example UI configuration for the File Vault:
 !
 ! </ui_config>
 
-The passphrase is an arbitrary string while client_fs_size and
+The passphrase is an arbitrary string whereas client_fs_size and
 journaling_buf_size each are a number of bytes (number with no suffix or with
 suffix 'K', 'M', 'G'). The File Vault checks the values of these attributes
 against further critera to determine wether they are suitable.  The passphrase
@@ -92,9 +92,9 @@ file.
 
 Only when the File Vault reports to be in the "unlocked" state, it considers
 <rekey> and <extend> tags in the UI configuration. If that is the case and
-there is a <rekey> tag and there is no rekey operation in progress and the id
-in the tag is not the id of the last finished rekey operation, then the File
-Vault will start a rekey operation with that id.
+there is a <rekey> tag and there is no rekey operation in progress and the ID
+in the tag is not the ID of the last finished rekey operation, then the File
+Vault will start a rekey operation with that ID.
 
 The same goes for the <extend> tag and extend operations. However, the tree
 attribute in the extend tag must define which tree of the Tresor container to
@@ -159,7 +159,7 @@ discard the current UI configuration, wait for 3 seconds, and transition to the
 
 :unlocked:
 
-The image file was unlocked and is now accessible via a File System service
+The image file was unlocked and is now accessible via a file-system service
 provided by the File Vault. As soon as the File Vault receives user input that
 is unsuitable for keeping the image file unlocked, it transitions to the
 "locking" state.
@@ -176,7 +176,7 @@ and the num_clients attribute about the number of session clients at the
 provided file system service.
 
 If a File Vault instance started an extend or rekey operation in the past, the
-report contains a corresponding <extend> or <rekey> tag stating the id of the
+report contains a corresponding <extend> or <rekey> tag stating the ID of the
 most recently started operation and wether that operation has yet finished or
 not. Note that failed operations stay unfinished forever but print an error to
 the log.
