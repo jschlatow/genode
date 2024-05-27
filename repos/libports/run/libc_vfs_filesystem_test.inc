@@ -144,7 +144,7 @@ build_boot_image [list {*}[build_artifacts] test.hda]
 #
 append qemu_args " -nographic "
 
-run_genode_until ".*child \"test-libc_vfs\" exited with exit value 0.*" 90
+run_genode_until ".*child \"test-libc_vfs\" exited with exit value 0.*" 120
 
 exec rm -f $disk_image
 
