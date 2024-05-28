@@ -8,7 +8,7 @@ if {
 }
 
 set build_components {
-	core init timer
+	core init timer lib/ld
 	driver/platform
 	driver/acpi
 	server/event_dump
