@@ -1,0 +1,52 @@
+<launcher pkg="jschlatow/pkg/firefox-av@vbox6/2024-05-23">
+	<route>
+		<service name="File_system" label="vm">
+			<child name="ram_fs"/>
+		</service>
+		<service name="File_system" label="shared">
+			<child name="ram_fs"/>
+		</service>
+		<service name="VM">
+			<parent/>
+		</service>
+		<service name="Gui">
+			<child name="wm"/>
+		</service>
+		<service name="Nic">
+			<child name="nic_router"/>
+		</service>
+		<service name="ROM" label="capslock">
+			<parent label="capslock"/>
+		</service>
+		<service name="ROM" label="platform_info">
+			<parent label="platform_info"/>
+		</service>
+		<service name="Report" label="shape">
+			<child name="wm"/>
+		</service>
+		<service name="Report" label="clipboard">
+			<child name="wm"/>
+		</service>
+		<service name="ROM" label="clipboard">
+			<child name="wm"/>
+		</service>
+		<service name="RM">
+			<parent/>
+		</service>
+		<service name="Rtc">
+			<child name="system_clock"/>
+		</service>
+		<service name="Usb">
+			<child name="black_hole"/>
+		</service>
+		<service name="Play">
+			<child name="mixer"/>
+		</service>
+		<service name="Record">
+			<child name="mixer"/>
+		</service>
+		<service name="Capture">
+			<child name="black_hole"/>
+		</service>
+	</route>
+</launcher>

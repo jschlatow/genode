@@ -6,9 +6,12 @@ gpu_drv: intel
 # supplemental depot content added to the system image
 import: pkg/sculpt_drivers-pc
 
+#build: lib/ld core
+
 # selection of launcher-menu entries
 launcher: vm_fs shared_fs download_debug_info black_hole trace_logger
 launcher: audio mixer system_clock acpi_support recall_fs touchpad
+launcher: firefox-av@vbox6
 
 # selection of accepted depot-package providers
 depot: genodelabs cnuke alex-ab mstein nfeske cproc chelmuth jschlatow
