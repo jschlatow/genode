@@ -430,7 +430,7 @@ Session_component::Session_component(Env                          & env,
                                      Diag           const         & diag,
                                      bool           const           info,
                                      Policy_version const           version,
-                                     bool           const           dma_remapping,
+                                     bool           const           ,
                                      bool           const           kernel_iommu)
 :
 	Session_object<Platform::Session>(env.ep(), resources, label, diag),
@@ -438,7 +438,7 @@ Session_component::Session_component(Env                          & env,
 	Dynamic_rom_session::Xml_producer("devices"),
 	_env(env), _config(config), _devices(devices),
 	_io_mmu_devices(io_mmu_devices), _info(info), _version(version),
-	_dma_allocator(_md_alloc, dma_remapping)
+	_dma_allocator(_md_alloc, true)
 {
 	/*
 	 * FIXME: As the ROM session does not propagate Out_of_*

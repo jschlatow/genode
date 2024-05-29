@@ -1,0 +1,81 @@
+#if { ![have_board pbxa9] } {
+#	puts "Platform is unsupported."
+#	exit 0
+#}
+
+create_boot_directory
+
+import_from_depot [depot_user]/src/[base_src] \
+                  [depot_user]/src/init \
+                  [depot_user]/src/platform_drv \
+                  [depot_user]/src/report_rom
+
+build { test/platform_drv_dma_alloc }
+
+install_config {
+<config>
+	<parent-provides>
+		<service name="ROM"/>
+		<service name="IRQ"/>
+		<service name="IO_MEM"/>
+		<service name="PD"/>
+		<service name="RM"/>
+		<service name="CPU"/>
+		<service name="LOG"/>
+	</parent-provides>
+	<default-route>
+		<any-service> <parent/> </any-service>
+	</default-route>
+	<default caps="100"/>
+
+	<start name="timer">
+		<resource name="RAM" quantum="10M"/>
+		<provides><service name="Timer"/></provides>
+	</start>
+
+	<start name="report_rom">
+		<resource name="RAM" quantum="3M"/>
+		<provides>
+			<service name="ROM"/>
+			<service name="Report"/>
+		</provides>
+		<route>
+			<any-service> <parent/> </any-service>
+		</route>
+		<config verbose="yes"/>
+	</start>
+
+	<start name="platform_drv" managing_system="yes">
+		<resource name="RAM" quantum="1M"/>
+		<provides> <service name="Platform"/> </provides>
+		<config devices_rom="config">
+			<report devices="yes"/>
+
+			<device name="dummy">
+				<reserved_memory address="0x80000000" size="0x70000000"/>
+			</device>
+
+			<default-policy info="yes"> <device name="dummy"/> </default-policy>
+		</config>
+		<route>
+			<service name="Report"> <child name="report_rom"/>    </service>
+			<any-service> <parent/> </any-service>
+		</route>
+	</start>
+
+	<start name="test-platform_drv_dma_alloc" caps="200">
+		<resource name="RAM" quantum="3000M"/>
+		<route>
+			<service name="Platform"> <child name="platform_drv"/> </service>
+			<any-service> <parent/> </any-service>
+		</route>
+	</start>
+
+</config>}
+
+
+build_boot_image [build_artifacts]
+
+append qemu_args "-nographic -m 1500"
+
+run_genode_until forever
