@@ -70,14 +70,18 @@ void Thread::_init_platform_thread(size_t weight, Type type)
 	size_t const utcb_size  = sizeof(Native_utcb);
 	addr_t const stack_area = stack_area_virtual_base();
 	addr_t const utcb_new   = (addr_t)&_stack->utcb() - stack_area;
-	Region_map * const rm   = env_stack_area_region_map;
 
 	/* remap initial main-thread UTCB according to stack-area spec */
-	try { rm->attach_at(Hw::_main_thread_utcb_ds, utcb_new, utcb_size); }
-	catch(...) {
-		error("failed to re-map UTCB");
-		while (1) ;
-	}
+	if (env_stack_area_region_map->attach(Hw::_main_thread_utcb_ds, {
+		.size       = utcb_size,
+		.offset     = { },
+		.use_at     = true,
+		.at         = utcb_new,
+		.executable = { },
+		.writeable  = true
+	}).failed())
+		error("failed to attach UTCB to local address space");
+
 	/* adjust initial object state in case of a main thread */
 	native_thread().cap = Hw::_main_thread_cap;
 	_thread_cap = main_thread_cap();
@@ -103,19 +107,26 @@ void Thread::_deinit_platform_thread()
 
 void Thread::start()
 {
-	/* attach userland stack */
-	try {
-		Dataspace_capability ds = Cpu_thread_client(_thread_cap).utcb();
-		size_t const size = sizeof(_stack->utcb());
-		addr_t dst = Stack_allocator::addr_to_base(_stack) +
-		             stack_virtual_size() - size - stack_area_virtual_base();
-		env_stack_area_region_map->attach_at(ds, dst, size);
-	} catch (...) {
-		error("failed to attach userland stack");
-		sleep_forever();
-	}
-	/* start thread with its initial IP and aligned SP */
-	Cpu_thread_client(_thread_cap).start((addr_t)_thread_start, _stack->top());
+	Cpu_thread_client cpu_thread(_thread_cap);
+
+	/* attach UTCB at top of stack */
+	size_t const size = sizeof(_stack->utcb());
+	env_stack_area_region_map->attach(cpu_thread.utcb(), {
+		.size       = size,
+		.offset     = { },
+		.use_at     = true,
+		.at         = Stack_allocator::addr_to_base(_stack)
+		            + stack_virtual_size() - size - stack_area_virtual_base(),
+		.executable = { },
+		.writeable  = true
+	}).with_result(
+		[&] (Region_map::Range) {
+			/* start execution with initial IP and aligned SP */
+			cpu_thread.start((addr_t)_thread_start, _stack->top());
+		},
+		[&] (Region_map::Attach_error) {
+			error("failed to attach userland stack"); }
+	);
 }
 
 

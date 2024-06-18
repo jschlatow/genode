@@ -86,7 +86,11 @@ class Trace_buffer_monitor
 		                     Trace::Subject_id     id,
 		                     Dataspace_capability  ds_cap)
 		:
-			_rm(rm), _id(id), _buffer_raw(rm.attach(ds_cap)),
+			_rm(rm), _id(id),
+			_buffer_raw(rm.attach(ds_cap, { }).convert<Trace::Buffer *>(
+				[&] (Region_map::Range r) { return (Trace::Buffer *)r.start; },
+				[&] (Region_map::Attach_error) { return nullptr; }
+			)),
 			_buffer(*_buffer_raw)
 		{
 			log("monitor "
@@ -96,7 +100,7 @@ class Trace_buffer_monitor
 
 		~Trace_buffer_monitor()
 		{
-			if (_buffer_raw) { _rm.detach(_buffer_raw); }
+			if (_buffer_raw) { _rm.detach(addr_t(_buffer_raw)); }
 		}
 
 		Trace::Subject_id id() { return _id; };
