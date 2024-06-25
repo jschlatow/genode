@@ -181,6 +181,8 @@ class Core::Cpu_thread_component : public  Rpc_object<Cpu_thread>,
 			_address_space_region_map.remove_client(_rm_client);
 		}
 
+		bool valid() const { return _bound_to_pd; };
+
 
 		/********************************************
 		 ** Trace::Source::Info_accessor interface **

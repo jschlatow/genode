@@ -154,11 +154,13 @@ void Thread::_deinit_platform_thread()
 	}
 
 	/* inform core about the killed thread */
-	_cpu_session->kill_thread(_thread_cap);
+	_thread_cap.with_result(
+		[&] (Thread_capability cap) { _cpu_session->kill_thread(cap); },
+		[&] (Cpu_session::Create_thread_error) { });
 }
 
 
-void Thread::start()
+Thread::Start_result Thread::start()
 {
 	/* synchronize calls of the 'start' function */
 	static Mutex mutex;
@@ -183,6 +185,8 @@ void Thread::start()
 
 	/* wait until the 'thread_start' function got entered */
 	startup_lock().block();
+
+	return Start_result::OK;
 }
 
 

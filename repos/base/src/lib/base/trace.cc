@@ -232,7 +232,7 @@ Trace::Logger *Thread::_logger()
 	if (!logger.initialized()) {
 		logger.init_pending(true);
 
-		Thread_capability thread_cap = myself ? myself->_thread_cap
+		Thread_capability thread_cap = myself ? myself->cap()
 		                                      : _env().parent().main_thread_cap();
 
 		Cpu_session &cpu = myself ? *myself->_cpu_session : _env().cpu();

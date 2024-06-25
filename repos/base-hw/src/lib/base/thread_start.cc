@@ -58,12 +58,9 @@ void Thread::_init_platform_thread(size_t weight, Type type)
 
 		/* create server object */
 		addr_t const utcb = (addr_t)&_stack->utcb();
-		_cpu_session->create_thread(pd_session_cap(), name(), _affinity,
-		                            Weight(weight), utcb).with_result(
-			[&] (Thread_capability cap) { _thread_cap = cap; },
-			[&] (Cpu_session::Create_thread_error) {
-				error("failed to create PD-local thread"); }
-		);
+
+		_thread_cap = _cpu_session->create_thread(pd_session_cap(), name(), _affinity,
+		                                          Weight(weight), utcb);
 		return;
 	}
 	/* if we got reinitialized we have to get rid of the old UTCB */
@@ -95,7 +92,9 @@ void Thread::_deinit_platform_thread()
 		return;
 	}
 
-	_cpu_session->kill_thread(_thread_cap);
+	_thread_cap.with_result(
+		[&] (Thread_capability cap) { _cpu_session->kill_thread(cap); },
+		[&] (Cpu_session::Create_thread_error) { });
 
 	/* detach userland stack */
 	size_t const size = sizeof(_stack->utcb());
@@ -105,27 +104,35 @@ void Thread::_deinit_platform_thread()
 }
 
 
-void Thread::start()
+Thread::Start_result Thread::start()
 {
-	Cpu_thread_client cpu_thread(_thread_cap);
+	return _thread_cap.convert<Start_result>(
+		[&] (Thread_capability cap) {
+			Cpu_thread_client cpu_thread(cap);
 
-	/* attach UTCB at top of stack */
-	size_t const size = sizeof(_stack->utcb());
-	env_stack_area_region_map->attach(cpu_thread.utcb(), {
-		.size       = size,
-		.offset     = { },
-		.use_at     = true,
-		.at         = Stack_allocator::addr_to_base(_stack)
-		            + stack_virtual_size() - size - stack_area_virtual_base(),
-		.executable = { },
-		.writeable  = true
-	}).with_result(
-		[&] (Region_map::Range) {
-			/* start execution with initial IP and aligned SP */
-			cpu_thread.start((addr_t)_thread_start, _stack->top());
+			/* attach UTCB at top of stack */
+			size_t const size = sizeof(_stack->utcb());
+			return env_stack_area_region_map->attach(cpu_thread.utcb(), {
+				.size       = size,
+				.offset     = { },
+				.use_at     = true,
+				.at         = Stack_allocator::addr_to_base(_stack)
+				            + stack_virtual_size() - size - stack_area_virtual_base(),
+				.executable = { },
+				.writeable  = true
+			}).convert<Start_result>(
+				[&] (Region_map::Range) {
+					/* start execution with initial IP and aligned SP */
+					cpu_thread.start((addr_t)_thread_start, _stack->top());
+					return Start_result::OK;
+				},
+				[&] (Region_map::Attach_error) {
+					error("failed to attach userland stack");
+					return Start_result::DENIED;
+				}
+			);
 		},
-		[&] (Region_map::Attach_error) {
-			error("failed to attach userland stack"); }
+		[&] (Cpu_session::Create_thread_error) { return Start_result::DENIED; }
 	);
 }
 

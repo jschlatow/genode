@@ -64,6 +64,12 @@ Cpu_session_component::create_thread(Capability<Pd_session> pd_cap,
 					_trace_sources, weight, _weight_to_quota(weight.value),
 					_thread_affinity(affinity), _label, name,
 					_priority, utcb);
+
+			if (!thread.valid()) {
+				destroy(_thread_alloc, &thread);
+				return;
+			}
+
 			thread.session_exception_sigh(_exception_sigh);
 
 			_thread_list.insert(&thread);

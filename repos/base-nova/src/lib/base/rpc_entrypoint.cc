@@ -48,7 +48,7 @@ Untyped_capability Rpc_entrypoint::_manage(Rpc_object_base *obj)
 	if (native_thread().ec_sel != Native_thread::INVALID_INDEX)
 		ec_cap = Capability_space::import(native_thread().ec_sel);
 	else
-		ec_cap = _thread_cap;
+		ec_cap = Thread::cap();
 
 	Untyped_capability obj_cap = _alloc_rpc_cap(_pd_session, ec_cap,
 	                                            (addr_t)&_activation_entry);

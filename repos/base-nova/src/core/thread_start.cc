@@ -79,7 +79,7 @@ void Thread::_deinit_platform_thread()
 }
 
 
-void Thread::start()
+Thread::Start_result Thread::start()
 {
 	/*
 	 * On NOVA, core almost never starts regular threads. This simply creates a
@@ -98,7 +98,7 @@ void Thread::start()
 	                        (mword_t)&utcb, sp, native_thread().exc_pt_sel, LOCAL_THREAD);
 	if (res != NOVA_OK) {
 		error("Thread::start: create_ec returned ", res);
-		return;
+		return Start_result::DENIED;
 	}
 
 	/* default: we don't accept any mappings or translations */
@@ -110,7 +110,7 @@ void Thread::start()
 	              Obj_crd(PT_SEL_PAGE_FAULT, 0),
 	              Obj_crd(native_thread().exc_pt_sel + PT_SEL_PAGE_FAULT, 0))) {
 		error("Thread::start: failed to create page-fault portal");
-		return;
+		return Start_result::DENIED;
 	}
 
 	struct Core_trace_source : public  Core::Trace::Source::Info_accessor,
@@ -145,4 +145,6 @@ void Thread::start()
 
 	new (platform().core_mem_alloc())
 		Core_trace_source(Core::Trace::sources(), *this);
+
+	return Start_result::OK;
 }
