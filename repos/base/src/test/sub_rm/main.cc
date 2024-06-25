@@ -130,7 +130,7 @@ void Component::construct(Env &env)
 	addr_t const local_attach_addr =
 		config.xml().attribute_value("local_attach_addr", (addr_t)0);
 
-	char * const sub_rm_base = env.rm().attach(ds, {
+	char * const sub_rm_base = env.rm().attach(sub_rm.dataspace(), {
 		.size       = { },   .offset    = { },
 		.use_at     = true,  .at        = local_attach_addr,
 		.executable = { },   .writeable = true
