@@ -62,7 +62,9 @@ class Net::Session_creation
 				.executable = { },  .writeable = true
 			}).with_result(
 				[&] (Region_map::Range range)  { _ram_ptr = (void *)range.start; },
-				[&] (Region_map::Attach_error) {
+				[&] (Region_map::Attach_error e) {
+					if (e == Region_map::Attach_error::OUT_OF_RAM)  throw Out_of_ram();
+					if (e == Region_map::Attach_error::OUT_OF_CAPS) throw Out_of_caps();
 					error("failed to attach Session_creation::_ram_ds"); }
 			);
 
