@@ -100,13 +100,10 @@ bool Trace::Logger::_evaluate_control()
 		max_event_size = 0;
 		policy_module  = nullptr;
 
-		_env().rm().attach(policy_ds, Region_map::Attr {
-			.size       = { },
-			.offset     = { },
-			.use_at     = { },
-			.at         = { },
-			.executable = true,
-			.writeable  = { },
+		_env().rm().attach(policy_ds, {
+			.size       = { },   .offset     = { },
+			.use_at     = { },   .at         = { },
+			.executable = true,  .writeable  = true,
 		}).with_result(
 			[&] (Region_map::Range range)  {
 				policy_module = reinterpret_cast<Policy_module *>(range.start); },

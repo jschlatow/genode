@@ -87,8 +87,12 @@ class Trace_buffer_monitor
 		                     Dataspace_capability  ds_cap)
 		:
 			_rm(rm), _id(id),
-			_buffer_raw(rm.attach(ds_cap, { }).convert<Trace::Buffer *>(
-				[&] (Region_map::Range r) { return (Trace::Buffer *)r.start; },
+			_buffer_raw(rm.attach(ds_cap, {
+				.size       = { }, .offset    = { },
+				.use_at     = { }, .at        = { },
+				.executable = { }, .writeable = true
+			}).convert<Trace::Buffer *>(
+				[&] (Region_map::Range r)      { return (Trace::Buffer *)r.start; },
 				[&] (Region_map::Attach_error) { return nullptr; }
 			)),
 			_buffer(*_buffer_raw)
