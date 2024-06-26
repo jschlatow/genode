@@ -33,8 +33,6 @@ class Genode::Attached_dataspace : Noncopyable
 
 		Region_map &_rm;
 
-		size_t const _size = { Dataspace_client(_ds).size() };
-
 		Dataspace_capability _check(Dataspace_capability ds)
 		{
 			if (ds.valid())
@@ -43,20 +41,18 @@ class Genode::Attached_dataspace : Noncopyable
 			throw Invalid_dataspace();
 		}
 
-		addr_t _attach()
-		{
-			Region_map::Attr attr { };
-			attr.writeable = true;
-			return _rm.attach(_ds, attr).convert<addr_t>(
-				[&] (Region_map::Range range) { return range.start; },
-				[&] (Region_map::Attach_error e) -> addr_t {
-					if (e == Region_map::Attach_error::OUT_OF_RAM)  throw Out_of_ram();
-					if (e == Region_map::Attach_error::OUT_OF_CAPS) throw Out_of_caps();
-					throw Region_conflict();
-				});
-		}
+		Region_map::Attach_result _attached = _rm.attach(_ds, {
+			.size       = { }, .offset    = { },
+			.use_at     = { }, .at        = { },
+			.executable = { }, .writeable = true });
 
-		addr_t _local_addr = _attach();
+		template <typename T>
+		T *_ptr() const
+		{
+			return _attached.convert<T *>(
+				[&] (Region_map::Range range)  { return (T *)range.start; },
+				[&] (Region_map::Attach_error) { return nullptr; });
+		}
 
 		/*
 		 * Noncopyable
@@ -75,15 +71,24 @@ class Genode::Attached_dataspace : Noncopyable
 		 * \throw Out_of_ram
 		 */
 		Attached_dataspace(Region_map &rm, Dataspace_capability ds)
-		: _ds(_check(ds)), _rm(rm) { }
+		:
+			_ds(_check(ds)), _rm(rm)
+		{
+			_attached.with_error([&] (Region_map::Attach_error e) {
+				if (e == Region_map::Attach_error::OUT_OF_RAM)  throw Out_of_ram();
+				if (e == Region_map::Attach_error::OUT_OF_CAPS) throw Out_of_caps();
+				throw Region_conflict();
+			});
+		}
 
 		/**
 		 * Destructor
 		 */
 		~Attached_dataspace()
 		{
-			if (_local_addr)
-				_rm.detach(_local_addr);
+			_attached.with_result(
+				[&] (Region_map::Range range)  { _rm.detach(range.start); },
+				[&] (Region_map::Attach_error) { });
 		}
 
 		/**
@@ -98,15 +103,20 @@ class Genode::Attached_dataspace : Noncopyable
 		 * A newly attached dataspace is untyped memory anyway.
 		 */
 		template <typename T>
-		T *local_addr() { return reinterpret_cast<T *>(_local_addr); }
+		T *local_addr() { return _ptr<T>(); }
 
 		template <typename T>
-		T const *local_addr() const { return reinterpret_cast<T const *>(_local_addr); }
+		T const *local_addr() const { return _ptr<T const>(); }
 
 		/**
 		 * Return size
 		 */
-		size_t size() const { return _size; }
+		size_t size() const
+		{
+			return _attached.convert<size_t>(
+				[&] (Region_map::Range range)  { return range.num_bytes; },
+				[&] (Region_map::Attach_error) { return 0UL; });
+		}
 
 		/**
 		 * Forget dataspace, thereby skipping the detachment on destruction
@@ -117,7 +127,7 @@ class Genode::Attached_dataspace : Noncopyable
 		 * removed the memory mappings of the dataspace. So we have to omit the
 		 * detach operation in '~Attached_dataspace'.
 		 */
-		void invalidate() { _local_addr = 0; }
+		void invalidate() { _attached = Region_map::Attach_error::INVALID_DATASPACE; }
 };
 
 #endif /* _INCLUDE__BASE__ATTACHED_DATASPACE_H_ */
