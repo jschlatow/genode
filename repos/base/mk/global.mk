@@ -127,7 +127,7 @@ endif
 ifneq ($(findstring /depot/,$(CURDIR)),)
 DEBUG_PREFIX = $(shell echo $(CURDIR) | \
                        sed -e 's#/depot/.*$$#/depot/#')
-CC_OPT += -fdebug-prefix-map=$(DEBUG_PREFIX)=/data/depot/
+CC_OPT += -fdebug-prefix-map=$(DEBUG_PREFIX)=/depot/
 endif
 
 #
