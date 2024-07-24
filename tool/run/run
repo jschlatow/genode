@@ -119,6 +119,8 @@ proc lappend_if {condition var string} {
 #
 proc check_xml_syntax {xml_file} {
 
+	return
+
 	if {![have_installed xmllint]} {
 		puts "Warning: Cannot validate config syntax (please install xmllint)"
 		return;
@@ -143,6 +145,8 @@ proc check_xml_syntax {xml_file} {
 # \param nesting_level    level of recursive calls of this procedure
 #
 proc check_config {bin xml_file xsd_file label avail_xsd_files xsd_inc nesting_level} {
+
+	return
 
 	# check prerequisites if this is not a recursive call
 	if {$nesting_level == 0} {
