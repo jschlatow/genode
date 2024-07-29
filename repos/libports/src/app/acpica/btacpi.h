@@ -9,8 +9,9 @@ namespace Btacpi {
 
 typedef String<8>   Name;
 typedef String<128> Pathname;
-typedef String<64>  Hid;
-typedef String<64>  Cid;
+typedef String<64>  Id;
+typedef Id          Hid;
+typedef Id          Cid;
 
 struct Buffer : ACPI_BUFFER
 {
@@ -70,13 +71,7 @@ struct Device
 		return { (char const *)info->CompatibleIdList.Ids[0].String };
 	}
 
-	ACPI_HANDLE parent() const
-	{
-		ACPI_HANDLE parent;
-		AcpiGetParent(handle, &parent);
-
-		return parent;
-	}
+	bool match(Id const &id) { return id == hid() || id == cid(); }
 
 	bool present_ok()
 	{
@@ -102,11 +97,20 @@ struct Device
 		return false;
 	}
 
-	bool has_method(Name const &name)
+	ACPI_HANDLE parent() const
 	{
-		ACPI_HANDLE tmp;
+		ACPI_HANDLE parent = nullptr;
+		AcpiGetParent(handle, &parent);
 
-		return ACPI_SUCCESS(AcpiGetHandle(handle, ACPI_STRING(name.string()), &tmp));
+		return parent;
+	}
+
+	ACPI_HANDLE child(Name const &name)
+	{
+		ACPI_HANDLE child = nullptr;
+		AcpiGetHandle(handle, ACPI_STRING(name.string()), &child);
+
+		return child;
 	}
 };
 
@@ -122,6 +126,7 @@ struct Resource : ACPI_RESOURCE
 	typedef Address<ACPI_RESOURCE_ADDRESS64> Address64;
 	struct Extended_irq;
 	struct Gpio;
+	struct Serial_bus;
 
 	static char const * producer_consumer(UINT8 v)
 	{
@@ -306,6 +311,51 @@ struct Resource::Gpio : ACPI_RESOURCE_GPIO
 };
 
 
+#if 0
+struct Resource::Serial_bus : ACPI_RESOURCE_COMMON_SERIAL_BUS
+{
+	Serial_bus(ACPI_RESOURCE_COMMON_SERIAL_BUS const &res) : ACPI_RESOURCE_COMMON_SERIAL_BUS(res)
+	{
+		/* *PinTable of PinTableLength */
+		/* *VendorData of VendorLength */
+	}
+
+	static char const * connection_type(UINT8 v)
+	{
+		switch (v) {
+		case ACPI_RESOURCE_GPIO_TYPE_INT: return "int";
+		case ACPI_RESOURCE_GPIO_TYPE_IO:  return "io";
+		default: return "?";
+		}
+	}
+
+	static char const * pin_config(UINT8 v)
+	{
+		switch (v) {
+		case ACPI_PIN_CONFIG_DEFAULT:  return "default";
+		case ACPI_PIN_CONFIG_PULLUP:   return "pullup";
+		case ACPI_PIN_CONFIG_PULLDOWN: return "pulldown";
+		case ACPI_PIN_CONFIG_NOPULL:   return "nopull";
+		default: return "?";
+		}
+	}
+
+	void print(Genode::Output &out) const
+	{
+		using Genode::print;
+
+		print(out, Right_aligned(8, "GPIO"));
+		print(out, " ", connection_type(ConnectionType));
+		print(out, " ", pin_config(PinConfig));
+		print(out, " ", triggering(Triggering));
+		print(out, " ", polarity(Polarity));
+		print(out, " ", sharable(Sharable));
+		print(out, " ", producer_consumer(ProducerConsumer));
+	}
+};
+#endif
+
+
 void Resource::print(Genode::Output &out) const
 {
 	using Genode::print;
@@ -330,7 +380,7 @@ void Resource::print(Genode::Output &out) const
 //	case ACPI_RESOURCE_TYPE_GENERIC_REGISTER:   /* 16 */
 	case ACPI_RESOURCE_TYPE_GPIO:               print(out, Gpio(Data.Gpio));                    break;
 //	case ACPI_RESOURCE_TYPE_FIXED_DMA:          /* 18 */
-//	case ACPI_RESOURCE_TYPE_SERIAL_BUS:         /* 19 */
+//	case ACPI_RESOURCE_TYPE_SERIAL_BUS:         print(out, Serial_bus(Data.CommonSerialBus));   break;
 //	case ACPI_RESOURCE_TYPE_PIN_FUNCTION:       /* 20 */
 //	case ACPI_RESOURCE_TYPE_PIN_CONFIG:         /* 21 */
 //	case ACPI_RESOURCE_TYPE_PIN_GROUP:          /* 22 */
@@ -397,7 +447,6 @@ ACPI_STATUS display_method(ACPI_HANDLE handle, UINT32 level,
                             void * /* context */, void ** /* retval */)
 {
 	Device method { handle };
-	Device parent { method.parent() };
 
 	log(" ", method.name(), " - ", method.pathname(), " ", handle);
 
@@ -410,107 +459,122 @@ ACPI_STATUS display_device(ACPI_HANDLE handle, UINT32 level,
 {
 	Device dev { handle };
 
-	if (dev.present_ok()) {
-		warning(dev.pathname(), " h:", dev.hid(), " c:", dev.cid());
-		AcpiWalkResources(handle, ACPI_STRING("_CRS"), detect_resource, &dev);
+	if (!dev.present_ok())
+		return AE_OK;
 
-		ACPI_HANDLE child = NULL;
-		while (true) {
-			if (AcpiGetNextObject(ACPI_TYPE_METHOD, dev.handle, child, &child) != AE_OK)
-				break;
-			display_method(child, 0, 0, 0);
-		}
+warning(dev.pathname(), " h:", dev.hid(), " c:", dev.cid());
+	AcpiWalkResources(handle, ACPI_STRING("_CRS"), detect_resource, &dev);
 
-		/* HID over I2C */
-		if (dev.cid() == "PNP0C50") {
-			if (false) {
-				Btacpi::Buffer out;
+	ACPI_HANDLE child = NULL;
+	while (true) {
+		if (AcpiGetNextObject(ACPI_TYPE_METHOD, dev.handle, child, &child) != AE_OK)
+			break;
+		display_method(child, 0, 0, 0);
+	}
 
-				ACPI_STATUS ret = AcpiEvaluateObject(dev.handle, ACPI_STRING("_HID"), nullptr, &out);
-
-				out.with_object([&] (auto &o) {
-					if (o.Type != ACPI_TYPE_STRING) return;
-
-					log("++++ _HID ret=", ret, " type=", o.Type, " string=", (void *)o.String.Pointer, "/", o.String.Length);
-				});
-			}
-
-			/* call _DSM to retrieve HID descriptor address */
-			{
-				ACPI_OBJECT      args[4];
-				ACPI_OBJECT_LIST in { 4, args };
-				Btacpi::Buffer   out;
-
-				ACPI_UUID guid { ACPI_INIT_UUID(0x3cdff6f7, 0x4267, 0x4555, 0xad, 0x05, 0xb3, 0x0a, 0x3d, 0x89, 0x38, 0xde) };
-
-				args[0].Type = ACPI_TYPE_BUFFER;
-				args[0].Buffer.Length = sizeof(guid);
-				args[0].Buffer.Pointer = guid.Data;
-				args[1].Type = ACPI_TYPE_INTEGER;
-				args[1].Integer.Value = 1; /* revision */
-				args[2].Type = ACPI_TYPE_INTEGER;
-				args[2].Integer.Value = 1; /* function (0: query 1: HID descriptor address (2 bytes) */
-				args[3].Type = ACPI_TYPE_PACKAGE;
-				args[3].Package.Count = 0;
-				args[3].Package.Elements = nullptr;
-
-				ACPI_STATUS ret = AcpiEvaluateObjectTyped(dev.handle, ACPI_STRING("_DSM"), &in, &out, ACPI_TYPE_INTEGER);
-
-				out.with_object([&] (auto &o) {
-					log("++++ ret=", ret, " type=", o.Type, " result=", o.Integer.Value); });
-			}
-
-			/* get parent bus parameters */
-			{
-				ACPI_HANDLE parent; AcpiGetParent(dev.handle, &parent);
-
-				Btacpi::Buffer out;
-
-				ACPI_STATUS ret = AcpiEvaluateObjectTyped(parent, ACPI_STRING("SSCN"), nullptr, &out, ACPI_TYPE_PACKAGE);
-				if (ret)
-					error("++++ ret=", ret);
-				else
-					out.with_object([&] (auto &o) {
-						if (o.Package.Count != 3)
-							error("++++ count=", o.Package.Count);
-						else
-							log(" SSCN",
-							    " ", o.Package.Elements[0].Integer.Value,
-							    " ", o.Package.Elements[1].Integer.Value,
-							    " ", o.Package.Elements[2].Integer.Value);
-						});
-			}
-		}
-
-		if (false && (dev.hid() == "PNP0C0B" || dev.cid() == "PNP0C0B")) {
+	/* HID over I2C */
+	if (dev.match("PNP0C50")) {
+		if (false) {
 			Btacpi::Buffer out;
 
-			ACPI_STATUS ret = AcpiEvaluateObjectTyped(dev.handle, ACPI_STRING("_FST"), nullptr, &out, ACPI_TYPE_PACKAGE);
+			ACPI_STATUS ret = AcpiEvaluateObject(dev.handle, ACPI_STRING("_HID"), nullptr, &out);
 
 			out.with_object([&] (auto &o) {
-				log("++++ ret=", ret, " type=", (ACPI_OBJECT_TYPE)o.Package.Type, " result=", o.Package.Count);
-				if (o.Package.Count >= 3)
-					log(" revision:", o.Package.Elements[0].Integer.Value,
-					    " control:",  o.Package.Elements[1].Integer.Value,
-					    " speed:",    o.Package.Elements[2].Integer.Value);
+				if (o.Type != ACPI_TYPE_STRING) return;
+
+				log("++++ _HID ret=", ret, " type=", o.Type, " string=", (void *)o.String.Pointer, "/", o.String.Length);
 			});
 		}
-		if (false && dev.has_method("_TMP")) {
-			for (unsigned i = 3; i > 0; --i) {
-				Btacpi::Buffer out;
 
-				ACPI_STATUS ret = AcpiEvaluateObjectTyped(dev.handle, ACPI_STRING("_TMP"), nullptr, &out, ACPI_TYPE_INTEGER);
+		/* call _DSM to retrieve HID descriptor address */
+		do {
+			ACPI_OBJECT      args[4];
+			ACPI_OBJECT_LIST in { 4, args };
+			Btacpi::Buffer   out;
 
-				if (ret)
-					error("++++ ret=", ret);
-				else
-					out.with_object([&] (auto &o) {
-						int temp_c = int(o.Integer.Value) - 2732; /* Kelvin to Celsius (tenth) */
-						log(" _TMP ", temp_c/10, ".", temp_c%10);
-					});
+			ACPI_UUID guid { ACPI_INIT_UUID(0x3cdff6f7, 0x4267, 0x4555, 0xad, 0x05, 0xb3, 0x0a, 0x3d, 0x89, 0x38, 0xde) };
 
-				AcpiOsSleep(1000);
+			args[0].Type = ACPI_TYPE_BUFFER;
+			args[0].Buffer.Length = sizeof(guid);
+			args[0].Buffer.Pointer = guid.Data;
+			args[1].Type = ACPI_TYPE_INTEGER;
+			args[1].Integer.Value = 1; /* revision */
+			args[2].Type = ACPI_TYPE_INTEGER;
+			args[2].Integer.Value = 1; /* function (0: query 1: HID descriptor address (2 bytes) */
+			args[3].Type = ACPI_TYPE_PACKAGE;
+			args[3].Package.Count = 0;
+			args[3].Package.Elements = nullptr;
+
+			ACPI_STATUS ret = AcpiEvaluateObjectTyped(dev.handle, ACPI_STRING("_DSM"), &in, &out, ACPI_TYPE_INTEGER);
+			if (ACPI_FAILURE(ret)) {
+				log("++++ ret=", ret);
+				break;
 			}
+
+			out.with_object([&] (auto &o) {
+				log(" ", Right_aligned(8, dev.hid()),
+				    " ", Right_aligned(8, dev.cid()),
+				    " HIDD address ", o.Integer.Value); });
+		} while (false);
+
+		/* get DW I2C bus parameters from parent */
+		ACPI_HANDLE parent = dev.parent();
+		auto bus_param = [&] (Name const &param) {
+			Btacpi::Buffer out;
+
+			ACPI_STATUS ret = AcpiEvaluateObjectTyped(parent, ACPI_STRING(param.string()), nullptr, &out, ACPI_TYPE_PACKAGE);
+			if (ACPI_FAILURE(ret))
+				return;
+
+			out.with_object([&] (auto &o) {
+				if (o.Package.Count != 3) {
+					error("++++ count=", o.Package.Count);
+					return;
+				}
+
+				log(" ", Right_aligned(8, dev.hid()),
+				    " ", Right_aligned(8, dev.cid()),
+				    " I2C ", param,
+				    " ", Right_aligned(3, o.Package.Elements[0].Integer.Value),
+				    " ", Right_aligned(3, o.Package.Elements[1].Integer.Value),
+				    " ", Right_aligned(3, o.Package.Elements[2].Integer.Value));
+			});
+		};
+		bus_param("SSCN");
+		bus_param("FMCN");
+		bus_param("FPCN");
+//		bus_param("HSCN");
+//		bus_param("HMCN");
+	}
+
+	if (false) if (dev.match("PNP0C0B")) {
+		Btacpi::Buffer out;
+
+		ACPI_STATUS ret = AcpiEvaluateObjectTyped(dev.handle, ACPI_STRING("_FST"), nullptr, &out, ACPI_TYPE_PACKAGE);
+
+		out.with_object([&] (auto &o) {
+			log("++++ ret=", ret, " type=", (ACPI_OBJECT_TYPE)o.Package.Type, " result=", o.Package.Count);
+			if (o.Package.Count >= 3)
+				log(" revision:", o.Package.Elements[0].Integer.Value,
+				    " control:",  o.Package.Elements[1].Integer.Value,
+				    " speed:",    o.Package.Elements[2].Integer.Value);
+		});
+	}
+	if (false) if (ACPI_HANDLE method = dev.child("_TMP")) {
+		for (unsigned i = 3; i > 0; --i) {
+			Btacpi::Buffer out;
+
+			ACPI_STATUS ret = AcpiEvaluateObjectTyped(method, nullptr, nullptr, &out, ACPI_TYPE_INTEGER);
+
+			if (ret)
+				error("++++ ret=", ret);
+			else
+				out.with_object([&] (auto &o) {
+					int temp_c = int(o.Integer.Value) - 2732; /* Kelvin to Celsius (tenth) */
+					log(" _TMP ", temp_c/10, ".", temp_c%10);
+				});
+
+			AcpiOsSleep(1000);
 		}
 	}
 
