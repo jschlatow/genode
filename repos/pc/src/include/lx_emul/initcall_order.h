@@ -285,6 +285,7 @@ static const char * lx_emul_initcall_order[] = {
 	"__initcall_evdev_init6",
 	"__initcall_atkbd_init6",
 	"__initcall_psmouse_init6",
+	"__initcall_goodix_ts_driver_init6",
 	"__initcall_pkg_temp_thermal_init6",
 	"__initcall_thermal_throttle_init_device6",
 	"__initcall_ledtrig_audio_init6",
