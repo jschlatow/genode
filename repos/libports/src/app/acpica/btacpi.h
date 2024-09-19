@@ -1,3 +1,14 @@
+/*
+ * TBD
+ *
+ * [acpi]   Advanced Configuration and Power Interface (ACPI) Specification
+ *          Release 6.5, August 29, 2022
+ *          https://uefi.org/specs/ACPI/6.5/
+ *
+ * [acpica] ACPI Component Architecture User Guide and Programmer Reference
+ *          Revision 6.3, September 14, 2021
+ *          https://github.com/acpica/acpica/blob/1ceb58cdec7f08dfccba36652193d4d20e0a1063/documents/acpica-reference.pdf
+ */
 #include <util/formatted_output.h>
 
 extern "C" {
@@ -7,17 +18,26 @@ extern "C" {
 
 namespace Btacpi {
 
-typedef String<8>   Name;
-typedef String<128> Pathname;
-typedef String<64>  Id;
-typedef Id          Hid;
-typedef Id          Cid;
+using Name     = String<8>;
+using Pathname = String<128>;
+using Id       = String<64>;
+using Hid      = Id;
+using Cid      = Id;
 
 struct Buffer : ACPI_BUFFER
 {
 	Buffer() : ACPI_BUFFER(ACPI_ALLOCATE_BUFFER, nullptr) { }
 
-	~Buffer() { if (Pointer) ACPI_FREE(Pointer); }
+	~Buffer()
+	{
+		/*
+		 * [acpica] 8.10 Memory Management
+		 *
+		 * if * ACPI_ALLOCATE_BUFFER is used [...] AcpiOsFree should be used to
+		 * free the buffer.
+		 */
+		if (Pointer) AcpiOsFree(Pointer);
+	}
 
 	auto with_object(auto const &fn) { return fn(*(ACPI_OBJECT *)Pointer); }
 };
@@ -33,7 +53,15 @@ struct Device
 		AcpiGetObjectInfo(handle, &info);
 	}
 
-	~Device() { ACPI_FREE(info); }
+	~Device()
+	{
+		/*
+		 * [acpica] 8.3.3 AcpiGetObjectInfo
+		 *
+		 * The object returned from this function should be freed via ACPI_FREE.
+		 */
+		ACPI_FREE(info);
+	}
 
 	Name name() const
 	{
@@ -115,18 +143,19 @@ struct Device
 };
 
 
-struct Resource : ACPI_RESOURCE
+struct Resource
 {
-	struct Irq;
 	struct Io;
-	struct Fixed_memory32;
-	template <typename> struct Address;
-	typedef Address<ACPI_RESOURCE_ADDRESS16> Address16;
-	typedef Address<ACPI_RESOURCE_ADDRESS32> Address32;
-	typedef Address<ACPI_RESOURCE_ADDRESS64> Address64;
-	struct Extended_irq;
+	struct Irq;
 	struct Gpio;
-	struct Serial_bus;
+	struct Fixed_memory32;
+	struct Extended_irq;
+	struct I2c_serial_bus;
+
+	template <typename> struct Address;
+	using Address16 = Address<ACPI_RESOURCE_ADDRESS16>;
+	using Address32 = Address<ACPI_RESOURCE_ADDRESS32>;
+	using Address64 = Address<ACPI_RESOURCE_ADDRESS64>;
 
 	static char const * producer_consumer(UINT8 v)
 	{
@@ -165,18 +194,39 @@ struct Resource : ACPI_RESOURCE
 		}
 	}
 
-	Resource(ACPI_RESOURCE const &res) : ACPI_RESOURCE(res) { }
+	ACPI_RESOURCE const &r;
+
+	Resource(ACPI_RESOURCE const &r) : r(r) { }
 
 	void print(Genode::Output &out) const;
 };
 
 
-struct Resource::Irq : ACPI_RESOURCE_IRQ
+struct Resource::Io
 {
-	Irq(ACPI_RESOURCE_IRQ const &res) : ACPI_RESOURCE_IRQ(res)
+	ACPI_RESOURCE_IO const &r;
+
+	Io(ACPI_RESOURCE_IO const &r) : r(r) { }
+
+	void print(Genode::Output &out) const
 	{
-		if (InterruptCount > 1)
-			warning("Resource::Irq: only first of ", InterruptCount, " IRQs supported");
+		using Genode::print;
+
+		print(out, Right_aligned(8, "IO"));
+		print(out, " ", Right_aligned(4, r.AddressLength), " ports at");
+		print(out, " ", Hex(r.Minimum), "/", Hex(r.Maximum));
+	}
+};
+
+
+struct Resource::Irq
+{
+	ACPI_RESOURCE_IRQ const &r;
+
+	Irq(ACPI_RESOURCE_IRQ const &r) : r(r)
+	{
+		if (r.InterruptCount > 1)
+			warning("Resource::Irq: only first of ", r.InterruptCount, " IRQs supported");
 	}
 
 	void print(Genode::Output &out) const
@@ -184,25 +234,10 @@ struct Resource::Irq : ACPI_RESOURCE_IRQ
 		using Genode::print;
 
 		print(out, Right_aligned(8, "IRQ"));
-		print(out, " ", Interrupts[0]);
-		print(out, " ", triggering(Triggering));
-		print(out, " ", polarity(Polarity));
-		print(out, " ", sharable(Sharable));
-	}
-};
-
-
-struct Resource::Io : ACPI_RESOURCE_IO
-{
-	Io(ACPI_RESOURCE_IO const &res) : ACPI_RESOURCE_IO(res) { }
-
-	void print(Genode::Output &out) const
-	{
-		using Genode::print;
-
-		print(out, Right_aligned(8, "IO"));
-		print(out, " ", Right_aligned(4, AddressLength), " ports at");
-		print(out, " ", Hex(Minimum), "/", Hex(Maximum));
+		print(out, " ", r.Interrupts[0]);
+		print(out, " ", triggering(r.Triggering));
+		print(out, " ", polarity(r.Polarity));
+		print(out, " ", sharable(r.Sharable));
 	}
 };
 
@@ -261,7 +296,6 @@ struct Resource::Extended_irq : ACPI_RESOURCE_EXTENDED_IRQ
 		print(out, " ", sharable(Sharable));
 		print(out, " ", producer_consumer(ProducerConsumer));
 
-		/* FIXME StringPtr is outside ACPI_RESOURCE_EXTENDED_IRQ */
 		if (ResourceSource.StringPtr)
 			print(out, " ", (char const *)ResourceSource.StringPtr);
 	}
@@ -307,122 +341,75 @@ struct Resource::Gpio : ACPI_RESOURCE_GPIO
 		print(out, " ", polarity(Polarity));
 		print(out, " ", sharable(Sharable));
 		print(out, " ", producer_consumer(ProducerConsumer));
+//		print(out, " PinTableLength=", PinTableLength);
+		if (PinTableLength)
+			print(out, " Pin0=", *PinTable);
+//		print(out, " VendorLength=",   VendorLength);
+		print(out, " ResourceSource=", (char const *)ResourceSource.StringPtr);
 	}
 };
 
 
-#if 0
-struct Resource::Serial_bus : ACPI_RESOURCE_COMMON_SERIAL_BUS
+struct Resource::I2c_serial_bus : ACPI_RESOURCE_I2C_SERIALBUS
 {
-	Serial_bus(ACPI_RESOURCE_COMMON_SERIAL_BUS const &res) : ACPI_RESOURCE_COMMON_SERIAL_BUS(res)
+	I2c_serial_bus(ACPI_RESOURCE_I2C_SERIALBUS const &res) : ACPI_RESOURCE_I2C_SERIALBUS(res)
 	{
-		/* *PinTable of PinTableLength */
-		/* *VendorData of VendorLength */
-	}
-
-	static char const * connection_type(UINT8 v)
-	{
-		switch (v) {
-		case ACPI_RESOURCE_GPIO_TYPE_INT: return "int";
-		case ACPI_RESOURCE_GPIO_TYPE_IO:  return "io";
-		default: return "?";
-		}
-	}
-
-	static char const * pin_config(UINT8 v)
-	{
-		switch (v) {
-		case ACPI_PIN_CONFIG_DEFAULT:  return "default";
-		case ACPI_PIN_CONFIG_PULLUP:   return "pullup";
-		case ACPI_PIN_CONFIG_PULLDOWN: return "pulldown";
-		case ACPI_PIN_CONFIG_NOPULL:   return "nopull";
-		default: return "?";
-		}
 	}
 
 	void print(Genode::Output &out) const
 	{
 		using Genode::print;
 
-		print(out, Right_aligned(8, "GPIO"));
-		print(out, " ", connection_type(ConnectionType));
-		print(out, " ", pin_config(PinConfig));
-		print(out, " ", triggering(Triggering));
-		print(out, " ", polarity(Polarity));
-		print(out, " ", sharable(Sharable));
-		print(out, " ", producer_consumer(ProducerConsumer));
+		print(out, Right_aligned(8, "I2C"));
+		print(out, " ResourceSource=", (char const *)ResourceSource.StringPtr);
+		print(out, " ", AccessMode);
+		print(out, " ", SlaveAddress);
+		print(out, " ", ConnectionSpeed);
 	}
 };
-#endif
 
 
 void Resource::print(Genode::Output &out) const
 {
 	using Genode::print;
 
-	switch (Type) {
-	case ACPI_RESOURCE_TYPE_IRQ:                print(out, Irq(Data.Irq));                      break;
+	print(out, "{", r.Type, ",", r.Length, "} ");
+
+	switch (r.Type) {
+	case ACPI_RESOURCE_TYPE_IRQ:                print(out, Irq(r.Data.Irq));                      break;
 //	case ACPI_RESOURCE_TYPE_DMA:                /* 1 */
 //	case ACPI_RESOURCE_TYPE_START_DEPENDENT:    /* 2 */
 //	case ACPI_RESOURCE_TYPE_END_DEPENDENT:      /* 3 */
-	case ACPI_RESOURCE_TYPE_IO:                 print(out, Io(Data.Io));                        break;
+	case ACPI_RESOURCE_TYPE_IO:                 print(out, Io(r.Data.Io));                        break;
 //	case ACPI_RESOURCE_TYPE_FIXED_IO:           /* 5 */
 //	case ACPI_RESOURCE_TYPE_VENDOR:             /* 6 */
 //	case ACPI_RESOURCE_TYPE_END_TAG:            /* 7 */
 //	case ACPI_RESOURCE_TYPE_MEMORY24:           /* 8 */
 //	case ACPI_RESOURCE_TYPE_MEMORY32:           /* 9 */
-	case ACPI_RESOURCE_TYPE_FIXED_MEMORY32:     print(out, Fixed_memory32(Data.FixedMemory32)); break;
-	case ACPI_RESOURCE_TYPE_ADDRESS16:          print(out, Address16(Data.Address16));          break;
-	case ACPI_RESOURCE_TYPE_ADDRESS32:          print(out, Address32(Data.Address32));          break;
-	case ACPI_RESOURCE_TYPE_ADDRESS64:          print(out, Address64(Data.Address64));          break;
+//	case ACPI_RESOURCE_TYPE_FIXED_MEMORY32:     print(out, Fixed_memory32(res.Data.FixedMemory32)); break;
+//	case ACPI_RESOURCE_TYPE_ADDRESS16:          print(out, Address16(res.Data.Address16));          break;
+//	case ACPI_RESOURCE_TYPE_ADDRESS32:          print(out, Address32(res.Data.Address32));          break;
+//	case ACPI_RESOURCE_TYPE_ADDRESS64:          print(out, Address64(res.Data.Address64));          break;
 //	case ACPI_RESOURCE_TYPE_EXTENDED_ADDRESS64: /* 14 */
-	case ACPI_RESOURCE_TYPE_EXTENDED_IRQ:       print(out, Extended_irq(Data.ExtendedIrq));     break;
+//	case ACPI_RESOURCE_TYPE_EXTENDED_IRQ:       print(out, Extended_irq(res.Data.ExtendedIrq));     break;
 //	case ACPI_RESOURCE_TYPE_GENERIC_REGISTER:   /* 16 */
-	case ACPI_RESOURCE_TYPE_GPIO:               print(out, Gpio(Data.Gpio));                    break;
+//	case ACPI_RESOURCE_TYPE_GPIO:               print(out, Gpio(res.Data.Gpio));                    break;
 //	case ACPI_RESOURCE_TYPE_FIXED_DMA:          /* 18 */
-//	case ACPI_RESOURCE_TYPE_SERIAL_BUS:         print(out, Serial_bus(Data.CommonSerialBus));   break;
+//	case ACPI_RESOURCE_TYPE_SERIAL_BUS:
+//		switch (res.Data.CommonSerialBus.Type) {
+//		case ACPI_RESOURCE_SERIAL_TYPE_I2C:     print(out, I2c_serial_bus(res.Data.I2cSerialBus));  break;
+////		case ACPI_RESOURCE_SERIAL_TYPE_SPI:     print(out, Spi_serial_bus(res.Data.SpiSerialBus));  break;
+////		case ACPI_RESOURCE_SERIAL_TYPE_UART:    print(out, Spi_serial_bus(res.Data.UartSerialBus)); break;
+//		default: print(out, "unknown serial type ", res.Data.CommonSerialBus.Type); break;
+//		} break;
 //	case ACPI_RESOURCE_TYPE_PIN_FUNCTION:       /* 20 */
 //	case ACPI_RESOURCE_TYPE_PIN_CONFIG:         /* 21 */
 //	case ACPI_RESOURCE_TYPE_PIN_GROUP:          /* 22 */
 //	case ACPI_RESOURCE_TYPE_PIN_GROUP_FUNCTION: /* 23 */
 //	case ACPI_RESOURCE_TYPE_PIN_GROUP_CONFIG:   /* 24 */
 
-//	case ACPI_RESOURCE_TYPE_SERIAL_BUS:
-//		switch (resource->Data.CommonSerialBus.Type) {
-//		case ACPI_RESOURCE_SERIAL_TYPE_I2C:
-//			log(" ", Right_aligned(8, dev.hid()),
-//			    " ", Right_aligned(8, dev.cid()),
-//			    " I2C",
-//			    " (", resource->Length, ")",
-//			    " type=", resource->Data.CommonSerialBus.Type,
-//			    " length=", resource->Data.CommonSerialBus.TypeDataLength,
-//			    " vlength=", resource->Data.CommonSerialBus.VendorLength,
-//			    " ", (char const *)resource->Data.CommonSerialBus.ResourceSource.StringPtr);
-//			break;
-//		case ACPI_RESOURCE_SERIAL_TYPE_SPI:
-//			log(" ", Right_aligned(8, dev.hid()),
-//			    " ", Right_aligned(8, dev.cid()),
-//			    " SPI",
-//			    " (", resource->Length, ")",
-//			    " type=", resource->Data.CommonSerialBus.Type,
-//			    " length=", resource->Data.CommonSerialBus.TypeDataLength,
-//			    " vlength=", resource->Data.CommonSerialBus.VendorLength,
-//			    " ", (char const *)resource->Data.CommonSerialBus.ResourceSource.StringPtr);
-//			break;
-//		case ACPI_RESOURCE_SERIAL_TYPE_UART:
-//			log(" ", Right_aligned(8, dev.hid()),
-//			    " ", Right_aligned(8, dev.cid()),
-//			    " UART",
-//			    " (", resource->Length, ")",
-//			    " type=", resource->Data.CommonSerialBus.Type,
-//			    " length=", resource->Data.CommonSerialBus.TypeDataLength,
-//			    " vlength=", resource->Data.CommonSerialBus.VendorLength,
-//			    " ", (char const *)resource->Data.CommonSerialBus.ResourceSource.StringPtr);
-//			break;
-//		} break;
-
 	default:
-		print(out, "unknown type ", Type);
+		print(out, "unknown type ", r.Type);
 		break;
 	}
 }
@@ -448,7 +435,7 @@ ACPI_STATUS display_method(ACPI_HANDLE handle, UINT32 level,
 {
 	Device method { handle };
 
-	log(" ", method.name(), " - ", method.pathname(), " ", handle);
+	log(" method ", method.name(), " - ", method.pathname(), " ", handle);
 
 	return AE_OK;
 }
@@ -459,8 +446,11 @@ ACPI_STATUS display_device(ACPI_HANDLE handle, UINT32 level,
 {
 	Device dev { handle };
 
-	if (!dev.present_ok())
+	if (!dev.present_ok()) {
+		if (dev.hid() == "PNP0B00")
+			warning("RTC object found but _STA returned not present/functioning");
 		return AE_OK;
+	}
 
 warning(dev.pathname(), " h:", dev.hid(), " c:", dev.cid());
 	AcpiWalkResources(handle, ACPI_STRING("_CRS"), detect_resource, &dev);
@@ -543,7 +533,7 @@ warning(dev.pathname(), " h:", dev.hid(), " c:", dev.cid());
 		bus_param("SSCN");
 		bus_param("FMCN");
 		bus_param("FPCN");
-//		bus_param("HSCN");
+		bus_param("HSCN");
 //		bus_param("HMCN");
 	}
 
@@ -582,6 +572,31 @@ warning(dev.pathname(), " h:", dev.hid(), " c:", dev.cid());
 }
 
 
+ACPI_STATUS display_special(ACPI_HANDLE handle, UINT32 level,
+                          void * /* context */, void ** /* retval */)
+{
+	Device node { handle };
+
+	log(" special ", node.name(), " - ", node.pathname(), " ", Hex(node.type()), " ", handle);
+
+	return AE_OK;
+}
+
+
+static void walk_special(ACPI_STRING scope, ACPI_OBJECT_TYPE type)
+{
+	ACPI_HANDLE handle;
+
+	ACPI_STATUS status = AcpiGetHandle (NULL, scope, &handle);
+	if (status != AE_OK)
+		return;
+
+	log((char const *)scope);
+	AcpiWalkNamespace(type, handle, ACPI_UINT32_MAX,
+	                  display_special, nullptr, nullptr, nullptr);
+}
+
+
 void another_test()
 {
 //	AcpiDbgLevel |= ACPI_LV_INFO;
@@ -602,6 +617,12 @@ void another_test()
 		AcpiWalkNamespace(ACPI_TYPE_PROCESSOR, ACPI_ROOT_OBJECT, ACPI_UINT32_MAX,
 		                  display_device, nullptr, nullptr, nullptr);
 	}
+
+	walk_special(ACPI_STRING("\\_GPE"), ACPI_TYPE_ANY);
+	walk_special(ACPI_STRING("\\_PR_"), ACPI_TYPE_ANY);
+//	walk_special(ACPI_STRING("\\_SB_"), ACPI_TYPE_ANY);
+	walk_special(ACPI_STRING("\\_SI_"), ACPI_TYPE_ANY);
+	walk_special(ACPI_STRING("\\_TZ_"), ACPI_TYPE_ANY);
 
 //	AcpiWalkNamespace(ACPI_TYPE_METHOD, ACPI_ROOT_OBJECT, ACPI_UINT32_MAX,
 //	                  display_method, nullptr, nullptr, nullptr);

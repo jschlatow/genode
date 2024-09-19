@@ -14,6 +14,8 @@ set build_components {
 	server/event_dump
 	app/pci_decode
 	app/acpica
+	driver/rtc
+	test/rtc
 }
 
 build $build_components
@@ -243,6 +245,17 @@ set config {
 				</rom>
 			</config>
 		</start>
+
+	<start name="rtc_drv"  priority="-1" caps="75">
+		<resource name="RAM" quantum="1M"/>
+		<provides><service name="Rtc"/></provides>
+		<config/>
+	</start>
+
+	<start name="test-rtc" priority="-1" caps="75">
+		<resource name="RAM" quantum="1M"/>
+		<config/>
+	</start>
 
 	</config>
 }
