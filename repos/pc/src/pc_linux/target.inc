@@ -59,8 +59,8 @@ LX_ENABLE += USB_PCI USB_UHCI_HCD
 # Intel framebuffer
 LX_ENABLE += DRM DRM_I915
 
-# required for GPIO irqchip on tigerlake
-LX_ENABLE += PINCTRL PINCTRL_TIGERLAKE
+# required for GPIO irqchip on tigerlake and alderlake
+LX_ENABLE += PINCTRL PINCTRL_TIGERLAKE PINCTRL_ALDERLAKE
 
 # I2C HID touchpad support (keep INPUT_EVDEV hook)
 LX_ENABLE += INPUT_EVDEV HID_GENERIC HID_MULTITOUCH
