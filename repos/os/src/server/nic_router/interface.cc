@@ -1734,7 +1734,7 @@ void Interface::_continue_handle_eth(Packet_descriptor const &pkt)
 void Interface::_destroy_dhcp_allocation(Dhcp_allocation &allocation,
                                          Domain          &local_domain)
 {
-	local_domain.with_dhcp_server([&] (Dhcp_server &srv) {
+	local_domain.with_optional_dhcp_server([&] (Dhcp_server &srv) {
 		srv.free_ip(allocation.ip()); });
 	destroy(_alloc, &allocation);
 }
