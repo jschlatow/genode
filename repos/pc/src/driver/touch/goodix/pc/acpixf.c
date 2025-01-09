@@ -97,7 +97,7 @@ acpi_status acpi_remove_address_space_handler(acpi_handle device,
 }
 
 
-acpi_status acpi_get_handle(acpi_handle parent, acpi_string pathname,
+acpi_status acpi_get_handle(acpi_handle parent, const char *pathname,
                             acpi_handle *ret_handle)
 {
 	*ret_handle = (acpi_handle)2;

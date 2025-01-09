@@ -1,7 +1,7 @@
 /*
  * \brief  Dummy definitions of Linux Kernel functions
  * \author Automatically generated file - do no edit
- * \date   2024-08-14
+ * \date   2025-01-09
  */
 
 #include <lx_emul.h>
@@ -47,6 +47,14 @@ unsigned int __kfifo_in(struct __kfifo * fifo,const void * buf,unsigned int len)
 #include <linux/kfifo.h>
 
 unsigned int __kfifo_out(struct __kfifo * fifo,void * buf,unsigned int len)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/maple_tree.h>
+
+void __mt_destroy(struct maple_tree * mt)
 {
 	lx_emul_trace_and_stop(__func__);
 }
@@ -211,8 +219,8 @@ struct file * anon_inode_getfile(const char * name,const struct file_operations 
 }
 
 
-extern void arch_trigger_cpumask_backtrace(const cpumask_t * mask,bool exclude_self);
-void arch_trigger_cpumask_backtrace(const cpumask_t * mask,bool exclude_self)
+extern void arch_trigger_cpumask_backtrace(const cpumask_t * mask,int exclude_self);
+void arch_trigger_cpumask_backtrace(const cpumask_t * mask,int exclude_self)
 {
 	lx_emul_trace_and_stop(__func__);
 }
@@ -306,6 +314,22 @@ const struct cpumask * cpu_clustergroup_mask(int cpu)
 }
 
 
+#include <linux/cpumask.h>
+
+unsigned int cpumask_any_and_distribute(const struct cpumask * src1p,const struct cpumask * src2p)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/sched/topology.h>
+
+bool cpus_share_cache(int this_cpu,int that_cpu)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
 #include <linux/gpio/consumer.h>
 
 int devm_acpi_dev_add_driver_gpios(struct device * dev,const struct acpi_gpio_mapping * gpios)
@@ -317,6 +341,14 @@ int devm_acpi_dev_add_driver_gpios(struct device * dev,const struct acpi_gpio_ma
 #include <linux/printk.h>
 
 asmlinkage __visible void dump_stack(void)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/printk.h>
+
+asmlinkage __visible void dump_stack_lvl(const char * log_lvl)
 {
 	lx_emul_trace_and_stop(__func__);
 }
@@ -423,11 +455,6 @@ long __sched io_schedule_timeout(long timeout)
 }
 
 
-#include <linux/swiotlb.h>
-
-struct io_tlb_mem io_tlb_default_mem;
-
-
 #include <linux/iommu.h>
 
 void iommu_device_unuse_default_domain(struct device * dev)
@@ -468,6 +495,75 @@ void kmsg_dump(enum kmsg_dump_reason reason)
 #include <linux/kobject.h>
 
 int kobject_synth_uevent(struct kobject * kobj,const char * buf,size_t count)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/delay.h>
+
+unsigned long loops_per_jiffy;
+
+
+#include <linux/maple_tree.h>
+
+void __init maple_tree_init(void)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/maple_tree.h>
+
+int mas_empty_area(struct ma_state * mas,unsigned long min,unsigned long max,unsigned long size)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/maple_tree.h>
+
+void * mas_erase(struct ma_state * mas)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/maple_tree.h>
+
+void * mas_find(struct ma_state * mas,unsigned long max)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/maple_tree.h>
+
+void mas_pause(struct ma_state * mas)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/maple_tree.h>
+
+int mas_store_gfp(struct ma_state * mas,void * entry,gfp_t gfp)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/maple_tree.h>
+
+void * mas_walk(struct ma_state * mas)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/maple_tree.h>
+
+void * mtree_load(struct maple_tree * mt,unsigned long index)
 {
 	lx_emul_trace_and_stop(__func__);
 }
@@ -537,6 +633,20 @@ void put_unused_fd(unsigned int fd)
 #include <linux/rational.h>
 
 void rational_best_approximation(unsigned long given_numerator,unsigned long given_denominator,unsigned long max_numerator,unsigned long max_denominator,unsigned long * best_numerator,unsigned long * best_denominator)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+extern void raw_spin_rq_lock_nested(struct rq * rq,int subclass);
+void raw_spin_rq_lock_nested(struct rq * rq,int subclass)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+extern void raw_spin_rq_unlock(struct rq * rq);
+void raw_spin_rq_unlock(struct rq * rq)
 {
 	lx_emul_trace_and_stop(__func__);
 }
@@ -635,6 +745,25 @@ int seq_release(struct inode * inode,struct file * file)
 }
 
 
+extern void set_rq_offline(struct rq * rq);
+void set_rq_offline(struct rq * rq)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+extern void set_rq_online(struct rq * rq);
+void set_rq_online(struct rq * rq)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/smp.h>
+
+unsigned int setup_max_cpus;
+
+
 #include <linux/sched/debug.h>
 
 void show_state_filter(unsigned int state_filter)
@@ -682,14 +811,6 @@ void synchronize_rcu(void)
 const int sysctl_vals[] = {};
 
 
-#include <linux/task_work.h>
-
-struct callback_head * task_work_cancel(struct task_struct * task,task_work_func_t func)
-{
-	lx_emul_trace_and_stop(__func__);
-}
-
-
 extern void unregister_handler_proc(unsigned int irq,struct irqaction * action);
 void unregister_handler_proc(unsigned int irq,struct irqaction * action)
 {
@@ -704,9 +825,8 @@ void unregister_irq_proc(unsigned int irq,struct irq_desc * desc)
 }
 
 
-#include <linux/sched/wake_q.h>
-
-void wake_q_add_safe(struct wake_q_head * head,struct task_struct * task)
+extern void update_group_capacity(struct sched_domain * sd,int cpu);
+void update_group_capacity(struct sched_domain * sd,int cpu)
 {
 	lx_emul_trace_and_stop(__func__);
 }

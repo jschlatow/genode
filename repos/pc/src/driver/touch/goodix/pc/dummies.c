@@ -203,7 +203,7 @@ int clk_hw_register(struct device * dev, struct clk_hw * hw)
 
 #include <linux/sysctl.h>
 
-void __init __register_sysctl_init(const char * path,struct ctl_table * table,const char * table_name)
+void __init __register_sysctl_init(const char * path,struct ctl_table * table,const char * table_name, size_t table_size)
 {
 	lx_emul_trace(__func__);
 }
@@ -222,20 +222,45 @@ void skb_init()
 	lx_emul_trace(__func__);
 }
 
-#include <linux/sysctl.h>
-
-struct ctl_table_header * register_sysctl(const char * path,struct ctl_table * table)
-{
-	lx_emul_trace(__func__);
-	return NULL;
-}
-
 #include <linux/iommu.h>
 
 int iommu_device_use_default_domain(struct device * dev)
 {
 	lx_emul_trace(__func__);
 	return 0;
+}
+
+
+#include <drm/drm_panel.h>
+
+int drm_panel_add_follower(struct device * follower_dev,struct drm_panel_follower * follower)
+{
+       lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <drm/drm_panel.h>
+
+void drm_panel_remove_follower(struct drm_panel_follower * follower)
+{
+       lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <drm/drm_panel.h>
+
+bool drm_is_panel_follower(struct device * dev)
+{
+       return false;
+}
+
+
+
+#include <linux/task_work.h>
+
+struct callback_head * task_work_cancel_func(struct task_struct * task,task_work_func_t func)
+{
+       lx_emul_trace_and_stop(__func__);
 }
 
 

@@ -15,6 +15,7 @@ drivers/base/pinctrl.c
 drivers/base/platform.c
 drivers/base/property.c
 drivers/base/regmap/regcache-flat.c
+drivers/base/regmap/regcache-maple.c
 drivers/base/regmap/regcache-rbtree.c
 drivers/base/regmap/regcache.c
 drivers/base/regmap/regmap.c
@@ -24,6 +25,7 @@ drivers/clk/clk-fractional-divider.c
 drivers/gpio/gpiolib-cdev.c
 drivers/gpio/gpiolib-devres.c
 drivers/gpio/gpiolib-legacy.c
+drivers/gpio/gpiolib-swnode.c
 drivers/gpio/gpiolib.c
 drivers/hid/hid-core.c
 drivers/hid/hid-generic.c
