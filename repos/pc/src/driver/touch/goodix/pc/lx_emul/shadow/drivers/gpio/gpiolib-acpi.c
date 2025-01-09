@@ -102,7 +102,7 @@ int acpi_dev_gpio_irq_wake_get_by(struct acpi_device *adev, const char *name, in
 }
 
 
-struct gpio_desc * acpi_find_gpio(struct device *dev, const char *con_id,
+struct gpio_desc * acpi_find_gpio(struct fwnode_handle *dev, const char *con_id,
                                   unsigned int idx, enum gpiod_flags *dflags,
                                   unsigned long *lookupflags)
 {
