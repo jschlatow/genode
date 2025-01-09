@@ -102,10 +102,8 @@ static uint64_t fixup_bar_base_address(Bdf bdf, unsigned bar, uint64_t addr, uin
 	auto base_address = addr;
 
 	/* Intel LPSS (I2C) devices - values taken from Linux boot */
-	if (bdf == Bdf { 0, 0x15, 0 } && bar == 0) base_address = 0x4017000000;
-	if (bdf == Bdf { 0, 0x15, 1 } && bar == 0) base_address = 0x4017001000;
-	if (bdf == Bdf { 0, 0x15, 2 } && bar == 0) base_address = 0x4017001000;
-	if (bdf == Bdf { 0, 0x15, 3 } && bar == 0) base_address = 0x4017002000;
+	if (bdf == Bdf { 0, 0x15, 0 } && bar == 0) base_address = 0x80626000;
+	if (bdf == Bdf { 0, 0x15, 2 } && bar == 0) base_address = 0x80627000;
 
 	if (addr != base_address)
 		log(bdf, " remap MEM BAR", bar, " ", Hex_range(addr, (size_t)size), " to ", Hex(base_address));
