@@ -33,7 +33,7 @@ static void init_i2c_hid_config(Xml_node const &config)
 {
 	i2c_hid_config.gpio_pin = config.attribute_value("gpio_pin", 306 /* 0x132 */);
 	i2c_hid_config.bus_addr = config.attribute_value("bus_addr",  93 /*  0x5d */);
-	i2c_hid_config.hid_addr = config.attribute_value("hid_addr",  32 /*  0x20 */);
+	i2c_hid_config.hid_addr = config.attribute_value("hid_addr",   1 /*  0x01 */);
 
 	log("using gpio_pin=", i2c_hid_config.gpio_pin, " bus_addr=",
 	    i2c_hid_config.bus_addr, " hid_addr=", i2c_hid_config.hid_addr);
