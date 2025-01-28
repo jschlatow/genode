@@ -513,7 +513,7 @@ void Main::parse_acpi_device_info(Xml_node const &xml, Xml_generator & gen)
 	 */
 	gen.node("device", [&]
 	{
-		gen.attribute("name", "INT34C5");
+		gen.attribute("name", "INTC1057");
 		gen.attribute("type", "acpi");
 		gen.node("irq", [&]
 		{
