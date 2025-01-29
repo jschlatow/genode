@@ -24,6 +24,57 @@ using Id       = String<64>;
 using Hid      = Id;
 using Cid      = Id;
 
+
+struct Routing : ACPI_PCI_ROUTING_TABLE
+{
+	ACPI_PCI_ROUTING_TABLE & table_start;
+	ACPI_PCI_ROUTING_TABLE * entry;
+	Genode::size_t           length;
+
+	Routing(ACPI_PCI_ROUTING_TABLE & table, Genode::size_t length)
+	: table_start(table), entry(&table_start), length(length)
+	{ }
+
+	bool valid() const { return entry->Length != 0 && (uint64_t)(entry) < (uint64_t)&table_start + length; }
+
+	bool next()
+	{
+		entry = (ACPI_PCI_ROUTING_TABLE*)((uint8_t*)entry + entry->Length);
+		return valid();
+	}
+
+	bool     fixed()    const { return entry->Source[0] == '\0'; }
+
+	uint32_t device()   const { return entry->Address >> 16; }
+
+	uint32_t function() const { return entry->Address & 0xFFFF; }
+
+	uint8_t  pin()      const { return entry->Pin; }
+
+	void print(Genode::Output &out) const
+	{
+		using Genode::print;
+		using Genode::Hex;
+
+		print(out, "PCI ", Hex(device()), ":", Hex(function()), " ");
+
+		switch(pin())
+		{
+			case 0:  print(out, "INTA#"); break;
+			case 1:  print(out, "INTB#"); break;
+			case 2:  print(out, "INTC#"); break;
+			case 3:  print(out, "INTD#"); break;
+			default:                      break;
+		}
+
+		if (fixed())
+			print(out, " -> GSI ", entry->SourceIndex);
+		else
+			print(out, " -> ", Genode::Cstring(entry->Source));
+	}
+};
+
+
 struct Buffer : ACPI_BUFFER
 {
 	Buffer() : ACPI_BUFFER(ACPI_ALLOCATE_BUFFER, nullptr) { }
@@ -40,6 +91,12 @@ struct Buffer : ACPI_BUFFER
 	}
 
 	auto with_object(auto const &fn) { return fn(*(ACPI_OBJECT *)Pointer); }
+
+	auto with_routing_table(auto const &fn)
+	{
+		Routing r(*(ACPI_PCI_ROUTING_TABLE *)Pointer, Length);
+		return fn(r);
+	}
 };
 
 
@@ -97,6 +154,14 @@ struct Device
 
 		/* only first compatible ID returned */
 		return { (char const *)info->CompatibleIdList.Ids[0].String };
+	}
+
+	uint64_t address() const
+	{
+		if (!(info->Valid & ACPI_VALID_ADR))
+			return 0;
+
+		return info->Address;
 	}
 
 	bool match(Id const &id) { return id == hid() || id == cid(); }
@@ -391,9 +456,9 @@ void Resource::print(Genode::Output &out) const
 //	case ACPI_RESOURCE_TYPE_ADDRESS32:          print(out, Address32(res.Data.Address32));          break;
 //	case ACPI_RESOURCE_TYPE_ADDRESS64:          print(out, Address64(res.Data.Address64));          break;
 //	case ACPI_RESOURCE_TYPE_EXTENDED_ADDRESS64: /* 14 */
-//	case ACPI_RESOURCE_TYPE_EXTENDED_IRQ:       print(out, Extended_irq(res.Data.ExtendedIrq));     break;
+	case ACPI_RESOURCE_TYPE_EXTENDED_IRQ:       print(out, Extended_irq(r.Data.ExtendedIrq));     break;
 //	case ACPI_RESOURCE_TYPE_GENERIC_REGISTER:   /* 16 */
-//	case ACPI_RESOURCE_TYPE_GPIO:               print(out, Gpio(res.Data.Gpio));                    break;
+	case ACPI_RESOURCE_TYPE_GPIO:               print(out, Gpio(r.Data.Gpio));                    break;
 //	case ACPI_RESOURCE_TYPE_FIXED_DMA:          /* 18 */
 //	case ACPI_RESOURCE_TYPE_SERIAL_BUS:
 //		switch (res.Data.CommonSerialBus.Type) {
@@ -452,7 +517,7 @@ ACPI_STATUS display_device(ACPI_HANDLE handle, UINT32 level,
 		return AE_OK;
 	}
 
-warning(dev.pathname(), " h:", dev.hid(), " c:", dev.cid());
+warning(dev.pathname(), " h:", dev.hid(), " c:", dev.cid(), " adr:", Hex(dev.address()));
 	AcpiWalkResources(handle, ACPI_STRING("_CRS"), detect_resource, &dev);
 
 	ACPI_HANDLE child = NULL;
@@ -461,6 +526,22 @@ warning(dev.pathname(), " h:", dev.hid(), " c:", dev.cid());
 			break;
 		display_method(child, 0, 0, 0);
 	}
+
+	/* get IRQ routing info from _PRT */
+	do {
+		Btacpi::Buffer out;
+		ACPI_STATUS ret = AcpiGetIrqRoutingTable(dev.handle, &out);
+		if (ACPI_FAILURE(ret))
+			break;
+
+		out.with_routing_table([&] (auto &t) {
+			while(t.valid()) {
+				log(t);
+				t.next();
+			}
+		});
+
+	} while (false);
 
 	/* HID over I2C */
 	if (dev.match("PNP0C50")) {
