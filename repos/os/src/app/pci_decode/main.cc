@@ -335,6 +335,12 @@ bus_t Main::parse_pci_function(Bdf        bdf,
 				irq_override_list.for_each([&] (Irq_override &io) {
 					io.generate(g, irq); });
 
+				/* XXX fixup for IRQ lines on StarLite (Alderlake) */
+				if (irq == 255 && bdf.dev == 0x15) {
+					if      (bdf.fn == 0) irq = 37;
+					else if (bdf.fn == 2) irq = 39;
+				}
+
 				g.attribute("number", irq);
 			});
 
