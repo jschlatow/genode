@@ -52,14 +52,6 @@ unsigned int __kfifo_out(struct __kfifo * fifo,void * buf,unsigned int len)
 }
 
 
-#include <linux/maple_tree.h>
-
-void __mt_destroy(struct maple_tree * mt)
-{
-	lx_emul_trace_and_stop(__func__);
-}
-
-
 #include <linux/printk.h>
 
 void __printk_safe_enter(void)
@@ -504,69 +496,6 @@ int kobject_synth_uevent(struct kobject * kobj,const char * buf,size_t count)
 
 unsigned long loops_per_jiffy;
 
-
-#include <linux/maple_tree.h>
-
-void __init maple_tree_init(void)
-{
-	lx_emul_trace_and_stop(__func__);
-}
-
-
-#include <linux/maple_tree.h>
-
-int mas_empty_area(struct ma_state * mas,unsigned long min,unsigned long max,unsigned long size)
-{
-	lx_emul_trace_and_stop(__func__);
-}
-
-
-#include <linux/maple_tree.h>
-
-void * mas_erase(struct ma_state * mas)
-{
-	lx_emul_trace_and_stop(__func__);
-}
-
-
-#include <linux/maple_tree.h>
-
-void * mas_find(struct ma_state * mas,unsigned long max)
-{
-	lx_emul_trace_and_stop(__func__);
-}
-
-
-#include <linux/maple_tree.h>
-
-void mas_pause(struct ma_state * mas)
-{
-	lx_emul_trace_and_stop(__func__);
-}
-
-
-#include <linux/maple_tree.h>
-
-int mas_store_gfp(struct ma_state * mas,void * entry,gfp_t gfp)
-{
-	lx_emul_trace_and_stop(__func__);
-}
-
-
-#include <linux/maple_tree.h>
-
-void * mas_walk(struct ma_state * mas)
-{
-	lx_emul_trace_and_stop(__func__);
-}
-
-
-#include <linux/maple_tree.h>
-
-void * mtree_load(struct maple_tree * mt,unsigned long index)
-{
-	lx_emul_trace_and_stop(__func__);
-}
 
 
 #include <linux/fs.h>

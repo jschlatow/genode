@@ -113,6 +113,7 @@ lib/kstrtox.c
 lib/list_sort.c
 lib/llist.c
 lib/math/reciprocal_div.c
+lib/maple_tree.c
 lib/radix-tree.c
 lib/rbtree.c
 lib/refcount.c
