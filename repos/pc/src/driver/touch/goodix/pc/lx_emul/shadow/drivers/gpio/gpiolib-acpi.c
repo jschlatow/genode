@@ -83,7 +83,7 @@ int acpi_dev_gpio_irq_wake_get_by(struct acpi_device *adev, const char *name, in
 		return -ENOENT;
 
 	/* most interesting part happens in gpiod_to_irq(desc) */
-	chip = gpiochip_find("INTC1057:00", find_match_name);
+	chip = gpiochip_find("INT34C5:00", find_match_name);
 	desc = gpiochip_get_desc(chip , i2c_hid_config.gpio_pin);
 	irq  = gpiod_to_irq(desc);
 
