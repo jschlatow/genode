@@ -41,6 +41,8 @@ drivers/i2c/busses/i2c-designware-platdrv.c
 drivers/i2c/i2c-boardinfo.c
 drivers/i2c/i2c-core-base.c
 drivers/i2c/i2c-core-smbus.c
+drivers/input/touchscreen/goodix.c
+drivers/input/touchscreen.c
 drivers/input/input-mt.c
 drivers/input/input-poller.c
 drivers/input/input.c
@@ -51,6 +53,7 @@ drivers/pci/pci-driver.c
 drivers/pinctrl/core.c
 drivers/pinctrl/intel/pinctrl-intel.c
 drivers/pinctrl/intel/pinctrl-tigerlake.c
+drivers/pinctrl/intel/pinctrl-alderlake.c
 drivers/pinctrl/pinconf-generic.c
 drivers/pinctrl/pinconf.c
 drivers/pinctrl/pinctrl-utils.c

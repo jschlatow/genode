@@ -13,6 +13,24 @@
 
 #include <lx_emul.h>
 
+struct goodix_ts_data;
+
+int goodix_firmware_check(struct goodix_ts_data * ts)
+{
+	lx_emul_trace(__func__);
+
+	/* needs to return the good case, otherwise probing will fail */
+	return 0;
+}
+
+
+bool goodix_handle_fw_request(struct goodix_ts_data * ts)
+{
+	lx_emul_trace(__func__);
+	return false;
+}
+
+
 #include <linux/pci.h>
 
 const struct attribute_group pci_dev_acpi_attr_group;
@@ -224,3 +242,36 @@ bool drm_is_panel_follower(struct device * dev)
 {
 	return false;
 }
+
+
+#include <drm/drm_panel.h>
+
+int drm_panel_add_follower(struct device * follower_dev,struct drm_panel_follower * follower)
+{
+       lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <drm/drm_panel.h>
+
+void drm_panel_remove_follower(struct drm_panel_follower * follower)
+{
+       lx_emul_trace_and_stop(__func__);
+}
+
+
+extern void arch_trigger_cpumask_backtrace(const cpumask_t * mask,int exclude_self);
+void arch_trigger_cpumask_backtrace(const cpumask_t * mask,int exclude_self)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/task_work.h>
+
+struct callback_head * task_work_cancel_func(struct task_struct * task,task_work_func_t func)
+{
+       lx_emul_trace_and_stop(__func__);
+}
+
+

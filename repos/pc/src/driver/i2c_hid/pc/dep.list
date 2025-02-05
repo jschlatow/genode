@@ -26,6 +26,7 @@ drivers/i2c/i2c-core.h
 drivers/input/input-compat.h
 drivers/input/input-core-private.h
 drivers/input/input-poller.h
+drivers/input/touchscreen/goodix.h
 drivers/mfd/intel-lpss.h
 drivers/pinctrl/core.h
 drivers/pinctrl/devicetree.h
@@ -57,6 +58,7 @@ include/linux/i2c.h
 include/linux/input.h
 include/linux/input/elan-i2c-ids.h
 include/linux/input/mt.h
+include/linux/input/touchscreen.h
 include/linux/io-64-nonatomic-lo-hi.h
 include/linux/irqchip/chained_irq.h
 include/linux/leds.h

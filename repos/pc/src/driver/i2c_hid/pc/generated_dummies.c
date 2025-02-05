@@ -1,7 +1,7 @@
 /*
  * \brief  Dummy definitions of Linux Kernel functions
  * \author Automatically generated file - do no edit
- * \date   2024-10-22
+ * \date   2025-02-05
  */
 
 #include <lx_emul.h>
@@ -149,7 +149,47 @@ int acpi_device_set_power(struct acpi_device * device,int state)
 
 #include <acpi/acpi_bus.h>
 
+acpi_status acpi_execute_simple_method(acpi_handle handle,char * method,u64 arg)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <acpi/acpi_bus.h>
+
 struct acpi_device * acpi_find_child_device(struct acpi_device * parent,u64 address,bool check_children)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/acpi.h>
+
+int acpi_get_override_irq(u32 gsi,int * is_level,int * active_low)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/acpi.h>
+
+bool acpi_gpio_get_io_resource(struct acpi_resource * ares,struct acpi_resource_gpio ** agpio)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/acpi.h>
+
+bool acpi_gpio_get_irq_resource(struct acpi_resource * ares,struct acpi_resource_gpio ** agpio)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/acpi.h>
+
+int acpi_register_gsi(struct device * dev,u32 gsi,int trigger,int polarity)
 {
 	lx_emul_trace_and_stop(__func__);
 }
@@ -166,13 +206,6 @@ int add_uevent_var(struct kobj_uevent_env * env,const char * format,...)
 #include <linux/anon_inodes.h>
 
 struct file * anon_inode_getfile(const char * name,const struct file_operations * fops,void * priv,int flags)
-{
-	lx_emul_trace_and_stop(__func__);
-}
-
-
-extern void arch_trigger_cpumask_backtrace(const cpumask_t * mask,int exclude_cpu);
-void arch_trigger_cpumask_backtrace(const cpumask_t * mask,int exclude_cpu)
 {
 	lx_emul_trace_and_stop(__func__);
 }
@@ -282,17 +315,9 @@ bool cpus_share_cache(int this_cpu,int that_cpu)
 }
 
 
-#include <drm/drm_panel.h>
+#include <linux/gpio/consumer.h>
 
-int drm_panel_add_follower(struct device * follower_dev,struct drm_panel_follower * follower)
-{
-	lx_emul_trace_and_stop(__func__);
-}
-
-
-#include <drm/drm_panel.h>
-
-void drm_panel_remove_follower(struct drm_panel_follower * follower)
+int devm_acpi_dev_add_driver_gpios(struct device * dev,const struct acpi_gpio_mapping * gpios)
 {
 	lx_emul_trace_and_stop(__func__);
 }
@@ -322,7 +347,8 @@ void emergency_restart(void)
 }
 
 
-extern void fd_install(unsigned int fd,struct file * file);
+#include <linux/file.h>
+
 void fd_install(unsigned int fd,struct file * file)
 {
 	lx_emul_trace_and_stop(__func__);
@@ -552,9 +578,25 @@ void raw_spin_rq_unlock(struct rq * rq)
 enum reboot_mode reboot_mode;
 
 
+#include <linux/firmware.h>
+
+void release_firmware(const struct firmware * fw)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
 #include <linux/proc_fs.h>
 
 void remove_proc_entry(const char * name,struct proc_dir_entry * parent)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+#include <linux/firmware.h>
+
+int request_firmware_nowait(struct module * module,bool uevent,const char * name,struct device * device,gfp_t gfp,void * context,void (* cont)(const struct firmware * fw,void * context))
 {
 	lx_emul_trace_and_stop(__func__);
 }
@@ -690,14 +732,6 @@ void synchronize_rcu(void)
 const int sysctl_vals[] = {};
 
 
-#include <linux/task_work.h>
-
-struct callback_head * task_work_cancel_func(struct task_struct * task,task_work_func_t func)
-{
-	lx_emul_trace_and_stop(__func__);
-}
-
-
 extern void unregister_handler_proc(unsigned int irq,struct irqaction * action);
 void unregister_handler_proc(unsigned int irq,struct irqaction * action)
 {
@@ -714,6 +748,13 @@ void unregister_irq_proc(unsigned int irq,struct irq_desc * desc)
 
 extern void update_group_capacity(struct sched_domain * sd,int cpu);
 void update_group_capacity(struct sched_domain * sd,int cpu)
+{
+	lx_emul_trace_and_stop(__func__);
+}
+
+
+extern const struct x86_cpu_id * x86_match_cpu(const struct x86_cpu_id * match);
+const struct x86_cpu_id * x86_match_cpu(const struct x86_cpu_id * match)
 {
 	lx_emul_trace_and_stop(__func__);
 }
