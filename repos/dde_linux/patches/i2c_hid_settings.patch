@@ -21,8 +21,8 @@ touchpad. Settings currently get lost in the rudimentary clk infrastructure.
  	}
 +
 +	/* XXX force correct value for i2c_hid */
-+	dev->ss_hcnt = 500; /* 0x1f4 */
-+	dev->ss_lcnt = 588; /* 0x24c */
++	dev->ss_hcnt = 552; /* 0x1f4 */
++	dev->ss_lcnt = 652; /* 0x24c */
 +
  	dev_dbg(dev->dev, "Standard Mode HCNT:LCNT = %d:%d\n",
  		dev->ss_hcnt, dev->ss_lcnt);
@@ -33,8 +33,8 @@ touchpad. Settings currently get lost in the rudimentary clk infrastructure.
  	}
 +
 +	/* XXX force correct value for i2c_hid */
-+	dev->fs_hcnt = 193; /* 0xc1 */
-+	dev->fs_lcnt = 313; /* 0x139 */
++	dev->fs_hcnt = 106; /* 0xc1 */
++	dev->fs_lcnt = 213; /* 0x139 */
 +
  	dev_dbg(dev->dev, "Fast Mode%s HCNT:LCNT = %d:%d\n",
  		fp_str, dev->fs_hcnt, dev->fs_lcnt);
