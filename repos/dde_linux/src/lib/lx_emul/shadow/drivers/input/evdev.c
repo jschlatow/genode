@@ -117,11 +117,11 @@ enum evdev_motion evdev_motion(struct input_dev const *dev)
 
 struct evdev_mt_slot
 {
-	int id; /* -1 means unused */
-	int finger;
-	int x, y, ox, oy;
+	bool touch;
+	int  finger;
+	int  x, y, ox, oy;
 };
-#define INIT_MT_SLOT (struct evdev_mt_slot){ -1, -1, -1, -1, -1, -1 }
+#define INIT_MT_SLOT (struct evdev_mt_slot){ false, -1, -1, -1, -1, -1 }
 
 
 /*
@@ -299,7 +299,7 @@ static bool record_mt(struct evdev_mt *mt, struct input_value const *v)
 
 	case ABS_MT_TRACKING_ID:
 		if (mt->cur_slot < mt->num_slots) {
-			mt->slots[mt->cur_slot].id = v->value >= 0 ? v->value : -1;
+			mt->slots[mt->cur_slot].touch  = v->value >= 0;
 			mt->slots[mt->cur_slot].finger = mt->cur_slot;
 			mt->pending = true;
 		}
@@ -543,7 +543,7 @@ static void submit_touchpad(struct evdev *evdev, struct genode_event_submit *sub
 
 	if (mt->pending) {
 		for_each_mt_slot(slot, mt) {
-			if (slot->id == -1) {
+			if (!slot->touch) {
 				*slot = INIT_MT_SLOT;
 				continue;
 			}
@@ -575,7 +575,7 @@ static void submit_touchscreen(struct evdev *evdev, struct genode_event_submit *
 
 	if (mt->pending) {
 		for_each_mt_slot(slot, mt) {
-			if (slot->id == -1 && slot->ox != -1 && slot->oy != -1) {
+			if (!slot->touch && slot->ox != -1 && slot->oy != -1) {
 				submit->touch_release(submit, slot->finger);
 
 				*slot = INIT_MT_SLOT;
