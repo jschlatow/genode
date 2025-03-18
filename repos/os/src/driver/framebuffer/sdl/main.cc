@@ -173,6 +173,7 @@ struct Fb_sdl::Sdl : Noncopyable
 				throw Creatergbsurface_failed();
 			}
 
+			SDL_ShowCursor(1);
 			return *surface_ptr;
 		}
 
@@ -224,6 +225,8 @@ struct Fb_sdl::Sdl : Noncopyable
 	Constructible<Capture::Connection::Screen> _captured_screen { };
 
 	int _mx = 0, _my = 0;
+
+	unsigned _key_cnt = 0;
 
 	unsigned _capture_woken_up = 0;
 
@@ -389,6 +392,8 @@ void Fb_sdl::Sdl::_handle_event(Event_batch &batch, SDL_Event const &event)
 			return;
 
 		batch.submit(Absolute_motion{_mx, _my});
+		if (_key_cnt != 0)
+			batch.submit(Touch{ Touch_id { 0 }, (float)_mx, (float)_my});
 		return;
 	}
 
@@ -421,13 +426,18 @@ void Fb_sdl::Sdl::_handle_event(Event_batch &batch, SDL_Event const &event)
 	case SDL_KEYUP:
 	case SDL_MOUSEBUTTONUP:
 
-		batch.submit(Release{keycode});
+		batch.submit(Touch_release{ Touch_id { 0 }});
+		_key_cnt--;
 		return;
 
 	case SDL_KEYDOWN:
 	case SDL_MOUSEBUTTONDOWN:
 
-		batch.submit(Press{keycode});
+		if (_key_cnt == 0)
+			batch.submit(Touch{ Touch_id { 0 }, (float)_mx, (float)_my});
+
+		(void)keycode;
+		_key_cnt++;
 		return;
 
 	case SDL_MOUSEWHEEL:
