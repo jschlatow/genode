@@ -172,6 +172,7 @@ struct Fb_sdl::Sdl : Noncopyable
 				throw Creatergbsurface_failed();
 			}
 
+			SDL_ShowCursor(1);
 			return *surface_ptr;
 		}
 		SDL_Texture &_init_texture()
@@ -218,6 +219,10 @@ struct Fb_sdl::Sdl : Noncopyable
 	Constructible<Capture::Connection::Screen> _captured_screen { };
 
 	MousePosition _mx = 0, _my = 0;
+
+	Point _pointer { -1, -1 };
+
+	unsigned _key_cnt = 0;
 
 	unsigned _capture_woken_up = 0;
 
@@ -401,9 +406,12 @@ void Fb_sdl::Sdl::_handle_event(Event_batch &batch, SDL_Event const &event)
 			return p;
 		};
 
-		Point const p = transformed({ _mx, _my }, _screen->size, _attr.rotate, _attr.flip);
+		_pointer = transformed({ _mx, _my }, _screen->size, _attr.rotate, _attr.flip);
 
-		batch.submit(Absolute_motion{p.x, p.y});
+		// batch.submit(Absolute_motion{p.x, p.y});
+		if (_key_cnt != 0)
+			// batch.submit(Absolute_motion{_pointer.x, _pointer.y});
+			batch.submit(Touch{ Touch_id { 0 }, (float)_pointer.x, (float)_pointer.y});
 		return;
 	}
 
@@ -439,13 +447,35 @@ void Fb_sdl::Sdl::_handle_event(Event_batch &batch, SDL_Event const &event)
 	case SDL_EVENT_KEY_UP:
 	case SDL_EVENT_MOUSE_BUTTON_UP:
 
-		batch.submit(Release{keycode});
+		if (event.button.button == SDL_BUTTON_LEFT) {
+			batch.submit(Touch_release{ Touch_id { 0 }});
+			batch.submit(Release{BTN_TOUCH});
+			_key_cnt--;
+		} else if (event.button.button == SDL_BUTTON_RIGHT) {
+			batch.submit(Release{BTN_LEFT});
+		} else {
+			batch.submit(Release{keycode});
+		}
 		return;
 
 	case SDL_EVENT_KEY_DOWN:
 	case SDL_EVENT_MOUSE_BUTTON_DOWN:
 
-		batch.submit(Press{keycode});
+		if (event.button.button == SDL_BUTTON_LEFT) {
+			if (_key_cnt == 0) {
+				batch.submit(Touch{ Touch_id { 0 }, (float)_pointer.x, (float)_pointer.y});
+				batch.submit(Press{BTN_TOUCH});
+				// batch.submit(Absolute_motion{_pointer.x, _pointer.y});
+			}
+
+			_key_cnt++;
+
+			(void)keycode;
+		} else if (event.button.button == SDL_BUTTON_RIGHT) {
+			batch.submit(Press{BTN_LEFT});
+		} else {
+			batch.submit(Press{keycode});
+		}
 		return;
 
 	case SDL_EVENT_MOUSE_WHEEL:
