@@ -423,7 +423,7 @@ class Event_filter::Touch_gesture_source : public Source, Source::Filter
 						case TRIGGERED:
 							/* translate into relative motion events */
 							if (id.value == 0) {
-								diff = _last_pos - p;
+								diff = p - _last_pos;
 								destination.submit(Input::Relative_motion { diff.x, diff.y });
 								_last_pos = p;
 							}
