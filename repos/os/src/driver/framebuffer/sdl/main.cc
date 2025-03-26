@@ -391,7 +391,7 @@ void Fb_sdl::Sdl::_handle_event(Event_batch &batch, SDL_Event const &event)
 		if (ox == _mx && oy == _my)
 			return;
 
-		batch.submit(Absolute_motion{_mx, _my});
+//		batch.submit(Absolute_motion{_mx, _my});
 		if (_key_cnt != 0)
 			batch.submit(Touch{ Touch_id { 0 }, (float)_mx, (float)_my});
 		return;
