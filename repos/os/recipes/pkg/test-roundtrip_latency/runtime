@@ -1,0 +1,31 @@
+<runtime ram="32M" caps="5000" binary="init">
+
+	<requires> <timer/> </requires>
+
+	<fail after_seconds="600"/>
+	<succeed>--- Roundtrip-latency test finished ---</succeed>
+	<fail>Error: </fail>
+
+	<content>
+		<rom label="ld.lib.so"/>
+		<rom label="test-roundtrip_latency"/>
+	</content>
+
+	<config>
+		<parent-provides>
+			<service name="ROM"/>
+			<service name="CPU"/>
+			<service name="RM"/>
+			<service name="PD"/>
+			<service name="IRQ"/>
+			<service name="IO_PORT"/>
+			<service name="IO_MEM"/>
+			<service name="LOG"/>
+			<service name="Timer"/>
+		</parent-provides>
+		<default-route>
+			<any-service> <parent/> <any-child/> </any-service>
+		</default-route>
+		<start name="test-roundtrip_latency" caps="4900" ram="20M"/>
+	</config>
+</runtime>
