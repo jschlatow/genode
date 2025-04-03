@@ -1,0 +1,33 @@
+                Test for signal-roundtrip latency
+
+There are four scenarios tested:
+
+a) A single pair of threads signal each other to measure the roundtrip latency.
+   This serves as a baseline.
+b) Two pairs of threads signal each other in parallel. Ideally, the two pairs
+   achieve similar roundtrip latencies.
+c) The same as b), yet with a CPU burner thread on the same priority. The
+   two pairs of signalling threads should be affected in the same way.
+d) Up to 64 pairs of threads are started. Each pair sleeps for 10ms between
+   every measurement.
+
+Evaluation:
+
+Results are displayed as histograms and a one-line condensed representation.
+
+The bars of the histograms are displayed horizontally using the symbols '-',
+'=', and '#'. '-' represents samples below the median. '=' represents samples
+between median an 90th percentile. '#' represents samples above the 90th
+percentile. The number of samples represented by a single character depends on
+the size of the largest bin.
+
+The one-line representation depicts a horizontal bar where each character
+represents a single bin. E.g.
+
+! |  >   ---------+----  * < |
+
+The bar is enclosed in '|'. A space does not indicate any information about the
+bin (might have samples or might be empty). A '>' indicates that the bin contains
+the minimum. A '>' indicates that the bin contains the maximum. A '-' marks
+the bins in the inter-quartile range. A '+' marks the bin that contains the
+median. A '*' indicates that the bin contains the 90th percentile.
