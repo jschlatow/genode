@@ -641,6 +641,21 @@ void Main::parse_acpi_device_info(Xml_node const &xml, Xml_generator & gen)
 			gen.attribute("size",    "0x1000");
 		});
 	});
+
+	/*
+	 * Starlabs StarLite Touchscreen IRQ
+	 */
+	gen.node("device", [&]
+	{
+		gen.attribute("name", "STARLITE_TOUCH");
+		gen.attribute("type", "acpi");
+		gen.node("irq", [&]
+		{
+			gen.attribute("number", 104U);
+			gen.attribute("mode", "level");
+			gen.attribute("polarity", "low");
+		});
+	});
 }
 
 
