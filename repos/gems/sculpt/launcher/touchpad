@@ -1,11 +1,41 @@
 <launcher pkg="pc_i2c_hid" priority="-1">
-	<config info="Fujtisu U7411 (SYNAPTICS)"/>
-	<!--
-	<config gpio_pin="266" bus_addr="21" hid_addr="1"  info="Fujtisu U7511 (ELAN)"/>
-	<config gpio_pin="174" bus_addr="44" hid_addr="32" info="Fujtisu U7412 (SYNAPTICS)"/>
-	<config gpio_pin="174" bus_addr="44" hid_addr="32" info="Fujtisu U7413 (SYNAPTICS)"/>
-	<config gpio_pin="3"   bus_addr="44" hid_addr="32" info="Framework Gen12/Gen13"/>
-	-->
+	<config>
+		<i2c_slave irq="266" bus_addr="44" hid_addr="32"
+		           gpio_chip="INT34C5"
+		           info="Fujitsu U7411 (SYNAPTICS)"/>
+
+		<!--
+		<i2c_slave irq="266" bus_addr="21" hid_addr="1"
+		           gpio_chip="INT34C5"
+		           info="Fujitsu U7511 (ELAN)"/>
+
+		<i2c_slave irq="174" bus_addr="44" hid_addr="32"
+		           gpio_chip="INT34C5"
+		           info="Fujitsu U7412/U7413 (SYNAPTICS)"/>
+
+		<i2c_slave irq="3"   bus_addr="44" hid_addr="32"
+		           gpio_chip="INT34C5"
+		           info="Framework Gen12/Gen13"/>
+
+		<i2c_slave irq="352" bus_addr="44" hid_addr="32"
+		           gpio_chip="INTC1083"
+		           info="Framework Core Ultra Series 1"/>
+
+		<i2c_slave irq="104" bus_addr="93" hid_addr="1"
+		           info="StarLite"/>
+		-->
+
+		<i2c_master bus_speed_hz="400" info="Tigerlake">
+			<fmcn hcnt="193" lcnt="313" hold_time="80"/>
+		</i2c_master>
+
+		<!--
+		<i2c_master bus_speed_hz="400" info="StarLite">
+			<fmcn hcnt="106" lcnt="213" hold_time="80"/>
+		</i2c_master>
+		-->
+	</config>
+
 	<route>
 		<service name="Platform"> <parent label="touchpad"/> </service>
 		<service name="Event">    <parent label="touchpad"/> </service>

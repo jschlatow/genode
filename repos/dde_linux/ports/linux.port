@@ -20,6 +20,7 @@ PATCH_FILES := i915_irq.patch \
                usb_net_pinephone.patch \
                usb_net_smsc95xx.patch \
                workqueue_deadlock.patch \
-               r8169_disable_irq_coalescing.patch
+               r8169_disable_irq_coalescing.patch \
+               i2c_hid_configure.patch
 
 PATCHES += $(addprefix patches/,$(PATCH_FILES))

@@ -51,6 +51,7 @@ drivers/pci/pci-driver.c
 drivers/pinctrl/core.c
 drivers/pinctrl/intel/pinctrl-intel.c
 drivers/pinctrl/intel/pinctrl-tigerlake.c
+drivers/pinctrl/intel/pinctrl-meteorlake.c
 drivers/pinctrl/pinconf-generic.c
 drivers/pinctrl/pinconf.c
 drivers/pinctrl/pinctrl-utils.c

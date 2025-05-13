@@ -80,3 +80,28 @@ struct clk_lookup *clkdev_create(struct clk *clk, const char *con_id, const char
 
 	return &cla->cl;
 }
+
+
+#include <i2c-designware-core.h>
+
+void lx_emul_i2c_configure(struct device *device)
+{
+	struct dw_i2c_dev *dev = dev_get_drvdata(device);
+
+	dev->ss_hcnt       = i2c_master_config.ss_hcnt;
+	dev->ss_lcnt       = i2c_master_config.ss_lcnt;
+	dev->fs_hcnt       = i2c_master_config.fs_hcnt;
+	dev->fs_lcnt       = i2c_master_config.fs_lcnt;
+
+	switch (i2c_master_config.bus_speed_hz)
+	{
+		case 100000:
+			dev->sda_hold_time = i2c_master_config.ss_ht;
+			break;
+		case 400000:
+			dev->sda_hold_time = i2c_master_config.fs_ht;
+			break;
+		default:
+			break;
+	}
+}

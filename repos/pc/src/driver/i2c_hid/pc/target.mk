@@ -20,6 +20,7 @@ SRC_C += lx_emul/shadow/drivers/input/evdev.c
 SRC_C += lx_user.c
 
 CC_OPT_lx_emul/shadow/drivers/gpio/gpiolib-acpi += -I$(LX_SRC_DIR)/drivers/gpio
+CC_OPT += -I$(LX_SRC_DIR)/drivers/i2c/busses
 
 vpath %.c  $(PRG_DIR)
 vpath %.cc $(PRG_DIR)
