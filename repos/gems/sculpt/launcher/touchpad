@@ -1,10 +1,10 @@
 <launcher pkg="jschlatow/pkg/pc_i2c_hid/2025-05-14" priority="-1">
 	<config>
+		<!--
 		<i2c_slave irq="266" bus_addr="44" hid_addr="32"
 		           gpio_chip="INT34C5"
 		           info="Fujitsu U7411 (SYNAPTICS)"/>
 
-		<!--
 		<i2c_slave irq="266" bus_addr="21" hid_addr="1"
 		           gpio_chip="INT34C5"
 		           info="Fujitsu U7511 (ELAN)"/>
@@ -16,11 +16,13 @@
 		<i2c_slave irq="3"   bus_addr="44" hid_addr="32"
 		           gpio_chip="INT34C5"
 		           info="Framework Gen12/Gen13"/>
+		-->
 
 		<i2c_slave irq="352" bus_addr="44" hid_addr="32"
 		           gpio_chip="INTC1083"
 		           info="Framework Core Ultra Series 1"/>
 
+		<!--
 		<i2c_slave irq="104" bus_addr="93" hid_addr="1"
 		           info="StarLite"/>
 		-->

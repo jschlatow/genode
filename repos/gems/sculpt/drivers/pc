@@ -110,8 +110,8 @@
 				<pci class="ISABRIDGE"/>
 			</policy>
 			<policy label="runtime -> touchpad" info="yes">
-				<device name="00:15.3" type="pci"/>
-				<device name="INT34C5" type="acpi"/>
+				<device name="00:19.1" type="pci"/>
+				<device name="INTC1083" type="acpi"/>
 			</policy>
 			<policy label_suffix="-> wifi" msix="false" info="yes"> <pci class="WIFI"/> </policy>
 			<policy label_suffix="-> nic" info="yes">   <pci class="ETHERNET"/> </policy>
