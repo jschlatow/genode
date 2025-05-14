@@ -1,4 +1,4 @@
-<launcher pkg="pc_i2c_hid" priority="-1">
+<launcher pkg="jschlatow/pkg/pc_i2c_hid/2025-05-14" priority="-1">
 	<config>
 		<i2c_slave irq="266" bus_addr="44" hid_addr="32"
 		           gpio_chip="INT34C5"
