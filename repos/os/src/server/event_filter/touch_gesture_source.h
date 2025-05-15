@@ -560,13 +560,14 @@ class Event_filter::Touch_gesture_source : public Source, Source::Filter
 
 			bool active    { false };
 			if (ev.touch() || ev.touch_release()) {
-				bool handled { false };
+				struct Triggered_gesture { Gesture const &gesture; };
+				Constructible<Triggered_gesture> triggered_gesture;
 
 				_multitouch.handle_event(event);
 
 				State old_state = _state;
 				_gestures.for_each([&] (Gesture &gesture) {
-					if (gesture.state() != old_state || handled)
+					if (gesture.state() != old_state || triggered_gesture.constructed())
 						return;
 
 					gesture.handle_event(destination, ev);
@@ -577,7 +578,8 @@ class Event_filter::Touch_gesture_source : public Source, Source::Filter
 					switch (gesture.state()) {
 						case TRIGGERED:
 							gesture.generate(destination, _buffer);
-							handled = true;
+							if (old_state != TRIGGERED)
+								triggered_gesture.construct(Triggered_gesture { gesture });
 							[[fallthrough]];
 						case DETECT:
 							active = true;
@@ -586,6 +588,14 @@ class Event_filter::Touch_gesture_source : public Source, Source::Filter
 							break;
 					}
 				});
+
+				/* cancel all other gestures if one gesture triggered */
+				if (triggered_gesture.constructed()) {
+					_gestures.for_each([&] (Gesture &gesture) {
+						if (&gesture != &triggered_gesture->gesture)
+							gesture.cancel();
+					});
+				}
 
 				/* pass touch events if all gestures were cancelled */
 				if (!active && _state != TRIGGERED) {
@@ -611,6 +621,9 @@ class Event_filter::Touch_gesture_source : public Source, Source::Filter
 					
 					_gestures.for_each([&] (Gesture & gesture) {
 						gesture.cancel(); });
+
+					_buffer.submit(destination);
+					_buffer.clear();
 				}
 			});
 
