@@ -430,7 +430,6 @@ class Kernel::Thread : private Kernel::Object, public Cpu_context, private Timeo
 		void ipc_send_request_succeeded() ;
 		void ipc_send_request_failed()    ;
 		void ipc_await_request_succeeded();
-		void ipc_await_request_failed()   ;
 		void ipc_copy_msg(Thread &sender) ;
 
 
