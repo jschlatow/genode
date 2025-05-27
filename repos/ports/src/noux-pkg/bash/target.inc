@@ -22,4 +22,7 @@ CFLAGS += -DNO_TTY_DRIVER
 # Prevent link error with GCC 10, which defaults to -fno-common
 CFLAGS += -fcommon
 
+# Prevent compile errors with host GCC 15 which defaults to -std=gnu23
+CONFIGURE_ARGS += "CFLAGS_FOR_BUILD=\"-std=gnu17\""
+
 include $(call select_from_repositories,mk/noux.mk)
