@@ -1,5 +1,5 @@
 assert {[have_spec x86]}
-assert {[have_include load/ipxe]}
+#assert {[have_include load/ipxe]}
 
 proc _arch { } {
 	if {[have_spec x86_32]} { return "x86_32" }
@@ -12,7 +12,7 @@ set ramdisk [run_dir]/rootfs.cpio
 
 create_boot_directory
 
-build { pc_linux busybox }
+build { pc_linux busybox/x86_64 }
 
 # Create expected boot directory, as we cannot use build_boot_image
 exec mkdir -p [run_dir]/boot
@@ -87,8 +87,8 @@ proc _uart { } {
 
 set uart [_uart]
 
-create_ipxe_config
-update_ipxe_boot_dir
+#create_ipxe_config
+#update_ipxe_boot_dir
 
 proc _boot_script { } {
 	global uart

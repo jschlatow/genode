@@ -66,8 +66,8 @@ LX_ENABLE += USB_PCI USB_UHCI_HCD
 # Intel i915 driver
 LX_ENABLE += DRM DRM_I915
 
-# required for GPIO irqchip on tigerlake
-LX_ENABLE += PINCTRL PINCTRL_TIGERLAKE
+# required for GPIO irqchip on tigerlake and meteorlake
+LX_ENABLE += PINCTRL PINCTRL_TIGERLAKE PINCTRL_METEORLAKE
 
 # I2C HID touchpad support (keep INPUT_EVDEV hook)
 LX_ENABLE += INPUT_EVDEV HID_GENERIC HID_MULTITOUCH
@@ -131,5 +131,7 @@ LX_DISABLE += SCHED_MC CPU_FREQ
 # disable optimization not possible in PIC code under Genode
 LX_DISABLE += CC_HAS_ASM_GOTO
 
+LX_ENABLE += USB_HID
+
 # slim down kernel by removing superfluous drivers
-LX_DISABLE += USB_HID VGA_CONSOLE DUMMY_CONSOLE NLS VGA_ARB DEBUG_LIST
+LX_DISABLE += VGA_CONSOLE DUMMY_CONSOLE NLS VGA_ARB DEBUG_LIST
