@@ -1,0 +1,58 @@
+<runtime ram="32M" caps="5000" binary="init">
+
+	<requires> <timer/> <trace/> </requires>
+
+	<fail after_seconds="600"/>
+	<succeed>--- Fairness test finished ---</succeed>
+	<fail>Error: </fail>
+
+	<content>
+		<rom label="ld.lib.so"/>
+		<rom label="test-fairness"/>
+		<rom label="top"/>
+		<rom label="dummy"/>
+	</content>
+
+	<config>
+		<affinity-space width="2" height="2"/>
+		<parent-provides>
+			<service name="ROM"/>
+			<service name="CPU"/>
+			<service name="RM"/>
+			<service name="PD"/>
+			<service name="IRQ"/>
+			<service name="IO_PORT"/>
+			<service name="IO_MEM"/>
+			<service name="LOG"/>
+			<service name="Timer"/>
+			<service name="TRACE"/>
+		</parent-provides>
+		<default caps="100" ram="2M"/>
+		<default-route>
+			<service name="TRACE"> <parent label=""/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</default-route>
+		<start name="test-fairness">
+			<affinity xpos="1" ypos="0" width="1" height="1"/>
+			<config ep="burn">
+				<thread name="burner 1"/>
+				<thread name="burner 2"/>
+			</config>
+		</start>
+		<start name="test-fairness-2">
+			<binary name="test-fairness"/>
+			<affinity xpos="1" ypos="0" width="1" height="1"/>
+			<config ep="burn"/>
+		</start>
+		<start name="top">
+			<config period_ms="2000"/>
+		</start>
+		<start name="dummy">
+			<exit propagate="yes"/>
+			<config>
+				<sleep ms="5000"/>
+				<exit/>
+			</config>
+		</start>
+	</config>
+</runtime>
