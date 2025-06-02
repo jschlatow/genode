@@ -1,0 +1,16 @@
+                  Test for scheduling fairness
+
+There are four components running on the same priority and two differnt CPUs
+(two components on each CPU).
+
+One of the components on CPU 0 has a single busy-looping thread whereas the
+other component on CPU 0 releases a signal storm. The expected result is that
+both, the entrypoint of the first component and the sender thread of the second
+component et an equal share of the CPU.
+
+The two components on the other CPU are busy-looping their entrypoint threads.
+Moreover, one of those components has two busy-looping threads, the other has
+two mutual exclusive threads. The expected result is that all busy-looping
+threads shall receive an equal share of the CPU. The mutual exclusive threads
+should get a bit less but a similar share.
+
