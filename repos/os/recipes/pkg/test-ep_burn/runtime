@@ -1,0 +1,44 @@
+<runtime ram="32M" caps="5000" binary="init">
+
+	<requires> <timer/> <trace/> </requires>
+
+	<fail after_seconds="600"/>
+	<succeed>--- Fairness test finished ---</succeed>
+	<fail>Error: </fail>
+
+	<content>
+		<rom label="ld.lib.so"/>
+		<rom label="test-ep_burn"/>
+		<rom label="top"/>
+	</content>
+
+	<config>
+		<affinity-space width="2" height="2"/>
+		<parent-provides>
+			<service name="ROM"/>
+			<service name="CPU"/>
+			<service name="RM"/>
+			<service name="PD"/>
+			<service name="IRQ"/>
+			<service name="IO_PORT"/>
+			<service name="IO_MEM"/>
+			<service name="LOG"/>
+			<service name="Timer"/>
+			<service name="TRACE"/>
+		</parent-provides>
+		<default caps="100"/>
+		<default-route>
+			<service name="TRACE"> <parent label=""/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</default-route>
+		<start name="test-ep_burn">
+			<resource name="RAM" quantum="2M"/>
+			<affinity xpos="1" ypos="0" width="1" height="1"/>
+			<config/>
+		</start>
+		<start name="top">
+			<resource name="RAM" quantum="2M"/>
+			<config period_ms="2000"/>
+		</start>
+	</config>
+</runtime>
