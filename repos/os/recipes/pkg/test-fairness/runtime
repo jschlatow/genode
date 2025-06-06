@@ -42,7 +42,10 @@
 		<start name="test-fairness-2">
 			<binary name="test-fairness"/>
 			<affinity xpos="1" ypos="0" width="1" height="1"/>
-			<config ep="burn"/>
+			<config ep="burn">
+				<mutex_thread name="mutex_user 1"/>
+				<mutex_thread name="mutex_user 2"/>
+			</config>
 		</start>
 		<start name="top">
 			<config period_ms="2000"/>

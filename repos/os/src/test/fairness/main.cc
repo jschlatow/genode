@@ -1,7 +1,7 @@
 /*
  * \brief  Test for scheduling fairness
  * \author Johannes Schlatow
- * \date   2025-04-01
+ * \date   2025-06-02
  */
 
 /*
@@ -20,6 +20,49 @@
 #include <util/string.h>
 
 using namespace Genode;
+
+static Mutex &mutex()
+{
+	static Mutex inst;
+	return inst;
+}
+
+/**
+ * A mutex thread
+ */
+class Mutex_thread : Thread
+{
+	private:
+
+		bool     volatile  _stop       { false };
+
+		void entry() override
+		{
+			while (!_stop) {
+				mutex().acquire();
+				mutex().release();
+			}
+		}
+
+	public:
+	
+		Mutex_thread(Env                       &env,
+		             Affinity::Location  const &location,
+		             String<32>          const &name)
+		:
+			Thread(env, name, 8*1024, location, Weight(), env.cpu())
+		{
+			Thread::start();
+		}
+
+		~Mutex_thread()
+		{
+			if (!_stop && Thread::myself() != this) {
+				_stop = true;
+				join();
+			}
+		}
+ };
 
 /**
  * A burner thread
@@ -58,12 +101,14 @@ class Burner : Thread
 
 struct Main
 {
-	using Burner_alloc = Memory::Constrained_obj_allocator<Burner>;
+	using Burner_alloc       = Memory::Constrained_obj_allocator<Burner>;
+	using Mutex_thread_alloc = Memory::Constrained_obj_allocator<Mutex_thread>;
 
 	Env                          &env;
-	Heap                          heap            { env.ram(), env.rm() };
-	Burner_alloc                  burner_alloc    { heap };
-	Attached_rom_dataspace        config          { env, "config" };
+	Heap                          heap               { env.ram(), env.rm() };
+	Burner_alloc                  burner_alloc       { heap };
+	Mutex_thread_alloc            mutex_thread_alloc { heap };
+	Attached_rom_dataspace        config             { env, "config" };
 
 	Affinity::Space     space     { env.cpu().affinity_space() };
 	Affinity::Location  location  { space.location_of_index(0) };
@@ -83,6 +128,20 @@ struct Main
 				},
 				[&] (Alloc_error) {
 					error("Failed to create burner thread \"", name, "\"");
+				}
+			);
+		});
+
+		config.xml().for_each_sub_node("mutex_thread", [&] (Xml_node const &node) {
+			String<32> name = node.attribute_value("name", String<32>(""));
+
+			mutex_thread_alloc.create(env, location, name).with_result(
+				[&] (Mutex_thread_alloc::Allocation &a) {
+					a.deallocate = false;
+					log("Created mutex thread\"", name, "\"");
+				},
+				[&] (Alloc_error) {
+					error("Failed to create mutex thread \"", name, "\"");
 				}
 			);
 		});
