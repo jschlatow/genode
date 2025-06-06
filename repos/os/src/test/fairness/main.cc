@@ -99,6 +99,34 @@ class Burner : Thread
 };
 
 
+/**
+ * A signal sender thread
+ */
+class Sender : Thread
+{
+	private:
+
+		Signal_context_capability cap;
+
+		void entry() override
+		{
+			while (true)
+				Signal_transmitter(cap).submit();
+		}
+
+	public:
+
+		Sender(Env                       &env,
+		       Affinity::Location  const &location,
+		       Signal_context_capability  cap)
+		:
+			Thread(env, "sender_thread", 8*1024, location, Weight(), env.cpu()), cap(cap)
+		{
+			Thread::start();
+		}
+};
+
+
 struct Main
 {
 	using Burner_alloc       = Memory::Constrained_obj_allocator<Burner>;
@@ -110,8 +138,14 @@ struct Main
 	Mutex_thread_alloc            mutex_thread_alloc { heap };
 	Attached_rom_dataspace        config             { env, "config" };
 
+	Io_signal_handler<Main>       signal_handler     { env.ep(), *this, &Main::handle };
+	Constructible<Sender>         sender             { };
+
 	Affinity::Space     space     { env.cpu().affinity_space() };
 	Affinity::Location  location  { space.location_of_index(0) };
+
+	void handle()
+	{ }
 
 	Main(Env &env) : env(env)
 	{
@@ -146,8 +180,15 @@ struct Main
 			);
 		});
 
-		if (config.xml().attribute_value("ep", String<8>("sleep")) == "burn") {
+		String<8> ep_attr = config.xml().attribute_value("ep", String<8>("sleep"));
+		if (ep_attr == "burn") {
 			for (;;);
+		} else if (ep_attr == "receive") {
+			sender.construct(env, location, signal_handler);
+
+			for (;;) {
+				env.ep().wait_and_dispatch_one_io_signal();
+			}
 		}
 	}
 };

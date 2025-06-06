@@ -14,7 +14,7 @@
 	</content>
 
 	<config>
-		<affinity-space width="2" height="2"/>
+		<affinity-space width="2" height="1"/>
 		<parent-provides>
 			<service name="ROM"/>
 			<service name="CPU"/>
@@ -46,6 +46,18 @@
 				<mutex_thread name="mutex_user 1"/>
 				<mutex_thread name="mutex_user 2"/>
 			</config>
+		</start>
+		<start name="burner">
+			<binary name="test-fairness"/>
+			<affinity xpos="0" ypos="0" width="1" height="1"/>
+			<config ep="sleep">
+				<thread name="burner"/>
+			</config>
+		</start>
+		<start name="test-signal_stress">
+			<binary name="test-fairness"/>
+			<affinity xpos="0" ypos="0" width="1" height="1"/>
+			<config ep="receive"/>
 		</start>
 		<start name="top">
 			<config period_ms="2000"/>
