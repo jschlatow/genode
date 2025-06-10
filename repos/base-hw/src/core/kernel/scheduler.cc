@@ -169,7 +169,7 @@ void Scheduler::update()
 		    _super_period_left);
 	_last_time = time;
 
-	if (_current) _current->_execution_time += duration;
+	if (_current) _current->helping_destination()._execution_time += duration;
 
 	/* do not detract the quota of idle or removed context */
 	if (_current && _current != &_idle) {
