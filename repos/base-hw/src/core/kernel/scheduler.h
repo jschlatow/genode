@@ -33,7 +33,7 @@ class Kernel::Scheduler
 {
 	public:
 
-		enum { MIN_SCHEDULE_US = 500 };
+		enum { MIN_SCHEDULE_US = 2000 };
 
 		using vtime_t = time_t;
 
@@ -190,10 +190,10 @@ class Kernel::Scheduler
 		List _ready_contexts {};
 
 		Group _groups[Group_id::MAX + 1] {
-			{ 2, 400 }, /* drivers    */
-			{ 3, 200 }, /* multimedia */
-			{ 2, 100 }, /* apps       */
-			{ 1,   0 }  /* background */
+			{ 35, _timer.us_to_ticks(800) }, /* drivers    */
+			{ 10, _timer.us_to_ticks(400) }, /* multimedia */
+			{  4, _timer.us_to_ticks(200) }, /* apps       */
+			{  1, _timer.us_to_ticks(  0) }  /* background */
 		};
 
 		void _for_each_group(auto const fn) {
@@ -219,60 +219,7 @@ class Kernel::Scheduler
 
 		void _check_ready_contexts();
 
-		time_t _ticks_distant_to_current(Context const &context) const
-		{
-			time_t time = _max_timeout;
-
-			_with_group(current(), [&] (Group const &cur) {
-				_with_group(context, [&] (Group const &oth) {
-					if (&cur == &oth)
-						time = (context._vtime - current()._vtime) + 1;
-					else
-						time = ((oth._vtime+cur._warp)
-						        - (cur._vtime+oth._warp) + 1) * cur._weight;
-				});
-			});
-
-			return Genode::max(time, _min_timeout);
-		}
-
-		void _with_next(auto const fn)
-		{
-			Context *next = &_idle;
-
-			_for_each_group([&] (Group const &group) {
-				group.with_first([&] (Context &context) {
-					if ((context._id.value != current()._id.value) &&
-					    _earlier(context, *next)) {
-						next = &context;
-					}
-				});
-			});
-
-			time_t ticks_next = _ticks_distant_to_current(*next);
-
-			_with_group(current(), [&] (Group const &group) {
-				group.with_first([&] (Context &context) {
-					bool same_group = true;
-					time_t t = _ticks_distant_to_current(context);
-
-					_with_group(*next, [&] (Group const &ng) {
-						Group future { group._weight, group._warp };
-						future._vtime = group._vtime;
-						future.add_ticks(t);
-						if (ng.earlier(future)) same_group = false;
-					});
-
-					if (same_group) {
-						next = &context;
-						ticks_next = t;
-						return;
-					}
-				});
-			});
-
-			fn(*next, ticks_next);
-		}
+		time_t _ticks_distant_to_current(Context const &context) const;
 
 		/**
 		 * Noncopyable
