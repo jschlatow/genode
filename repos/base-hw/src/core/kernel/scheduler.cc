@@ -181,7 +181,7 @@ time_t Scheduler::_ticks_distant_to_current(Context const &context) const
 				time = (context._vtime - current()._vtime) + _min_timeout;
 			else
 				time = ((oth._vtime+cur._warp)
-				        - (cur._vtime+oth._warp) + _min_timeout) * cur._weight;
+				        - (cur._vtime+oth._warp)) * cur._weight + _min_timeout;
 		});
 	});
 
