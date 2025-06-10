@@ -17,6 +17,7 @@
 #include <base/thread.h>
 #include <base/registry.h>
 #include <base/duration.h>
+#include <base/attached_rom_dataspace.h>
 #include <timer_session/connection.h>
 
 /* local includes */
@@ -258,21 +259,23 @@ struct Test
 
 struct Main
 {
-	Env                &env;
-	Heap                heap      { env.ram(), env.rm() };
-	Timer::Connection   timer     { env };
-	Tsc_converter       converter { timer };
+	Env                   &env;
+	Heap                   heap      { env.ram(), env.rm() };
+	Timer::Connection      timer     { env };
+	Tsc_converter          converter { timer };
 
-	Affinity::Space     space     { env.cpu().affinity_space() };
-	Affinity::Location  location  { space.location_of_index(space.total()-1) };
+	Affinity::Space        space     { env.cpu().affinity_space() };
+	Affinity::Location     location  { space.location_of_index(space.total()-1) };
 
-	unsigned            next_id   { 0 };
+	Attached_rom_dataspace config { env, "config" };
+
+	unsigned               next_id   { 0 };
 
 	Constructible<Test>        single_test { };
 	Constructible<Burner>      burner { };
 	Registry<Registered<Test>> registry { };
 
-	Main(Env &env) : env(env)
+	void _bench_mode()
 	{
 		log("--- Roundtrip-latency test ---");
 
@@ -298,6 +301,24 @@ struct Main
 
 		log("--- Roundtrip-latency test finished ---");
 		env.parent().exit(0);
+	}
+
+	void _continuous_mode()
+	{
+		log("--- Measuring roundtrip latency (continuous mode) ---");
+
+		for (;;) {
+			test(1, Milliseconds{ 10 });
+			print_diff_stats();
+		}
+	}
+
+	Main(Env &env) : env(env)
+	{
+		if (config.xml().attribute_value("continuous", false))
+			_continuous_mode();
+		else
+			_bench_mode();
 	}
 
 	void test(unsigned num, Milliseconds interval)
