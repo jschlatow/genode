@@ -130,11 +130,16 @@ class Kernel::Scheduler
 				friend class Scheduler;
 				friend class Scheduler_test::Main;
 
+				/* higher weight results in slower virtual time */
 				vtime_t const _weight;
+
+				/* warp = backwards shift in virtual time */
 				vtime_t const _warp;
 
+				/* group's virtual time */
 				vtime_t _vtime { 0 };
 
+				/* minimum virtual time within the group */
 				vtime_t _min_vtime { 0 };
 
 				List _contexts {};
@@ -179,6 +184,7 @@ class Kernel::Scheduler
 		time_t  _max_timeout { _timer.us_to_ticks(_timer.timeout_max_us()) };
 		time_t  _last_time { 0 };
 
+		/* minimum virtual time of all groups */
 		vtime_t _min_vtime { 0 };
 
 		enum State { UP_TO_DATE, OUT_OF_DATE }
@@ -187,8 +193,10 @@ class Kernel::Scheduler
 		Context &_idle;
 		Context *_current { &_idle };
 
+		/* stores LISTED contexts, will be moved into groups by update() */
 		List _ready_contexts {};
 
+		/* The guaranteed CPU share of a group calculates as weight/sum_of_weights */
 		Group _groups[Group_id::MAX + 1] {
 			{ 35, _timer.us_to_ticks(800) }, /* drivers    */
 			{ 10, _timer.us_to_ticks(400) }, /* multimedia */
