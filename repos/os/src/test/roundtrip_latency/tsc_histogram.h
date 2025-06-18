@@ -210,9 +210,9 @@ class Genode::Histogram : Noncopyable
 			bool     const print_min    = before_median > before_min;
 			bool     const print_p90    = before_p90 > before_q3;
 			bool     const print_max    = (before_max > before_p90)
-			                           && (before_max < (int)BINS)
+			                           && (!_maxed_out)
 			                           && ((int)BINS - before_max);
-			bool     const print_maxout = before_max >= (int)BINS;
+			bool     const print_maxout = _maxed_out;
 
 			if (print_min && before_q1 == before_min)
 				before_q1++;

@@ -179,12 +179,23 @@ class Handler : Thread
 		Signal_receiver   &_receiver;
 		bool               _stop           { false };
 
+		uint8_t            _buffer1[4096];
+		uint8_t            _buffer2[4096];
+
 		void entry() override
 		{
 			while (!_stop) {
 				Signal signal = _receiver.wait_for_signal();
 				if (signal.num() > 1)
 					error("Got signalled more than once");
+
+				/* let's consume some CPU time to make preemptions measurable
+				 * remark: number of iterations was carefully adjusted to result in
+				 *         ~170us on a Thinkpad x230, which turned out to be just
+				 *         manageable by NOVA
+				 */
+				for (unsigned i=0; i < 380; i++)
+					memcpy(_buffer1, _buffer2, sizeof(_buffer1));
 
 				/* signal back */
 				if (!_stop)
@@ -294,9 +305,10 @@ struct Main
 		burner.destruct();
 		print_diff_stats();
 
-		log("--- running up to 64 tests in parallel ---");
+		unsigned num = min(max_tests(), 64U);
+		log("--- running ", num, " tests in parallel ---");
 
-		test(64, Milliseconds { 10 });
+		test(num, Milliseconds { 10 });
 		print_combined_stats();
 
 		log("--- Roundtrip-latency test finished ---");
@@ -313,6 +325,15 @@ struct Main
 		}
 	}
 
+	unsigned max_tests()
+	{
+		
+		addr_t const max_threads = Thread::stack_area_virtual_size() /
+		                           Thread::stack_virtual_size();
+
+		return (unsigned)max_threads/2;
+	}
+
 	Main(Env &env) : env(env)
 	{
 		if (config.xml().attribute_value("continuous", false))
@@ -323,11 +344,7 @@ struct Main
 
 	void test(unsigned num, Milliseconds interval)
 	{
-		addr_t const max_threads = Thread::stack_area_virtual_size() /
-		                           Thread::stack_virtual_size();
-
-		unsigned max_tests = min(num, (unsigned)max_threads/2);
-		for (unsigned i=max_tests; i; i--)
+		for (unsigned i=num; i; i--)
 			new (heap) Registered<Test>(registry, env, location,
 			                            next_id++, interval, converter);
 
