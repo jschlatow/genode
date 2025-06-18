@@ -2,6 +2,71 @@
  * \brief   Schedules execution times of a CPU
  * \author  Stefan Kalkowski
  * \date    2014-10-09
+ *
+ * Implements two-level scheduling scheme with groups of contexts
+ * sharing a virtual time, a weight (virtual time factor), and warp
+ * value (virtual time shift / latency boost).
+ * Within a group each context holds its own virtual time.
+
+ * On the top-level, the group with the lowest virtual time gets
+ * selected. Within a group the context with the lowest virtual time
+ * gets selected. Whenever the state of the scheduler needs to get
+ * updated (timer interrupt, context gets ready/unready, or yield
+ * gets called) the virtual time of the current context and group
+ * gets increased, depending on the elapsed time and weight of the
+ * group.
+ *
+ * The implementation is strongly related to the scheduler scheme
+ * described by Duda and Cheriton in "Borrowed Virtual-Time (BVT)
+ * Scheduling" (SOSP99),
+ * see https://dl.acm.org/doi/10.1145/319151.319169.
+ *
+ * We apply the following simplifications/modifications to the BVT scheme:
+ *
+ * - On the top-level, we have four groups with different weights and warp
+ *   values. On the second level, each context has weight 1 and no warp value.
+ * - The next timeout is programmed such that the effective virtual time
+ *   of the selected context/group $i$ does not exceed any other effective
+ *   virtual time by more than $MIN_SCHEDULE_US/weight_i$. This is in contrast
+ *   to the definition of context switches from Duda and Cheriton, which uses
+ *   actual virtual time instead of effective virtual time.
+ * - The (effective) virtual time is considered lowest if it is less or equal
+ *   any other virtual time. In consequence, contexts that just got ready (and
+ *   have not consumed any CPU time lately) are scheduled immediately.
+ * - There is no warp time limit nor unwarp time requirement.
+ *
+ * For a single-level variant of the above scheduling scheme, we can calculate
+ * the following upper bounds on scheduling latency, i.e. the time a context
+ * needs to wait until it will get scheduled:
+ *
+ * - Let $E_i$ and $A_i$ denote the effective and actual virtual time of
+ *   a context $i$. Furthermore, let $w_i$ and $e_i$ denote its weight and warp
+ *   time. Let $C=MIN_SCHEDULE_US$. Let $SVT$ denote the scheduler virtual time,
+ *   $SVT=min_j(A_j)$.
+ * - Context $i$ cannot execute ahead of any other context $j$ for more than
+ *   $C/w_j$, i.e. $E_i <= E_j + C/w_j$.
+ * - Context $i$ cannot execute behind any other context for more than $C/w_j$,
+ *   i.e. $E_i >= E_j - C/w_j$.
+ * - When context $i$ becomes ready after a longer idle time ($A_i < SVT), its
+ *   actual virtual time is set to SVT. Hence, $E_i = SVT - e_i$. All other
+ *   contexts $j$ have minimum actual virtual time as well, such that they
+ *   execute at most from $E_j=SVT - e_j$ until
+ *   $E'_j=E_i + C/w_j = SVT - e_i + C/w_j$. In the worst case, $j$ executes for
+ *   for $max(E'_j-E_i, 0)*w_j = max(C+(e_j-e_i)w_j, 0)$ real time before $i$.
+ *   The worst-case scheduling latency (in real time) is thus caluclated by
+ *   $sum_j{max(C + (e_j-e_i)w_j,0)}$.
+ * - When context $i$ becomes ready after it just consumed all its "quota", its
+ *   effective virtual time is at most $C/w_i$ ahead of the SVT, hence
+ *   $E_i=SVT-e_i + C/w_i$. In the worst case, any other context $j$ would
+ *   execute from $E_j=SVT-e_j$ to $E'_j=E_i + C/w_j=SVT - e_i + C/w_j + C/w_i$.
+ *   The worst-case scheduling latency (in real time) is thus calculated by
+ *   $sum_j{max(E'_j-E_i, 0)*w_j}=sum_j{max(C + C*w_j/w_i + (e_j-e_i)w_j, 0)}$.
+ *
+ * In consequence, warp times, weights and MIN_SCHEDULE_US can be used for
+ * tuning the scheduling latency. While second-level scheduling is only affected
+ * by MIN_TIMEOUT_US, the top-level scheduling can be adjusted such that groups
+ * with higher warp values experience reduced (or even zero) scheduling
+ * interference from groups with lower warp values.
  */
 
 /*
