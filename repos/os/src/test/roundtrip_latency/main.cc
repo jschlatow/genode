@@ -122,10 +122,13 @@ class Sender : Thread
 		Signal_receiver   &_receiver;
 		Milliseconds const _interval;
 		Stats             &_stats;
-		bool     volatile  _stop       { false };
+		bool     volatile &_stop;
 
 		void entry() override
 		{
+			if (_interval.value) {
+				_timer.msleep(_interval.value); }
+
 			while (!_stop) {
 				{
 					Latency_probe probe(_stats);
@@ -146,24 +149,24 @@ class Sender : Thread
 		       Signal_context_capability  context,
 		       Signal_receiver           &receiver,
 		       Milliseconds               interval,
-		       Stats                     &stats)
+		       Stats                     &stats,
+		       bool                      &stop)
 		:
 			Thread(env, "sender", 8*1024, location, Weight(), env.cpu()),
 			_timer(env),
 			_transmitter(context),
 			_receiver(receiver),
 			_interval(interval),
-			_stats(stats)
+			_stats(stats),
+			_stop(stop)
 		{
 			Thread::start();
 		}
 
 		~Sender()
 		{
-			if (!_stop && Thread::myself() != this) {
-				_stop = true;
+			if (Thread::myself() != this)
 				join();
-			}
 		}
 };
 
@@ -240,19 +243,14 @@ struct Test
 	Signal_receiver    receiver        { };
 	Signal_receiver    receiver_return { };
 	bool const         verbose   { false };
+	bool              &stop;
 
 	Constructible<Handler> handler { };
 	Constructible<Sender>  sender { };
 
-	void stop()
-	{
-		sender.destruct();
-		handler.destruct();
-	}
-
 	Test(Env &env, Affinity::Location const &location, int id,
-	     Milliseconds interval, Tsc_converter &converter)
-	: id(id), stats(converter)
+	     Milliseconds interval, Tsc_converter &converter, bool &stop)
+	: id(id), stats(converter), stop(stop)
 	{
 		if (verbose)
 			log("Starting sender/receiver ", id, "; sleep_ms=", interval.value);
@@ -261,10 +259,14 @@ struct Test
 		                  receiver_return.manage(context_return), receiver);
 		sender.construct(env, location,
 		                 receiver.manage(context), receiver_return,
-		                 interval, stats);
+		                 interval, stats, stop);
 	}
 
-	virtual ~Test() { stop(); }
+	virtual ~Test()
+	{
+		sender.destruct();
+		handler.destruct();
+	}
 
 };
 
@@ -282,9 +284,10 @@ struct Main
 
 	unsigned               next_id   { 0 };
 
-	Constructible<Test>        single_test { };
 	Constructible<Burner>      burner { };
 	Registry<Registered<Test>> registry { };
+
+	bool                       simul_stop { false };
 
 	void _bench_mode()
 	{
@@ -344,19 +347,21 @@ struct Main
 
 	void test(unsigned num, Milliseconds interval)
 	{
+		simul_stop = false;
+
 		for (unsigned i=num; i; i--)
 			new (heap) Registered<Test>(registry, env, location,
-			                            next_id++, interval, converter);
+			                            next_id++, interval, converter, simul_stop);
 
 		/* collect data for 3s */
 		timer.msleep(3000);
+
+		simul_stop = true;
 	}
 
 	void print_stats()
 	{
 		registry.for_each([&] (Test &test) {
-			test.stop();
-
 			log("\nSender ", test.id, " stats:");
 			test.stats.output_stats<Log::Log_fn>();
 			test.stats.output_visual_stats<Log::Log_fn>();
@@ -369,8 +374,6 @@ struct Main
 	void print_diff_stats()
 	{
 		registry.for_each([&] (Test &test) {
-			test.stop();
-
 			test.stats.output_visual_stats<Log::Log_fn>();
 
 			destroy(heap, &test);
@@ -384,12 +387,12 @@ struct Main
 		Stats      stats { converter };
 		Meta_stats median_stats { meta_converter };
 		Meta_stats p90_stats    { meta_converter };
+		Meta_stats max_stats    { meta_converter };
 		registry.for_each([&] (Test &test) {
-			test.stop();
 			stats += test.stats;
 			median_stats.add(test.stats.percentile(50));
 			p90_stats.   add(test.stats.percentile(90));
-			destroy(heap, &test);
+			max_stats.   add(test.stats.max_value());
 		});
 
 		/* print histogram over all samples */
@@ -400,6 +403,14 @@ struct Main
 		median_stats.output_visual_stats<Log::Log_fn>();
 		log("\nStats of 90th percentiles:");
 		p90_stats.output_visual_stats<Log::Log_fn>();
+		log("\nStats of maxima:");
+		max_stats.output_visual_stats<Log::Log_fn>();
+
+		log("\nStats for all tests:");
+		registry.for_each([&] (Test &test) {
+			test.stats.output_visual_stats<Log::Log_fn>();
+			destroy(heap, &test);
+		});
 	}
 };
 

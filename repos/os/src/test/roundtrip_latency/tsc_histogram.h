@@ -107,6 +107,11 @@ class Genode::Histogram : Noncopyable
 			return _sum / _num_samples;
 		}
 
+		Type max_value() const
+		{
+			return _max;
+		}
+
 		/*
 		 * returns the approximate p-th percentile
 		 */
