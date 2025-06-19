@@ -54,7 +54,7 @@ void Scheduler::Group::insert_orderly(Context &c)
 	using List_element = Genode::List_element<Context>;
 
 	if (!_contexts.first() ||
-	    _contexts.first()->object()->vtime() >= c.vtime()) {
+	    _contexts.first()->object()->_after(c)) {
 		_contexts.insert(&c._group_le);
 		return;
 	}
@@ -62,7 +62,7 @@ void Scheduler::Group::insert_orderly(Context &c)
 	for (List_element * le = _contexts.first(); le;
 	     le = le->next())
 		if (!le->next() ||
-		    le->next()->object()->vtime() >= c.vtime()) {
+		    le->next()->object()->_after(c)) {
 			_contexts.insert(&c._group_le, le);
 			return;
 		}
@@ -85,7 +85,7 @@ void Scheduler::Timeout::timeout_triggered()
 bool Scheduler::_earlier(Context const &first, Context const &second) const
 {
 	if (first.equal_group(second))
-		return first._vtime <= second._vtime;
+		return second._after(first);
 
 	bool ret = false;
 	_with_group(first, [&] (Group const &g1) {
@@ -152,13 +152,20 @@ void Scheduler::_check_ready_contexts()
 
 		_with_group(c, [&] (Group &group) {
 
-			/* If group has a vtime in the past, use minimum vtime */
-			if (!_ready(group) && (_min_vtime > group._vtime))
-				group._vtime = _min_vtime;
+			if (!_ready(group)) {
+				/* If group has a vtime in the past, use minimum vtime */
+				if (_min_vtime > group._vtime)
+					group._vtime = _min_vtime;
+
+				group._ready_vtime = group._vtime;
+			}
 
 			/* if context has a vtime in the past, use groups' minimum time */
 			if (group._min_vtime > c._vtime)
 				c._vtime = group._min_vtime;
+
+			/* remember vtime when context got ready */
+			c._ready_vtime = c._vtime;
 
 			if (_earlier(c, current()) ||
 			    _ticks_distant_to_current(c) < _timer.ticks_left(_timeout))

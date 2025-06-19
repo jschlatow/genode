@@ -130,6 +130,7 @@ class Kernel::Scheduler
 				Group_id const _id;
 
 				vtime_t _vtime { 0 };
+				vtime_t _ready_vtime { 0 };      
 
 				time_t _execution_time { 0 };
 
@@ -151,6 +152,20 @@ class Kernel::Scheduler
 					for (List_element *h = _helper_list.first();
 					     h; h = h->next())
 						fn(*h->object());
+				}
+
+				vtime_t _vtime_since_ready() const {
+					return _vtime - _ready_vtime; }
+
+				bool _after(Context const &other) const
+				{
+					/* vtime must be greater or (if equal) this context has run
+					 * at least MIN_SCHEDULE_US since it got ready and other context
+					 * has not run yet
+					 */
+					return _vtime > other._vtime ||
+					      (_vtime == other._vtime && !other._vtime_since_ready() &&
+					      _vtime_since_ready() >= MIN_SCHEDULE_US );
 				}
 
 				/**
@@ -204,10 +219,16 @@ class Kernel::Scheduler
 				/* group's virtual time */
 				vtime_t _vtime { 0 };
 
+				/* group's virtual time since it got ready */
+				vtime_t _ready_vtime { 0 };
+
 				/* minimum virtual time within the group */
 				vtime_t _min_vtime { 0 };
 
 				List _contexts {};
+
+				time_t _rtime_since_ready() const {
+					return (_vtime - _ready_vtime)*_weight; }
 
 				/**
 				 * Noncopyable
@@ -230,8 +251,14 @@ class Kernel::Scheduler
 				void add_ticks(time_t ticks) {
 					_vtime += (ticks > _weight) ? ticks / _weight : 1; }
 
-				bool earlier(Group const &other) const {
-					return (other._vtime + _warp) >= (_vtime + other._warp); }
+				bool earlier(Group const &other) const
+				{
+					vtime_t const lhs = other._vtime + _warp;
+					vtime_t const rhs = _vtime + other._warp;
+					return lhs > rhs ||
+					      (lhs == rhs && !_rtime_since_ready() &&
+					       other._rtime_since_ready() >= MIN_SCHEDULE_US);
+				}
 		};
 
 		struct Timeout : Kernel::Timeout
