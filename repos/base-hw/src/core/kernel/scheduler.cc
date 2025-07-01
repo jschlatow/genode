@@ -161,8 +161,15 @@ void Scheduler::_check_ready_contexts()
 				c._vtime = group._min_vtime;
 
 			if (_earlier(c, current()) ||
-			    _ticks_distant_to_current(c) < _timer.ticks_left(_timeout))
+			    _ticks_distant_to_current(c) < _timer.ticks_left(_timeout)) {
 				_state = OUT_OF_DATE;
+				if (group._warp > 0)
+					_expected_id.value = c._id.value;
+				else if (current()._id.value == 0 && !_earlier(c, current()))
+					_expected_id.value = c._id.value;
+			} else if (group._warp > 0) {
+				warning("Warping context is not earlier");
+			}
 
 			group.insert_orderly(c);
 		});
@@ -201,9 +208,13 @@ void Scheduler::update()
 
 	/* determine the group with minimum virtual time */
 	Context *earliest = &_idle;
+	Context *driver_context = &_idle;
 	_for_each_group([&] (Group &group) {
 		group.with_first([&] (Context &context) {
-			if (_earlier(context, *earliest)) earliest = &context; });
+			if (_earlier(context, *earliest)) earliest = &context;
+			if (context._id.value == Group_id::DRIVER)
+				driver_context = &context;
+		});
 	});
 
 	/* switch if earliest group has context earlier than current */
@@ -213,6 +224,16 @@ void Scheduler::update()
 		_current = earliest;
 		_with_group(current(), [&] (Group &group) {
 			group.remove(current()); });
+	}
+
+	if (driver_context->_id.value == 0 && current()._id.value != 0) {
+		warning("Not switching to group 0 but to group ", current()._id.value);
+	}
+
+	if (_expected_id.valid()) {
+		if (_expected_id.value != earliest->_id.value)
+			warning("Did not switch to ", _expected_id.value, " but to ", earliest->_id.value);
+		_expected_id.value = Group_id::INVALID;
 	}
 
 	/* find max run-time till next context should be scheduled */
@@ -279,6 +300,8 @@ void Scheduler::yield()
 	 * to the first position in the group.
 	 */
 	current()._vtime += _min_timeout;
+	if (current()._id.value == Group_id::DRIVER)
+		warning("DRIVER context yields");
 	_update_time();
 	_state = OUT_OF_DATE;
 }
