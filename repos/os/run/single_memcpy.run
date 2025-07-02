@@ -1,0 +1,39 @@
+build { core init lib/ld test/single_memcpy app/cpu_burner timer }
+
+create_boot_directory
+
+install_config {
+	<config prio_levels="4">
+		<parent-provides>
+			<service name="LOG"/>
+			<service name="CPU"/>
+			<service name="PD"/>
+			<service name="ROM"/>
+			<service name="IO_MEM"/>
+		</parent-provides>
+		<default-route>
+			<any-service> <parent/> <any-child/> </any-service>
+		</default-route>
+		<default caps="100"/>
+
+		<affinity-space width="2" height="2"/>
+
+		<start name="cpu_burner" ram="2M" priority="-3">
+			<affinity xpos="1" ypos="0" width="1" height="1"/>
+		</start>
+
+		<start name="timer" ram="2M" priority="0">
+			<affinity xpos="0" ypos="0" width="1" height="1"/>
+			<resource name="CPU" quantum="10"/>
+			<provides> <service name="Timer"/> </provides>
+		</start>
+
+		<start name="test-single_memcpy" ram="2M" priority="0">
+			<affinity xpos="1" ypos="0" width="1" height="1"/>
+			<resource name="CPU" quantum="10"/>
+		</start>
+	</config> }
+
+build_boot_image [build_artifacts]
+
+run_genode_until forever
