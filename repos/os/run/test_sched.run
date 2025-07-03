@@ -21,15 +21,10 @@ assert {![have_include power_on/qemu]}
 # Build
 #
 
-build { core init timer lib/ld lib/libc lib/vfs
+build { core init timer lib/ld
         test/roundtrip_latency
         app/top
         app/dummy
-        app/rom_logger
-        server/fs_rom
-        server/vfs
-        server/terminal_log server/file_terminal
-        app/log_core
         app/cpu_burner }
 
 
@@ -105,14 +100,12 @@ install_config {
 		-->
 
 		<!-- 100% CPU burner on lowest priority -->
-		<!--
 		<start name="burner-3" priority="-3">
 			<resource name="CPU" quantum="20"/>
 			<affinity xpos="1" ypos="0" width="1" height="1"/>
 			<binary name="cpu_burner"/>
 			<config/>
 		</start>
-		-->
 
 		<start name="test-0" priority="0">
 			<resource name="CPU" quantum="10"/>
@@ -136,74 +129,6 @@ install_config {
 			} $config {
 		</start>
 		-->
-
-		<start name="rom_logger" ram="10M" priority="-2">
-			<affinity xpos="0" ypos="0" width="1" height="1"/>
-			<config rom="log" period_ms="20000"/>
-			<route>
-				<service name="ROM" unscoped_label="rom_logger"> <parent/> </service>
-				<service name="ROM" unscoped_label="ld.lib.so"> <parent/> </service>
-				<service name="ROM" label="log"> <child name="fs_rom" label="ram"/> </service>
-				<service name="Timer"> <child name="timer"/> </service>
-				<service name="PD"> <parent/> </service>
-				<service name="CPU"> <parent/> </service>
-				<service name="LOG"> <parent/> </service>
-			</route>
-		</start>
-
-		<start name="fs_rom" ram="10M" priority="-2">
-			<affinity xpos="0" ypos="0" width="1" height="1"/>
-			<provides> <service name="ROM"/> </provides>
-			<route> <any-service> <parent/> <any-child/> </any-service> </route>
-		</start>
-
-		<start name="vfs" ram="3M" priority="-2">
-			<affinity xpos="0" ypos="0" width="1" height="1"/>
-			<provides> <service name="File_system"/> </provides>
-			<config>
-				<vfs> <dir name="dev"> <null/> </dir> <ram/> </vfs>
-				<default-policy root="/" writeable="yes"/>
-			</config>
-			<route> <any-service> <parent/> <any-child/> </any-service> </route>
-		</start>
-
-		<start name="file_terminal" ram="3M" priority="-2">
-			<binary name="file_terminal"/>
-			<affinity xpos="0" ypos="0" width="1" height="1"/>
-			<provides> <service name="Terminal"/> </provides>
-			<config>
-				<default-policy filename="ram" />
-				<vfs> <fs/> </vfs>
-				<libc stdout="/dev/null"/>
-			</config>
-			<route> <any-service> <parent/> <any-child/> </any-service> </route>
-		</start>
-
-		<start name="terminal_log" priority="-2">
-			<affinity xpos="0" ypos="0" width="1" height="1"/>
-			<provides> <service name="LOG"/> </provides>
-			<config/>
-			<route>
-				<service name="Terminal"> <child name="file_terminal"/> </service>
-				<any-service> <parent/> </any-service>
-			</route>
-		</start>
-
-		<start name="log_core" ram="10M" priority="-2">
-			<config period_ms="4500"/>
-			<affinity xpos="0" ypos="0" width="1" height="1"/>
-			<route>
-				<service name="ROM" unscoped_label="log_core"> <parent/> </service>
-				<service name="ROM" unscoped_label="ld.lib.so"> <parent/> </service>
-				<service name="ROM" label="log"> <parent label="core_log"/> </service>
-				<service name="Timer"> <child name="timer"/> </service>
-				<service name="LOG" label="log"> <child name="terminal_log"/> </service>
-				<service name="PD"> <parent/> </service>
-				<service name="CPU"> <parent/> </service>
-				<service name="LOG"> <parent/> </service>
-			</route>
-		</start>
-
 	</config>
 }
 

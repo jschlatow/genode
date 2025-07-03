@@ -17,7 +17,6 @@
 #include <util/print_lines.h>
 #include <base/component.h>
 #include <util/reconstructible.h>
-#include <timer_session/connection.h>
 
 namespace Rom_logger { struct Main; }
 
@@ -27,8 +26,6 @@ struct Rom_logger::Main
 	Genode::Env &_env;
 
 	Genode::Attached_rom_dataspace _config_rom { _env, "config" };
-
-	Timer::Connection _timer { _env };
 
 	Genode::Constructible<Genode::Attached_rom_dataspace> _rom_ds { };
 
@@ -82,21 +79,13 @@ void Rom_logger::Main::_handle_update()
 	using Format_string = Genode::String<8>;
 	Format_string const format = config.attribute_value("format", Format_string("text"));
 
-	bool const has_period = config.has_attribute("period_ms");
-
 	/*
 	 * If ROM name changed, reconstruct '_rom_ds'
 	 */
 	if (rom_name != _rom_name) {
 		_rom_ds.construct(_env, rom_name.string());
+		_rom_ds->sigh(_update_handler);
 		_rom_name = rom_name;
-		if (!has_period)
-			_rom_ds->sigh(_update_handler);
-		else {
-			_timer.sigh(_update_handler);
-			_timer.trigger_periodic((Genode::uint64_t)1000*config.attribute_value("period_ms", 1000U));
-			return;
-		}
 	}
 
 	if (!_rom_ds.constructed())
@@ -112,7 +101,7 @@ void Rom_logger::Main::_handle_update()
 		return;
 	}
 
-	error("ROM '", _rom_name, "':");
+	log("ROM '", _rom_name, "':");
 
 	if (format == "text") {
 		Genode::print_lines<200>(_rom_ds->local_addr<char>(), _rom_ds->size(),
