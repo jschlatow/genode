@@ -16,10 +16,10 @@ install_config {
 		</default-route>
 		<default caps="100"/>
 
-		<affinity-space width="2" height="2"/>
+		<affinity-space width="4" height="2"/>
 
 		<start name="cpu_burner" ram="2M" priority="-3">
-			<affinity xpos="1" ypos="0" width="1" height="1"/>
+			<affinity xpos="2" ypos="0" width="1" height="1"/>
 		</start>
 
 		<start name="timer" ram="2M" priority="0">
@@ -29,7 +29,7 @@ install_config {
 		</start>
 
 		<start name="test-single_memcpy" ram="2M" priority="0">
-			<affinity xpos="1" ypos="0" width="1" height="1"/>
+			<affinity xpos="2" ypos="0" width="1" height="1"/>
 			<resource name="CPU" quantum="10"/>
 		</start>
 	</config> }
