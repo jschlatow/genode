@@ -27,7 +27,7 @@
 using namespace Core;
 
 
-void Core_log::out(char const c) { Kernel::log(c); }
+// void Core_log::out(char const c) { Kernel::log(c); }
 
 
 void Genode::raw_write_string(char const *str)
@@ -49,6 +49,8 @@ static inline bool running_in_kernel()
 	return ((addr_t)&cpu_region) >= cpu_region.base &&
 	       ((addr_t)&cpu_region) < cpu_region.end();
 }
+
+void Core_log::out(char const c) { if (!running_in_kernel()) Kernel::log(c); }
 
 
 /*******************************************
