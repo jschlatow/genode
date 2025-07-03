@@ -113,14 +113,12 @@ class Kernel::Scheduler
 				INVALID,
 			};
 
-			unsigned value;
+			unsigned const value;
 
 			Group_id(unsigned const id) : value(id) { }
 
 			bool valid() const { return value <= MAX; }
 		};
-
-		Group_id _expected_id { Group_id::INVALID };
 
 		class Context
 		{
@@ -265,10 +263,10 @@ class Kernel::Scheduler
 
 		/* The guaranteed CPU share of a group calculates as weight/sum_of_weights */
 		Group _groups[Group_id::MAX + 1] {
-			{  1, _timer.us_to_ticks(20000) }, /* drivers    */
-			{  1, _timer.us_to_ticks(0) }, /* multimedia */
-			{  1, _timer.us_to_ticks(0) }, /* apps       */
-			{  1, _timer.us_to_ticks(0) }  /* background */
+			{ 35, _timer.us_to_ticks(800) }, /* drivers    */
+			{ 10, _timer.us_to_ticks(400) }, /* multimedia */
+			{  4, _timer.us_to_ticks(200) }, /* apps       */
+			{  1, _timer.us_to_ticks(  0) }  /* background */
 		};
 
 		void _for_each_group(auto const fn) {
