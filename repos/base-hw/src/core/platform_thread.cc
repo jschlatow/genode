@@ -88,14 +88,14 @@ Weak_ptr<Address_space>& Platform_thread::address_space() {
 	return _address_space; }
 
 
-Platform_thread::Platform_thread(Label const &label, Native_utcb &utcb)
+Platform_thread::Platform_thread(Label const &label, Native_utcb &utcb, Affinity::Location const location)
 :
 	_label(label),
 	_pd(_kernel_main_get_core_platform_pd()),
 	_pager(nullptr),
 	_utcb((addr_t)&utcb),
 	_main_thread(false),
-	_location(Affinity::Location()),
+	_location(location),
 	_kobj(_kobj.CALLED_FROM_CORE, _location.xpos(), _label.string())
 { }
 
