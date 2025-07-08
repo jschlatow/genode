@@ -1,8 +1,26 @@
-build { core init lib/ld test/single_memcpy app/cpu_burner timer }
+proc log_mem { } {
+
+	global ::env
+
+	if {[info exists ::env(LOG)]} {
+		if {$::env(LOG) == "mem"} { return true }
+	}
+
+	return false
+}
+
+set build_components { core init lib/ld test/single_memcpy app/cpu_burner timer }
+if {[log_mem]} {
+	append build_components { app/rom_logger server/fs_rom server/vfs
+		server/terminal_log server/file_terminal app/log_core
+		lib/libc lib/vfs }
+}
+
+build $build_components
 
 create_boot_directory
 
-install_config {
+append config {
 	<config prio_levels="4">
 		<parent-provides>
 			<service name="LOG"/>
@@ -18,7 +36,7 @@ install_config {
 
 		<affinity-space width="4" height="2"/>
 
-		<start name="cpu_burner" ram="2M" priority="-3">
+		<start name="cpu_burner" ram="2M" priority="-1">
 			<affinity xpos="2" ypos="0" width="1" height="1"/>
 		</start>
 
@@ -28,11 +46,67 @@ install_config {
 			<provides> <service name="Timer"/> </provides>
 		</start>
 
-		<start name="test-single_memcpy" ram="2M" priority="0">
+		<start name="test-single_memcpy" ram="2M" priority="-2">
 			<affinity xpos="2" ypos="0" width="1" height="1"/>
 			<resource name="CPU" quantum="10"/>
 		</start>
-	</config> }
+}
+
+if {[log_mem]} {
+	append config {
+		<start name="rom_logger" ram="10M" priority="-2">
+			<affinity xpos="0" ypos="0" width="1" height="1"/>
+			<config rom="log" period_ms="5000"/>
+			<route>
+				<service name="ROM" label="log"> <child name="fs_rom" label="ram"/> </service>
+				<any-service> <parent/> <any-child/> </any-service>
+			</route>
+		</start>
+
+		<start name="fs_rom" ram="10M" priority="-2">
+			<affinity xpos="0" ypos="0" width="1" height="1"/>
+			<provides> <service name="ROM"/> </provides>
+		</start>
+
+		<start name="vfs" ram="3M" priority="-2">
+			<affinity xpos="0" ypos="0" width="1" height="1"/>
+			<provides> <service name="File_system"/> </provides>
+			<config>
+				<vfs> <dir name="dev"> <null/> </dir> <ram/> </vfs>
+				<default-policy root="/" writeable="yes"/>
+			</config>
+		</start>
+
+		<start name="file_terminal" ram="3M" priority="-2">
+			<affinity xpos="0" ypos="0" width="1" height="1"/>
+			<provides> <service name="Terminal"/> </provides>
+			<config>
+				<default-policy filename="ram"/>
+				<vfs> <fs/> </vfs>
+				<libc stdout="/dev/null"/>
+			</config>
+		</start>
+
+		<start name="terminal_log" ram="2M" priority="-2">
+			<affinity xpos="0" ypos="0" width="1" height="1"/>
+			<provides> <service name="LOG"/> </provides>
+		</start>
+
+		<start name="log_core" ram="10M" priority="-2">
+			<affinity xpos="0" ypos="0" width="1" height="1"/>
+			<config period_ms="2000"/>
+			<route>
+				<service name="ROM" label="log"> <parent label="core_log"/> </service>
+				<service name="LOG" label="log"> <child name="terminal_log"/> </service>
+				<any-service> <parent/> <any-child/> </any-service>
+			</route>
+		</start>
+	}
+}
+
+append config { </config> }
+
+install_config $config
 
 build_boot_image [build_artifacts]
 
