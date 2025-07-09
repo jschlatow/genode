@@ -112,6 +112,35 @@ bool Scheduler::_ready(Group const &group) const
 }
 
 
+void Scheduler::_fast_forward(Group &group)
+{
+	/* skip if group was ready on last update() or its vtime not below min_vtime */
+	if (group._last_ready || group._vtime >= _min_vtime)
+		return;
+
+	/*
+	 * When the group was unready for a relatively short time, e.g. waiting for
+	 * cross-core IPC, it should not be penalized by fast-forwarding its vtime
+	 * to min_vtime and letting the group wait for every group with a larger warp
+	 * value. To cirumvent his, we assume the group had been scheduled
+	 * the entire time instead of being unready. If the notional vtime is still
+	 * smaller than min_vtime, we let the group continue with this vtime.
+	 * This mechanism, however, is only effective when the group's waiting time
+	 * was at most MIN_SCHEDULE_US. Otherwise, a group with a large weight would
+	 * receive additional CPU time after waiting for a long time while another
+	 * low weight group was executing.
+	 */
+	time_t const duration = _last_time - group._last_state_change;
+	if (duration <= _min_timeout) {
+		group.add_ticks(duration);
+		group._vtime = min(group._vtime, _min_vtime);
+		return;
+	}
+
+	group._vtime = _min_vtime;
+}
+
+
 void Scheduler::_update_time()
 {
 	time_t const time = _timer.time();
@@ -152,9 +181,9 @@ void Scheduler::_check_ready_contexts()
 
 		_with_group(c, [&] (Group &group) {
 
-			/* If group has a vtime in the past, use minimum vtime */
-			if (!_ready(group) && (_min_vtime > group._vtime))
-				group._vtime = _min_vtime;
+			/* fast-forward the group's vtime if it became ready */
+			if (!_ready(group))
+				_fast_forward(group);
 
 			/* if context has a vtime in the past, use groups' minimum time */
 			if (group._min_vtime > c._vtime)
@@ -195,6 +224,14 @@ void Scheduler::update()
 
 	/* move contexts from _ready_contexts into groups */
 	_check_ready_contexts();
+
+	/* remember group ready state and timestamp of any state change */
+	_for_each_group([&] (Group &group) {
+		bool const ready = _ready(group);
+		if (group._last_ready != ready)
+			group._last_state_change = _last_time;
+		group._last_ready = ready;
+	});
 
 	if (_up_to_date())
 		return;
