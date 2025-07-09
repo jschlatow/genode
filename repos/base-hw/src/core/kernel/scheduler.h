@@ -207,6 +207,12 @@ class Kernel::Scheduler
 				/* minimum virtual time within the group */
 				vtime_t _min_vtime { 0 };
 
+				/* ready state on last update() */
+				bool    _last_ready { false };
+
+				/* last time the group's ready state changed */
+				time_t  _last_state_change { 0 };
+
 				List _contexts {};
 
 				/**
@@ -289,6 +295,8 @@ class Kernel::Scheduler
 		bool _earlier(Context const &first, Context const &second) const;
 
 		bool _ready(Group const &group) const;
+
+		void _fast_forward(Group &group);
 
 		void _check_ready_contexts();
 
