@@ -51,7 +51,7 @@ install_config {
 			<service name="TRACE"/>
 		</parent-provides>
 
-		<affinity-space width="2" height="2"/>
+		<affinity-space width="4" height="2"/>
 
 		<default-route>
 			<service name="TRACE"> <parent label=""/> </service>
@@ -82,7 +82,7 @@ install_config {
 		<!-- 80% CPU burner on priority -1 -->
 		<start name="burner-1" priority="-1">
 			<resource name="CPU" quantum="25"/>
-			<affinity xpos="1" ypos="0" width="1" height="1"/>
+			<affinity xpos="2" ypos="0" width="1" height="1"/>
 			<binary name="cpu_burner"/>
 			<config percent="80"/>
 		</start>
@@ -90,7 +90,7 @@ install_config {
 		<!-- 80% CPU burner on priority -2 -->
 		<start name="burner-2" priority="-2">
 			<resource name="CPU" quantum="25"/>
-			<affinity xpos="1" ypos="0" width="1" height="1"/>
+			<affinity xpos="2" ypos="0" width="1" height="1"/>
 			<binary name="cpu_burner"/>
 			<config percent="80"/>
 		</start>
@@ -98,28 +98,28 @@ install_config {
 		<!-- 100% CPU burner on lowest priority -->
 		<start name="burner-3" priority="-3">
 			<resource name="CPU" quantum="20"/>
-			<affinity xpos="1" ypos="0" width="1" height="1"/>
+			<affinity xpos="2" ypos="0" width="1" height="1"/>
 			<binary name="cpu_burner"/>
 			<config/>
 		</start>
 
 		<start name="test-0" priority="0">
 			<resource name="CPU" quantum="10"/>
-			<affinity xpos="1" ypos="0" width="1" height="1"/>
+			<affinity xpos="2" ypos="0" width="1" height="1"/>
 			<binary name="} $binary {"/>
 			} $config {
 		</start>
 
 		<start name="test-1" priority="-1">
 			<resource name="CPU" quantum="10"/>
-			<affinity xpos="1" ypos="0" width="1" height="1"/>
+			<affinity xpos="2" ypos="0" width="1" height="1"/>
 			<binary name="} $binary {"/>
 			} $config {
 		</start>
 
 		<start name="test-2" priority="-2">
 			<resource name="CPU" quantum="10"/>
-			<affinity xpos="1" ypos="0" width="1" height="1"/>
+			<affinity xpos="2" ypos="0" width="1" height="1"/>
 			<binary name="} $binary {"/>
 			} $config {
 		</start>
