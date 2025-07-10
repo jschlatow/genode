@@ -53,8 +53,10 @@ void Scheduler::Group::insert_orderly(Context &c)
 {
 	using List_element = Genode::List_element<Context>;
 
+	time_t const l = _warp_limit;
+
 	if (!_contexts.first() ||
-	    _contexts.first()->object()->vtime() >= c.vtime()) {
+	    _contexts.first()->object()->vtime(_warp, l) >= c.vtime(_warp, l)) {
 		_contexts.insert(&c._group_le);
 		return;
 	}
@@ -62,7 +64,7 @@ void Scheduler::Group::insert_orderly(Context &c)
 	for (List_element * le = _contexts.first(); le;
 	     le = le->next())
 		if (!le->next() ||
-		    le->next()->object()->vtime() >= c.vtime()) {
+		    le->next()->object()->vtime(_warp, l) >= c.vtime(_warp, l)) {
 			_contexts.insert(&c._group_le, le);
 			return;
 		}
@@ -84,14 +86,22 @@ void Scheduler::Timeout::timeout_triggered()
 
 bool Scheduler::_earlier(Context const &first, Context const &second) const
 {
-	if (first.equal_group(second))
-		return first._vtime <= second._vtime;
-
 	bool ret = false;
+	if (first.equal_group(second)) {
+		_with_group(first, [&] (Group const &g) {
+			ret = first. vtime(g._warp, g._warp_limit) <=
+			      second.vtime(g._warp, g._warp_limit);
+		});
+		return ret;
+	}
+
 	_with_group(first, [&] (Group const &g1) {
 		ret = true;
 		_with_group(second, [&] (Group const &g2) {
-			ret = g1.earlier(g2); });
+			ret =    first .with_warp(g1._warp, g1._warp_limit, [&] (vtime_t w1) {
+				return second.with_warp(g2._warp, g2._warp_limit, [&] (vtime_t w2) {
+					return (g1._vtime + w2) <= (g2._vtime + w1); }); });
+		});
 	});
 
 	return ret;
@@ -189,6 +199,9 @@ void Scheduler::_check_ready_contexts()
 			if (group._min_vtime > c._vtime)
 				c._vtime = group._min_vtime;
 
+			/* remember execution time when context got ready */
+			c._ready_execution_time = c._execution_time;
+
 			if (_earlier(c, current()) ||
 			    _ticks_distant_to_current(c) < _timer.ticks_left(_timeout))
 				_state = OUT_OF_DATE;
@@ -206,11 +219,19 @@ time_t Scheduler::_ticks_distant_to_current(Context const &context) const
 
 	_with_group(current(), [&] (Group const &cur) {
 		_with_group(context, [&] (Group const &oth) {
+			vtime_t const w1 = cur._warp;
+			vtime_t const w2 = oth._warp;
+			time_t  const l1 = cur._warp_limit;
+			time_t  const l2 = oth._warp_limit;
+
 			if (&cur == &oth)
-				time = (context._vtime - current()._vtime) + _min_timeout;
-			else
-				time = ((oth._vtime+cur._warp)
-				        - (cur._vtime+oth._warp)) * cur._weight + _min_timeout;
+				time = (context.vtime(w2, l2) - current().vtime(w1, l2)) + _min_timeout;
+			else {
+				time = current().with_warp(w1, l1, [&] (vtime_t curw) {
+					return context.with_warp(w2, l2, [&] (vtime_t othw) {
+						return ((oth._vtime+curw)
+						        - (cur._vtime+othw)) * cur._weight + _min_timeout; }); });
+			}
 		});
 	});
 

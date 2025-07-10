@@ -133,6 +133,8 @@ class Kernel::Scheduler
 
 				time_t _execution_time { 0 };
 
+				time_t _ready_execution_time { 0 };
+
 				enum State { UNREADY, LISTED, READY };
 
 				State _state { UNREADY };
@@ -177,7 +179,21 @@ class Kernel::Scheduler
 				time_t execution_time() const {
 					return _execution_time; }
 
-				vtime_t vtime() const { return _vtime; }
+				auto with_warp(vtime_t warp,
+				               time_t  limit,
+				               auto const fn) const
+				{
+					if (_execution_time - _ready_execution_time > limit)
+						warp = 0;
+
+					return fn(warp);
+				}
+
+				vtime_t vtime(vtime_t warp, time_t limit) const
+				{
+					return with_warp(warp, limit, [&] (vtime_t const w) {
+						return _vtime > w ? _vtime - w : 0; });
+				}
 
 				bool valid() const { return _id.valid(); }
 		};
@@ -201,6 +217,9 @@ class Kernel::Scheduler
 				/* warp = backwards shift in virtual time */
 				vtime_t const _warp;
 
+				/* maximum warped execution time per context */
+				time_t const _warp_limit;
+
 				/* group's virtual time */
 				vtime_t _vtime { 0 };
 
@@ -223,9 +242,9 @@ class Kernel::Scheduler
 
 			public:
 
-				Group(vtime_t weight, vtime_t warp)
+				Group(vtime_t weight, vtime_t warp, time_t warp_limit)
 				:
-					_weight(weight), _warp(warp) {}
+					_weight(weight), _warp(warp), _warp_limit(warp_limit) {}
 
 				void insert_orderly(Context &c);
 				void remove(Context &c);
@@ -235,9 +254,6 @@ class Kernel::Scheduler
 
 				void add_ticks(time_t ticks) {
 					_vtime += (ticks > _weight) ? ticks / _weight : 1; }
-
-				bool earlier(Group const &other) const {
-					return (other._vtime + _warp) >= (_vtime + other._warp); }
 		};
 
 		struct Timeout : Kernel::Timeout
@@ -268,11 +284,29 @@ class Kernel::Scheduler
 		List _ready_contexts {};
 
 		/* The guaranteed CPU share of a group calculates as weight/sum_of_weights */
+		/*
+		 * Set of scheduling parameters:
+		 * - Each group gets a guaranteed CPU share of weight/sum_of_weights. 
+		 * - The warp value allows an (idle) group to be preferred over a no-warp
+		 *   group for up to weight*warp.
+		 * - We account for 10ms execution of the apps group uninterrupted by the
+		 *   background group. The apps group gets 5 times more CPU time than the
+		 *   background group.
+		 * - We account for 10ms execution of the multimedia group uninterrupted
+		 *   by the apps group. The multimedia group gets the same share as
+		 *   the apps group.
+		 * - We account for 5ms execution of the drivers group uninterrupted by
+		 *   the multimedia group. The drivers group gets twice as much time as
+		 *   the multimedia group. In consequence, the drivers group is granted
+		 *   about half of the CPU time. Moreover, it is able to execute for 25ms
+		 *   without any interruption by the apps group and 45ms without
+		 *   interruptions by the background group.
+		 */
 		Group _groups[Group_id::MAX + 1] {
-			{ 35, _timer.us_to_ticks(800) }, /* drivers    */
-			{ 10, _timer.us_to_ticks(400) }, /* multimedia */
-			{  4, _timer.us_to_ticks(200) }, /* apps       */
-			{  1, _timer.us_to_ticks(  0) }  /* background */
+			{ 10, _timer.us_to_ticks(4100), _timer.us_to_ticks(50000) }, /* drivers    */
+			{  5, _timer.us_to_ticks(4000), _timer.us_to_ticks(50000) }, /* multimedia */
+			{  5, _timer.us_to_ticks(2000), _timer.us_to_ticks(50000) }, /* apps       */
+			{  1, _timer.us_to_ticks(0),    _timer.us_to_ticks(0) }      /* background */
 		};
 
 		void _for_each_group(auto const fn) {
