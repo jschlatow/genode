@@ -197,7 +197,7 @@ class Handler : Thread
 				 *         ~170us on a Thinkpad x230, which turned out to be just
 				 *         manageable by NOVA
 				 */
-				for (unsigned i=0; i < 2000; i++)
+				for (unsigned i=0; i < 380; i++)
 					memcpy(_buffer1, _buffer2, sizeof(_buffer1));
 
 				/* signal back */
@@ -318,12 +318,12 @@ struct Main
 		env.parent().exit(0);
 	}
 
-	void _continuous_mode(unsigned num)
+	void _continuous_mode()
 	{
 		log("--- Measuring roundtrip latency (continuous mode) ---");
 
 		for (;;) {
-			test(num, Milliseconds{ 10 });
+			test(1, Milliseconds{ 10 });
 			print_diff_stats();
 		}
 	}
@@ -340,7 +340,7 @@ struct Main
 	Main(Env &env) : env(env)
 	{
 		if (config.xml().attribute_value("continuous", false))
-			_continuous_mode(config.xml().attribute_value("num", 1U));
+			_continuous_mode();
 		else
 			_bench_mode();
 	}
