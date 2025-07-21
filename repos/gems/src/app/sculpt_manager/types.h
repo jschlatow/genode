@@ -59,7 +59,7 @@ namespace Sculpt {
 		STORAGE      = DEFAULT,
 		MULTIMEDIA   = -2,
 		DRIVER       = -1,       /* only for latency-critical drivers */
-		LEITZENTRALE = MULTIMEDIA,
+		LEITZENTRALE = DEFAULT,
 		NESTED_MAX   = 0,        /* within nested init (inspect) */
 	};
 
