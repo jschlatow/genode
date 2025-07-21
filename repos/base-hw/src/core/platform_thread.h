@@ -145,11 +145,22 @@ class Core::Platform_thread : Noncopyable
 		 */
 		bool _attaches_utcb_by_itself();
 
-		unsigned _scale_priority(unsigned virt_prio)
+		unsigned _priority_to_group(unsigned priority)
 		{
-			static constexpr unsigned p =
-				Kernel::Scheduler::Group_id::BACKGROUND+1;
-			return Cpu_session::scale_priority(p, virt_prio, false);
+			using Id = Kernel::Scheduler::Group_id;
+
+			enum { TOP_LEVEL_PRIO_HIGH = Cpu_session::PRIORITY_LIMIT / 2 };
+
+			if (priority < TOP_LEVEL_PRIO_HIGH)
+				return Id::DRIVER;
+
+			switch (priority >> 12) {
+			case 0x8: return Id::MULTIMEDIA;
+			case 0x9: return Id::DRIVER;
+			case 0xa: return Id::MULTIMEDIA;
+			case 0xb: return Id::APP;
+			default:  return Id::BACKGROUND;
+			};
 		}
 
 		Platform_pd &_kernel_main_get_core_platform_pd();
