@@ -1,0 +1,40 @@
+<runtime ram="10M" caps="1000" binary="init">
+
+	<requires> <timer/> </requires>
+
+	<content>
+		<rom label="ld.lib.so"/>
+		<rom label="test-report_rom_latency"/>
+		<rom label="report_rom"/>
+		<rom label="init"/>
+	</content>
+
+	<config>
+		<parent-provides>
+			<service name="ROM"/>
+			<service name="CPU"/>
+			<service name="RM"/>
+			<service name="PD"/>
+			<service name="IRQ"/>
+			<service name="IO_PORT"/>
+			<service name="IO_MEM"/>
+			<service name="LOG"/>
+			<service name="Timer"/>
+		</parent-provides>
+		<default-route>
+			<service name="ROM" label="test"> <child name="report_rom"/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</default-route>
+		<start name="report_rom" caps="200" ram="2M">
+			<provides>
+				<service name="ROM"/>
+				<service name="Report"/>
+			</provides>
+			<config>
+				<policy  label="test-report_rom_latency -> test"
+				        report="test-report_rom_latency -> test"/>
+			</config>
+		</start>
+		<start name="test-report_rom_latency" caps="100" ram="4M"/>
+	</config>
+</runtime>
