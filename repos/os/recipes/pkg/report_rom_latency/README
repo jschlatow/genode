@@ -1,0 +1,27 @@
+              Test for roundtrip latency using report ROM
+
+The test component generates a report every 10ms and waits for the updated ROM
+signal. The latency between report generation and received ROM signal is measured.
+Every 1000 measurement the component logs the latency statistics.
+
+Evaluation:
+
+Results are displayed as histograms and a one-line condensed representation.
+
+The bars of the histograms are displayed horizontally using the symbols '-',
+'=', and '#'. '-' represents samples below the median. '=' represents samples
+between median an 90th percentile. '#' represents samples above the 90th
+percentile. The number of samples represented by a single character depends on
+the size of the largest bin.
+
+The one-line representation depicts a horizontal bar where each character
+represents a single bin. E.g.
+
+! |  >   ---------+----  * < | 192
+
+The bar is enclosed in '|'. A space does not indicate any information about the
+bin (might have samples or might be empty). A '>' indicates that the bin contains
+the minimum. A '>' indicates that the bin contains the maximum. A '-' marks
+the bins in the inter-quartile range. A '+' marks the bin that contains the
+median. A '*' indicates that the bin contains the 90th percentile.
+The number of samples is printed next to the bar.
