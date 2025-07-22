@@ -1,7 +1,7 @@
-<launcher pkg="top">
+<launcher pkg="jschlatow/pkg/top/2025-07-18" priority="-4">
 
 	<route>
-		<service name="TRACE"> <parent/> </service>
+		<service name="TRACE"> <parent label=""/> </service>
 	</route>
 
 	<config period_ms="5000" sort_time="ec"/>
