@@ -57,7 +57,7 @@ struct Sculpt::Ps2_driver : private Noncopyable
 		                 && !board_info.options.suppress.ps2
 		                 && !board_info.options.suspending;
 
-		_ps2.conditional(use_ps2, registry, "ps2", Priority::MULTIMEDIA,
+		_ps2.conditional(use_ps2, registry, "ps2", Priority::DEFAULT,
 		                 Ram_quota { 1*1024*1024 }, Cap_quota { 100 });
 	}
 };
