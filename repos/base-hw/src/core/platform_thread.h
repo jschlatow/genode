@@ -155,7 +155,7 @@ class Core::Platform_thread : Noncopyable
 				return Id::DRIVER;
 
 			switch (priority >> 12) {
-			case 0x8: return Id::MULTIMEDIA;
+			case 0x8: return Id::APP;
 			case 0x9: return Id::DRIVER;
 			case 0xa: return Id::MULTIMEDIA;
 			case 0xb: return Id::APP;
