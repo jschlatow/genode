@@ -49,7 +49,7 @@ struct Sculpt::Touch_driver : private Noncopyable
 		_soc.conditional(board_info.soc.touch && board_info.options.display,
 		                 registry, Child_state::Attr {
 		                    .name      = "touch",
-		                    .priority  = Priority::MULTIMEDIA,
+		                    .priority  = Priority::DEFAULT,
 		                    .cpu_quota = 10,
 		                    .location  = { },
 		                    .initial   = { Ram_quota { 10*1024*1024 },
