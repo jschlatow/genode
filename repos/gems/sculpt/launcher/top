@@ -1,7 +1,7 @@
-<launcher pkg="top">
+<launcher pkg="top" priority="-4">
 
 	<route>
-		<service name="TRACE"> <parent/> </service>
+		<service name="TRACE"> <parent label=""/> </service>
 	</route>
 
 	<config period_ms="5000" sort_time="ec"/>
