@@ -329,7 +329,7 @@ class Kernel::Thread : private Kernel::Object, public Cpu_context, private Timeo
 
 	public:
 
-		Genode::Align_at<Core::Cpu::Context> regs;
+		Genode::Align_at<Board::Cpu::Context> regs;
 
 		Thread(Board::Address_space_id_allocator &addr_space_id_alloc,
 		       Irq::Pool                         &user_irq_pool,
