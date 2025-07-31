@@ -1,0 +1,131 @@
+#
+# This run script tests the kernel's scheduler by measuring signal roundtrip
+# latency on different priorities.
+#
+# Test setup:
+#
+# Priority  0: signalling test
+# Priority -1: signalling test + 80% CPU burner
+# Priority -2: signalling test + 80% CPU burner
+# Priority -3: CPU burner (100%)
+#
+# Expected results:
+# - Latencies should not be affected by the CPU burner on priority -3.
+# - There should only be a small effect of the CPU burners on priority -1 and
+#   -2 on latencies on priorities -1 and -2.
+
+assert {![have_cmd_switch --autopilot]}
+assert {![have_include power_on/qemu]}
+
+#
+# Build
+#
+
+build { core init timer lib/ld
+        test/roundtrip_latency
+        app/top
+        app/dummy
+        app/cpu_burner }
+
+
+#
+# Configure and assemble boot image
+#
+
+create_boot_directory
+
+set binary "test-roundtrip_latency"
+set config "<config continuous=\"yes\"/>"
+
+install_config {
+	<config prio_levels="4" verbose="yes">
+		<parent-provides>
+			<service name="ROM"/>
+			<service name="IRQ"/>
+			<service name="IO_MEM"/>
+			<service name="IO_PORT"/>
+			<service name="PD"/>
+			<service name="RM"/>
+			<service name="CPU"/>
+			<service name="LOG"/>
+			<service name="TRACE"/>
+		</parent-provides>
+
+		<affinity-space width="4" height="2"/>
+
+		<default-route>
+			<service name="TRACE"> <parent label=""/> </service>
+			<any-service> <parent/> <any-child/> </any-service>
+		</default-route>
+
+		<default caps="100" ram="2M"/>
+
+		<start name="timer" priority="0">
+			<affinity xpos="0" ypos="0" width="1" height="1"/>
+			<provides><service name="Timer"/></provides>
+		</start>
+
+		<start name="dummy">
+			<affinity xpos="0" ypos="0" width="1" height="1"/>
+			<exit propagate="yes"/>
+			<config>
+				<sleep ms="25000"/>
+				<exit/>
+			</config>
+		</start>
+
+		<start name="top">
+			<affinity xpos="0" ypos="0" width="1" height="1"/>
+			<config period_ms="10000"/>
+		</start>
+
+		<!-- 80% CPU burner on priority -1 -->
+		<start name="burner-1" priority="-1">
+			<resource name="CPU" quantum="25"/>
+			<affinity xpos="2" ypos="0" width="1" height="1"/>
+			<binary name="cpu_burner"/>
+			<config percent="80"/>
+		</start>
+
+		<!-- 80% CPU burner on priority -2 -->
+		<start name="burner-2" priority="-2">
+			<resource name="CPU" quantum="25"/>
+			<affinity xpos="2" ypos="0" width="1" height="1"/>
+			<binary name="cpu_burner"/>
+			<config percent="80"/>
+		</start>
+
+		<!-- 100% CPU burner on lowest priority -->
+		<start name="burner-3" priority="-3">
+			<resource name="CPU" quantum="20"/>
+			<affinity xpos="2" ypos="0" width="1" height="1"/>
+			<binary name="cpu_burner"/>
+			<config/>
+		</start>
+
+		<start name="test-0" priority="0">
+			<resource name="CPU" quantum="10"/>
+			<affinity xpos="2" ypos="0" width="1" height="1"/>
+			<binary name="} $binary {"/>
+			} $config {
+		</start>
+
+		<start name="test-1" priority="-1">
+			<resource name="CPU" quantum="10"/>
+			<affinity xpos="2" ypos="0" width="1" height="1"/>
+			<binary name="} $binary {"/>
+			} $config {
+		</start>
+
+		<start name="test-2" priority="-2">
+			<resource name="CPU" quantum="10"/>
+			<affinity xpos="2" ypos="0" width="1" height="1"/>
+			<binary name="} $binary {"/>
+			} $config {
+		</start>
+	</config>
+}
+
+build_boot_image [build_artifacts]
+
+run_genode_until "exited" 30
