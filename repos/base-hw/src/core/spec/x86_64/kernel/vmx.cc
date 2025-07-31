@@ -894,6 +894,13 @@ void Vmcs::switch_world(Board::Cpu::Context &regs, addr_t)
 	 * 31.4 Vm Instruction Error Numbers
 	 */
 	error("VM: execution error: ", Genode::Hex(read(Vmcs::E_VM_INSTRUCTION_ERROR)));
+
+	asm volatile(
+	      "pushq %[trap_val];"
+	      "jmp _kernel_entry;"
+	      :
+	      : [trap_val] "i"(Board::TRAP_VMDEAD)
+	      : "memory");
 }
 
 /*
