@@ -217,6 +217,8 @@ void Kernel::Thread::exception(Genode::Cpu_state &state)
 
 void Kernel::Thread::proceed()
 {
+	Cpu::Ia32_tsc_aux::write((Cpu::Ia32_tsc_aux::access_t)_cpu().id());
+
 	if (!_cpu().active(pd().mmu_regs) && type() != CORE)
 		_cpu().switch_to(pd().mmu_regs);
 
