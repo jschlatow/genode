@@ -1,0 +1,33 @@
+build { core init lib/ld test/rdtscp timer }
+
+create_boot_directory
+
+install_config {
+	<config>
+		<parent-provides>
+			<service name="LOG"/>
+			<service name="CPU"/>
+			<service name="PD"/>
+			<service name="ROM"/>
+			<service name="IO_MEM"/>
+		</parent-provides>
+		<default-route>
+			<any-service> <parent/> <any-child/> </any-service>
+		</default-route>
+		<default caps="100"/>
+
+		<affinity-space width="4" height="2"/>
+
+		<start name="timer" ram="2M">
+			<affinity xpos="2" ypos="0" width="1" height="1"/>
+			<provides> <service name="Timer"/> </provides>
+		</start>
+
+		<start name="test-rdtscp" ram="2M">
+		</start>
+	</config>
+}
+
+build_boot_image [build_artifacts]
+
+run_genode_until forever
