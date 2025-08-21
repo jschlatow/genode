@@ -81,14 +81,17 @@ struct Observer : Thread
 					continue;
 
 				uint64_t last_thread_tsc = thread->_last_tsc;
-				uint64_t thread_tsc = last_thread_tsc;
-				uint64_t ref_tsc;
+				uint64_t thread_tsc      = last_thread_tsc;
+				uint64_t ref_tsc         = Trace::timestamp();
+				uint64_t last_ref_tsc;
 				while (thread_tsc == last_thread_tsc) {
-					thread_tsc = thread->_last_tsc;
-					ref_tsc    = Trace::timestamp();
+					last_ref_tsc = ref_tsc;
+					ref_tsc      = Trace::timestamp();
+					thread_tsc   = thread->_last_tsc;
 				}
 
-				log(_sequence_id, ":", thread->_aux, " ", Hex(thread_tsc), "-", Hex(ref_tsc), " = ", (int64_t)thread_tsc - (int64_t)ref_tsc);
+				bool const preempted = ref_tsc < thread_tsc || (ref_tsc - last_ref_tsc) > 1000;
+				log(_sequence_id, ":", thread->_aux, " ", Hex(thread_tsc), "-", Hex(ref_tsc), " = ", (int64_t)thread_tsc - (int64_t)ref_tsc, preempted ? " (preempted)" : "");
 			}
 		}
 	}
