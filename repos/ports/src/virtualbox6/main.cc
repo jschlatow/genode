@@ -40,6 +40,10 @@
 #include <input_adapter.h>
 #include <mouse_shape.h>
 
+/* profile includes */
+#include <profile/profile.h>
+#include <base/slab.h>
+
 using namespace Genode;
 
 
@@ -84,6 +88,14 @@ struct Main : Event_handler
 	Attached_rom_dataspace _config { _env, "config" };
 
 	Signal_handler<Main> _config_handler { _env.ep(), *this, &Main::_handle_config };
+
+	uint8_t              emt0_bs[12288];
+	Slab                 emt0_slab { sizeof(Profile::Function_info), sizeof(emt0_bs), emt0_bs };
+	Profile::Thread_info emt0_info { "EMT-0", emt0_slab, Profile::Milliseconds { 5000 } };
+
+	uint8_t              emt1_bs[12288];
+	Slab                 emt1_slab { sizeof(Profile::Function_info), sizeof(emt1_bs), emt1_bs };
+	Profile::Thread_info emt1_info { "EMT-1", emt1_slab, Profile::Milliseconds { 5000 } };
 
 	void _handle_config()
 	{
@@ -440,6 +452,14 @@ struct Main : Event_handler
 		 * framebuffer dimensions in scenarios without a window manager.
 		 */
 		_handle_fb_mode();
+
+		log("Enable profiling...");
+
+		Profile::init(2'600'000);
+		emt0_info.enable();
+		emt1_info.enable();
+
+		log("DONE");
 	}
 };
 

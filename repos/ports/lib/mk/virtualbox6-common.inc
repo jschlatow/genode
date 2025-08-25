@@ -108,7 +108,7 @@ CC_OPT += -include global_defs.h
 # flag, therefore it gets added to CC_OPT instead of VBOX_CC_OPT.
 CC_OPT += -fshort-wchar
 
-LIBS += libc libm libc-mem
+LIBS += libc libm libc-mem profile
 
 INC_DIR += $(REP_DIR)/src/virtualbox6/include
 INC_DIR += $(VIRTUALBOX_DIR)/include

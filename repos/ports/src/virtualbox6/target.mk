@@ -19,6 +19,7 @@ LIBS  += stdcxx
 LIBS  += libiconv
 LIBS  += qemu-usb libyuv
 LIBS  += mesa
+LIBS  += profile
 
 CC_OPT_main = -Wno-multistatement-macros
 CC_OPT += -DProgress=ClientProgress
