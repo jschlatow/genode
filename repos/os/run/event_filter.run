@@ -1,5 +1,5 @@
 build {
-	core init timer lib/ld
+	core init timer lib/ld lib/profile
 	server/report_rom server/event_filter test/event_filter
 }
 

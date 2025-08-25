@@ -1,3 +1,3 @@
 TARGET = test-event_filter
 SRC_CC = main.cc
-LIBS  += base
+LIBS  += base profile

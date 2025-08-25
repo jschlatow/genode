@@ -25,6 +25,7 @@
 #include <os/reporter.h>
 #include <os/ring_buffer.h>
 #include <base/sleep.h>
+#include <profile/profile.h>
 
 namespace Test {
 	class Input_from_filter;
@@ -582,8 +583,18 @@ struct Test::Main : Input_from_filter::Event_handler
 	Signal_handler<Main> _timer_handler {
 		_env.ep(), *this, &Main::_handle_timer };
 
+	uint8_t              ep_store[8192];
+	Slab                 ep_slab       { sizeof(Profile::Function_info), sizeof(ep_store), ep_store };
+	Profile::Thread_info ep_info       { "ep", ep_slab, Profile::Milliseconds { 5000 } };
+	uint8_t              sep_store[8192];
+	Slab                 sep_slab       { sizeof(Profile::Function_info), sizeof(sep_store), sep_store};
+	Profile::Thread_info sep_info       { "server_ep", sep_slab, Profile::Milliseconds { 5000 } };
+
 	Main(Env &env) : _env(env)
 	{
+		Profile::init(2'600'000);
+		ep_info.enable();
+		sep_info.enable();
 		_timer.sigh(_timer_handler);
 		_execute_curr_step();
 	}
