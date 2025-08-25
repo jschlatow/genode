@@ -304,6 +304,7 @@ install_config {
 	<resource name="RAM" preserve="2M"/>
 
 	<start name="timer" priority="0">
+		<affinity xpos="1" ypos="0" width="1" height="1"/>
 		<resource name="CPU" quantum="5"/>
 		<provides><service name="Timer"/></provides>
 	</start>

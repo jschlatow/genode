@@ -3,7 +3,7 @@ drivers: pc
 system:  pc
 gpu:     intel
 
-build: app/sculpt_manager
+build: app/sculpt_manager core
 
 # supplemental depot content added to the system image
 import: pkg/sculpt_drivers-pc
