@@ -48,6 +48,14 @@ class Sup::Gip
 			Timer::Connection          timer;
 			Signal_handler<Entrypoint> handler;
 
+			Genode::uint64_t last_tsc    { Genode::Trace::timestamp() };
+			Genode::uint64_t sum_tsc     { 0 };
+			Genode::uint64_t cur_sum_tsc { 0 };
+			Genode::uint64_t cur_max_tsc { 0 };
+			Genode::uint64_t cur_min_tsc { ~0ULL };
+			Genode::uint64_t update_cnt  { 0 };
+			Genode::uint64_t cur_cnt     { 0 };
+
 			Entrypoint(Env &env, SUPGIPCPU *cpu, Genode::uint64_t cpu_hz)
 			:
 				Genode::Entrypoint(env, 512*1024, "gip_ep", Affinity::Location()),
@@ -61,6 +69,30 @@ class Sup::Gip
 			void update()
 			{
 				Genode::uint64_t tsc_current = Genode::Trace::timestamp();
+
+				sum_tsc     += tsc_current - last_tsc;
+				cur_sum_tsc += tsc_current - last_tsc;
+				update_cnt++;
+				cur_cnt++;
+
+				cur_max_tsc = Genode::max(cur_max_tsc, tsc_current - last_tsc);
+				cur_min_tsc = Genode::min(cur_min_tsc, tsc_current - last_tsc);
+
+				if (update_cnt % 5000 == 0) {
+					// uint64_t const ticks_per_us = 2600;
+					/*
+					Genode::warning("Gip::update(): ", update_cnt, "(", cur_cnt, ") calls every ",
+					                (sum_tsc/update_cnt)/ticks_per_us, "(",
+					                (cur_sum_tsc/cur_cnt)/ticks_per_us, ")", "us on average, last ", (tsc_current - last_tsc) / ticks_per_us,
+					                " max ", cur_max_tsc/ticks_per_us, ", min ", cur_min_tsc/ticks_per_us);
+					                */
+					cur_cnt     = 0;
+					cur_sum_tsc = 0;
+					cur_max_tsc = 0;
+					cur_min_tsc = ~0ULL;
+				}
+
+				last_tsc = tsc_current;
 
 				/*
 				 * Convert tsc to nanoseconds.
@@ -161,6 +193,8 @@ class Sup::Gip
 				cpu[i].iCpuSet                 = 0;
 				cpu[i].idApic                  = i;
 			}
+
+			Genode::warning("gip set up");
 		}
 
 		SUPGLOBALINFOPAGE *gip() { return &_gip; };
