@@ -12,6 +12,7 @@
  */
 
 #include <base/log.h>
+#include <base/mutex.h>
 #include <util/construct_at.h>
 
 #include <profile/profile.h>
@@ -77,6 +78,10 @@ void Profile::Function_info::print()
 void Profile::print_thread_info(Thread_info &th)
 {
 	using namespace Genode;
+
+	/* make sure that printing is mutually exclusive */
+	static Mutex mutex { };
+	Mutex::Guard guard { mutex };
 
 	Trace::Timestamp const now = Trace::timestamp();
 
