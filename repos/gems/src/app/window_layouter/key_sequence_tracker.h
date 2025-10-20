@@ -28,18 +28,46 @@ class Window_layouter::Key_sequence_tracker
 		{
 			struct Entry
 			{
-				bool press;
+				enum Type { PRESS, RELEASE, TOUCH, TOUCH_RELEASE };
+				Type type;
 
-				Input::Keycode key;
+				Input::Keycode  key;
+				Input::Touch_id id;
+
+				bool key_valid() const {
+					return type == PRESS || type == RELEASE; }
+
+				bool id_valid() const {
+					return type == TOUCH || type == TOUCH_RELEASE; }
 
 				bool operator == (Entry const &other) const
 				{
-					return other.press == press && other.key == key;
+					return other.type == type && other.key == key && other.id.value == id.value;
+				}
+
+				Genode::String<16> type_name() const
+				{
+					switch (type) {
+						case PRESS:         return "press";
+						case RELEASE:       return "release";
+						case TOUCH:         return "touch";
+						case TOUCH_RELEASE: return "touch-release";
+						default:            return "invalid";
+					}
 				}
 
 				void print(Output &out) const
 				{
-					Genode::print(out, press ? "press " : "release ", Input::key_name(key));
+					switch (type) {
+						case PRESS:
+						case RELEASE:
+							Genode::print(out, type_name(), " ", Input::key_name(key));
+							break;
+						case TOUCH:
+						case TOUCH_RELEASE:
+							Genode::print(out, type_name(), " ", id.value);
+							break;
+					}
 				}
 			};
 
@@ -103,17 +131,22 @@ class Window_layouter::Key_sequence_tracker
 		void _with_matching_sub_node(Node const &curr, Stack::Entry entry,
 		                             auto const &fn, auto const &no_match_fn) const
 		{
-			auto const node_type = entry.press ? "press" : "release";
-
 			using Key_name = String<32>;
 			Key_name const key(Input::key_name(entry.key));
 
-			bool done = false; /* process the first match only */
-			curr.for_each_sub_node(node_type, [&] (Node const &node) {
-				if (node.attribute_value("name", Key_name()) == key
-				 || node.attribute_value("key",  Key_name()) == key) {
+			bool done = false;
+			curr.for_each_sub_node(entry.type_name().string(), [&] (Node const &node) {
+				if (entry.key_valid()) {
+					if (node.attribute_value("name", Key_name()) == key
+					 || node.attribute_value("key",  Key_name()) == key) {
+						fn(node);
+						done = true;
+					}
+				} else if (entry.id_valid() && node.attribute_value("id", 0U) == entry.id.value) {
 					fn(node);
-					done = true; } });
+					done = true;
+				}
+			});
 
 			if (!done)
 				no_match_fn();
@@ -147,10 +180,10 @@ class Window_layouter::Key_sequence_tracker
 			_with_match_rec(0, _stack.pos, config, fn);
 		}
 
-		void _with_node_at_press(Node const &config, Input::Keycode key, auto const &fn) const
+		void _with_node_at(Node const &config, Stack::Entry const &entry, auto const &fn) const
 		{
 			for (unsigned i = 0; i < _stack.pos; i++)
-				if (_stack.entries[i].press && _stack.entries[i].key == key) {
+				if (_stack.entries[i] == entry) {
 					_with_match_rec(0, i + 1, config, fn);
 					return; }
 		}
@@ -181,48 +214,81 @@ class Window_layouter::Key_sequence_tracker
 		 */
 		void apply(Input::Event const &ev, Node const &config, auto const &fn)
 		{
+			using Type = Stack::Entry::Type;
+
 			/*
 			 * If the sequence contains a press-release combination for
 			 * the pressed key, we flush those entries of the sequence
-			 * to preserver the invariant that each key is present only
+			 * to preserve the invariant that each key is present only
 			 * once.
 			 */
 			ev.handle_press([&] (Input::Keycode key, Codepoint) {
-				_stack.flush(Stack::Entry { .press = true,  .key = key });
-				_stack.flush(Stack::Entry { .press = false, .key = key });
+				_stack.flush(Stack::Entry { .type = Type::PRESS,   .key = key, .id = 0 });
+				_stack.flush(Stack::Entry { .type = Type::RELEASE, .key = key, .id = 0 });
+			});
+			ev.handle_touch([&] (Input::Touch_id id, float, float) {
+				_stack.flush(Stack::Entry { .type = Type::TOUCH,         .key = Input::KEY_UNKNOWN, .id = id });
+				_stack.flush(Stack::Entry { .type = Type::TOUCH_RELEASE, .key = Input::KEY_UNKNOWN, .id = id });
 			});
 
 			Constructible<Stack::Entry> new_entry { };
 
 			_with_node_by_path(config, [&] (Node const &curr_node) {
 
-				ev.handle_press([&] (Input::Keycode key, Codepoint) {
-					Stack::Entry const press { .press = true, .key = key };
-					_with_matching_sub_node(curr_node, press,
+				auto press_or_touch = [&] (Stack::Entry const &entry) {
+					_with_matching_sub_node(curr_node, entry,
 						[&] (Node const &node) {
 							_execute_command(node, fn); },
 						[&] { });
 
-					new_entry.construct(press);
+					new_entry.construct(entry);
+				};
+
+				ev.handle_press([&] (Input::Keycode key, Codepoint) {
+					Stack::Entry const press { .type = Type::PRESS,
+					                           .key  = key,
+					                           .id   = 0 };
+					press_or_touch(press);
 				});
 
-				ev.handle_release([&] (Input::Keycode key) {
+				ev.handle_touch([&] (Input::Touch_id id, float, float) {
+					Stack::Entry const touch { .type = Type::TOUCH,
+					                           .key  = Input::KEY_UNKNOWN,
+					                           .id   = id };
+					press_or_touch(touch);
+				});
 
+				auto release_key_or_touch = [&] (Stack::Entry const &entry) {
 					/*
 					 * If there exists a specific path for the release event,
 					 * follow the path and record the release event. Otherwise,
 					 * 'new_entry' will remain unconstructed so that the
 					 * corresponding press event gets flushed from the stack.
 					 */
-					Stack::Entry const release { .press = false, .key = key };
-					_with_matching_sub_node(curr_node, release,
+					_with_matching_sub_node(curr_node, entry,
 						[&] (Node const &next_node) {
 							_execute_command(next_node, fn);
 							if (next_node.num_sub_nodes())
-								new_entry.construct(release);
+								new_entry.construct(entry);
 						},
 						[&] /* no match */ { });
+					
+				};
+
+				ev.handle_release([&] (Input::Keycode key) {
+					Stack::Entry const release { .type = Type::RELEASE,
+					                             .key  = key,
+					                             .id   = 0 };
+					release_key_or_touch(release);
 				});
+
+				ev.handle_touch_release([&] (Input::Touch_id id) {
+					Stack::Entry const release { .type = Type::TOUCH_RELEASE,
+					                             .key  = Input::KEY_UNKNOWN,
+					                             .id   = id };
+					release_key_or_touch(release);
+				});
+
 			});
 
 			if (new_entry.constructed()) {
@@ -235,15 +301,31 @@ class Window_layouter::Key_sequence_tracker
 			 * of keys, fall back to a <release> node declared immediately
 			 * inside the corresponding <press> node.
 			 */
-			ev.handle_release([&] (Input::Keycode key) {
-				_with_node_at_press(config, key, [&] (Node const &press_node) {
-					_with_matching_sub_node(press_node, { .press = false, .key = key },
+			auto fallback_release = [&] (Stack::Entry const &at, Stack::Entry const &release) {
+				_with_node_at(config, at, [&] (Node const &at_node) {
+					_with_matching_sub_node(at_node, release,
 						[&] (Node const &next_node) {
 							_execute_command(next_node, fn); },
 						[&] { }); });
 
-				_stack.flush(Stack::Entry { .press = true,  .key = key });
-				_stack.flush(Stack::Entry { .press = false, .key = key });
+				_stack.flush(at);
+				_stack.flush(release);
+			};
+
+			ev.handle_release([&] (Input::Keycode key) {
+				Stack::Entry const press   { .type = Type::PRESS,   .key = key, .id = 0 };
+				Stack::Entry const release { .type = Type::RELEASE, .key = key, .id = 0 };
+				fallback_release(press, release);
+			});
+
+			ev.handle_touch_release([&] (Input::Touch_id id) {
+				Stack::Entry const touch   { .type = Type::TOUCH,
+				                             .key  = Input::KEY_UNKNOWN,
+				                             .id   = id };
+				Stack::Entry const release { .type = Type::TOUCH_RELEASE,
+				                             .key  = Input::KEY_UNKNOWN,
+				                             .id   = id };
+				fallback_release(touch, release);
 			});
 		}
 };

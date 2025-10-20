@@ -63,6 +63,52 @@ class Window_layouter::User_state
 
 		unsigned _key_cnt = 0;
 
+		struct Touch_state {
+			enum { MAX_TOUCH_ID = 10 };
+			bool _touched[MAX_TOUCH_ID+1];
+
+			bool set(Input::Event const &e)
+			{
+				bool result = false;
+				e.handle_touch([&] (Input::Touch_id id, float, float) {
+					if (id.value > MAX_TOUCH_ID) {
+						error("Ignoring touch id ", id.value);
+						return;
+					}
+
+					if (!_touched[id.value]) {
+						_touched[id.value] = true;
+						result = true;
+					}
+				});
+				return result;
+			}
+
+			bool reset(Input::Event const &e)
+			{
+				bool result = false;
+				e.handle_touch_release([&] (Input::Touch_id id) {
+					if (id.value > MAX_TOUCH_ID) {
+						error("Ignoring touch id ", id.value);
+						return;
+					}
+
+					if (_touched[id.value]) {
+						_touched[id.value] = false;
+						result = true;
+					}
+				});
+				return result;
+			}
+
+			Touch_state()
+			{
+				for (unsigned i=0; i <= MAX_TOUCH_ID; i++)
+					_touched[i] = false;
+			}
+			
+		} _touch_state { };
+
 		Key_sequence_tracker _key_sequence_tracker { };
 
 		Window::Element _strict_hovered_element { };  /* hovered window control */
@@ -263,6 +309,11 @@ void Window_layouter::User_state::_handle_event(Input::Event const &e,
 	e.handle_absolute_motion([&] (int x, int y) {
 		_pointer_curr = Point(x, y); });
 
+	e.handle_touch([&] (Input::Touch_id id, float x, float y) {
+		if (id.value == 0)
+			_pointer_curr = Point((int)x, (int)y);
+	});
+
 	if (e.absolute_motion() || e.focus_enter()) {
 
 		if (_drag_state && _drag_init_done)
@@ -270,14 +321,19 @@ void Window_layouter::User_state::_handle_event(Input::Event const &e,
 			             _pointer_clicked, _pointer_curr);
 	}
 
+	bool const new_touch         = _touch_state.set(e);
+	bool const new_touch_release = _touch_state.reset(e);
+
 	/* track number of pressed buttons/keys */
-	if (e.press())   _key_cnt++;
-	if (e.release()) _key_cnt--;
+	if (e.press())         _key_cnt++;
+	if (e.release())       _key_cnt--;
+	if (new_touch)         _key_cnt++;
+	if (new_touch_release) _key_cnt--;
 
 	/* handle key sequences */
-	if (_key(e)) {
+	if (_key(e) || new_touch || new_touch_release) {
 
-		if (e.press() && _key_cnt == 1)
+		if ((e.press() || e.touch()) && _key_cnt == 1)
 			_key_sequence_tracker.reset();
 
 		auto visible = [&] (Window_id id) { return _action.visible(id); };
