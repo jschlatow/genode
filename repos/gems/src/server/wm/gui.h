@@ -625,6 +625,7 @@ class Wm::Gui::Session_component : public Session_object<Gui::Session>,
 		Point          _pointer_pos = _initial_pointer_pos;
 		Point          _virtual_pointer_pos { };
 		unsigned       _key_cnt = 0;
+		bool           _touched = false;
 
 		auto _with_view(View_id id, auto const &fn, auto const &missing_fn)
 		-> decltype(missing_fn())
@@ -739,6 +740,20 @@ class Wm::Gui::Session_component : public Session_object<Gui::Session>,
 					 * screen area or when finishing a drag operation.
 					 */
 					bool propagate_to_pointer_state = false;
+
+					ev.handle_touch([&] (Input::Touch_id id, float x, float y) {
+						if (id.value == 0 && !_touched) {
+							_click_handler.handle_click(Point((int)x, (int)y));
+							_touched = true;
+							propagate_to_pointer_state = true;
+						}
+					});
+					ev.handle_touch_release([&] (Input::Touch_id id) {
+						if (id.value == 0) {
+							_touched = false;
+							propagate_to_pointer_state = true;
+						}
+					});
 
 					/* pointer enters application area */
 					if (ev.absolute_motion() && _first_motion && _key_cnt == 0) {

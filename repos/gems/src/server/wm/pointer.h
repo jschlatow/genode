@@ -42,6 +42,7 @@ struct Wm::Pointer
 			Position _last_observed { };
 
 			unsigned _key_cnt = 0;
+			bool     _touched = false;
 
 			Tracker &_tracker;
 
@@ -77,6 +78,23 @@ struct Wm::Pointer
 					if (_key_cnt == 0)
 						pointer_report_update_needed = true;
 				}
+
+				ev.handle_touch([&] (Input::Touch_id id, float x, float y) {
+					if (id.value == 0 && !_touched) {
+						_last_observed = { .valid = true, .value = { (int)x, (int)y }};
+						_touched = true;
+						pointer_report_update_needed = true;
+					}
+				});
+
+				ev.handle_touch_release([&] (Input::Touch_id id) {
+					if (id.value == 0) {
+						_last_observed = { .valid = false, .value = { } };
+						_touched = false;
+						/* dont update pointer (keep the last hover report) */
+						pointer_report_update_needed = false;
+					}
+				});
 
 				if (pointer_report_update_needed)
 					_tracker.update_pointer_report();
