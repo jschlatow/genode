@@ -223,7 +223,7 @@ struct Clipboard::Main : Rom::Module::Read_policy, Rom::Module::Write_policy
 
 		return with_trimmed(_focused_label, [&] (Span const &focused_label) {
 			return with_trimmed(truncated_label, [&] (Span const &truncated_label) {
-				return focused_label.equals(truncated_label); }); });
+				return focused_label.starts_with(truncated_label); }); });
 	}
 
 	/**
