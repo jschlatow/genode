@@ -1,0 +1,58 @@
+<runtime ram="32M" caps="1000" binary="init">
+
+	<requires> <timer/> </requires>
+
+	<fail after_seconds="40"/>
+	<succeed>
+			*child "consumer" exited with exit value 0*
+	</succeed>
+
+	<content>
+		<rom label="ld.lib.so"/>
+		<rom label="vfs.lib.so"/>
+		<rom label="libc.lib.so"/>
+		<rom label="libm.lib.so"/>
+		<rom label="test-nested_signal_handling"/>
+	</content>
+
+	<config prio_levels="4">
+		<parent-provides>
+			<service name="ROM"/>
+			<service name="IRQ"/>
+			<service name="IO_MEM"/>
+			<service name="IO_PORT"/>
+			<service name="PD"/>
+			<service name="RM"/>
+			<service name="CPU"/>
+			<service name="LOG"/>
+			<service name="Timer"/>
+		</parent-provides>
+		<default-route>
+			<any-service> <parent/> <any-child/> </any-service>
+		</default-route>
+		<default caps="100"/>
+		<start name="producer" ram="2M" priority="0">
+			<binary name="test-nested_signal_handling"/>
+			<provides>
+				<service name="ROM"/>
+			</provides>
+			<config consumer="no">
+				<libc stdout="/log"/>
+				<vfs> <log/> </vfs>
+			</config>
+		</start>
+		<start name="consumer" ram="2M" priority="-3">
+			<binary name="test-nested_signal_handling"/>
+			<config consumer="yes">
+				<libc stdout="/log"/>
+				<vfs> <log/> <rom name="testfile" label="config"/> </vfs>
+			</config>
+			<route>
+				<service name="ROM" label="test">
+					<child name="producer"/>
+				</service>
+				<any-service> <parent/> <any-child/> </any-service>
+			</route>
+		</start>
+	</config>
+</runtime>
