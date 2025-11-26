@@ -164,6 +164,7 @@ proc run_boot_dir {binaries} {
 proc base_src { } {
 
 	if {[have_spec x86]}              { return base-sel4-x86 }
+	if {[have_board imx8q_evk]}       { return base-sel4-imx8q_evk }
 	if {[have_board imx6q_sabrelite]} { return base-sel4-imx6q_sabrelite }
 
 	global specs
