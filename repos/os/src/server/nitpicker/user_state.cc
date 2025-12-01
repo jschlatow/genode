@@ -160,11 +160,13 @@ void User_state::_handle_input_event(Input::Event ev)
 
 	ev.handle_touch([&] (Input::Touch_id id, float x, float y) {
 
-		if (id.value == 0) {
+		/* update touched view at the beginning of a touch sequence */
+		if (id.value == 0 && _touch_released) {
 			Point at { int(x), int(y) };
 			View const * const touched_view = _view_stack.find_view(at);
 			_touched = touched_view ? &touched_view->owner() : nullptr;
 			_touched_position = at;
+			_touch_released = false;
 		}
 	});
 
@@ -288,14 +290,14 @@ void User_state::_handle_input_event(Input::Event ev)
 		}
 
 		if (ev.touch() || ev.touch_release())
-			if (_touched)
+			if (_touched && !_touch_released)
 				receiver = _touched;
 
 		if (ev.seq_number()) {
 			receiver = _focused;
 			if (_hovered)
 				receiver = _hovered;
-			if (_touched)
+			if (_touched && !_touch_released)
 				receiver = _touched;
 		}
 
@@ -356,8 +358,10 @@ void User_state::_handle_input_event(Input::Event ev)
 	 * report until the activity timeout is reached.
 	 */
 	ev.handle_touch_release([&] (Input::Touch_id id) {
-		if (id.value == 0)
-			_touched_position = Nowhere(); });
+		if (id.value == 0) {
+			_touch_released = true;
+			_touched_position = Nowhere();
+		}});
 }
 
 

@@ -104,12 +104,18 @@ class Nitpicker::User_state
 		Attempt<Point, Nowhere> _touched_position = Nowhere { };
 
 		/*
+		 * If set, the touched view owner has actually been released
+		 */
+		bool _touch_released = true;
+
+		/*
 		 * Currently pointed-at view owner
 		 */
 		View_owner *_hovered = nullptr;
 
 		/*
-		 * Currently touched view owner
+		 * Currently touched view owner if !_touch_released, else: last touched
+		 * view owner
 		 */
 		View_owner *_touched = nullptr;
 
