@@ -291,7 +291,7 @@ void User_state::_handle_input_event(Input::Event ev)
 
 		if (ev.touch() || ev.touch_release())
 			if (_touched && !_touch_released)
-				receiver = _touched;
+				receiver = _global_key_sequence ? _input_receiver : _touched;
 
 		if (ev.seq_number()) {
 			receiver = _focused;
