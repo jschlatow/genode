@@ -309,6 +309,13 @@ void User_state::_handle_input_event(Input::Event ev)
 
 		if (receiver)
 			receiver->submit_input_event(ev);
+
+		/*
+		 * make sure that _touched receives a touch release when
+		 * the receiver changes amid a touch sequence
+		 */
+		if (ev.touch_release() && _touched && receiver != _touched)
+			_touched->submit_input_event(ev);
 	}
 
 	/*
