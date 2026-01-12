@@ -115,8 +115,11 @@ struct Wm::Main : Pointer::Tracker, Gui::Session_component::Action
 
 	void _handle_update_pointer_report()
 	{
-		Pointer::Position const pos = _gui_root.last_observed_pointer_pos();
-		Input::Seq_number const seq_number = _gui_root.seq_number();
+		Pointer::Position const touch_pos   = _gui_root.last_observed_touch_pos();
+		Pointer::Position const pointer_pos = _gui_root.last_observed_pointer_pos();
+		Input::Seq_number const seq_number  = _gui_root.seq_number();
+
+		Pointer::Position const pos = touch_pos.valid ? touch_pos : pointer_pos;
 
 		/* only report if pos or seq_number changed */
 		if (_reported_position.valid == pos.valid &&

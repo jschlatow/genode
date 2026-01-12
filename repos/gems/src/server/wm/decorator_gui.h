@@ -24,6 +24,7 @@
 #include <types.h>
 #include <window_registry.h>
 #include <pointer.h>
+#include <touch.h>
 #include <real_gui.h>
 #include <seq_number_generator.h>
 
@@ -96,6 +97,8 @@ struct Wm::Decorator_gui_session : Session_object<Gui::Session>,
 
 	Pointer::State _pointer_state;
 
+	Touch::State  &_touch_state;
+
 	Input::Session_component &_window_layouter_input;
 
 	Seq_number_generator &_seq_number_generator;
@@ -129,11 +132,13 @@ struct Wm::Decorator_gui_session : Session_object<Gui::Session>,
 	                      Pointer::Tracker           &pointer_tracker,
 	                      Input::Session_component   &window_layouter_input,
 	                      Seq_number_generator       &seq_number_generator, 
-	                      Decorator_content_callback &content_callback)
+	                      Decorator_content_callback &content_callback,
+	                      Touch::State               &touch_state)
 	:
 		Session_object<Gui::Session>(env.ep(), resources, label, diag),
 		_env(env),
 		_pointer_state(pointer_tracker),
+		_touch_state(touch_state),
 		_window_layouter_input(window_layouter_input),
 		_seq_number_generator(seq_number_generator),
 		_content_callback(content_callback)
@@ -158,6 +163,7 @@ struct Wm::Decorator_gui_session : Session_object<Gui::Session>,
 			_input_session.for_each_event([&] (Input::Event const &ev) {
 				_seq_number_generator.apply_event(ev);
 				_pointer_state.apply_event(ev);
+				_touch_state.apply_event(ev);
 				_seq_number_generator.submit(_window_layouter_input);
 				_window_layouter_input.submit(ev); });
 	}

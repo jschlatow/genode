@@ -27,6 +27,7 @@
 #include <decorator_gui.h>
 #include <layouter_gui.h>
 #include <direct_gui.h>
+#include <touch.h>
 
 namespace Wm { namespace Gui {
 
@@ -622,6 +623,7 @@ class Wm::Gui::Session_component : public Session_object<Gui::Session>,
 		bool           _close_requested = false;
 		bool           _has_alpha = false;
 		Pointer::State _pointer_state;
+		Touch::State  &_touch_state;
 		Point    const _initial_pointer_pos { -1, -1 };
 		Point          _pointer_pos = _initial_pointer_pos;
 		Point          _virtual_pointer_pos { };
@@ -746,14 +748,11 @@ class Wm::Gui::Session_component : public Session_object<Gui::Session>,
 						if (id.value == 0 && !_touched) {
 							_click_handler.handle_click(Point((int)x, (int)y));
 							_touched = true;
-							propagate_to_pointer_state = true;
 						}
 					});
 					ev.handle_touch_release([&] (Input::Touch_id id) {
-						if (id.value == 0) {
+						if (id.value == 0)
 							_touched = false;
-							propagate_to_pointer_state = true;
-						}
 					});
 
 					/* pointer enters application area */
@@ -775,6 +774,8 @@ class Wm::Gui::Session_component : public Session_object<Gui::Session>,
 
 					if (propagate_to_pointer_state)
 						_pointer_state.apply_event(ev);
+
+					_touch_state.apply_event(ev);
 
 					/*
 					 * Handle pointer grabbing/ungrabbing
@@ -959,14 +960,16 @@ class Wm::Gui::Session_component : public Session_object<Gui::Session>,
 		                  Diag       const  diag,
 		                  Window_registry  &window_registry,
 		                  Pointer::Tracker &pointer_tracker,
-		                  Click_handler    &click_handler)
+		                  Click_handler    &click_handler,
+		                  Touch::State     &touch_state)
 		:
 			Session_object<Gui::Session>(env.ep(), resources, label, diag),
 			Producer("panorama"),
 			_env(env), _action(action),
 			_window_registry(window_registry),
 			_click_handler(click_handler),
-			_pointer_state(pointer_tracker)
+			_pointer_state(pointer_tracker),
+			_touch_state(touch_state)
 		{
 			_gui_input.sigh(_input_handler);
 			_input_session.event_queue().enabled(true);
@@ -1436,6 +1439,8 @@ class Wm::Gui::Root : public  Rpc_object<Typed_root<Gui::Session> >,
 		 */
 		Gui::Connection &_focus_gui_session;
 
+		Touch::State _touch_state { _pointer_tracker };
+
 	public:
 
 		/**
@@ -1455,6 +1460,9 @@ class Wm::Gui::Root : public  Rpc_object<Typed_root<Gui::Session> >,
 
 			env.parent().announce(env.ep().manage(*this));
 		}
+
+		Pointer::Position last_observed_touch_pos() const {
+			return _touch_state.last_observed_pos(); }
 
 		Pointer::Position last_observed_pointer_pos() const
 		{
@@ -1547,7 +1555,8 @@ class Wm::Gui::Root : public  Rpc_object<Typed_root<Gui::Session> >,
 						Session_component(_env, _action, resources, label, diag,
 						                  _window_registry,
 						                  _pointer_tracker,
-						                  _click_handler);
+						                  _click_handler,
+						                  _touch_state);
 					_sessions.insert(&session);
 					return { session.cap() };
 				}
@@ -1561,7 +1570,8 @@ class Wm::Gui::Root : public  Rpc_object<Typed_root<Gui::Session> >,
 						                      _pointer_tracker,
 						                      _window_layouter_input,
 						                      _seq_number_generator,
-						                      *this);
+						                      *this,
+						                      _touch_state);
 					_decorator_sessions.insert(&session);
 					return { session.cap() };
 				}
