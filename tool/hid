@@ -1369,7 +1369,7 @@ proc _hid_from_xml_rec { text info_var } {
 					# annotation, appearing at the right side of the node
 					regsub {\s*\n\s*} $comment " " comment
 					set comment [string_trim $comment]
-					set result [_hid_attach_annotation_to_last_node $result ". $comment"]
+					set result [_hid_attach_annotation_to_last_node $result " | . $comment"]
 				}
 			}
 		}
