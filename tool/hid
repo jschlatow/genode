@@ -1871,7 +1871,7 @@ with_command set {
 					if {[attr_tag $attr] == [attr_tag $new_attr]} {
 						set present 1 } }
 				if {!$present} {
-					set prespace " "
+					set prespace " | "
 					if {[llength $result_attrs] > 0} { set prespace " | " }
 					lappend result_attrs [list "?" $prespace [attr_tag   $new_attr] \
 					                                     " " [attr_value $new_attr] ""] }
