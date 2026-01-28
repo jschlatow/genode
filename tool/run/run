@@ -405,6 +405,7 @@ proc check_config_in_run_dir { binary_name config_path } {
 		lappend cmd --hsd-dir [run_dir]/genode --schema $binary_name }
 
 	if {[catch {exec {*}$cmd $config_path } result]} {
+		puts stderr "Error: invalid $config_path (schema '$binary_name')"
 		puts stderr $result
 		if {[error_at_any_line $result]} {
 			exit 1
