@@ -958,12 +958,16 @@ proc check_against_hsd_rec { hid hsd_var hsd_meta_var } {
 	foreach tag $hsd(attr_indices) {
 		if {![info exists hsd(attr,default,$tag)]} {
 			set type $hsd(attr,type,$tag)
-			set pattern [string_trim $hsd_meta(type,$type)]
-			set detail "attribute '$tag' of type '$hsd(attr,type,$tag)' ($pattern)"
-			if {$tag == "name"} { set detail "a name" }
-			if {![hid_has_attr $hid $tag]} {
-				check_failed "node '[hid_type $hid]' at line [hid_line $hid]\
-				              lacks $detail" } } }
+			if {![info exists hsd_meta(type,$type)]} {
+				check_failed "unknown type '$type' of '$tag' attribute at line [hid_line $hid]"
+			} else {
+				set pattern [string_trim $hsd_meta(type,$type)]
+				set detail "attribute '$tag' of type '$hsd(attr,type,$tag)' ($pattern)"
+				if {$tag == "name"} { set detail "a name" }
+				if {![hid_has_attr $hid $tag]} {
+					check_failed "node '[hid_type $hid]' at line [hid_line $hid]\
+					              lacks $detail" } } }
+			}
 
 	#
 	# Find corresponding hsd-node index for a given hid node.
