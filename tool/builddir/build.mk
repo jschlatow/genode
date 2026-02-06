@@ -219,7 +219,7 @@ _all $(DST_DIRS) $(addprefix lib/,$(LIBS)) : migrate_to_codeberg gen_deps_and_bu
 GIT_REPO_PATHS := $(sort $(foreach R,$(wildcard $(GENODE_DIR)/repos/*),$(shell git -C $(R) rev-parse --show-toplevel 2> /dev/null)))
 .PHONY: migrate_to_codeberg
 migrate_to_codeberg:
-	@$(GENODE_DIR)/tool/migrate_to_codeberg $(GIT_REPO_PATHS)
+	@test ! -e $(GENODE_DIR)/.git || $(GENODE_DIR)/tool/migrate_to_codeberg $(GIT_REPO_PATHS)
 
 ##
 ## First stage: generate library dependencies
