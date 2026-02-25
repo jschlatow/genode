@@ -176,7 +176,7 @@ scope.
 !   + route
 !     + service ROM | label: recording | + child record_rom
 !     + service Gui                    | + child wm
-!     + service any-service            | + parent
+!     + any-service                    | + parent
 ! -
 
 In the example, the attributes of the inner 'config' node stand out as most
