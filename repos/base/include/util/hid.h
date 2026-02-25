@@ -148,12 +148,10 @@ class Genode::Hid_node : Noncopyable
 
 			_with_skipped(bytes, _num_spaces(bytes), [&] (Span const &bytes) {
 
-				if (bytes.num_bytes < 1) return;
-
-				Prefix const prefix = Prefix::from_char(bytes.start[0]);
-
 				/* line prefix followed by one space */
 				if (bytes.num_bytes > 1 && _space(bytes.start[1])) {
+
+					Prefix const prefix = Prefix::from_char(bytes.start[0]);
 
 					if (prefix.valid()) {
 						_with_skipped(bytes, 2, [&] (Span const &remain) {
@@ -168,10 +166,13 @@ class Genode::Hid_node : Noncopyable
 				}
 
 				/* COMMENT or RAW prefix followed by newline */
-				else if (bytes.num_bytes == 1 && prefix.line_delimited()) {
-					_with_skipped(bytes, 1, [&] (Span const &remain) {
-						fn(prefix, remain, Span(nullptr, 0));
-					});
+				else if (bytes.num_bytes == 1) {
+
+					Prefix const prefix = Prefix::from_char(bytes.start[0]);
+
+					if (prefix.line_delimited())
+						_with_skipped(bytes, 1, [&] (Span const &remain) {
+							fn(prefix, remain, Span(nullptr, 0)); });
 				}
 
 				/* other content, i.e., attribute */
