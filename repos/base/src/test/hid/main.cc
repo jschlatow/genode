@@ -552,7 +552,7 @@ void Component::construct(Genode::Env &env)
 			node.for_each_quoted_line([&] (auto const &) {
 				num_lines++; });
 
-			unsigned const expected_lines = 4;
+			unsigned const expected_lines = 5;
 			if (num_lines != expected_lines)
 				fail("wrong number of lines (expected: ", expected_lines, ", got: ", num_lines, ")");
 		});
