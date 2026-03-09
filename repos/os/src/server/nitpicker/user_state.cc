@@ -340,9 +340,12 @@ void User_state::_handle_input_event(Input::Event ev)
 
 		update_hover();
 
-		if (_drag || _global_key_sequence || _transient_focus)
+		if (_drag || _global_key_sequence || _transient_focus) {
 			if (_input_receiver && (_input_receiver != _hovered))
 				_input_receiver->submit_input_event(Hover_leave());
+			if (_input_receiver && (_input_receiver != _focused))
+				_input_receiver->submit_input_event(Focus_leave());
+		}
 
 		_drag = false;
 
