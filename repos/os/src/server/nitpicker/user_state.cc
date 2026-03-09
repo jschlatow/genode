@@ -27,11 +27,11 @@ static inline bool _mouse_button(Keycode keycode) {
 		return keycode >= BTN_LEFT && keycode <= BTN_MIDDLE; }
 
 
-static inline bool _hovered_takes_input(View_owner const *hovered,
-                                        View_owner const *focused)
+static inline bool _takes_input(View_owner const *owner,
+                                View_owner const *focused)
 {
-	return hovered && (hovered->has_focusable_domain()
-	                || hovered->has_same_domain(focused));
+	return owner && (owner->has_focusable_domain()
+	              || owner->has_same_domain(focused));
 }
 
 
@@ -193,7 +193,7 @@ void User_state::_handle_input_event(Input::Event ev)
 
 		/* update focused session */
 		if (_mouse_button(keycode) && (_hovered != _focused)
-		 && _hovered_takes_input(_hovered, _focused)) {
+		 && _takes_input(_hovered, _focused)) {
 
 			/*
 			 * Notify both the old focused session and the new one.
@@ -324,7 +324,7 @@ void User_state::_handle_input_event(Input::Event ev)
 			return;
 
 		if (!_mouse_button(key) || _global_key_sequence
-		 || _hovered_takes_input(_hovered, _focused))
+		 || _takes_input(_hovered, _focused))
 			_input_receiver->submit_input_event(ev);
 		else
 			_input_receiver = nullptr;
