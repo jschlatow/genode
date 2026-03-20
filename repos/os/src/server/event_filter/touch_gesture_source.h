@@ -24,6 +24,7 @@
 #include <base/duration.h>
 
 /* local includes */
+#include <include_accessor.h>
 #include <source.h>
 
 namespace Event_filter { class Touch_gesture_source; }
@@ -39,6 +40,12 @@ class Event_filter::Touch_gesture_source : public Source, Source::Filter
 		using Microseconds = Genode::Microseconds;
 
 		Owner _owner;
+
+		Include_accessor &_include_accessor;
+
+		Timer_accessor &_timer_accessor;
+
+		Source::Trigger &_trigger;
 
 		Source &_source;
 
@@ -624,31 +631,58 @@ class Event_filter::Touch_gesture_source : public Source, Source::Filter
 				_buffer.clear();
 			}
 		}
+		
+		void _apply_config(Node const &config, unsigned const max_recursion = 4)
+		{
+			if (max_recursion == 0) {
+				warning("too deeply nested includes");
+				throw Invalid_config();
+			}
+
+			config.for_each_sub_node("include", [&] (Node const &node) {
+					try {
+						Include_accessor::Name const rom =
+							node.attribute_value("rom", Include_accessor::Name());
+
+						_include_accessor.apply_include(rom, name(), [&] (Node const &inc) {
+							_apply_config(inc, max_recursion - 1); });
+						return;
+					}
+					catch (Include_accessor::Include_unavailable) {
+						throw Invalid_config(); }
+			});
+			
+			config.for_each_sub_node("hold", [&] (Node const &node) {
+				new (_alloc) Hold(_gestures, _timer_accessor.timer(), _trigger,
+				                  _alloc, _multitouch, node);
+			});
+
+			config.for_each_sub_node("swipe", [&] (Node const &node) {
+				new (_alloc) Swipe(_gestures, _timer_accessor.timer(),
+				                   _alloc, _multitouch, node);
+			});
+		}
 
 	public:
 
 		static char const *name() { return "touch-gesture"; }
 
 		Touch_gesture_source(Owner &owner, Node const &config,
-		                     Source::Factory &factory,
-		                     Timer_accessor  &timer_accessor,
-		                     Source::Trigger &trigger,
-		                     Allocator       &alloc)
+		                     Source::Factory  &factory,
+		                     Timer_accessor   &timer_accessor,
+		                     Source::Trigger  &trigger,
+		                     Allocator        &alloc,
+		                     Include_accessor &include_accessor)
 		:
 			Source(owner),
 			_owner(factory),
+			_include_accessor(include_accessor),
+			_timer_accessor(timer_accessor),
+			_trigger(trigger),
 			_source(factory.create_source_for_sub_node(_owner, config)),
 			_alloc(alloc)
 		{
-			config.for_each_sub_node("hold", [&] (Node const &node) {
-				new (_alloc) Hold(_gestures, timer_accessor.timer(), trigger,
-				                  _alloc, _multitouch, node);
-			});
-
-			config.for_each_sub_node("swipe", [&] (Node const &node) {
-				new (_alloc) Swipe(_gestures, timer_accessor.timer(),
-				                   _alloc, _multitouch, node);
-			});
+			_apply_config(config);
 		}
 
 		~Touch_gesture_source()

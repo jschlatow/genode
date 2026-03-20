@@ -19,6 +19,7 @@
 #define _EVENT_FILTER__TRANSFORM_SOURCE_H_
 
 /* local includes */
+#include <include_accessor.h>
 #include <source.h>
 #include <affine_transform.h>
 
@@ -31,13 +32,36 @@ class Event_filter::Transform_source : public Source, Source::Filter
 
 		Owner _owner;
 
+		Include_accessor &_include_accessor;
+
 		Source &_source;
 
 		Transform::Matrix _transform = Transform::Matrix::identity();
 
-		void _apply_config(Node const &config)
+		void _apply_config(Node const &config, unsigned const max_recursion = 4)
 		{
+			if (max_recursion == 0) {
+				warning("too deeply nested includes");
+				throw Invalid_config();
+			}
+
 			config.for_each_sub_node([&] (Node const &node) {
+				/*
+				 * Handle includes
+				 */
+				if (node.type() == "include") {
+					try {
+						Include_accessor::Name const rom =
+							node.attribute_value("rom", Include_accessor::Name());
+
+						_include_accessor.apply_include(rom, name(), [&] (Node const &inc) {
+							_apply_config(inc, max_recursion - 1); });
+						return;
+					}
+					catch (Include_accessor::Include_unavailable) {
+						throw Invalid_config(); }
+				}
+
 				if (node.has_type("translate")) {
 					_transform = _transform.translate(
 						float(node.attribute_value("x", 0.0)),
@@ -123,10 +147,12 @@ class Event_filter::Transform_source : public Source, Source::Filter
 
 		static char const *name() { return "transform"; }
 
-		Transform_source(Owner &owner, Node const &config, Source::Factory &factory)
+		Transform_source(Owner &owner, Node const &config, Source::Factory &factory,
+		                 Include_accessor &include_accessor)
 		:
 			Source(owner),
 			_owner(factory),
+			_include_accessor(include_accessor),
 			_source(factory.create_source_for_sub_node(_owner, config))
 		{
 			_apply_config(config);
