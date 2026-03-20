@@ -38,86 +38,57 @@ class Event_filter::Transform_source : public Source, Source::Filter
 
 		Transform::Matrix _transform = Transform::Matrix::identity();
 
-		void _apply_config(Node const &config, unsigned const max_recursion = 4)
+		void _apply_sub_node(Node const &node)
 		{
-			if (max_recursion == 0) {
-				warning("too deeply nested includes");
-				throw Invalid_config();
+			if (node.has_type("translate")) {
+				_transform = _transform.translate(
+					float(node.attribute_value("x", 0.0)),
+					float(node.attribute_value("y", 0.0)));
+				return;
 			}
-
-			config.for_each_sub_node([&] (Node const &node) {
-				/*
-				 * Handle includes
-				 */
-				if (node.type() == "include") {
-					try {
-						Include_accessor::Name const rom =
-							node.attribute_value("rom", Include_accessor::Name());
-
-						_include_accessor.apply_include(rom, name(), [&] (Node const &inc) {
-							_apply_config(inc, max_recursion - 1); });
-						return;
-					}
-					catch (Include_accessor::Include_unavailable) {
-						throw Invalid_config(); }
-				}
-
-				if (node.has_type("translate")) {
-					_transform = _transform.translate(
-						float(node.attribute_value("x", 0.0)),
-						float(node.attribute_value("y", 0.0)));
-					return;
-				}
-				if (node.has_type("scale")) {
-					_transform = _transform.scale(
-						float(node.attribute_value("x", 1.0)),
-						float(node.attribute_value("y", 1.0)));
-					return;
-				}
-				if (node.has_type("rotate")) {
-					unsigned degrees = node.attribute_value("angle", 0);
-					Transform::Angle angle =
-						Transform::angle_from_degrees(degrees);
-
-					if (angle == Transform::ANGLE_0)
-						warning("invalid transform rotate(", degrees, ")");
-					else
-						_transform = _transform.rotate(angle);
-					return;
-				}
-				if (node.has_type("hflip")) {
-					float width = float(node.attribute_value("width", -1.0));
-
-					if (width <= 0)
-						warning("invalid transform hflip");
-					else
-						_transform = _transform.hflip(width);
-					return;
-				}
-				if (node.has_type("vflip")) {
-					float height = float(node.attribute_value("height", -1.0));
-
-					if (height <= 0)
-						warning("invalid transform vflip");
-					else
-						_transform = _transform.vflip(height);
-					return;
-				}
-				if (node.has_type("reorient")) {
-					float width      = float(node.attribute_value("width",  -1.0));
-					float height     = float(node.attribute_value("height", -1.0));
-					unsigned degrees = node.attribute_value("angle", 0);
-
-					Transform::Angle angle =
-						Transform::angle_from_degrees(degrees);
-
-					if (width <= 0 || height <= 0 || angle == Transform::ANGLE_0)
-						warning("invalid transform reorient");
-					else
-						_transform = _transform.reorient(angle, width, height);
-					return;
-				}
-			});
+			if (node.has_type("scale")) {
+				_transform = _transform.scale(
+					float(node.attribute_value("x", 1.0)),
+					float(node.attribute_value("y", 1.0)));
+				return;
+			}
+			if (node.has_type("rotate")) {
+				unsigned degrees = node.attribute_value("angle", 0);
+				Transform::Angle angle =
+					Transform::angle_from_degrees(degrees);
+				if (angle == Transform::ANGLE_0)
+					warning("invalid transform rotate(", degrees, ")");
+				else
+					_transform = _transform.rotate(angle);
+				return;
+			}
+			if (node.has_type("hflip")) {
+				float width = float(node.attribute_value("width", -1.0));
+				if (width <= 0)
+					warning("invalid transform hflip");
+				else
+					_transform = _transform.hflip(width);
+				return;
+			}
+			if (node.has_type("vflip")) {
+				float height = float(node.attribute_value("height", -1.0));
+				if (height <= 0)
+					warning("invalid transform vflip");
+				else
+					_transform = _transform.vflip(height);
+				return;
+			}
+			if (node.has_type("reorient")) {
+				float width      = float(node.attribute_value("width",  -1.0));
+				float height     = float(node.attribute_value("height", -1.0));
+				unsigned degrees = node.attribute_value("angle", 0);
+				Transform::Angle angle =
+					Transform::angle_from_degrees(degrees);
+				if (width <= 0 || height <= 0 || angle == Transform::ANGLE_0)
+					warning("invalid transform reorient");
+				else
+					_transform = _transform.reorient(angle, width, height);
+			}
 		}
 
 		/**
@@ -155,7 +126,8 @@ class Event_filter::Transform_source : public Source, Source::Filter
 			_include_accessor(include_accessor),
 			_source(factory.create_source_for_sub_node(_owner, config))
 		{
-			_apply_config(config);
+			_include_accessor.for_each_sub_node(config, name(),
+				[&] (Node const &n) { _apply_sub_node(n); });
 		}
 
 		void generate(Sink &destination) override

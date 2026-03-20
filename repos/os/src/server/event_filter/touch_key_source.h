@@ -100,28 +100,10 @@ class Event_filter::Touch_key_source : public Source, Source::Filter
 			});
 		}
 
-		void _apply_config(Node const &config, unsigned const max_recursion = 4)
+		void _apply_sub_node(Node const &node)
 		{
-			if (max_recursion == 0) {
-				warning("too deeply nested includes");
-				throw Invalid_config();
-			}
-
-			config.for_each_sub_node("include", [&] (Node const &node) {
-					try {
-						Include_accessor::Name const rom =
-							node.attribute_value("rom", Include_accessor::Name());
-
-						_include_accessor.apply_include(rom, name(), [&] (Node const &inc) {
-							_apply_config(inc, max_recursion - 1); });
-						return;
-					}
-					catch (Include_accessor::Include_unavailable) {
-						throw Invalid_config(); }
-			});
-
-			config.for_each_sub_node("tap", [&] (Node const &node) {
-				new (_alloc) Registered<Tap>(_tap_rules, node); });
+			if (node.type() == "tap")
+				new (_alloc) Registered<Tap>(_tap_rules, node);
 		}
 
 	public:
@@ -138,7 +120,8 @@ class Event_filter::Touch_key_source : public Source, Source::Filter
 			_source(factory.create_source_for_sub_node(_owner, config)),
 			_alloc(alloc)
 		{
-			_apply_config(config);
+			_include_accessor.for_each_sub_node(config, name(),
+				[&] (Node const &n) { _apply_sub_node(n); });
 		}
 
 		~Touch_key_source()

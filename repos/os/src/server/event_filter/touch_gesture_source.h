@@ -632,35 +632,15 @@ class Event_filter::Touch_gesture_source : public Source, Source::Filter
 			}
 		}
 		
-		void _apply_config(Node const &config, unsigned const max_recursion = 4)
+		void apply_sub_node(Node const &node)
 		{
-			if (max_recursion == 0) {
-				warning("too deeply nested includes");
-				throw Invalid_config();
-			}
-
-			config.for_each_sub_node("include", [&] (Node const &node) {
-					try {
-						Include_accessor::Name const rom =
-							node.attribute_value("rom", Include_accessor::Name());
-
-						_include_accessor.apply_include(rom, name(), [&] (Node const &inc) {
-							_apply_config(inc, max_recursion - 1); });
-						return;
-					}
-					catch (Include_accessor::Include_unavailable) {
-						throw Invalid_config(); }
-			});
-			
-			config.for_each_sub_node("hold", [&] (Node const &node) {
+			if (node.type() == "hold")
 				new (_alloc) Hold(_gestures, _timer_accessor.timer(), _trigger,
 				                  _alloc, _multitouch, node);
-			});
 
-			config.for_each_sub_node("swipe", [&] (Node const &node) {
+			if (node.type() == "swipe")
 				new (_alloc) Swipe(_gestures, _timer_accessor.timer(),
 				                   _alloc, _multitouch, node);
-			});
 		}
 
 	public:
@@ -682,7 +662,8 @@ class Event_filter::Touch_gesture_source : public Source, Source::Filter
 			_source(factory.create_source_for_sub_node(_owner, config)),
 			_alloc(alloc)
 		{
-			_apply_config(config);
+			_include_accessor.for_each_sub_node(config, name(),
+				[&] (Node const &n) { apply_sub_node(n); });
 		}
 
 		~Touch_gesture_source()
