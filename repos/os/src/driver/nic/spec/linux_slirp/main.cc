@@ -17,7 +17,6 @@
 #include <base/heap.h>
 #include <base/thread.h>
 #include <base/log.h>
-#include <base/blockade.h>
 #include <os/reporter.h>
 #include <net/port.h>
 #include <net/ipv4.h>
@@ -37,19 +36,14 @@ using namespace Genode;
 using Mac_address = Net::Mac_address;
 
 
-class Uplink_client : public Uplink_client_base
+class Uplink_client : public Uplink_client_base,
+                      public Libslirp::Action
 {
 	private:
 
-		struct Poll_thread : Thread, Libslirp::Action
+		struct Poll_thread : Thread
 		{
-			Uplink_client &uplink;
-			Blockade       blockade { };
-
-			const void    *send_buf { nullptr };
-			size_t         send_len { 0 };
-
-			Thread const  *main_context { Thread::myself() };
+			Uplink_client             &uplink;
 
 			Poll_thread(Poll_thread const &) = delete;
 			Poll_thread & operator = (Poll_thread const &) = delete;
@@ -57,37 +51,24 @@ class Uplink_client : public Uplink_client_base
 			Poll_thread(Env &env, Uplink_client &uplink)
 			: Thread(env, "poll", Stack_size { 0x1000 }), uplink(uplink) { }
 
-			size_t send(const void *buf, size_t len) override
-			{
-				/* block on re-entry until _handle_rx() processed the last packet */
-				blockade.block();
-
-				/* store buf and len */
-				send_buf = buf;
-				send_len = len;
-
-				if (Thread::myself() == main_context)
-					uplink._handle_rx();
-				else
-					uplink._rx_handler.local_submit();
-
-				return len;
-			}
-
-			void entry() override {
-				blockade.wakeup();
-				uplink._slirp.poll_loop(); }
+			void entry() override { uplink._slirp.poll_loop(); }
 		};
 
 		bool                          _verbose;
 
-		Signal_handler<Uplink_client> _rx_handler  { _env.ep(), *this, &Uplink_client::_handle_rx };
 		Poll_thread                   _poll_thread { _env, *this };
 
 		Libslirp::Context             _slirp;
 
-		void _handle_rx()
+		/**********************
+		 ** Libslirp::Action **
+		 **********************/
+
+		size_t send(const void *buf, size_t len) override
 		{
+			if (!buf || !len)
+				return 0;
+
 			size_t const max_pkt_size {
 				Nic::Packet_allocator::OFFSET_PACKET_SIZE };
 
@@ -97,22 +78,14 @@ class Uplink_client : public Uplink_client_base
 				[&] (void   *conn_tx_pkt_base,
 				     size_t &adjusted_conn_tx_pkt_size)
 			{
-				if (!_poll_thread.send_buf || !_poll_thread.send_len) {
-					return Write_result::WRITE_FAILED;
-				}
+				memcpy(conn_tx_pkt_base, buf, len);
+				adjusted_conn_tx_pkt_size = len;
 
-				memcpy(conn_tx_pkt_base, _poll_thread.send_buf, _poll_thread.send_len);
-				adjusted_conn_tx_pkt_size = _poll_thread.send_len;
-
-				_poll_thread.send_buf = nullptr;
-				_poll_thread.send_len = 0;
 				return Write_result::WRITE_SUCCEEDED;
 			});
 
-			/* wakeup poll thread */
-			_poll_thread.blockade.wakeup();
+			return len;
 		}
-
 
 		/************************
 		 ** Uplink_client_base **
@@ -122,7 +95,6 @@ class Uplink_client : public Uplink_client_base
 		_drv_transmit_pkt(const char *conn_rx_pkt_base,
 		                  size_t      conn_rx_pkt_size) override
 		{
-	
 			if (_slirp.input((const uint8_t *)conn_rx_pkt_base, (int)conn_rx_pkt_size))
 				return Transmit_result::ACCEPTED;
 
@@ -139,7 +111,7 @@ class Uplink_client : public Uplink_client_base
 		:
 			Uplink_client_base { env, alloc, mac_address },
 			_verbose { verbose },
-			_slirp   { _poll_thread, network, _verbose }
+			_slirp   { *this, network, _verbose }
 		{
 			_drv_handle_link_state(true);
 			_poll_thread.start();

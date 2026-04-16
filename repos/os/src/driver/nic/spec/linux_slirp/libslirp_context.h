@@ -19,12 +19,15 @@
 #include <util/interface.h>
 #include <net/port.h>
 #include <net/ipv4.h>
+#include <nic/packet_allocator.h>
 
 /* Linux */
 #include <slirp/libslirp.h>
 #include <poll.h>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #if SLIRP_CONFIG_VERSION_MAX < 4
 #error "Requires libslirp >= 4.7.0"
@@ -57,6 +60,12 @@ class Libslirp::Context
 			return *(Context*)opaque; }
 
 		/*
+		 * Communication channel (socketpair) between main context and poll thread
+		 */
+		enum { MAIN = 0x0, POLL = 0x1 };
+		int _socket_fds[2] { };
+
+		/*
 		 * Poll fd management
 		 */
 		struct pollfd *_fds      { nullptr };
@@ -78,6 +87,7 @@ class Libslirp::Context
 
 				if (!ctx._fds) {
 					ctx._fds_size = 0;
+					Genode::error("Failed to allocate more file descriptors for polling.");
 					return -1;
 				}
 			}
@@ -150,8 +160,7 @@ class Libslirp::Context
 		static void _timer_mod(void *, int64_t, void *) {
 			Genode::warning(__func__, " not implemented"); }
 
-		static void _notify(void *) {
-			Genode::warning(__func__, " not implemented"); }
+		static void _notify(void *) { }
 
 		static void _register_poll_fd(int, void *) { }
 
@@ -239,14 +248,21 @@ class Libslirp::Context
 				Genode::warning("Unable to enable libslirp debugging (requires libslirp >= 4.9.0)");
 #endif
 
+			/* create socketpair for communication to poll thread */
+			if (socketpair(AF_LOCAL, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, _socket_fds) != 0)
+				Genode::error("Unable to create socket pair.");
+
 			_slirp = slirp_new(&_config, &_callbacks, this);
 
 		}
 
 		~Context()
 		{
-			if (_slirp)
+			if (_slirp) {
+				::close(_socket_fds[MAIN]);
+				::close(_socket_fds[POLL]);
 				slirp_cleanup(_slirp);
+			}
 		}
 
 		bool valid() const { return _slirp != nullptr; }
@@ -273,9 +289,8 @@ class Libslirp::Context
 			if (!valid())
 				return 0;
 
-			slirp_input(_slirp, base, len);
-
-			return len;
+			/* forward via local socket to poll thread */
+			return ::write(_socket_fds[MAIN], base, len);
 		}
 
 		void poll_loop()
@@ -283,6 +298,12 @@ class Libslirp::Context
 			while (valid()) {
 
 				uint32_t timeout { UINT32_MAX };
+				_fds_len = 0;
+
+				/* fill pollfds with our own local socket (from MAIN context) */
+				_add_poll(_socket_fds[POLL], SLIRP_POLL_IN | SLIRP_POLL_HUP, this);
+
+				/* fill pollfds with slirp-managed sockets */
 				slirp_pollfds_fill(_slirp, &timeout, Context::_add_poll, this);
 
 				/*
@@ -291,6 +312,15 @@ class Libslirp::Context
 				 */
 
 				int const pollout = poll(_fds, _fds_len, timeout);
+
+				/* handle packets from main thread */
+				if (_fds[0].revents) {
+					enum { MAX_PACKET_SIZE = Nic::Packet_allocator::DEFAULT_PACKET_SIZE };
+					uint8_t       buf[MAX_PACKET_SIZE];
+					ssize_t const len = ::read(_socket_fds[POLL], buf, MAX_PACKET_SIZE);
+					if (len > 0)
+						slirp_input(_slirp, buf, (int)len);
+				}
 
 				slirp_pollfds_poll(_slirp, pollout <= 0, Context::_get_revents, this);
 
