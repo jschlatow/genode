@@ -203,13 +203,13 @@ struct Main
 
 		/* parse forwarding rules */
 		_config_rom.node().for_each_sub_node([&] (Node const &node) {
-			if (node.type() != "udp-forward" && node.type() != "tcp-forward")
+			if (node.type() != "udp_forward" && node.type() != "tcp_forward")
 				return;
 
 			using namespace Net;
 
 			Port const port    = node.attribute_value("port",    Port(0));
-			Port const to_port = node.attribute_value("to-port", port);
+			Port const to_port = node.attribute_value("to_port", port);
 
 			if (port.value == 0) {
 				error("Missing or invalid port attribute for ", node.type(), " node");
