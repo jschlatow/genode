@@ -74,6 +74,7 @@ class Libslirp::Context
 
 				if (!ctx._fds) {
 					ctx._fds_size = 0;
+					Genode::error("Failed to allocate more file descriptors for polling.");
 					return -1;
 				}
 			}
@@ -285,6 +286,7 @@ class Libslirp::Context
 			while (valid()) {
 
 				uint32_t timeout { UINT32_MAX };
+				_fds_len = 0;
 				slirp_pollfds_fill_socket(_slirp, &timeout, Context::_add_poll, this);
 
 				/*
