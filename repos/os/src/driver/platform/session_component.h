@@ -132,6 +132,7 @@ class Driver::Session_component
 		void              _free_dma_buffer(Dma_buffer &buf);
 
 		Io_mmu::Domain & _create_domain();
+		void _destroy_domain();
 		bool _dma_remapable() const;
 
 		/*

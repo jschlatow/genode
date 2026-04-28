@@ -182,10 +182,12 @@ Kernel_io_mmu::create_domain(Allocator                  &md_alloc,
 }
 
 
-void Kernel_io_mmu::destroy_domain(Allocator &, Driver::Io_mmu::Domain &)
+void Kernel_io_mmu::destroy_domain(Allocator &md_alloc, Driver::Io_mmu::Domain &domain)
 {
-	error(__func__,
-	      " for kernel controlled IOMMU domain should never be called!");
+	auto device_pd = static_cast<Device_pd *>(&domain);
+
+	if (device_pd)
+		destroy(md_alloc, device_pd);
 }
 
 

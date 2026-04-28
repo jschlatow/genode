@@ -83,6 +83,22 @@ Driver::Io_mmu::Domain & Session_component::_create_domain()
 }
 
 
+void Session_component::_destroy_domain()
+{
+	bool reference_invalidated = false;
+
+	_devices.for_each([&] (Device const &dev) {
+		if (!matches(dev) || reference_invalidated)
+			return;
+
+		_devices.with_io_mmu(dev, [&] (auto &io_mmu) {
+			io_mmu.destroy_domain(heap(), _domain);
+			reference_invalidated = true;
+		});
+	});
+}
+
+
 bool Session_component::_dma_remapable() const
 {
 	/* iterate IOMMU devices and determine address translation mode */
@@ -393,6 +409,8 @@ Session_component::~Session_component()
 	/* free up dma buffers */
 	_dma_allocator.buffer_registry().for_each([&] (Dma_buffer &buf) {
 		_free_dma_buffer(buf); });
+
+	_destroy_domain();
 
 	/* replenish quota for rom sessions, see constructor for explanation */
 	_cap_quota_guard().replenish(Cap_quota{Rom_session::CAP_QUOTA});
