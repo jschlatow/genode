@@ -480,6 +480,11 @@ class Sculpt::Runtime_config
 
 		void toggle_selection(Start_name const &name, Storage_target const &storage_target)
 		{
+			if (_selected == name) {
+				reset_selection();
+				return;
+			}
+
 			_components.for_each([&] (Component &child) {
 				child.selected    = (child.name == name) && !child.selected;
 				child.tcb         = child.selected;
