@@ -9,6 +9,7 @@ _/src/file_terminal
 _/src/fs_query
 _/src/fs_report
 _/src/fs_rom
+_/src/gmp
 _/src/gui_fb
 _/src/init
 _/src/libc
