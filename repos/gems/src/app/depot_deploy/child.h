@@ -718,7 +718,7 @@ void Depot_deploy::Child::_gen_routes(Generator &g,
 			if (named) {
 				if (resource.type == Resource::FS)
 					g.attribute("label_prefix", Prefix { name, " ->" });
-				else if (resource.type == Resource::ROM)
+				else if (resource.type == Resource::ROM || resource.type == Resource::REPORT)
 					g.attribute("label_last", name);
 				else
 					g.attribute("label", name);
