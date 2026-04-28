@@ -43,7 +43,7 @@ struct Sculpt::System_dialog : Top_level_dialog
 
 	Action &_action;
 
-	enum Tab { POWER, PRESET, OPTIONS, UPDATE } _selected_tab = Tab::PRESET;
+	enum Tab { POWER, PRESET, OPTIONS, UPDATE } _selected_tab = Tab::OPTIONS;
 
 	Hosted<Frame, Vbox, System_power_widget>     _power_widget   { Id { "power" } };
 	Hosted<Frame, Vbox, Software_presets_widget> _presets_widget { Id { "presets" } };
