@@ -30,7 +30,6 @@ struct Sculpt::Panel_dialog : Top_level_dialog
 		virtual Tab  selected_tab()        const = 0;
 		virtual bool system_visible()      const = 0;
 		virtual bool inspect_tab_visible() const = 0;
-		virtual bool system_available()    const = 0;
 
 		bool files_tab_selected()      const { return selected_tab() == Tab::FILES; }
 		bool components_tab_selected() const { return selected_tab() == Tab::COMPONENTS; }

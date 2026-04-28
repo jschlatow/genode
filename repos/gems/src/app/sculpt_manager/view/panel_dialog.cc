@@ -37,9 +37,7 @@ void Panel_dialog::view(Scope<> &s) const
 		s.sub_scope<Float>([&] (Scope<Frame, Float> &s) {
 			s.attribute("east", true);
 			s.sub_scope<Hbox>([&] (Scope<Frame, Float, Hbox> &s) {
-				if (_state.system_available())
-					s.widget(_system_button, _state.system_visible());
-			});
+				s.widget(_system_button, _state.system_visible()); });
 		});
 	});
 }

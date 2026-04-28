@@ -1023,11 +1023,6 @@ struct Sculpt::Main : Input_event_handler,
 
 	Panel_dialog::Tab selected_tab() const override { return _selected_tab; }
 
-	bool system_available() const override
-	{
-		return _storage._selected_target.valid() && !_prepare_in_progress();
-	}
-
 	struct Diag_dialog : Top_level_dialog
 	{
 		Main const &_main;
@@ -2396,15 +2391,13 @@ void Sculpt::Main::_update_window_layout(Node const &decorator_margins,
 			gen_resize(win, rect.area);
 		});
 
-		if (system_available()) {
-			_with_window(window_list, system_view_label, [&] (Node const &win) {
-				Area  const size = win_size(win);
-				Point const pos  = _system_visible
-				                 ? Point(log_p1.x - size.w, avail.y1())
-				                 : Point(_screen_size.w, avail.y1());
-				gen_window(win, Rect(pos, size));
-			});
-		}
+		_with_window(window_list, system_view_label, [&] (Node const &win) {
+			Area  const size = win_size(win);
+			Point const pos  = _system_visible
+			                 ? Point(log_p1.x - size.w, avail.y1())
+			                 : Point(_screen_size.w, avail.y1());
+			gen_window(win, Rect(pos, size));
+		});
 
 		_with_window(window_list, file_browser_view_label, [&] (Node const &win) {
 			if (_selected_tab == Panel_dialog::Tab::FILES) {
